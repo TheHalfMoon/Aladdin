@@ -1,0 +1,79 @@
+{
+  "id": "SG-000014",
+  "title": "Workspace-scoped AppContainer filesystem authority qualification",
+  "program": "COTRA-P05",
+  "state": "GRAIN",
+  "risk": "high",
+  "created": "2026-09-27",
+  "base": "9b70d2629d66b6e79180edc2c813c460ae5b49fb",
+  "dependencies": ["SG-000010", "SG-000011", "SG-000012", "SG-000013"],
+  "objective": "Qualify the minimum stable-Windows filesystem authority required for a zero-capability AppContainer child to read and write only within an explicitly trusted workspace, while preserving denial of Cotra protected state, unrelated user resources, network capability, and authority-channel inheritance. This is a provider-private qualification grain and must not expose new public PowerShell or process authority.",
+  "scope": {
+    "include": [
+      "stable Windows security primitives for workspace-scoped AppContainer filesystem access",
+      "temporary test-owned trusted workspace only",
+      "explicit read and write qualification inside that workspace",
+      "negative access qualification for a test-owned sibling resource outside the workspace",
+      "SG-000012 protected-state and authority-channel isolation regressions",
+      "zero AppContainer network capabilities",
+      "existing suspended launch, token verification, Job membership, bounded I/O, timeout, and verified termination invariants",
+      "native Windows exact-head qualification"
+    ],
+    "exclude": [
+      "public powershell.run",
+      "additional public process.spawn executable targets",
+      "generic executable-registry widening",
+      "broad user-profile or filesystem grants",
+      "Cotra protected-state grants",
+      "caller-selected ACL targets or security descriptors",
+      "caller-provided environment overrides or stdin payloads",
+      "process network authority or PowerShell remoting",
+      "background or detached execution",
+      "public process kill authority",
+      "Git mutation",
+      "browser or UI automation",
+      "elevation",
+      "approval bypass or persistent approval reuse",
+      "experimental CreateProcessInSandbox or Bound File System as the production baseline"
+    ]
+  },
+  "authority_delta": {
+    "filesystem": "Provider-private qualification only: minimum AppContainer access to one explicit test-owned trusted workspace; no public authority delta.",
+    "process": "None; no new public executable or PowerShell authority.",
+    "network": "None; zero AppContainer network capabilities remain mandatory.",
+    "browser": "None",
+    "ui_input": "None",
+    "secrets": "None; Cotra/tunnel/API secret-like values and protected state remain unavailable.",
+    "approval": "None",
+    "privileged": "None"
+  },
+  "invariants": [
+    "Public powershell.run remains absent throughout this grain",
+    "Windows public process.spawn remains restricted to the exact SG-000010-qualified System32 whoami.exe target",
+    "Workspace authority is granted only to an explicit test-owned trusted workspace and never to the user profile or arbitrary caller-selected paths",
+    "A contained child can read and write inside the qualified workspace only after the workspace grant is established",
+    "A contained child remains denied access to a test-owned sibling resource outside the workspace and to Cotra protected state",
+    "The cotra-mcp to cotrad authority channel and caller secrets are not inherited",
+    "The AppContainer retains zero network capabilities",
+    "Existing suspended-launch, AppContainer-token verification, pre-resume Job membership, bounded I/O, timeout, descendant lifecycle, and verified termination guarantees remain intact",
+    "Any temporary ACL or security-state mutation is deterministic, test-owned, and cleaned up without broadening unrelated resources",
+    "No generic executable registry, Git mutation, browser/UI, elevation, approval bypass, or persistent approval reuse is introduced"
+  ],
+  "acceptance": [
+    {"id": "A1", "claim": "Native Windows exact-head tests prove a zero-capability AppContainer child can read a deterministic fixture inside one explicit test-owned trusted workspace after the minimum stable-Windows workspace grant is applied."},
+    {"id": "A2", "claim": "Native Windows exact-head tests prove the contained child can create or modify a deterministic test-owned file inside that workspace and the host can verify the expected result."},
+    {"id": "A3", "claim": "The same contained identity remains denied access to a test-owned sibling resource outside the workspace and SG-000012 Cotra protected-state/authority-channel isolation remains green."},
+    {"id": "A4", "claim": "The implementation does not grant broad user-profile access, caller-selected ACL authority, network capability, additional executable authority, or public PowerShell authority."},
+    {"id": "A5", "claim": "Workspace grant setup and cleanup are deterministic and bounded to test-owned resources, with failure paths preserving fail-closed behavior."},
+    {"id": "A6", "claim": "SG-000011 descendant-aware lifecycle and SG-000013 bounded PowerShell containment regressions remain green under the workspace-authority qualification."},
+    {"id": "A7", "claim": "Exact-head Windows/Ubuntu Rust, Node, Governance, genuine TypeSafe Jev, Alibaba Open Code Review, exact-diff security review, and zero unresolved blocking review threads all pass."}
+  ],
+  "review": {
+    "diffcipline": true,
+    "jev_semantic_review": true,
+    "alibaba_open_code_review": "required exact-range qualification where integrated",
+    "security_review": true,
+    "exact_head_ci": true
+  },
+  "done_when": "Workspace-scoped AppContainer read/write authority is proven on native Windows with negative isolation regressions, merged and post-merge verified, while public PowerShell and broader process/filesystem authority remain absent."
+}
