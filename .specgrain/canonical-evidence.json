@@ -1,172 +1,26 @@
 {
   "schema_version": 1,
-  "snapshot_base": "6b24a810712c7ee1edfab714c672447606dc0b13",
+  "snapshot_base": "d6bb05a1b8dbb26b0927b1acce67854c8bdad80d",
   "state_semantics": {
     "GRAIN": "Authorized or active work packet whose acceptance is not yet canonically proven.",
     "PROVEN": "Acceptance and required qualification are proven, but canonical closeout/governance is not yet complete.",
     "CLOSED": "Machine state corresponding to Diffcipline COMPLETE_CANONICAL: implementation/acceptance evidence, required platform evidence, merge, post-merge verification, review closure, and governance reconciliation are complete."
   },
   "grains": {
-    "SG-000001": {
-      "implementation_pr": 2,
-      "implementation_base": "e32c5af725df43ef0d5c33d8564f85917d880772",
-      "qualified_head": "e13d71764710c0ddb202a5d6390baa5596f7d76b",
-      "pre_merge_ci": "35917584139",
-      "merge_sha": "4e83e019d8f3ebc38d6bd36edbce1afdcac1a5b7",
-      "post_merge_ci": "35922412274",
-      "review_basis": "Historical semantic/security review recorded before the later base-controlled Jev/OCR gate existed; no retroactive automated review claim.",
-      "unresolved_review_threads": 0
-    },
-    "SG-000002": {
-      "implementation_pr": 3,
-      "implementation_base": "4e83e019d8f3ebc38d6bd36edbce1afdcac1a5b7",
-      "qualified_head": "e1c12836660185d362e53a68b4cc5a64bb5cfde9",
-      "pre_merge_ci": "35923989601",
-      "merge_sha": "7d4003a1b6a82cac577c77e91b7d2606f49733f4",
-      "post_merge_ci": "35924151711",
-      "review_basis": "Historical security/semantic review under then-current governance; no retroactive automated review claim.",
-      "unresolved_review_threads": 0
-    },
-    "SG-000003": {
-      "implementation_pr": 4,
-      "implementation_base": "7d4003a1b6a82cac577c77e91b7d2606f49733f4",
-      "qualified_head": "53fe512c02c422553507a068dda9d2b558653dce",
-      "pre_merge_ci": "35924850354",
-      "merge_sha": "527a5e69e453fa740a754c4f037dbb1b2764c917",
-      "post_merge_ci": "35924987328",
-      "review_basis": "Historical security/semantic review under then-current governance; Alibaba OCR was only where integrated.",
-      "unresolved_review_threads": 0
-    },
-    "SG-000004": {
-      "implementation_pr": 5,
-      "implementation_base": "527a5e69e453fa740a754c4f037dbb1b2764c917",
-      "qualified_head": "7b8879dd3a1eb84dcf679288570c3ba269da2c4d",
-      "pre_merge_ci": "35969551340",
-      "merge_sha": "4aa28b128a27d21cf6fa768ca34d44db4b3b39cc",
-      "post_merge_ci": "35969805332",
-      "review_basis": "Historical security/semantic review under then-current governance; live ChatGPT tunnel E2E remains explicitly UNPROVEN and is not required to close this supervisor-isolation grain.",
-      "unresolved_review_threads": 0
-    },
-    "SG-000005": {
-      "implementation_pr": 6,
-      "implementation_base": "4aa28b128a27d21cf6fa768ca34d44db4b3b39cc",
-      "qualified_head": "29067ae3224ee79f9018b92908d6046b85016465",
-      "pre_merge_ci": "35970146506",
-      "merge_sha": "0f71ca47b32f08045f83d194497aa49daad2d4de",
-      "post_merge_ci": "35970291619",
-      "review_basis": "Historical security/semantic review under then-current governance; Alibaba OCR was only where integrated.",
-      "unresolved_review_threads": 0
-    },
-    "SG-000006": {
-      "implementation_pr": 7,
-      "implementation_base": "0f71ca47b32f08045f83d194497aa49daad2d4de",
-      "qualified_head": "a13cbd86c63789170f61bf9751e15849f09a393c",
-      "pre_merge_ci": "35970657031",
-      "merge_sha": "fe3c5453b1b0b44b2e6209e3087c197e4a78c907",
-      "post_merge_ci": "35970806759",
-      "review_basis": "Historical security/semantic review under then-current governance; native Windows qualification was required.",
-      "unresolved_review_threads": 0
-    },
-    "SG-000007": {
-      "implementation_pr": 8,
-      "implementation_base": "fe3c5453b1b0b44b2e6209e3087c197e4a78c907",
-      "qualified_head": "598d90c85b6569570c49a9a6054650192bd2d509",
-      "pre_merge_ci": "35971171993",
-      "merge_sha": "ed5cd2be9acd7aac93754965d055c82f77a01884",
-      "post_merge_ci": "35971323866",
-      "review_basis": "Historical security/semantic review under then-current governance; native Windows qualification was required.",
-      "unresolved_review_threads": 0
-    },
-    "SG-000008A": {
-      "implementation_pr": 10,
-      "implementation_base": "ed5cd2be9acd7aac93754965d055c82f77a01884",
-      "qualified_head": "89c0eb1753b4a0654d71395a848974a68d91e154",
-      "pre_merge_ci": "36017263003",
-      "merge_sha": "321e261afde623953c4c407125857c91b7631911",
-      "post_merge_ci": "36017688955",
-      "review_basis": "Bootstrap qualification: pinned genuine TypeSafe Jev 7/7 hunks with zero findings, official Alibaba OCR v1.12.9 exact-range delegation, independent security review, and exact-head CI; the base-controlled workflow did not yet exist on the base branch.",
-      "unresolved_review_threads": 0
-    },
-    "SG-000008": {
-      "implementation_pr": 9,
-      "implementation_base": "321e261afde623953c4c407125857c91b7631911",
-      "qualified_head": "1cda16d178730421a2bd80d295970c3c9d66e79c",
-      "pre_merge_ci": "36017984916",
-      "pre_merge_review_gates": "36017981120",
-      "merge_sha": "2524b8f8bbf3ff196cb1bc2915312e785ab7a858",
-      "post_merge_ci": "36018639615",
-      "review_basis": "Base-controlled exact-diff Review Gates plus native Windows/Ubuntu CI.",
-      "unresolved_review_threads": 0
-    },
-    "SG-000009": {
-      "implementation_pr": 11,
-      "implementation_base": "2524b8f8bbf3ff196cb1bc2915312e785ab7a858",
-      "qualified_head": "ca17e5b5f8145dfb01ad0ad6102587ef7f80ed76",
-      "pre_merge_ci": "36027271683",
-      "pre_merge_review_gates": "36027269455",
-      "merge_sha": "ba6aa919d35432db0c049ca970be29f95767041f",
-      "post_merge_ci": "36029004410",
-      "closeout_pr": 12,
-      "closeout_head": "47565897a6f4a9f9f5628e3a94fb08c0ad324b89",
-      "closeout_merge_sha": "617b06ca234298f5cca184d66c04df5ce1b1b4cc",
-      "closeout_post_merge_ci": "36029741014",
-      "review_basis": "Jev 20/20 hunks with zero findings/blocking findings and Alibaba OCR exact-range evidence.",
-      "unresolved_review_threads": 0
-    },
-    "SG-000009A": {
-      "implementation_pr": 14,
-      "implementation_base": "b350932c4226fc5250a2d234c1927149f7c49064",
-      "qualified_head": "8e43a8404d08da6932922caa2a956dee54df4072",
-      "pre_merge_ci": "36034565643",
-      "pre_merge_review_gates": "36034562275",
-      "merge_sha": "f405b7f0fcbc949d5f9ddf868e8e5029b1024310",
-      "post_merge_ci": "36196698333",
-      "closeout_pr": 15,
-      "closeout_head": "790cae1e617d8eb8efa0f7baad77121394b2b2bf",
-      "closeout_pre_merge_ci": "36197082769",
-      "closeout_review_gates": "36197082800",
-      "closeout_merge_sha": "4d843a6b519faf39ac16e320e99683b236140b5c",
-      "closeout_post_merge_ci": "36198431012",
-      "review_basis": "Implementation Jev 15/15 and closeout Jev 5/5 with zero findings/blocking findings; Alibaba OCR exact-range delegation succeeded on both qualified ranges.",
-      "unresolved_review_threads": 0
-    },
-    "SG-000010": {
-      "implementation_pr": 18,
-      "implementation_base": "9c1e932d93abd46943e91af1118df0dce5fe35de",
-      "qualified_head": "248b96c17e3dc387371441ba12b5ee75d41c2495",
-      "pre_merge_ci": "36248970994",
-      "pre_merge_review_gates": "36248969775",
-      "merge_sha": "388f5de196580d71275a31b84b584f5ac280baec",
-      "post_merge_ci": "36250111765",
-      "review_basis": "Exact-head genuine TypeSafe Jev 46/46 hunks with zero findings/blocking findings, Alibaba Open Code Review v1.12.9 exact-range delegation, independent exact-head security re-review after positive executable-policy repair, native Windows qualification, and zero unresolved review threads.",
-      "unresolved_review_threads": 0,
-      "authority_boundary": "Windows public process.spawn is restricted to the exact qualified %SystemRoot%\\System32\\whoami.exe target. Generic executable-registry authority and descendant-producing executable qualification remain successor work."
-    },
-    "SG-000011": {
-      "implementation_pr": 21,
-      "implementation_base": "57bb970c69f55c7775900f47fe1047c5ff7322f7",
-      "qualified_head": "b6ca7106196e3d1c4771f46f311ec22a413eff49",
-      "pre_merge_ci": "36251790829",
-      "pre_merge_review_gates": "36251789043",
-      "merge_sha": "00cab385bdce43562530646dce84be71e1ddfabd",
-      "post_merge_ci": "36253841733",
-      "review_basis": "Exact-head genuine TypeSafe Jev 11/11 hunks with zero findings/blocking findings, Alibaba Open Code Review v1.12.9 exact-range delegation, manual security review of the excluded security note, native Windows descendant-retained-stdio qualification, SG-000009/009A/010 regressions, and zero unresolved review threads.",
-      "unresolved_review_threads": 0,
-      "authority_boundary": "No new public authority. Windows public process.spawn remains restricted to the exact SG-000010-qualified %SystemRoot%\\System32\\whoami.exe target; generic executable-registry widening, PowerShell, process network, detached/background execution, and public kill remain absent."
-    },
-    "SG-000012": {
-      "implementation_pr": 24,
-      "implementation_base": "fb84a7fe8bab9589f29213eecdd346a306910fec",
-      "qualified_head": "2fa87c15a3a6f7d0fdc3cf06ed3015ccce0a039e",
-      "pre_merge_ci": "36255254224",
-      "pre_merge_review_gates": "36255253042",
-      "merge_sha": "6b24a810712c7ee1edfab714c672447606dc0b13",
-      "post_merge_ci": "36255431331",
-      "review_basis": "Exact-head genuine TypeSafe Jev 2/2 hunks with zero findings/blocking findings, Alibaba Open Code Review v1.12.9 exact-range delegation, manual security review of the excluded security note, native Windows protected-state negative-access qualification, SG-000009/009A/010/011 regressions, and zero unresolved review threads.",
-      "unresolved_review_threads": 0,
-      "native_windows": "SUCCESS: the zero-capability AppContainer child could not read the Cotra-owned LocalAppData sentinel, received no tested Cotra/API secret-like environment variables, observed NUL/EOF stdin rather than the cotrad authority channel, and reached verified Job quiescence.",
-      "acl_repair_required": false,
-      "authority_boundary": "No new public authority. Windows public process.spawn remains restricted to the exact SG-000010-qualified %SystemRoot%\\System32\\whoami.exe target; generic executable-registry widening, PowerShell, process network, detached/background execution, and public kill remain absent."
-    }
+    "SG-000001": {"implementation_pr":2,"implementation_base":"e32c5af725df43ef0d5c33d8564f85917d880772","qualified_head":"e13d71764710c0ddb202a5d6390baa5596f7d76b","pre_merge_ci":"35917584139","merge_sha":"4e83e019d8f3ebc38d6bd36edbce1afdcac1a5b7","post_merge_ci":"35922412274","review_basis":"Historical semantic/security review recorded before the later base-controlled Jev/OCR gate existed; no retroactive automated review claim.","unresolved_review_threads":0},
+    "SG-000002": {"implementation_pr":3,"implementation_base":"4e83e019d8f3ebc38d6bd36edbce1afdcac1a5b7","qualified_head":"e1c12836660185d362e53a68b4cc5a64bb5cfde9","pre_merge_ci":"35923989601","merge_sha":"7d4003a1b6a82cac577c77e91b7d2606f49733f4","post_merge_ci":"35924151711","review_basis":"Historical security/semantic review under then-current governance; no retroactive automated review claim.","unresolved_review_threads":0},
+    "SG-000003": {"implementation_pr":4,"implementation_base":"7d4003a1b6a82cac577c77e91b7d2606f49733f4","qualified_head":"53fe512c02c422553507a068dda9d2b558653dce","pre_merge_ci":"35924850354","merge_sha":"527a5e69e453fa740a754c4f037dbb1b2764c917","post_merge_ci":"35924987328","review_basis":"Historical security/semantic review under then-current governance; Alibaba OCR was only where integrated.","unresolved_review_threads":0},
+    "SG-000004": {"implementation_pr":5,"implementation_base":"527a5e69e453fa740a754c4f037dbb1b2764c917","qualified_head":"7b8879dd3a1eb84dcf679288570c3ba269da2c4d","pre_merge_ci":"35969551340","merge_sha":"4aa28b128a27d21cf6fa768ca34d44db4b3b39cc","post_merge_ci":"35969805332","review_basis":"Historical security/semantic review under then-current governance; live ChatGPT tunnel E2E remains explicitly UNPROVEN and is not required to close this supervisor-isolation grain.","unresolved_review_threads":0},
+    "SG-000005": {"implementation_pr":6,"implementation_base":"4aa28b128a27d21cf6fa768ca34d44db4b3b39cc","qualified_head":"29067ae3224ee79f9018b92908d6046b85016465","pre_merge_ci":"35970146506","merge_sha":"0f71ca47b32f08045f83d194497aa49daad2d4de","post_merge_ci":"35970291619","review_basis":"Historical security/semantic review under then-current governance; Alibaba OCR was only where integrated.","unresolved_review_threads":0},
+    "SG-000006": {"implementation_pr":7,"implementation_base":"0f71ca47b32f08045f83d194497aa49daad2d4de","qualified_head":"a13cbd86c63789170f61bf9751e15849f09a393c","pre_merge_ci":"35970657031","merge_sha":"fe3c5453b1b0b44b2e6209e3087c197e4a78c907","post_merge_ci":"35970806759","review_basis":"Historical security/semantic review under then-current governance; native Windows qualification was required.","unresolved_review_threads":0},
+    "SG-000007": {"implementation_pr":8,"implementation_base":"fe3c5453b1b0b44b2e6209e3087c197e4a78c907","qualified_head":"598d90c85b6569570c49a9a6054650192bd2d509","pre_merge_ci":"35971171993","merge_sha":"ed5cd2be9acd7aac93754965d055c82f77a01884","post_merge_ci":"35971323866","review_basis":"Historical security/semantic review under then-current governance; native Windows qualification was required.","unresolved_review_threads":0},
+    "SG-000008A": {"implementation_pr":10,"implementation_base":"ed5cd2be9acd7aac93754965d055c82f77a01884","qualified_head":"89c0eb1753b4a0654d71395a848974a68d91e154","pre_merge_ci":"36017263003","merge_sha":"321e261afde623953c4c407125857c91b7631911","post_merge_ci":"36017688955","review_basis":"Bootstrap qualification: pinned genuine TypeSafe Jev 7/7 hunks with zero findings, official Alibaba OCR v1.12.9 exact-range delegation, independent security review, and exact-head CI; the base-controlled workflow did not yet exist on the base branch.","unresolved_review_threads":0},
+    "SG-000008": {"implementation_pr":9,"implementation_base":"321e261afde623953c4c407125857c91b7631911","qualified_head":"1cda16d178730421a2bd80d295970c3c9d66e79c","pre_merge_ci":"36017984916","pre_merge_review_gates":"36017981120","merge_sha":"2524b8f8bbf3ff196cb1bc2915312e785ab7a858","post_merge_ci":"36018639615","review_basis":"Base-controlled exact-diff Review Gates plus native Windows/Ubuntu CI.","unresolved_review_threads":0},
+    "SG-000009": {"implementation_pr":11,"implementation_base":"2524b8f8bbf3ff196cb1bc2915312e785ab7a858","qualified_head":"ca17e5b5f8145dfb01ad0ad6102587ef7f80ed76","pre_merge_ci":"36027271683","pre_merge_review_gates":"36027269455","merge_sha":"ba6aa919d35432db0c049ca970be29f95767041f","post_merge_ci":"36029004410","closeout_pr":12,"closeout_head":"47565897a6f4a9f9f5628e3a94fb08c0ad324b89","closeout_merge_sha":"617b06ca234298f5cca184d66c04df5ce1b1b4cc","closeout_post_merge_ci":"36029741014","review_basis":"Jev 20/20 hunks with zero findings/blocking findings and Alibaba OCR exact-range evidence.","unresolved_review_threads":0},
+    "SG-000009A": {"implementation_pr":14,"implementation_base":"b350932c4226fc5250a2d234c1927149f7c49064","qualified_head":"8e43a8404d08da6932922caa2a956dee54df4072","pre_merge_ci":"36034565643","pre_merge_review_gates":"36034562275","merge_sha":"f405b7f0fcbc949d5f9ddf868e8e5029b1024310","post_merge_ci":"36196698333","closeout_pr":15,"closeout_head":"790cae1e617d8eb8efa0f7baad77121394b2b2bf","closeout_pre_merge_ci":"36197082769","closeout_review_gates":"36197082800","closeout_merge_sha":"4d843a6b519faf39ac16e320e99683b236140b5c","closeout_post_merge_ci":"36198431012","review_basis":"Implementation Jev 15/15 and closeout Jev 5/5 with zero findings/blocking findings; Alibaba OCR exact-range delegation succeeded on both qualified ranges.","unresolved_review_threads":0},
+    "SG-000010": {"implementation_pr":18,"implementation_base":"9c1e932d93abd46943e91af1118df0dce5fe35de","qualified_head":"248b96c17e3dc387371441ba12b5ee75d41c2495","pre_merge_ci":"36248970994","pre_merge_review_gates":"36248969775","merge_sha":"388f5de196580d71275a31b84b584f5ac280baec","post_merge_ci":"36250111765","review_basis":"Exact-head genuine TypeSafe Jev 46/46 hunks with zero findings/blocking findings, Alibaba Open Code Review v1.12.9 exact-range delegation, independent exact-head security re-review after positive executable-policy repair, native Windows qualification, and zero unresolved review threads.","unresolved_review_threads":0,"authority_boundary":"Windows public process.spawn is restricted to the exact qualified %SystemRoot%\\System32\\whoami.exe target. Generic executable-registry authority and descendant-producing executable qualification remain successor work."},
+    "SG-000011": {"implementation_pr":21,"implementation_base":"57bb970c69f55c7775900f47fe1047c5ff7322f7","qualified_head":"b6ca7106196e3d1c4771f46f311ec22a413eff49","pre_merge_ci":"36251790829","pre_merge_review_gates":"36251789043","merge_sha":"00cab385bdce43562530646dce84be71e1ddfabd","post_merge_ci":"36253841733","review_basis":"Exact-head genuine TypeSafe Jev 11/11 hunks with zero findings/blocking findings, Alibaba Open Code Review v1.12.9 exact-range delegation, manual security review of the excluded security note, native Windows descendant-retained-stdio qualification, SG-000009/009A/010 regressions, and zero unresolved review threads.","unresolved_review_threads":0,"authority_boundary":"No new public authority. Windows public process.spawn remains restricted to the exact SG-000010-qualified %SystemRoot%\\System32\\whoami.exe target; generic executable-registry widening, PowerShell, process network, detached/background execution, and public kill remain absent."},
+    "SG-000012": {"implementation_pr":24,"implementation_base":"fb84a7fe8bab9589f29213eecdd346a306910fec","qualified_head":"2fa87c15a3a6f7d0fdc3cf06ed3015ccce0a039e","pre_merge_ci":"36255254224","pre_merge_review_gates":"36255253042","merge_sha":"6b24a810712c7ee1edfab714c672447606dc0b13","post_merge_ci":"36255431331","review_basis":"Exact-head genuine TypeSafe Jev 2/2 hunks with zero findings/blocking findings, Alibaba Open Code Review v1.12.9 exact-range delegation, manual security review of the excluded security note, native Windows protected-state negative-access qualification, SG-000009/009A/010/011 regressions, and zero unresolved review threads.","unresolved_review_threads":0,"native_windows":"SUCCESS: the zero-capability AppContainer child could not read the Cotra-owned LocalAppData sentinel, received no tested Cotra/API secret-like environment variables, observed NUL/EOF stdin rather than the cotrad authority channel, and reached verified Job quiescence.","acl_repair_required":false,"authority_boundary":"No new public authority. Windows public process.spawn remains restricted to the exact SG-000010-qualified %SystemRoot%\\System32\\whoami.exe target; generic executable-registry widening, PowerShell, process network, detached/background execution, and public kill remain absent."},
+    "SG-000013": {"implementation_pr":27,"implementation_base":"6b4ec228619292271dd77700f0c7d966c219124c","qualified_head":"74b4a91d7b8e7f582a0df0fc814526658795514f","pre_merge_ci":"36258473411","pre_merge_review_gates":"36258472190","merge_sha":"ddfcb4c9d5f06af446d44e031eb96bd70e4424d9","post_merge_ci":"36258601073","recovery_pr":29,"recovery_head":"d9285db573c11a192fdf51cd8829f010191f5902","recovery_merge_sha":"d6bb05a1b8dbb26b0927b1acce67854c8bdad80d","recovery_post_merge_ci":"36266186799","review_basis":"Exact-head genuine TypeSafe Jev 2/2 hunks with zero findings/blocking findings, Alibaba Open Code Review v1.12.9 exact-range delegation, manual security review of the excluded security note, native Windows PowerShell success/timeout/stdout-limit/stderr-limit qualification, retained SG-000011/012 regressions, forward-only recovery of the Windows test-isolation defect, successful recovery post-merge CI, and zero unresolved review threads.","unresolved_review_threads":0,"native_windows":"SUCCESS: four SG-000013 PowerShell integration tests passed for deterministic success, verified timeout, verified stdout output limit, and verified stderr output limit inside the existing zero-capability AppContainer/Job containment boundary.","authority_boundary":"No new public authority. Public powershell.run remains absent and Windows public process.spawn remains restricted to the exact SG-000010-qualified %SystemRoot%\\System32\\whoami.exe target; generic executable-registry widening, process network, detached/background execution, public kill, Git mutation, browser/UI automation, elevation, and approval bypass/reuse remain absent."}
   }
 }
