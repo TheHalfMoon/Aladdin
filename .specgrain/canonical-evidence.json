@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "snapshot_base": "ddfcb4c9d5f06af446d44e031eb96bd70e4424d9",
+  "snapshot_base": "6b24a810712c7ee1edfab714c672447606dc0b13",
   "state_semantics": {
     "GRAIN": "Authorized or active work packet whose acceptance is not yet canonically proven.",
     "PROVEN": "Acceptance and required qualification are proven, but canonical closeout/governance is not yet complete.",
@@ -167,19 +167,6 @@
       "native_windows": "SUCCESS: the zero-capability AppContainer child could not read the Cotra-owned LocalAppData sentinel, received no tested Cotra/API secret-like environment variables, observed NUL/EOF stdin rather than the cotrad authority channel, and reached verified Job quiescence.",
       "acl_repair_required": false,
       "authority_boundary": "No new public authority. Windows public process.spawn remains restricted to the exact SG-000010-qualified %SystemRoot%\\System32\\whoami.exe target; generic executable-registry widening, PowerShell, process network, detached/background execution, and public kill remain absent."
-    },
-    "SG-000013": {
-      "implementation_pr": 27,
-      "implementation_base": "6b4ec228619292271dd77700f0c7d966c219124c",
-      "qualified_head": "74b4a91d7b8e7f582a0df0fc814526658795514f",
-      "pre_merge_ci": "36258473411",
-      "pre_merge_review_gates": "36258472190",
-      "merge_sha": "ddfcb4c9d5f06af446d44e031eb96bd70e4424d9",
-      "post_merge_ci": "36258601073",
-      "review_basis": "Exact-head genuine TypeSafe Jev 2/2 hunks with zero findings/blocking findings, Alibaba Open Code Review v1.12.9 exact-range delegation, manual security review of the excluded security note, native Windows PowerShell success/timeout/stdout-limit/stderr-limit qualification, retained SG-000011/012 regressions, and zero unresolved review threads.",
-      "unresolved_review_threads": 0,
-      "native_windows": "SUCCESS: four SG-000013 PowerShell integration tests passed for deterministic success, verified timeout, verified stdout output limit, and verified stderr output limit inside the existing zero-capability AppContainer/Job containment boundary.",
-      "authority_boundary": "No new public authority. Public powershell.run remains absent and Windows public process.spawn remains restricted to the exact SG-000010-qualified %SystemRoot%\\System32\\whoami.exe target; generic executable-registry widening, process network, detached/background execution, public kill, Git mutation, browser/UI automation, elevation, and approval bypass/reuse remain absent."
     }
   }
 }

@@ -441,14 +441,21 @@ mod tests {
     use super::*;
     use cotra_contracts::RequestEnvelope;
     use serde_json::json;
+    use std::sync::atomic::{AtomicU64, Ordering};
     use std::time::{SystemTime, UNIX_EPOCH};
+
+    static TEMP_ROOT_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
     fn temp_root() -> PathBuf {
         let suffix = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .expect("clock")
             .as_nanos();
-        let root = std::env::temp_dir().join(format!("cotra-policy-{suffix}"));
+        let sequence = TEMP_ROOT_SEQUENCE.fetch_add(1, Ordering::Relaxed);
+        let root = std::env::temp_dir().join(format!(
+            "cotra-policy-{}-{suffix}-{sequence}",
+            std::process::id()
+        ));
         std::fs::create_dir_all(&root).expect("create temp workspace");
         root
     }

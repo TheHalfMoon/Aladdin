@@ -2,7 +2,7 @@
   "id": "SG-000013",
   "title": "Private bounded PowerShell containment qualification",
   "program": "COTRA-P05",
-  "state": "CLOSED",
+  "state": "PROVEN",
   "risk": "high",
   "created": "2026-09-26",
   "base": "197e6171e71dc3641b95751da848e4f9c1cf41fc",
@@ -135,6 +135,11 @@
     "ocr": "PASSED: Open Code Review v1.12.9 exact-range delegation, 2 files total, 1 reviewable, 1 excluded unsupported_ext and manually reviewed",
     "security_review": "PASS on exact qualified head; no public authority delta",
     "unresolved_review_threads": 0,
+    "first_closeout_pr": 28,
+    "first_closeout_head": "3b37d2e8c0a5a48ae3175a03820513979e043892",
+    "first_closeout_merge": "23796b29eaed06781fe964d16a19768c7800886b",
+    "first_closeout_post_merge_ci": "36262599177",
+    "first_closeout_post_merge_result": "FAILED: Windows Rust test authorizes_only_bounded_argv_process_spawn hit a pre-existing parallel temp-workspace name collision; SG-000013 therefore remains PROVEN until forward-only recovery and a fresh canonical closeout succeed.",
     "authority_boundary": "No new public authority. Public powershell.run remains absent and Windows public process.spawn remains restricted to the exact SG-000010-qualified %SystemRoot%\\System32\\whoami.exe target; generic executable-registry widening, process network, detached/background execution, public kill, Git mutation, browser/UI automation, elevation, and approval bypass/reuse remain absent."
   }
 }
