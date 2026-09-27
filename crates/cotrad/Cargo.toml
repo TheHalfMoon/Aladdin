@@ -5,6 +5,11 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
+autobins = false
+
+[[bin]]
+name = "cotrad"
+path = "src/sg000015_main.rs"
 
 [dependencies]
 cotra-approval = { path = "../cotra-approval" }
