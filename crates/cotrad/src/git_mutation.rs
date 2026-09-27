@@ -127,9 +127,7 @@ impl Mutation {
         approved: &GitMutationState,
     ) -> Result<Value, ProviderError> {
         match self {
-            Self::BranchCreate { branch } => {
-                provider.create_branch(repository, branch, approved)
-            }
+            Self::BranchCreate { branch } => provider.create_branch(repository, branch, approved),
             Self::Stage { paths } => provider.stage(repository, paths, approved),
             Self::Unstage { paths } => provider.unstage(repository, paths, approved),
             Self::Commit { message } => provider.commit(repository, message, approved),
@@ -216,10 +214,7 @@ fn require_approval(
     }
 }
 
-fn required_string<'a>(
-    request: &'a RequestEnvelope,
-    name: &str,
-) -> Result<&'a str, ProviderError> {
+fn required_string<'a>(request: &'a RequestEnvelope, name: &str) -> Result<&'a str, ProviderError> {
     request
         .arguments
         .get(name)
@@ -331,7 +326,12 @@ mod tests {
         }
     }
 
-    fn request(root: &Path, capability: &str, operation: &str, arguments: Value) -> RequestEnvelope {
+    fn request(
+        root: &Path,
+        capability: &str,
+        operation: &str,
+        arguments: Value,
+    ) -> RequestEnvelope {
         let head = git(root, &["rev-parse", "HEAD"]).trim().to_owned();
         let mut arguments = arguments;
         arguments["expected_head"] = json!(head);
@@ -361,12 +361,7 @@ mod tests {
 
         let root = repository();
         fs::write(root.join("a.txt"), "two\n").expect("modify");
-        let request = request(
-            &root,
-            "git.stage",
-            "stage",
-            json!({"paths": ["a.txt"]}),
-        );
+        let request = request(&root, "git.stage", "stage", json!({"paths": ["a.txt"]}));
         let before = git(&root, &["diff", "--cached", "--name-only"]);
         let error = dispatch(&workspace(&root), &Deny, &request)
             .expect_err("denial")
@@ -380,12 +375,7 @@ mod tests {
     fn approved_stage_mutates_only_after_bound_approval() {
         let root = repository();
         fs::write(root.join("a.txt"), "two\n").expect("modify");
-        let request = request(
-            &root,
-            "git.stage",
-            "stage",
-            json!({"paths": ["a.txt"]}),
-        );
+        let request = request(&root, "git.stage", "stage", json!({"paths": ["a.txt"]}));
         let result = dispatch(
             &workspace(&root),
             &FixedApprovalBroker(ApprovalDecision::Approved),
