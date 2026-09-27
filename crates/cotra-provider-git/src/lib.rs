@@ -2,8 +2,8 @@ pub mod fetch;
 mod mutation;
 
 pub use fetch::{
-    destination_ref, parse_destination, source_ref, FetchPreview, GitFetchDestination,
-    SystemResolver,
+    destination_ref, parse_destination, source_ref, ApprovedFetch, FetchPreview,
+    GitFetchDestination, SystemResolver,
 };
 pub use mutation::GitMutationState;
 

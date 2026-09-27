@@ -1,7 +1,7 @@
 #[path = "sg000015.rs"]
-mod legacy;
+mod sg000015_legacy;
 
-pub use legacy::{validate_relative_target, PolicyDecision, PolicyError, Workspace};
+pub use sg000015_legacy::{validate_relative_target, PolicyDecision, PolicyError, Workspace};
 
 use cotra_contracts::{FailureCode, RequestEnvelope};
 use serde_json::{Map, Value};
@@ -25,7 +25,7 @@ pub struct FetchDestination {
 
 #[derive(Debug, Clone)]
 pub struct PolicyEngine {
-    legacy: legacy::PolicyEngine,
+    legacy: sg000015_legacy::PolicyEngine,
     destinations: BTreeMap<(String, String), FetchDestination>,
 }
 
@@ -71,7 +71,7 @@ impl PolicyEngine {
             }
         }
         Ok(Self {
-            legacy: legacy::PolicyEngine::new(workspaces)?,
+            legacy: sg000015_legacy::PolicyEngine::new(workspaces)?,
             destinations: map,
         })
     }

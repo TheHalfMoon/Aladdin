@@ -100,17 +100,17 @@ pub fn dispatch(
                 ),
             };
             require_approval(approval, &prompt)?;
+            let fetch_args = cotra_provider_git::fetch::ApprovedFetch {
+                relative: &repository,
+                destination: &provider_destination,
+                policy_id: &policy_id,
+                branch: &branch,
+                expected_head: &expected_head,
+                expected_prior: &expected_prior,
+                pinned: &pinned,
+            };
             let result = provider
-                .fetch_approved(
-                    &repository,
-                    &provider_destination,
-                    &policy_id,
-                    &branch,
-                    &expected_head,
-                    &expected_prior,
-                    &pinned,
-                    resolver,
-                )
+                .fetch_approved(&fetch_args, resolver)
                 .map_err(map_git_error)?;
             Ok(Some(result))
         }

@@ -1,6 +1,6 @@
 use cotra_provider_git::fetch::{
-    destination_ref, parse_destination, select_pinned_address, source_ref, DnsResolver,
-    GitFetchDestination, SystemResolver,
+    destination_ref, parse_destination, select_pinned_address, source_ref, ApprovedFetch,
+    DnsResolver, GitFetchDestination, SystemResolver,
 };
 use cotra_provider_git::{GitProvider, GitProviderError};
 use std::net::IpAddr;
@@ -169,13 +169,15 @@ fn fetch_rejects_non_public_pinned_address_before_network() {
     };
     let error = provider
         .fetch_approved(
-            ".",
-            &destination(),
-            "test-origin",
-            "main",
-            &head,
-            "ABSENT",
-            &loopback,
+            &ApprovedFetch {
+                relative: ".",
+                destination: &destination(),
+                policy_id: "test-origin",
+                branch: "main",
+                expected_head: &head,
+                expected_prior: "ABSENT",
+                pinned: &loopback,
+            },
             &resolver,
         )
         .expect_err("loopback must fail");
@@ -198,13 +200,15 @@ fn fetch_fails_closed_on_stale_head_prior_and_drift() {
     let stale_head = "ffffffffffffffffffffffffffffffffffffffff";
     let error = provider
         .fetch_approved(
-            ".",
-            &destination(),
-            "test-origin",
-            "main",
-            stale_head,
-            "ABSENT",
-            &real_public,
+            &ApprovedFetch {
+                relative: ".",
+                destination: &destination(),
+                policy_id: "test-origin",
+                branch: "main",
+                expected_head: stale_head,
+                expected_prior: "ABSENT",
+                pinned: &real_public,
+            },
             &resolver,
         )
         .expect_err("stale head must fail");
@@ -212,13 +216,15 @@ fn fetch_fails_closed_on_stale_head_prior_and_drift() {
 
     let error = provider
         .fetch_approved(
-            ".",
-            &destination(),
-            "test-origin",
-            "main",
-            &head,
-            &head,
-            &real_public,
+            &ApprovedFetch {
+                relative: ".",
+                destination: &destination(),
+                policy_id: "test-origin",
+                branch: "main",
+                expected_head: &head,
+                expected_prior: &head,
+                pinned: &real_public,
+            },
             &resolver,
         )
         .expect_err("stale prior must fail");
@@ -232,13 +238,15 @@ fn fetch_fails_closed_on_stale_head_prior_and_drift() {
     let pinned = select_pinned_address(&[real_public]).unwrap();
     let error = provider
         .fetch_approved(
-            ".",
-            &destination(),
-            "test-origin",
-            "main",
-            &head,
-            "ABSENT",
-            &pinned,
+            &ApprovedFetch {
+                relative: ".",
+                destination: &destination(),
+                policy_id: "test-origin",
+                branch: "main",
+                expected_head: &head,
+                expected_prior: "ABSENT",
+                pinned: &pinned,
+            },
             &drift,
         )
         .expect_err("drift must fail");
@@ -267,13 +275,15 @@ fn fetch_rejects_unsafe_repository_local_network_config() {
     };
     let error = provider
         .fetch_approved(
-            ".",
-            &destination(),
-            "test-origin",
-            "main",
-            &head,
-            "ABSENT",
-            &real_public,
+            &ApprovedFetch {
+                relative: ".",
+                destination: &destination(),
+                policy_id: "test-origin",
+                branch: "main",
+                expected_head: &head,
+                expected_prior: "ABSENT",
+                pinned: &real_public,
+            },
             &resolver,
         )
         .expect_err("rewrite must fail");
@@ -304,13 +314,15 @@ fn real_https_qualification_against_pinned_public_source() {
     assert_eq!(preview.head, head);
     let result = provider
         .fetch_approved(
-            ".",
-            &destination,
-            &destination.id,
-            "main",
-            &preview.head,
-            &preview.prior,
-            &pinned,
+            &ApprovedFetch {
+                relative: ".",
+                destination: &destination,
+                policy_id: &destination.id,
+                branch: "main",
+                expected_head: &preview.head,
+                expected_prior: &preview.prior,
+                pinned: &pinned,
+            },
             &resolver,
         )
         .expect("real HTTPS fetch");

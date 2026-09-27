@@ -71,7 +71,7 @@ impl DnsResolver for SystemResolver {
                 "destination hostname resolved to no addresses",
             ));
         }
-        addresses.sort_by(|left, right| left.to_string().cmp(&right.to_string()));
+        addresses.sort_by_key(|address| address.to_string());
         Ok(addresses)
     }
 }
@@ -424,9 +424,6 @@ fn is_public_ipv6(value: &Ipv6Addr) -> bool {
     if segments[0] == 0x0064 && (segments[1] & 0xffc0) == 0xff00 {
         return false;
     }
-    if value.is_unicast_link_local() {
-        return false;
-    }
     if value.octets()[0] == 0 && value.octets()[1] == 0 {
         return false;
     }
@@ -456,9 +453,20 @@ pub fn select_pinned_address(addresses: &[IpAddr]) -> Result<IpAddr, GitProvider
             "destination resolved only to non-public addresses; fetch is denied",
         ));
     }
-    public.sort_by(|left, right| left.to_string().cmp(&right.to_string()));
+    public.sort_by_key(|address| address.to_string());
     public.dedup();
     Ok(public[0])
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct ApprovedFetch<'a> {
+    pub relative: &'a str,
+    pub destination: &'a GitFetchDestination,
+    pub policy_id: &'a str,
+    pub branch: &'a str,
+    pub expected_head: &'a str,
+    pub expected_prior: &'a str,
+    pub pinned: &'a IpAddr,
 }
 
 impl GitProvider {
@@ -549,15 +557,16 @@ impl GitProvider {
 
     pub fn fetch_approved(
         &self,
-        relative: &str,
-        destination: &GitFetchDestination,
-        policy_id: &str,
-        branch: &str,
-        expected_head: &str,
-        expected_prior: &str,
-        pinned: &IpAddr,
+        args: &ApprovedFetch<'_>,
         resolver: &impl DnsResolver,
     ) -> Result<Value, GitProviderError> {
+        let relative = args.relative;
+        let destination = args.destination;
+        let policy_id = args.policy_id;
+        let branch = args.branch;
+        let expected_head = args.expected_head;
+        let expected_prior = args.expected_prior;
+        let pinned = args.pinned;
         validate_policy_id(policy_id)?;
         if policy_id != destination.id {
             return Err(invalid(
