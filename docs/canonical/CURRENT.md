@@ -1,11 +1,11 @@
 # Cotra Current Canonical Frontier
 
-Status: CLOSEOUT_CANDIDATE
+Status: ACTIVE_GRAIN
 Date: 2026-09-27
-Governance snapshot base: 8bb6b50a543d20d27f8cc86fa43a1ab747571ea4
+Governance snapshot base: 5ded68d3f42100ef6f077c6b61fcd79c2a0784d5
 Evidence ledger: `.specgrain/canonical-evidence.json`
 
-`Governance snapshot base` records the exact canonical parent from which this closeout snapshot was authored. It deliberately does not claim the eventual merge SHA of the commit containing this file.
+`Governance snapshot base` records the exact canonical parent from which this activation snapshot was authored. It deliberately does not claim the eventual merge SHA of the commit containing this file.
 
 ## SpecGrain state semantics
 
@@ -17,34 +17,60 @@ The machine-readable evidence for every `CLOSED` grain is recorded in `.specgrai
 
 ## Closed canonical grains
 
-SG-000001 through SG-000013 are already `CLOSED` and canonical.
+SG-000001 through SG-000014 are `CLOSED` and canonical.
 
-This closeout candidate records SG-000014 as `CLOSED` using the qualified implementation and merged-tree evidence below. That closeout classification becomes canonical only after this governance change itself merges and the resulting canonical main passes post-merge CI.
+SG-000014 closeout merged through PR `#33` as canonical main `5ded68d3f42100ef6f077c6b61fcd79c2a0784d5`; post-closeout CI `36302401799` completed SUCCESS.
 
-SG-000014 implementation evidence:
-- implementation PR: `#32`;
-- implementation base: `8ae4a41c242878b4e5ed9a8431dd4f23fc4b69fa`;
-- qualified head: `5825070722220046717015c77efa528e132344e0`;
-- exact-head CI: `36294704134` — SUCCESS;
-- exact-head Review Gates: `36294703030` — SUCCESS;
-- implementation merge: `8bb6b50a543d20d27f8cc86fa43a1ab747571ea4`;
-- implementation post-merge CI: `36294846126` — SUCCESS.
+The completed COTRA-P05 program now has canonical evidence for bounded argv execution, destructive timeout/output-limit termination, descendant lifecycle hardening, protected-state isolation, provider-private bounded PowerShell containment, and workspace-scoped AppContainer filesystem qualification. Public `powershell.run` was not exposed by P05.
 
-Native Windows qualification proved that the zero-capability AppContainer child could read the deterministic input and create the deterministic output only inside the explicitly granted test-owned workspace, remained denied the deterministic sibling resource, observed NUL/EOF stdin, received no tested Cotra/API secret-like environment values, and reached verified Job quiescence. The original workspace DACL was explicitly restored before fixture cleanup. SG-000012 protected-state isolation and SG-000013 bounded PowerShell regressions remained green.
+## Active grain
 
-Genuine TypeSafe Jev reviewed the exact implementation range with `2/2` hunks, zero findings, and zero blocking findings. Alibaba Open Code Review v1.12.9 delegated the exact range with one reviewable code file and one unsupported-extension security note; the excluded note was manually security-reviewed. There were zero unresolved blocking review threads.
+SG-000015 — Approved local Git mutation foundation — is the sole active COTRA-P06 grain.
 
-## Successor frontier
+This activation authorizes implementation and qualification of local-only typed Git mutation for trusted workspace repositories:
+- create and switch to one new validated branch rooted at an exact expected HEAD;
+- stage an explicit literal repository-relative path set;
+- unstage an explicit literal repository-relative path set;
+- create one non-amending unsigned commit from an exact approved staged state.
 
-No successor grain is authorized by this closeout candidate.
+Every mutation must require fresh local approval and must re-check expected HEAD plus the material approved state after approval before changing repository state.
 
-After this SG-000014 closeout merges and its post-merge CI succeeds, re-read the canonical architecture, delivery plan, evidence ledger, open governance records, and `CURRENT.md` to derive the next lawful COTRA-P05 frontier. Do not infer or pre-authorize SG-000015 from numbering alone.
+## Active acceptance frontier
+
+SG-000015 must prove that local Git mutation is narrower than generic Git command execution.
+
+Required controls include:
+- repository root remains canonically inside the selected trusted workspace;
+- expected HEAD is mandatory and stale HEAD fails closed before mutation;
+- approval binds workspace, repository, operation, expected HEAD, exact literal path set or staged-state digest, branch/message material, and policy revision;
+- material state is revalidated after approval before mutation;
+- hooks, editors, commit signing, credential prompting/helpers, fsmonitor, pagers, and Git network transport remain disabled or absent;
+- staging rejects paths with configured Git filter drivers so clean/smudge/process filters cannot become hidden code-execution authority;
+- mutation path inputs reject absolute paths, parent escapes, NUL, pathspec magic, and `.git` control paths;
+- postconditions verify resulting branch/HEAD/index/commit evidence;
+- read-only `git.status`, `git.diff`, and `git.log` regressions remain green.
+
+## Deferred COTRA-P06 authority
+
+Not authorized by SG-000015:
+- `git.fetch`;
+- `git.push`;
+- any Git network transport;
+- credential helpers or interactive credential prompts;
+- force push;
+- branch deletion;
+- switching to an existing branch;
+- reset, rebase, merge, cherry-pick, revert, stash, clean, tag mutation, or arbitrary Git subcommands;
+- submodule mutation;
+- commit amend or commit signing.
+
+A later lawful COTRA-P06 grain may qualify bounded network Git operations only after SG-000015 reaches canonical closeout and destination/credential policy is explicitly defined and proven.
 
 ## Canonical public authority boundary retained
 
 Windows public `process.spawn` remains positively restricted to the exact SG-000010-qualified `%SystemRoot%\System32\whoami.exe` target.
 
-Still denied or absent:
+Still denied or absent outside the active SG-000015 Git-local scope:
 - public `powershell.run`;
 - caller-provided PowerShell script text;
 - direct PowerShell executable authority through `process.spawn`;
@@ -59,7 +85,6 @@ Still denied or absent:
 - PowerShell remoting;
 - detached/background public execution;
 - public process kill capability;
-- Git mutation;
 - browser automation;
 - Windows UI Automation/input injection;
 - elevation;
