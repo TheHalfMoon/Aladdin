@@ -430,6 +430,12 @@ fn validate_branch(branch: &str) -> Result<(), PolicyError> {
             "Git branch name is empty, unsafe, or too large",
         ));
     }
+    if branch == "refs" || branch.starts_with("refs/") {
+        return Err(policy_error(
+            FailureCode::InvalidRequest,
+            "Git branch name must be a short name, not a full ref",
+        ));
+    }
     if branch.bytes().any(|byte| {
         matches!(
             byte,
@@ -452,7 +458,12 @@ fn validate_branch(branch: &str) -> Result<(), PolicyError> {
             "Git branch name has an unsafe leading or trailing component",
         ));
     }
-    if branch.contains("//") || branch.contains("..") || branch.contains("@{") {
+    if branch.contains("//")
+        || branch.contains("/.")
+        || branch.contains(".lock/")
+        || branch.contains("..")
+        || branch.contains("@{")
+    {
         return Err(policy_error(
             FailureCode::InvalidRequest,
             "Git branch name contains an unsafe sequence",
@@ -460,6 +471,12 @@ fn validate_branch(branch: &str) -> Result<(), PolicyError> {
     }
     for component in branch.split('/') {
         if component.is_empty() || component == "." || component == ".." || component == "@" {
+            return Err(policy_error(
+                FailureCode::InvalidRequest,
+                "Git branch name contains an unsafe component",
+            ));
+        }
+        if component.starts_with('.') || component.ends_with(".lock") {
             return Err(policy_error(
                 FailureCode::InvalidRequest,
                 "Git branch name contains an unsafe component",

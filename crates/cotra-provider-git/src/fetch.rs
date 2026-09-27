@@ -119,6 +119,11 @@ pub fn validate_branch(branch: &str) -> Result<String, GitProviderError> {
     if branch.is_empty() || branch.len() > 255 {
         return Err(invalid("Git fetch branch is empty or too large"));
     }
+    if branch == "refs" || branch.starts_with("refs/") {
+        return Err(invalid(
+            "Git fetch branch must be a short name, not a full ref",
+        ));
+    }
     if branch.bytes().any(|byte| {
         matches!(
             byte,
