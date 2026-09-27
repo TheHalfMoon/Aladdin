@@ -1,0 +1,90 @@
+{
+  "id": "SG-000015",
+  "title": "Approved local Git mutation foundation",
+  "program": "COTRA-P06",
+  "state": "GRAIN",
+  "risk": "high",
+  "created": "2026-09-27",
+  "base": "5ded68d3f42100ef6f077c6b61fcd79c2a0784d5",
+  "dependencies": ["SG-000002", "SG-000003", "SG-000014"],
+  "objective": "Introduce the first bounded local Git mutation surface for trusted workspace repositories: create-and-switch a new branch from an exact expected HEAD, stage or unstage an exact literal path set, and create a non-amending commit from an exact approved staged state. Every mutation must require fresh local approval, re-check expected HEAD and material state after approval, return resulting-ref evidence, and remain local-only with Git hooks, signing, editors, credential prompting, network transport, destructive history operations, and arbitrary shell execution disabled or absent.",
+  "scope": {
+    "include": [
+      "git.branch.create for a new validated branch name rooted at the exact expected HEAD and switched without changing the commit tree",
+      "git.stage for explicit literal repository-relative file paths only",
+      "git.unstage for explicit literal repository-relative file paths only",
+      "git.commit for a bounded UTF-8 message without amend or signing",
+      "fresh local approval bound to workspace, repository, operation, expected HEAD, exact path set or staged-state digest, branch name or commit-message digest, and policy revision",
+      "post-approval expected-HEAD and material-state revalidation before mutation",
+      "postcondition verification of resulting HEAD, current branch, index state, and resulting commit/ref where applicable",
+      "repository-local identity requirements for commit authoring without global config inheritance",
+      "explicit disabling of Git hooks, editors, signing, credential prompting, fsmonitor, pagers, and network transport for this grain",
+      "negative qualification for path escape, stale expected HEAD, approval denial/unavailability, hook execution, configured filter drivers on staged paths, and unsupported repository operation state",
+      "Windows and Ubuntu exact-head qualification with existing read-only Git regressions retained"
+    ],
+    "exclude": [
+      "git.fetch",
+      "git.push",
+      "any Git network transport",
+      "force push",
+      "branch deletion",
+      "checkout or switch to an existing branch",
+      "reset, rebase, merge, cherry-pick, revert, stash, clean, tag mutation, or reflog mutation APIs",
+      "commit amend",
+      "commit signing",
+      "Git hooks",
+      "external clean or smudge filter execution",
+      "external diff or textconv execution",
+      "credential helpers or interactive credential prompting",
+      "submodule mutation",
+      "arbitrary Git subcommands",
+      "raw shell, cmd.exe, or PowerShell authority",
+      "public powershell.run",
+      "additional process.spawn executable targets",
+      "browser or UI automation",
+      "elevation",
+      "approval bypass or persistent approval reuse"
+    ]
+  },
+  "authority_delta": {
+    "filesystem": "Bounded repository-local Git index, HEAD/ref, and object-database mutation inside an already trusted workspace after fresh local approval; no arbitrary filesystem grant.",
+    "process": "No generic process authority. The existing typed Git provider may execute only fixed Git subcommands required by this grain with sanitized non-interactive configuration.",
+    "network": "None; fetch, push, credential helpers, and Git network transport are excluded.",
+    "browser": "None",
+    "ui_input": "None",
+    "secrets": "No new secret access; credential prompting/helpers and inherited secret-like environment remain unavailable.",
+    "approval": "Fresh local approval is mandatory for every Git mutation and is bound to exact normalized mutation state.",
+    "privileged": "None"
+  },
+  "invariants": [
+    "Read-only git.status, git.diff, and git.log remain available without mutation",
+    "Every Git mutation is restricted to a repository whose canonical root remains inside the selected trusted workspace",
+    "Every mutation requires an exact expected HEAD and fails with TARGET_STALE if HEAD differs before or after approval",
+    "Approval is bound to the exact mutation target and material state; drift after approval fails closed before mutation",
+    "Path-bearing Git mutation accepts only explicit literal repository-relative paths and rejects absolute, parent-escape, NUL, pathspec-magic, and .git-control paths",
+    "Git hooks cannot execute during qualified mutations",
+    "Stage refuses paths with configured Git filter drivers so clean/smudge/process filters cannot become hidden code-execution authority",
+    "Commit uses an explicit message, disables editors and signing, does not amend, and requires repository-local author identity",
+    "No Git network operation, credential prompt/helper, fetch, push, submodule mutation, force push, reset, rebase, merge, or arbitrary Git subcommand is reachable",
+    "Public process.spawn remains restricted to the SG-000010-qualified System32 whoami.exe target and public powershell.run remains absent",
+    "No browser/UI, elevation, approval bypass, or persistent approval reuse is introduced"
+  ],
+  "acceptance": [
+    {"id": "A1", "claim": "Exact-head tests prove approved git.branch.create creates and switches to one validated new branch rooted at the exact expected HEAD, rejects an existing/invalid branch and stale HEAD, executes no hooks, and returns verified current-branch and HEAD evidence."},
+    {"id": "A2", "claim": "Exact-head tests prove approved git.stage stages only the requested literal repository-relative paths, rejects escapes and paths with configured filter drivers, revalidates the approved worktree-diff state before mutation, and returns verified staged-state evidence."},
+    {"id": "A3", "claim": "Exact-head tests prove approved git.unstage removes only the requested literal paths from the index, revalidates the approved staged-state digest before mutation, and returns verified index evidence."},
+    {"id": "A4", "claim": "Exact-head tests prove approved git.commit creates exactly one non-amending unsigned commit from the approved staged state, with parent equal to expected HEAD, bounded explicit message, repository-local author identity, hooks/editors disabled, and verified resulting HEAD evidence."},
+    {"id": "A5", "claim": "Approval denial/unavailability and any stale HEAD, staged-state, worktree-state, branch, or unsupported repository operation state fail before mutation and preserve repository refs/index/worktree."},
+    {"id": "A6", "claim": "Tests prove fetch/push/network, credential helpers/prompts, hooks, signing, submodule mutation, destructive history operations, arbitrary Git subcommands, public PowerShell, and broader process authority remain unreachable."},
+    {"id": "A7", "claim": "Existing read-only Git operations and SG-000014/P05 regressions remain green with no authority expansion outside the bounded local Git mutation surface."},
+    {"id": "A8", "claim": "Exact-head Windows/Ubuntu Rust, Node, Governance, genuine TypeSafe Jev, Alibaba Open Code Review, exact-diff security review, and zero unresolved blocking review threads all pass."}
+  ],
+  "review": {
+    "diffcipline": true,
+    "jev_semantic_review": true,
+    "alibaba_open_code_review": "required exact-range qualification where integrated",
+    "security_review": true,
+    "exact_head_ci": true
+  },
+  "done_when": "Bounded branch-create/switch, stage, unstage, and commit operations are merged and post-merge verified with expected-HEAD and approval-drift protection, resulting-ref/index evidence, hooks/filters/network suppression, and no destructive or network Git authority."
+}
