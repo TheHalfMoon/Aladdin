@@ -70,9 +70,7 @@ fn branch_stage_unstage_and_commit_are_exact_and_verified() {
         .as_str()
         .is_some_and(|value| value.contains("a.txt")));
 
-    let unstage_state = provider
-        .unstage_state(".", &paths)
-        .expect("unstage state");
+    let unstage_state = provider.unstage_state(".", &paths).expect("unstage state");
     provider
         .unstage(".", &paths, &unstage_state)
         .expect("unstage exact path");
