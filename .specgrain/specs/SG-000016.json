@@ -1,0 +1,103 @@
+{
+  "id": "SG-000016",
+  "title": "Bounded Git HTTPS fetch and egress-policy foundation",
+  "program": "COTRA-P06",
+  "state": "GRAIN",
+  "risk": "high",
+  "created": "2026-09-27",
+  "base": "3623363603ab2cd2edfb2f456beb84c420983fc8",
+  "dependencies": ["SG-000015"],
+  "objective": "Introduce the first destination-scoped Git network capability without introducing ambient network, credential, shell, or push authority. Add workspace-bound HTTPS Git destination policy and an approved git.fetch operation that fetches one explicit branch ref from one explicitly configured destination into a Cotra-owned remote-tracking namespace while binding expected local state, pinning an allowed public destination address for the actual HTTPS request, disabling redirects and inherited credential/proxy behavior, and verifying resulting refs. git.push remains hard-denied in this grain and must be qualified separately after a protected credential-binding design exists.",
+  "scope": {
+    "include": [
+      "workspace policy records for explicitly configured Git HTTPS fetch destinations identified by stable policy ids rather than caller-supplied arbitrary URLs",
+      "canonical destination validation requiring https, an explicit DNS hostname, port 443 or the implicit HTTPS default, no URL userinfo, no query, no fragment, and no alternate Git transport syntax",
+      "DNS resolution through a testable resolver boundary followed by public-address classification that rejects loopback, private, link-local, multicast, unspecified, documentation/special-use, and otherwise non-public destinations",
+      "binding one validated destination address to the actual Git HTTPS request so DNS rebinding cannot silently widen the approved destination",
+      "git.fetch for one explicit refs/heads/<branch> source ref into a deterministic Cotra-owned refs/remotes/cotra/<policy-id>/<branch> destination ref",
+      "fresh local approval for every fetch, bound to workspace, repository identity, policy revision, destination policy id, canonical HTTPS URL, hostname, port, pinned destination address, source ref, destination ref, expected HEAD, and expected prior destination-ref state",
+      "post-approval re-resolution and policy revalidation before network use; any material policy, repository, HEAD, destination, or ref drift fails closed",
+      "fixed Git transport hardening including HTTPS-only protocol allowlisting, disabled redirects, TLS verification enabled, no proxy inheritance, no cookies, no extra HTTP headers inherited from repository policy, no credential helper, no askpass/interactive prompt, no submodule recursion, no tags, no prune, and no FETCH_HEAD mutation where supported",
+      "repository-local configuration inspection that rejects URL rewrite rules or other local Git configuration capable of redirecting or widening the approved network destination",
+      "postcondition verification that checked-out HEAD, branch, index/worktree material state remain unchanged and only the authorized Cotra-owned remote-tracking ref/object data changes as intended",
+      "typed evidence reporting canonical destination identity, approved/pinned address, source ref, prior destination-ref state, resulting destination-ref object id, and unchanged local HEAD evidence",
+      "deterministic unit/security tests with injected DNS results plus at least one no-cost real HTTPS fetch qualification against an explicitly pinned public test source",
+      "Windows and Ubuntu exact-head qualification with SG-000015 local mutation and existing read-only Git regressions retained"
+    ],
+    "exclude": [
+      "git.push",
+      "any credential secret access or credential-reference resolution",
+      "credential helpers, askpass, interactive username/password/token prompts, or URL-embedded credentials",
+      "HTTP without TLS",
+      "SSH, git://, file://, ext, remote helpers, SCP-style syntax, or arbitrary protocols",
+      "caller-supplied arbitrary remote URLs",
+      "redirect following",
+      "proxy inheritance or caller-selected proxies",
+      "private, loopback, link-local, multicast, unspecified, metadata-style, or other non-public destination addresses",
+      "wildcard, negative, deletion, tag, notes, replace, or caller-selected arbitrary destination refspecs",
+      "force fetch into arbitrary refs",
+      "force push",
+      "branch deletion",
+      "submodule fetch/update",
+      "tag fetch/update",
+      "prune",
+      "checkout, merge, reset, rebase, cherry-pick, revert, stash, clean, or worktree mutation caused by fetch",
+      "arbitrary Git subcommands or argv",
+      "general network.fetch or generic HTTP client authority",
+      "raw shell, cmd.exe, or PowerShell authority",
+      "public powershell.run",
+      "additional process.spawn executable targets",
+      "browser or UI automation",
+      "elevation",
+      "approval bypass or persistent approval reuse"
+    ]
+  },
+  "authority_delta": {
+    "filesystem": "Git may add fetched objects and update exactly one deterministic Cotra-owned remote-tracking ref inside an already trusted repository after approval; checked-out HEAD, current branch, index, worktree, tags, ordinary remote-tracking refs, and arbitrary refs are not writable through this grain.",
+    "process": "No generic process authority. The typed Git provider may execute only the fixed read/state commands and the fixed hardened HTTPS fetch command required by this grain.",
+    "network": "Adds DIRECT_DESTINATION egress only for an explicitly configured HTTPS Git destination whose hostname and port are policy-bound and whose validated public address is pinned to the actual request. No generic socket/HTTP/proxy authority is added.",
+    "browser": "None",
+    "ui_input": "None",
+    "secrets": "None. This grain is anonymous/no-credential only; ambient Git credentials, helpers, URL userinfo, tokens, cookies, custom authorization headers, and inherited proxy/secret environment are denied.",
+    "approval": "Fresh local approval is mandatory for every fetch and binds exact destination, pinned address, repository/ref state, and policy revision.",
+    "privileged": "None"
+  },
+  "invariants": [
+    "No caller can turn git.fetch into arbitrary network access because the URL originates from workspace policy rather than request data",
+    "Only canonical HTTPS destinations on the approved hostname and port are usable; alternate Git protocols and redirect widening fail closed",
+    "The address actually used by Git is one public address validated and bound by Cotra rather than an unverified later DNS result",
+    "Repository-local URL rewrite, proxy, credential, header, cookie, or transport configuration cannot widen or decorate the approved request",
+    "Fetch never receives ambient credentials and cannot invoke credential helpers, askpass, shell helpers, or interactive prompts",
+    "Every fetch requires exact expected local HEAD and exact prior destination-ref state before and after approval",
+    "Fetch writes only the deterministic refs/remotes/cotra namespace entry selected from a validated source branch and never updates checked-out HEAD, index, worktree, tags, submodules, or arbitrary refs",
+    "git.push remains policy-denied and provider-unreachable in this grain",
+    "Force push remains impossible; no push transport is exposed",
+    "Existing SG-000015 local branch/stage/unstage/commit controls remain unchanged and local-only",
+    "Public process.spawn remains restricted to the SG-000010-qualified System32 whoami.exe target and public powershell.run remains absent",
+    "No browser/UI, elevation, generic network, or approval bypass authority is introduced"
+  ],
+  "acceptance": [
+    {"id": "A1", "claim": "Tests prove workspace Git-destination policy accepts only canonical HTTPS hostname destinations and rejects URL userinfo, query/fragment, non-443 explicit ports, HTTP, SSH/SCP, git://, file://, ext/remote-helper forms, malformed hostnames, caller-provided arbitrary URLs, and duplicate/ambiguous policy ids."},
+    {"id": "A2", "claim": "Resolver/policy tests prove loopback, private, link-local, multicast, unspecified, documentation/special-use, and other non-public IPv4/IPv6 results fail before approval/network use; approved public resolution is pinned into the actual Git HTTP transport configuration and post-approval resolution/policy drift fails closed."},
+    {"id": "A3", "claim": "Exact-head tests prove approved git.fetch accepts only one validated refs/heads/<branch> source and maps it to the deterministic refs/remotes/cotra/<policy-id>/<branch> destination with exact expected HEAD and exact expected prior destination-ref state."},
+    {"id": "A4", "claim": "Network command-plan tests prove HTTPS is the only allowed Git protocol; redirects are disabled; TLS verification is enabled; proxy, cookies, extra headers, credential helpers, askpass/interactive prompts, tags, prune, submodules, FETCH_HEAD mutation, arbitrary refspecs, URL rewrites, and inherited secret-like environment cannot widen the operation."},
+    {"id": "A5", "claim": "Exact-head tests prove approval denial/unavailability, stale HEAD/ref/policy/destination state, unsafe repository-local network Git configuration, DNS-address widening, transport error, or postcondition mismatch fail closed and do not mutate checked-out HEAD/index/worktree or unauthorized refs."},
+    {"id": "A6", "claim": "Successful fetch evidence verifies the resulting Cotra-owned destination ref object id and proves checked-out HEAD, current branch, index/worktree material state are unchanged. A no-cost real HTTPS qualification exercises the actual hardened transport against an explicitly pinned public source without credentials."},
+    {"id": "A7", "claim": "Tests prove git.push, force push, credential-secret access, arbitrary Git/network commands, general network.fetch, public PowerShell, and broader process authority remain unreachable."},
+    {"id": "A8", "claim": "SG-000015 branch/stage/unstage/commit and read-only git.status/diff/log regressions remain green with no authority expansion outside the bounded HTTPS fetch surface."},
+    {"id": "A9", "claim": "Exact-head Windows/Ubuntu Rust, Node, Governance, genuine TypeSafe Jev, Alibaba Open Code Review, exact-diff security review, manual review of excluded security-sensitive files, and zero unresolved blocking review threads all pass."}
+  ],
+  "successor_requirements": {
+    "git_push": "A later COTRA-P06 grain must add git.push only after defining a protected credential-reference path or an explicitly credentialless approved destination, fresh approval, exact source and remote destination refs, expected remote-ref protection, non-fast-forward/force hard denial, destination revalidation, secret redaction, and post-push remote-ref verification.",
+    "credential_policy": "No ambient Git credential manager or caller-supplied raw token may be promoted into authority by implication. Any authenticated push successor must bind secrets through an explicit protected credential capability and must prove that raw credentials never appear in request/tool output, logs, audit, command argv, persisted Git config, or unrelated child environments."
+  },
+  "review": {
+    "diffcipline": true,
+    "jev_semantic_review": true,
+    "alibaba_open_code_review": "required exact-range qualification where integrated",
+    "security_review": true,
+    "exact_head_ci": true,
+    "native_network_qualification": true
+  },
+  "done_when": "Destination-scoped anonymous HTTPS git.fetch is merged and post-merge verified with explicit workspace destination policy, public-address classification and request pinning, redirect/proxy/credential suppression, exact approval/state binding, deterministic Cotra-owned ref mutation, resulting-ref evidence, real no-cost HTTPS qualification, and git.push still hard-denied pending its credential-safe successor."
+}
