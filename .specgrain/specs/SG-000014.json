@@ -2,10 +2,16 @@
   "id": "SG-000014",
   "title": "Workspace-scoped AppContainer filesystem authority qualification",
   "program": "COTRA-P05",
-  "state": "GRAIN",
+  "state": "CLOSED",
   "risk": "high",
   "created": "2026-09-27",
   "base": "9b70d2629d66b6e79180edc2c813c460ae5b49fb",
+  "qualified_head": "5825070722220046717015c77efa528e132344e0",
+  "implementation_base": "8ae4a41c242878b4e5ed9a8431dd4f23fc4b69fa",
+  "implementation_merge": "8bb6b50a543d20d27f8cc86fa43a1ab747571ea4",
+  "pre_merge_ci": "36294704134",
+  "pre_merge_review_gates": "36294703030",
+  "post_merge_ci": "36294846126",
   "dependencies": ["SG-000010", "SG-000011", "SG-000012", "SG-000013"],
   "objective": "Qualify the minimum stable-Windows filesystem authority required for a zero-capability AppContainer child to read and write only within an explicitly trusted workspace, while preserving denial of Cotra protected state, unrelated user resources, network capability, and authority-channel inheritance. This is a provider-private qualification grain and must not expose new public PowerShell or process authority.",
   "scope": {
@@ -75,5 +81,20 @@
     "security_review": true,
     "exact_head_ci": true
   },
-  "done_when": "Workspace-scoped AppContainer read/write authority is proven on native Windows with negative isolation regressions, merged and post-merge verified, while public PowerShell and broader process/filesystem authority remain absent."
+  "done_when": "Workspace-scoped AppContainer read/write authority is proven on native Windows with negative isolation regressions, merged and post-merge verified, while public PowerShell and broader process/filesystem authority remain absent.",
+  "canonical_evidence": {
+    "implementation_pr": 32,
+    "implementation_base": "8ae4a41c242878b4e5ed9a8431dd4f23fc4b69fa",
+    "qualified_head": "5825070722220046717015c77efa528e132344e0",
+    "pre_merge_ci": "36294704134",
+    "pre_merge_review_gates": "36294703030",
+    "merge_sha": "8bb6b50a543d20d27f8cc86fa43a1ab747571ea4",
+    "post_merge_ci": "36294846126",
+    "native_windows": "SUCCESS: the zero-capability AppContainer child read the deterministic input and created the deterministic output only inside the explicitly granted test-owned workspace, remained denied the deterministic sibling resource, observed NUL/EOF stdin, received no tested Cotra/API secret-like variables, and reached verified Job quiescence; SG-000012 and SG-000013 regressions remained green.",
+    "jev": "PASSED: 2/2 hunks, zero findings, zero blocking findings",
+    "ocr": "PASSED: Open Code Review v1.12.9 exact-range delegation, 2 files total, 1 reviewable, 1 excluded unsupported_ext and manually reviewed",
+    "security_review": "PASS on exact qualified head; temporary ACL grant is test-owned, workspace-scoped, explicitly restored, and introduces no public authority delta",
+    "unresolved_review_threads": 0,
+    "authority_boundary": "No new public authority. Public powershell.run remains absent and Windows public process.spawn remains restricted to the exact SG-000010-qualified %SystemRoot%\\System32\\whoami.exe target; caller-selected ACL authority, broad filesystem grants, generic executable-registry widening, process network, detached/background execution, public kill, Git mutation, browser/UI automation, elevation, and approval bypass/reuse remain absent."
+  }
 }
