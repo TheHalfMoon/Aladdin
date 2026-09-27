@@ -1,6 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/server";
 import { serveStdio } from "@modelcontextprotocol/server/stdio";
 import * as z from "zod/v4";
+import { registerGitMutationTools } from "./git_mutation.js";
 import { KernelClient, type KernelResponse } from "./kernel.js";
 import { processSpawnInputSchema } from "./process.js";
 
@@ -235,57 +236,50 @@ function createServer(): McpServer {
   );
 
   server.registerTool(
-  "process_spawn",
-  {
-    description:
-      "Execute one argv-only process after fresh local approval inside the selected trusted workspace. No shell string, caller environment, stdin payload, background mode, or process network authority is exposed.",
-    inputSchema: processSpawnInputSchema
-  },
-  async ({
-    workspace_id,
-    executable,
-    argv,
-    cwd,
-    timeout_ms,
-    stdout_bytes,
-    stderr_bytes,
-    stdin_policy,
-    network_class
-  }) => {
-    // EXECUTE uses a request-scoped daemon. If the MCP-side deadline expires,
-    // the finally block closes this daemon; closing cotrad drops its Job handle,
-    // preventing an approved process from starting or continuing after the caller
-    // has already observed a timeout.
-    const processKernel = new KernelClient();
-    clients.add(processKernel);
-    try {
-      return asToolResult(
-        await processKernel.call({
-          workspaceId: workspace_id,
-          capability: "process.spawn",
-          operation: "spawn",
-          arguments: {
-            executable,
-            argv,
-            cwd,
-            timeout_ms,
-            stdout_bytes,
-            stderr_bytes,
-            stdin_policy,
-            network_class
-          },
-          // Runtime timeout is enforced inside the provider. The additional window
-          // is reserved for explicit local approval; expiration still fails closed
-          // because the request-scoped daemon is terminated in finally.
-          timeoutMs: timeout_ms + 5 * 60_000
-        })
-      );
-    } finally {
-      clients.delete(processKernel);
-      processKernel.close();
+    "process_spawn",
+    {
+      description:
+        "Execute one argv-only process after fresh local approval inside the selected trusted workspace. No shell string, caller environment, stdin payload, background mode, or process network authority is exposed.",
+      inputSchema: processSpawnInputSchema
+    },
+    async ({
+      workspace_id,
+      executable,
+      argv,
+      cwd,
+      timeout_ms,
+      stdout_bytes,
+      stderr_bytes,
+      stdin_policy,
+      network_class
+    }) => {
+      const processKernel = new KernelClient();
+      clients.add(processKernel);
+      try {
+        return asToolResult(
+          await processKernel.call({
+            workspaceId: workspace_id,
+            capability: "process.spawn",
+            operation: "spawn",
+            arguments: {
+              executable,
+              argv,
+              cwd,
+              timeout_ms,
+              stdout_bytes,
+              stderr_bytes,
+              stdin_policy,
+              network_class
+            },
+            timeoutMs: timeout_ms + 5 * 60_000
+          })
+        );
+      } finally {
+        clients.delete(processKernel);
+        processKernel.close();
+      }
     }
-  }
-);
+  );
 
   server.registerTool(
     "git_status",
@@ -354,6 +348,8 @@ function createServer(): McpServer {
       )
   );
 
+  registerGitMutationTools(server, kernel, DEFAULT_WORKSPACE);
+
   server.server.onclose = () => {
     kernel.close();
     clients.delete(kernel);
@@ -363,7 +359,7 @@ function createServer(): McpServer {
 }
 
 const handle = serveStdio(createServer);
-process.stderr.write("[cotra-mcp] serving Cotra SG-000010 tools over stdio\n");
+process.stderr.write("[cotra-mcp] serving Cotra SG-000015 tools over stdio\n");
 
 function shutdown(): void {
   for (const client of clients) {
