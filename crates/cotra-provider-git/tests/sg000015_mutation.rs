@@ -3,15 +3,19 @@ use cotra_provider_git::GitProvider;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
+
+static TEMP_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
 fn temp_root(label: &str) -> PathBuf {
     let suffix = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .expect("clock")
         .as_nanos();
+    let sequence = TEMP_SEQUENCE.fetch_add(1, Ordering::Relaxed);
     let root = std::env::temp_dir().join(format!(
-        "cotra-sg000015-{label}-{}-{suffix}",
+        "cotra-sg000015-{label}-{}-{suffix}-{sequence}",
         std::process::id()
     ));
     fs::create_dir_all(&root).expect("create temp root");
