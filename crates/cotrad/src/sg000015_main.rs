@@ -10,8 +10,6 @@ mod git_mutation;
 
 #[allow(dead_code)]
 mod legacy {
-    include!("main.rs");
-
     pub(super) fn load_policy_bridge() -> Result<cotra_policy::PolicyEngine, String> {
         load_policy()
     }
@@ -24,6 +22,8 @@ mod legacy {
     ) -> Result<serde_json::Value, cotra_provider_fs::ProviderError> {
         dispatch(policy, workspace, approval, request)
     }
+
+    include!("main.rs");
 }
 
 fn main() {
