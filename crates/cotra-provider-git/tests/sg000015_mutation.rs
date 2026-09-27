@@ -71,7 +71,7 @@ fn branch_stage_unstage_and_commit_are_exact_and_verified() {
         .is_some_and(|value| value.contains("a.txt")));
 
     let unstage_state = provider
-        .staged_paths_state(&root, &paths)
+        .unstage_state(".", &paths)
         .expect("unstage state");
     provider
         .unstage(".", &paths, &unstage_state)
@@ -110,9 +110,11 @@ fn stale_head_and_unsafe_paths_fail_before_mutation() {
         .stage(".", &paths, &stale)
         .expect_err("stale HEAD must fail");
     assert_eq!(error.code, FailureCode::TargetStale);
-    assert!(git(&root, &["diff", "--cached", "--name-only", "--", "a.txt"])
-        .trim()
-        .is_empty());
+    assert!(
+        git(&root, &["diff", "--cached", "--name-only", "--", "a.txt"])
+            .trim()
+            .is_empty()
+    );
 
     for unsafe_path in ["../escape.txt", ".git/config", ":(glob)*"] {
         let error = provider
