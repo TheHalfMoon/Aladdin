@@ -3,7 +3,7 @@ use cotra_contracts::{FailureCode, RequestEnvelope};
 use cotra_policy::{Workspace, POLICY_REVISION};
 use cotra_provider_fs::ProviderError;
 use cotra_provider_git::{GitMutationState, GitProvider, GitProviderError};
-use serde_json::{json, Value};
+use serde_json::Value;
 use sha2::{Digest, Sha256};
 
 pub fn dispatch(
@@ -363,9 +363,7 @@ mod tests {
         fs::write(root.join("a.txt"), "two\n").expect("modify");
         let request = request(&root, "git.stage", "stage", json!({"paths": ["a.txt"]}));
         let before = git(&root, &["diff", "--cached", "--name-only"]);
-        let error = dispatch(&workspace(&root), &Deny, &request)
-            .expect_err("denial")
-            .expect("handled mutation");
+        let error = dispatch(&workspace(&root), &Deny, &request).expect_err("denial");
         assert_eq!(error.code, FailureCode::ApprovalDenied);
         assert_eq!(git(&root, &["diff", "--cached", "--name-only"]), before);
         let _ = fs::remove_dir_all(root);
