@@ -1,0 +1,96 @@
+name: Winds PR260 Jev Exact Head 6dc1c650
+
+on:
+  push:
+    branches:
+      - review/winds-pr260-jev-6dc1c650
+
+permissions:
+  contents: read
+
+env:
+  WINDS_BASE_SHA: c9c85e75fa066049f62a7f3ab2ccfcc70bf98e6d
+  WINDS_HEAD_SHA: 6dc1c65008b6b0f20da3bfe51635410abac4aaee
+  WINDS_HEAD_BRANCH: impl/spec-012-t167-topology-projection
+  COTRA_TRUSTED_SHA: 57bb970c69f55c7775900f47fe1047c5ff7322f7
+  JEV_REVIEW_SHA: 31f89602797fb7bea007f8a480bf368bf564954e
+  ADAPTER_BLOB: c4a144f4b6ee064986c291c637b6390e58ed3601
+
+jobs:
+  jev-review:
+    name: Winds PR260 Jev Semantic Review
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "24"
+
+      - name: Require existing TypeSafe credential
+        env:
+          TYPESAFE_API_KEY: ${{ secrets.TYPESAFE_API_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${TYPESAFE_API_KEY:-}"
+
+      - name: Fetch exact Winds candidate as Git data only
+        shell: bash
+        run: |
+          set -euo pipefail
+          WINDS_DIR="$RUNNER_TEMP/winds-pr260"
+          git init "$WINDS_DIR"
+          git -C "$WINDS_DIR" remote add origin https://github.com/TheHalfMoon/Winds.git
+          git -C "$WINDS_DIR" fetch --no-tags origin refs/heads/main:refs/remotes/origin/main
+          git -C "$WINDS_DIR" fetch --no-tags origin "refs/heads/$WINDS_HEAD_BRANCH:refs/remotes/origin/pr260"
+          test "$(git -C "$WINDS_DIR" rev-parse refs/remotes/origin/main)" = "$WINDS_BASE_SHA"
+          test "$(git -C "$WINDS_DIR" rev-parse refs/remotes/origin/pr260)" = "$WINDS_HEAD_SHA"
+          test "$(git -C "$WINDS_DIR" merge-base "$WINDS_BASE_SHA" "$WINDS_HEAD_SHA")" = "$WINDS_BASE_SHA"
+          test "$(git -C "$WINDS_DIR" rev-list --count "$WINDS_BASE_SHA..$WINDS_HEAD_SHA")" = "10"
+          test "$(git -C "$WINDS_DIR" rev-list --count "$WINDS_HEAD_SHA..$WINDS_BASE_SHA")" = "0"
+          git -C "$WINDS_DIR" diff --check "$WINDS_BASE_SHA" "$WINDS_HEAD_SHA"
+          test "$(git -C "$WINDS_DIR" diff --name-only "$WINDS_BASE_SHA" "$WINDS_HEAD_SHA" | wc -l)" = "4"
+          test "$(git -C "$WINDS_DIR" diff --name-only "$WINDS_BASE_SHA" "$WINDS_HEAD_SHA" | sort | tr '\n' ' ')" = "src/multiplexer/projection.rs src/persistent_runtime/client.rs src/persistent_runtime/owner.rs src/t167_multiplexer_client_tests.rs "
+
+      - name: Install pinned Jev Review
+        shell: bash
+        run: |
+          set -euo pipefail
+          JEV_DIR="$RUNNER_TEMP/jev-review"
+          git clone https://github.com/devagrawal09/jev-review.git "$JEV_DIR"
+          git -C "$JEV_DIR" checkout --detach "$JEV_REVIEW_SHA"
+          npm --prefix "$JEV_DIR" ci
+
+      - name: Materialize trusted Cotra exact-diff adapter
+        shell: bash
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor "$COTRA_TRUSTED_SHA" HEAD
+          ADAPTER="$RUNNER_TEMP/jev-exact-diff.mjs"
+          git show "$COTRA_TRUSTED_SHA:.github/scripts/jev-exact-diff.mjs" > "$ADAPTER"
+          test "$(git hash-object "$ADAPTER")" = "$ADAPTER_BLOB"
+          node --check "$ADAPTER"
+
+      - name: Run genuine Jev exact-diff review on Winds PR260
+        env:
+          TYPESAFE_API_KEY: ${{ secrets.TYPESAFE_API_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          WINDS_DIR="$RUNNER_TEMP/winds-pr260"
+          JEV_DIR="$RUNNER_TEMP/jev-review"
+          ADAPTER="$RUNNER_TEMP/jev-exact-diff.mjs"
+          node "$ADAPTER" "$WINDS_BASE_SHA" "$WINDS_HEAD_SHA" "$WINDS_DIR" "$JEV_DIR" | tee jev-review.json
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: winds-pr260-jev-review-6dc1c650
+          path: jev-review.json
+          if-no-files-found: warn
+          retention-days: 14
