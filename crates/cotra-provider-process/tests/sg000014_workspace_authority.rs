@@ -339,7 +339,7 @@ fn workspace_authority_child() {
     let mut byte = [0u8; 1];
     assert_eq!(std::io::stdin().read(&mut byte).expect("read stdin"), 0);
 
-    let workspace = PathBuf::from(required_env("TMP"));
+    let workspace = std::env::current_dir().expect("read qualified workspace cwd");
     let input = std::fs::read(workspace.join("input.txt")).expect("read workspace fixture");
     assert_eq!(input, b"COTRA-SG-000014-READ");
     std::fs::write(workspace.join("output.txt"), b"COTRA-SG-000014-WRITE")
