@@ -34,9 +34,10 @@ This activation authorizes implementation and qualification of the first destina
 Authorized target design:
 - workspace-bound Git destination policy identified by stable policy id rather than an arbitrary caller URL;
 - canonical HTTPS destination only, with DNS hostname, default/explicit port 443, no URL userinfo/query/fragment, and no alternate Git transport syntax;
+- `git.fetch.preview` as a local-only/read-only operation that performs no DNS or network request and returns the exact current HEAD plus deterministic destination ref and its current object id/`ABSENT` value required for stale protection;
 - public-address resolution/classification followed by pinning of one validated address to the actual Git HTTPS request so DNS rebinding cannot widen authority;
 - `git.fetch` of one explicit `refs/heads/<branch>` source into deterministic Cotra-owned `refs/remotes/cotra/<policy-id>/<branch>` state;
-- fresh local approval bound to exact workspace/repository/policy/destination/pinned-address/ref/HEAD/prior-ref state;
+- fresh local approval bound to exact workspace/repository/policy/destination/pinned-address/ref/HEAD/prior-ref state obtained from preview;
 - post-approval destination/state revalidation;
 - hardened Git transport with HTTPS-only protocol policy, redirects disabled, TLS verification enabled, no inherited proxy/cookies/authorization headers/credential helpers/askpass/interactive prompts, and no tags/prune/submodule/FETCH_HEAD side effects;
 - rejection of repository-local URL rewrites or equivalent configuration that could widen the approved destination;
@@ -47,7 +48,9 @@ Authorized target design:
 
 SG-000016 must prove that Git network access is narrower than generic HTTP, shell, or arbitrary Git authority.
 
-The actual destination used by Git must be both policy-authorized and public-address validated. Merely checking an HTTPS hostname and then allowing Git to resolve it independently is not sufficient. Redirect following is disabled rather than treated as implicit destination expansion.
+The preview path must make exact stale-protection material obtainable without guessing and without creating hidden network authority. It cannot resolve DNS, contact the configured destination, request approval, or mutate repository state.
+
+The actual destination used by `git.fetch` must be both policy-authorized and public-address validated. Merely checking an HTTPS hostname and then allowing Git to resolve it independently is not sufficient. Redirect following is disabled rather than treated as implicit destination expansion.
 
 The caller cannot supply arbitrary remote URLs, arbitrary refspecs, proxy settings, credentials, custom HTTP headers, or transport protocols.
 
@@ -59,7 +62,7 @@ Not authorized by SG-000016:
 - any raw credential/token argument;
 - ambient Git credential-manager authority;
 - credential helper/askpass/interactivity;
-- SSH, git://, file://, ext, remote helpers, or HTTP without TLS;
+- SSH, git://, file://, ext/remote helpers, or HTTP without TLS;
 - generic `network.fetch` or arbitrary HTTP/socket authority;
 - arbitrary Git argv/refspec/ref mutation;
 - branch deletion or destructive history operations;
