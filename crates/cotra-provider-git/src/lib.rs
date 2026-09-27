@@ -1,5 +1,10 @@
+pub mod fetch;
 mod mutation;
 
+pub use fetch::{
+    destination_ref, parse_destination, source_ref, ApprovedFetch, FetchPreview,
+    GitFetchDestination, SystemResolver,
+};
 pub use mutation::GitMutationState;
 
 use cotra_contracts::FailureCode;
@@ -294,7 +299,17 @@ impl GitProvider {
     }
 }
 
-fn read_bounded(
+fn read_bounded(reader: impl Read, max_bytes: usize) -> Result<(Vec<u8>, bool), GitProviderError> {
+    read_bounded_inner(reader, max_bytes)
+}
+
+pub(crate) fn read_bounded_for_fetch(
+    reader: impl Read,
+) -> Result<(Vec<u8>, bool), GitProviderError> {
+    read_bounded_inner(reader, MAX_STDOUT_BYTES)
+}
+
+fn read_bounded_inner(
     mut reader: impl Read,
     max_bytes: usize,
 ) -> Result<(Vec<u8>, bool), GitProviderError> {

@@ -9,7 +9,7 @@ autobins = false
 
 [[bin]]
 name = "cotrad"
-path = "src/sg000015_main.rs"
+path = "src/sg000016_main.rs"
 
 [dependencies]
 cotra-approval = { path = "../cotra-approval" }
