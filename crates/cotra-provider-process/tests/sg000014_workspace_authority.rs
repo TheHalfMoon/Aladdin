@@ -387,7 +387,13 @@ fn windows_appcontainer_workspace_authority_is_scoped_and_reversible() {
     assert!(!plan.env.contains_key("COTRA_DAEMON"));
 
     let result = execute_contained(plan, &profile).expect("contained workspace qualification");
-    assert_eq!(result.exit_code, 0);
+    assert_eq!(
+        result.exit_code,
+        0,
+        "contained child failed; stdout={} stderr={}",
+        String::from_utf8_lossy(&result.stdout),
+        String::from_utf8_lossy(&result.stderr)
+    );
     assert!(result.appcontainer_verified);
     assert!(result.assigned_to_job_before_resume);
     assert!(result.job_quiescent);
