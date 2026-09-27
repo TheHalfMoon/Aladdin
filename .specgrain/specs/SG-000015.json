@@ -2,10 +2,16 @@
   "id": "SG-000015",
   "title": "Approved local Git mutation foundation",
   "program": "COTRA-P06",
-  "state": "GRAIN",
+  "state": "CLOSED",
   "risk": "high",
   "created": "2026-09-27",
   "base": "5ded68d3f42100ef6f077c6b61fcd79c2a0784d5",
+  "qualified_head": "df6dbe31e06db6e8b718bd2ab8a58d936f25d35f",
+  "implementation_base": "235e3339071ab4e6ef233c10114a067a33be5888",
+  "implementation_merge": "08be5a4d572d4b5c6283f63ede26bdc7c0cece14",
+  "pre_merge_ci": "36333639216",
+  "pre_merge_review_gates": "36333636589",
+  "post_merge_ci": "36333869446",
   "dependencies": ["SG-000002", "SG-000003", "SG-000014"],
   "objective": "Introduce the first bounded local Git mutation surface for trusted workspace repositories: create-and-switch a new branch from an exact expected HEAD, stage or unstage an exact literal path set, and create a non-amending commit from an exact approved staged state. Every mutation must require fresh local approval, re-check expected HEAD and material state after approval, return resulting-ref evidence, and remain local-only with Git hooks, signing, editors, credential prompting, network transport, destructive history operations, and arbitrary shell execution disabled or absent.",
   "scope": {
@@ -86,5 +92,19 @@
     "security_review": true,
     "exact_head_ci": true
   },
-  "done_when": "Bounded branch-create/switch, stage, unstage, and commit operations are merged and post-merge verified with expected-HEAD and approval-drift protection, resulting-ref/index evidence, hooks/filters/network suppression, and no destructive or network Git authority."
+  "done_when": "Bounded branch-create/switch, stage, unstage, and commit operations are merged and post-merge verified with expected-HEAD and approval-drift protection, resulting-ref/index evidence, hooks/filters/network suppression, and no destructive or network Git authority.",
+  "canonical_evidence": {
+    "implementation_pr": 35,
+    "implementation_base": "235e3339071ab4e6ef233c10114a067a33be5888",
+    "qualified_head": "df6dbe31e06db6e8b718bd2ab8a58d936f25d35f",
+    "pre_merge_ci": "36333639216",
+    "pre_merge_review_gates": "36333636589",
+    "merge_sha": "08be5a4d572d4b5c6283f63ede26bdc7c0cece14",
+    "post_merge_ci": "36333869446",
+    "jev": "PASSED: 16/16 hunks, zero findings, zero blocking findings",
+    "ocr": "PASSED: Open Code Review v1.12.9 exact-range delegation, 12 files total, 10 reviewable, 2 excluded and manually reviewed",
+    "security_review": "PASS on exact qualified head; bounded local-only Git mutation exposes no arbitrary Git argv or network transport, suppresses hooks/editors/signing/credentials, revalidates approved state after approval, rejects unsafe paths/filters, and verifies resulting HEAD/index/commit evidence",
+    "unresolved_review_threads": 0,
+    "authority_boundary": "Only git.branch.create, git.stage, git.unstage, and git.commit are newly authorized inside trusted workspaces after fresh local approval. Fetch, push, Git network transport, force push, destructive history/ref mutation, arbitrary Git commands, submodule mutation, raw shell, public PowerShell, browser/UI automation, elevation, and approval bypass/reuse remain absent."
+  }
 }
