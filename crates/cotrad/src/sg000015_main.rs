@@ -164,7 +164,11 @@ mod tests {
             .env("GIT_CONFIG_GLOBAL", null_device())
             .output()
             .expect("git");
-        assert!(output.status.success(), "git failed: {}", String::from_utf8_lossy(&output.stderr));
+        assert!(
+            output.status.success(),
+            "git failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
         String::from_utf8_lossy(&output.stdout).into_owned()
     }
 
@@ -204,7 +208,10 @@ mod tests {
         )
         .expect("dispatch");
         assert_eq!(result["paths"][0], "a.txt");
-        assert_eq!(git(&root, &["diff", "--cached", "--name-only"]).trim(), "a.txt");
+        assert_eq!(
+            git(&root, &["diff", "--cached", "--name-only"]).trim(),
+            "a.txt"
+        );
         let _ = fs::remove_dir_all(root);
     }
 
