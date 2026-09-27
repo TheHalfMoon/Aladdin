@@ -31,12 +31,15 @@ impl PolicyEngine {
     pub fn authorize(&self, request: &RequestEnvelope) -> Result<PolicyDecision, PolicyError> {
         if is_git_mutation(request) {
             self.validate_git_mutation(request)?;
-            let workspace = self.legacy.workspace(&request.workspace_id).ok_or_else(|| {
-                policy_error(
-                    FailureCode::WorkspaceDenied,
-                    "requested workspace is not configured",
-                )
-            })?;
+            let workspace = self
+                .legacy
+                .workspace(&request.workspace_id)
+                .ok_or_else(|| {
+                    policy_error(
+                        FailureCode::WorkspaceDenied,
+                        "requested workspace is not configured",
+                    )
+                })?;
             return Ok(PolicyDecision {
                 workspace: workspace.clone(),
                 policy_revision: POLICY_REVISION,
@@ -334,7 +337,11 @@ mod sg000015_tests {
             ("git.rebase", "rebase"),
         ] {
             let error = engine
-                .authorize(&request(capability, operation, json!({"expected_head": head})))
+                .authorize(&request(
+                    capability,
+                    operation,
+                    json!({"expected_head": head}),
+                ))
                 .expect_err("must be denied");
             assert_eq!(error.code, FailureCode::CapabilityDenied);
         }
