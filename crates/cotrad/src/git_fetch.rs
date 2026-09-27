@@ -36,7 +36,7 @@ pub fn dispatch(
             let provider = GitProvider::new(&workspace.root).map_err(map_git_error)?;
             let provider_destination = provider_destination(&destination)?;
             let preview = provider
-                .fetch_preview(&repository, &policy_id, &branch, &provider_destination)
+                .fetch_preview(repository, &policy_id, &branch, &provider_destination)
                 .map_err(map_git_error)?;
             Ok(Some(preview.to_json()))
         }
@@ -219,7 +219,7 @@ fn require_approval(
     }
 }
 
-fn required_target<'a>(request: &'a RequestEnvelope) -> Result<&'a str, ProviderError> {
+fn required_target(request: &RequestEnvelope) -> Result<&str, ProviderError> {
     request.target.as_deref().ok_or_else(|| {
         ProviderError::new(
             FailureCode::InvalidRequest,
