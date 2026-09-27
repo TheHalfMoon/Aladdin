@@ -91,6 +91,17 @@ impl GitProvider {
         self.base_state(&repo, material)
     }
 
+    pub fn unstage_state(
+        &self,
+        relative: &str,
+        paths: &[String],
+    ) -> Result<GitMutationState, GitProviderError> {
+        let repo = self.repository_root(relative)?;
+        self.ensure_supported_repository_state(&repo)?;
+        let paths = validate_paths(paths)?;
+        self.staged_paths_state(&repo, &paths)
+    }
+
     pub fn staged_state(&self, relative: &str) -> Result<GitMutationState, GitProviderError> {
         let repo = self.repository_root(relative)?;
         self.ensure_supported_repository_state(&repo)?;
@@ -133,14 +144,8 @@ impl GitProvider {
         self.ensure_supported_repository_state(&repo)?;
         let current = self.base_state(&repo, String::new())?;
         require_state(&current, expected)?;
-        self.run_secure_git(
-            &repo,
-            &["check-ref-format", "--branch", branch],
-        )?;
-        self.run_secure_git(
-            &repo,
-            &["switch", "-c", branch, expected.head.as_str()],
-        )?;
+        self.run_secure_git(&repo, &["check-ref-format", "--branch", branch])?;
+        self.run_secure_git(&repo, &["switch", "-c", branch, expected.head.as_str()])?;
         let result = self.base_state(&repo, String::new())?;
         if result.head != expected.head || result.branch.as_deref() != Some(branch) {
             return Err(postcondition(
@@ -193,11 +198,7 @@ impl GitProvider {
         let current = self.staged_paths_state(&repo, &paths)?;
         require_state(&current, expected)?;
         let literal = literal_pathspecs(&paths);
-        let mut args = vec![
-            "restore".to_owned(),
-            "--staged".to_owned(),
-            "--".to_owned(),
-        ];
+        let mut args = vec!["restore".to_owned(), "--staged".to_owned(), "--".to_owned()];
         args.extend(literal);
         self.run_secure_owned(&repo, &args)?;
         let result = self.index_evidence(&repo, &paths)?;
@@ -208,16 +209,6 @@ impl GitProvider {
             "paths": paths,
             "index_entries": result,
         }))
-    }
-
-    pub fn staged_paths_state(
-        &self,
-        relative: &Path,
-        paths: &[String],
-    ) -> Result<GitMutationState, GitProviderError> {
-        let paths = validate_paths(paths)?;
-        let material = self.index_evidence(relative, &paths)?;
-        self.base_state(relative, material)
     }
 
     pub fn commit(
@@ -231,9 +222,10 @@ impl GitProvider {
         self.ensure_supported_repository_state(&repo)?;
         let current = self.staged_state(relative)?;
         require_state(&current, expected)?;
-        let branch = current.branch.clone().ok_or_else(|| {
-            invalid("git.commit requires an attached local branch")
-        })?;
+        let branch = current
+            .branch
+            .clone()
+            .ok_or_else(|| invalid("git.commit requires an attached local branch"))?;
         self.require_local_identity(&repo)?;
         self.run_secure_git(
             &repo,
@@ -268,6 +260,15 @@ impl GitProvider {
         }))
     }
 
+    fn staged_paths_state(
+        &self,
+        repo: &Path,
+        paths: &[String],
+    ) -> Result<GitMutationState, GitProviderError> {
+        let material = self.index_evidence(repo, paths)?;
+        self.base_state(repo, material)
+    }
+
     fn base_state(
         &self,
         repo: &Path,
@@ -296,11 +297,7 @@ impl GitProvider {
         Ok((!branch.is_empty()).then(|| branch.to_owned()))
     }
 
-    fn path_material(
-        &self,
-        repo: &Path,
-        paths: &[String],
-    ) -> Result<String, GitProviderError> {
+    fn path_material(&self, repo: &Path, paths: &[String]) -> Result<String, GitProviderError> {
         let mut material = String::new();
         for path in paths {
             let literal = literal_pathspec(path);
@@ -322,10 +319,8 @@ impl GitProvider {
                     return Err(invalid("Git mutation accepts file paths only"));
                 }
                 Ok(metadata) if metadata.is_file() => {
-                    let hash = self.run_git(
-                        repo,
-                        &["hash-object", "--no-filters", "--", path.as_str()],
-                    )?;
+                    let hash =
+                        self.run_git(repo, &["hash-object", "--no-filters", "--", path.as_str()])?;
                     material.push_str(hash.stdout.trim());
                 }
                 Ok(_) => return Err(invalid("unsupported filesystem object for Git mutation")),
@@ -348,11 +343,7 @@ impl GitProvider {
         Ok(material)
     }
 
-    fn index_evidence(
-        &self,
-        repo: &Path,
-        paths: &[String],
-    ) -> Result<String, GitProviderError> {
+    fn index_evidence(&self, repo: &Path, paths: &[String]) -> Result<String, GitProviderError> {
         let literal = literal_pathspecs(paths);
         let mut args = vec![
             "ls-files".to_owned(),
@@ -374,11 +365,7 @@ impl GitProvider {
         paths: &[String],
     ) -> Result<(), GitProviderError> {
         for path in paths {
-            let literal = literal_pathspec(path);
-            let output = self.run_git(
-                repo,
-                &["check-attr", "filter", "--", literal.as_str()],
-            )?;
+            let output = self.run_git(repo, &["check-attr", "filter", "--", path.as_str()])?;
             let value = output
                 .stdout
                 .trim_end()
@@ -442,7 +429,10 @@ impl GitProvider {
         repo: &Path,
         args: &[&str],
     ) -> Result<CommandOutput, GitProviderError> {
-        let args = args.iter().map(|value| (*value).to_owned()).collect::<Vec<_>>();
+        let args = args
+            .iter()
+            .map(|value| (*value).to_owned())
+            .collect::<Vec<_>>();
         self.run_secure_owned(repo, &args)
     }
 
@@ -468,11 +458,7 @@ impl GitProvider {
         self.run_owned(repo, &args)
     }
 
-    fn run_owned(
-        &self,
-        repo: &Path,
-        args: &[String],
-    ) -> Result<CommandOutput, GitProviderError> {
+    fn run_owned(&self, repo: &Path, args: &[String]) -> Result<CommandOutput, GitProviderError> {
         let refs = args.iter().map(String::as_str).collect::<Vec<_>>();
         self.run_git_raw(repo, &refs)
     }
@@ -490,7 +476,11 @@ fn validate_paths(paths: &[String]) -> Result<Vec<String>, GitProviderError> {
         if value.is_empty() || value.len() > MAX_MUTATION_PATH_BYTES {
             return Err(invalid("Git mutation path is empty or too large"));
         }
-        if value.contains(['\0', '\n', '\r', '\t']) || value.starts_with(':') {
+        if value
+            .chars()
+            .any(|character| matches!(character, '\0' | '\n' | '\r' | '\t'))
+            || value.starts_with(':')
+        {
             return Err(invalid(
                 "Git mutation path contains control data or pathspec magic",
             ));
@@ -526,7 +516,9 @@ fn validate_paths(paths: &[String]) -> Result<Vec<String>, GitProviderError> {
 fn validate_branch_input(branch: &str) -> Result<(), GitProviderError> {
     if branch.is_empty()
         || branch.len() > 255
-        || branch.contains(['\0', '\n', '\r', '\t'])
+        || branch
+            .chars()
+            .any(|character| matches!(character, '\0' | '\n' | '\r' | '\t'))
         || branch.starts_with('-')
     {
         return Err(invalid("Git branch name is empty, unsafe, or too large"));
