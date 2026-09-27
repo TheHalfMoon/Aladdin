@@ -380,8 +380,11 @@ mod tests {
         let lookup = StaticLookup {
             destination: destination(),
         };
+        // Preview performs no DNS resolution. The denial fetch below must reach
+        // the approval broker, so resolve a public address here; non-public
+        // rejection is covered by dedicated provider tests.
         let resolver = StaticResolver {
-            addresses: vec!["203.0.113.10".parse().unwrap()],
+            addresses: vec!["8.8.8.8".parse().unwrap()],
         };
         let before_refs = git(&root, &["show-ref"]);
         let result = dispatch(
