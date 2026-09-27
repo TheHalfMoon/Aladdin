@@ -1,11 +1,11 @@
 # Cotra Current Canonical Frontier
 
-Status: CLOSEOUT_CANDIDATE
+Status: ACTIVE_GRAIN
 Date: 2026-09-27
-Governance snapshot base: c85b79f24ce2deef46319d9c5790623fd70c3b0d
+Governance snapshot base: d9708b1f2537befaf09db57e94099949b2a4115c
 Evidence ledger: `.specgrain/canonical-evidence.json`
 
-`Governance snapshot base` records the exact canonical parent from which this closeout snapshot was authored. It deliberately does not claim the eventual merge SHA of the commit containing this file.
+`Governance snapshot base` records the exact canonical parent from which this activation snapshot was authored. It deliberately does not claim the eventual merge SHA of the commit containing this file.
 
 ## SpecGrain state semantics
 
@@ -17,34 +17,44 @@ The machine-readable evidence for every `CLOSED` grain is recorded in `.specgrai
 
 ## Closed canonical grains
 
-SG-000001 through SG-000015 are already `CLOSED` and canonical.
+SG-000001 through SG-000016 are `CLOSED` and canonical.
 
-This closeout candidate records SG-000016 as `CLOSED` using the qualified implementation and merged-tree evidence below. That closeout classification becomes canonical only after this governance change itself merges and the resulting canonical main passes post-merge CI.
+SG-000016 implementation PR `#38` merged as `c85b79f24ce2deef46319d9c5790623fd70c3b0d` after exact-head CI `36339733920`, Review Gates `36339732607`, genuine TypeSafe Jev `15/15` hunk coverage with zero findings/blockers, Alibaba Open Code Review v1.12.9 exact-range delegation plus manual review of both excluded files, and zero unresolved review threads. Implementation post-merge CI `36339937619` completed SUCCESS.
 
-SG-000016 implementation evidence:
-- implementation PR: `#38`;
-- implementation base: `5f4c15073f11be20066d1dde319b742fb49f5a3d`;
-- qualified head: `fbe699f52ada7792a7009ab3100e5d370ec0fa33`;
-- exact-head CI: `36339733920` — SUCCESS;
-- exact-head Review Gates: `36339732607` — SUCCESS;
-- implementation merge: `c85b79f24ce2deef46319d9c5790623fd70c3b0d`;
-- implementation post-merge CI: `36339937619` — SUCCESS.
-
-Genuine TypeSafe Jev reviewed the exact implementation range with `15/15` hunks, zero findings, and zero blocking findings. Alibaba Open Code Review v1.12.9 delegated the same exact range across 12 changed files: 10 reviewable files and two exclusions (`apps/cotra-mcp/src/git_fetch.test.ts` by default-path classification and `docs/security/SG-000016_BOUNDED_GIT_FETCH_NOTE.md` by unsupported-extension classification). Both excluded files were manually reviewed. There were zero unresolved blocking review threads.
-
-Manual exact-diff security review confirmed destination-scoped canonical HTTPS policy with stable policy ids, short-branch validation rejecting full refs, local-only preview with no DNS or network, public-address classification with pinned request address and post-approval drift denial, HTTPS-only transport with redirects disabled and TLS verification enabled, proxy cookie header credential-helper askpass prompt suppression with repository rewrite rejection, deterministic Cotra-owned ref mutation with exact HEAD and prior binding, fresh approval with revalidation, resulting-ref verification with unchanged checkout proof, and hard-denied push force-push arbitrary network shell PowerShell browser elevation and approval reuse.
+SG-000016 governance closeout PR `#39` qualified on exact head `7ad72e3974ba754c4a4860e30f26d1af6aa5ef87` with CI `36340440771` SUCCESS, Review Gates `36340440946` SUCCESS, genuine TypeSafe Jev `6/6` hunk coverage with zero findings/blockers, Alibaba Open Code Review v1.12.9 exact-range delegation plus manual review of excluded `docs/canonical/CURRENT.md`, and zero review threads. It merged normally as canonical main `d9708b1f2537befaf09db57e94099949b2a4115c`; post-closeout CI `36340662627` completed SUCCESS across Governance, Node/Ubuntu, Node/Windows, Rust/Ubuntu, and Rust/Windows.
 
 The canonical SG-000016 authority adds only local `git.fetch.preview` and approved destination-scoped anonymous `git.fetch` into `refs/remotes/cotra/<policy-id>/<branch>`; `git.push` and credential authority remain absent.
 
-## Successor frontier
+## Active grain
 
-No successor grain is authorized by this closeout candidate.
+SG-000017 — Bounded Git push with protected credential references — is the sole active COTRA-P06 grain.
 
-COTRA-P06 is not complete at this frontier. The canonical architecture still requires the lawful push path with protected credential handling, explicit source and destination refs, expected remote-ref protection, force and non-fast-forward denial, destination revalidation, fresh approval, secret redaction, and post-push verification, in addition to the local mutation and fetch foundation now being closed.
+This activation authorizes implementation and qualification of the destination-scoped Git push capability while deliberately keeping ambient credential and generic network authority absent.
 
-After this SG-000016 closeout merges and its post-merge CI succeeds, re-read the canonical architecture, delivery plan, evidence ledger, open governance records, and this `CURRENT.md` to derive the next lawful COTRA-P06 grain. Do not infer or pre-authorize the next SpecGrain identifier or exact push design from numbering alone.
+Authorized target design:
+- workspace-bound Git push destination policy identified by stable policy id rather than an arbitrary caller URL;
+- canonical HTTPS destination only, with DNS hostname, default/explicit port 443, no URL userinfo/query/fragment, and no alternate Git transport syntax;
+- explicit local source ref and explicit remote destination ref, each restricted to validated `refs/heads/<branch>` short-branch form;
+- local-only/read-only stale-protection preview that performs no DNS or network request and returns the exact current HEAD plus deterministic refs and current remote-ref object id/`ABSENT` value;
+- public-address resolution/classification followed by pinning of one validated address to the actual Git HTTPS request so DNS rebinding cannot widen authority;
+- fresh local approval bound to exact workspace/repository/policy/destination/pinned-address/source-ref/destination-ref/HEAD/prior-ref/credential-reference state;
+- post-approval destination/state/credential-binding revalidation;
+- non-fast-forward rejection with hard force-push denial and no force, delete, or wildcard refspec path;
+- hardened Git transport with HTTPS-only protocol policy, redirects disabled, TLS verification enabled, no inherited proxy/cookies/authorization headers/askpass/interactive prompts, and no tags/prune/submodule side effects;
+- protected credential-reference architecture with secret redaction and no ambient credential-manager inheritance;
+- rejection of repository-local URL rewrites, credential-helper overrides, or equivalent configuration that could widen or re-authenticate the approved destination;
+- resulting remote-ref evidence plus proof that checked-out HEAD, current branch, index, and worktree state remain unchanged except for intended remote-tracking evidence;
+- deterministic resolver/security/credential tests and a no-cost real HTTPS push qualification or an explicit unproven record where no no-cost destination exists.
 
-A successor push grain must explicitly define and prove permitted destinations, protocol and credential policy, approval class, expected ref protections, redirect or destination-widening behavior where applicable, bounded push semantics, hard force-push denial, postcondition and ref verification, secret handling, and an explicit egress class. It must not expose generic Git shell or general network authority.
+## Active acceptance frontier
+
+SG-000017 must prove that Git push is narrower than generic Git command execution and never leaks raw secrets.
+
+The preview path must make exact stale-protection material obtainable without guessing and without creating hidden network authority. It cannot resolve DNS, contact the configured destination, request approval, or mutate repository state.
+
+The actual destination used by `git.push` must be both policy-authorized and public-address validated. Redirect following is disabled rather than treated as implicit destination expansion.
+
+The caller cannot supply arbitrary remote URLs, arbitrary refspecs, force or delete semantics, proxy settings, raw credentials, custom HTTP headers, or transport protocols.
 
 ## Canonical public authority boundary retained
 
@@ -52,7 +62,7 @@ Existing SG-000015 local Git mutation remains subject to its exact approved-stat
 
 Existing SG-000016 destination-scoped fetch remains subject to its exact workspace policy, short-branch, preview, approval, pinning, transport-hardening, and resulting-ref controls.
 
-Still denied or absent outside the closed SG-000016 HTTPS-fetch scope:
+Still denied or absent outside the active SG-000017 push scope:
 - public `powershell.run`;
 - caller-provided PowerShell script text;
 - direct PowerShell executable authority through `process.spawn`;
@@ -67,12 +77,15 @@ Still denied or absent outside the closed SG-000016 HTTPS-fetch scope:
 - PowerShell remoting;
 - detached/background public execution;
 - public process kill capability;
-- `git.push` and force push;
+- force push and branch deletion;
+- raw credential arguments and ambient credential-manager authority;
 - generic network fetch/socket authority;
 - browser automation;
 - Windows UI Automation/input injection;
 - elevation;
 - approval bypass or persistent approval reuse.
+
+A later lawful grain must add P07 strong approval and trust UX only after COTRA-P06 exits with branch, stage, unstage, commit, fetch, and push all canonically closed. Raw credentials must never be accepted merely because Git can consume them.
 
 Windows public `process.spawn` remains positively restricted to the exact SG-000010-qualified `%SystemRoot%\System32\whoami.exe` target.
 
