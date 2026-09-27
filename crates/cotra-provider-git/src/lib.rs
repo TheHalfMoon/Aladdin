@@ -1,3 +1,7 @@
+mod mutation;
+
+pub use mutation::GitMutationState;
+
 use cotra_contracts::FailureCode;
 use serde_json::{json, Value};
 use std::ffi::OsString;
@@ -207,6 +211,10 @@ impl GitProvider {
             .env("GIT_CONFIG_GLOBAL", null_device())
             .env("GIT_TERMINAL_PROMPT", "0")
             .env("GIT_PAGER", "cat")
+            .env("GIT_EDITOR", null_device())
+            .env("GIT_SEQUENCE_EDITOR", null_device())
+            .env("GIT_ALLOW_PROTOCOL", "")
+            .env("GCM_INTERACTIVE", "Never")
             .env("GIT_OPTIONAL_LOCKS", "0");
 
         let mut child = command.spawn().map_err(|error| {
