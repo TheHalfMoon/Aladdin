@@ -3,6 +3,7 @@ import { serveStdio } from "@modelcontextprotocol/server/stdio";
 import * as z from "zod/v4";
 import { registerGitFetchTools } from "./git_fetch.js";
 import { registerGitMutationTools } from "./git_mutation.js";
+import { registerGitPushTools } from "./git_push.js";
 import { KernelClient, type KernelResponse } from "./kernel.js";
 import { processSpawnInputSchema } from "./process.js";
 
@@ -351,6 +352,7 @@ function createServer(): McpServer {
 
   registerGitMutationTools(server, kernel, DEFAULT_WORKSPACE);
   registerGitFetchTools(server, kernel, DEFAULT_WORKSPACE);
+  registerGitPushTools(server, kernel, DEFAULT_WORKSPACE);
 
   server.server.onclose = () => {
     kernel.close();
@@ -361,7 +363,7 @@ function createServer(): McpServer {
 }
 
 const handle = serveStdio(createServer);
-process.stderr.write("[cotra-mcp] serving Cotra SG-000016 tools over stdio\n");
+process.stderr.write("[cotra-mcp] serving Cotra SG-000017 tools over stdio\n");
 
 function shutdown(): void {
   for (const client of clients) {
