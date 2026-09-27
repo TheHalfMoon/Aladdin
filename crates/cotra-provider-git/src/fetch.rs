@@ -197,7 +197,7 @@ pub fn validate_canonical_https_url(url: &str) -> Result<(String, u16, String), 
     if rest.contains('\\') {
         return Err(invalid("Git destination URL must not contain a backslash"));
     }
-    let (authority_and_path,) = (rest,);
+    let authority_and_path = rest;
     let (authority, path) = match authority_and_path.find('/') {
         Some(index) => (&authority_and_path[..index], &authority_and_path[index..]),
         None => (authority_and_path, "/"),
@@ -289,7 +289,7 @@ fn validate_dns_hostname(hostname: &str) -> Result<(), GitProviderError> {
     if hostname.contains("..") {
         return Err(invalid("Git destination hostname contains an empty label"));
     }
-    let mut has_dot = false;
+    let has_dot = hostname.contains('.');
     let mut has_alpha = false;
     for label in hostname.split('.') {
         if label.is_empty() || label.len() > 63 {
@@ -312,7 +312,6 @@ fn validate_dns_hostname(hostname: &str) -> Result<(), GitProviderError> {
         }
         has_alpha = has_alpha || label.bytes().any(|byte| byte.is_ascii_alphabetic());
     }
-    has_dot = hostname.contains('.');
     if !has_dot {
         return Err(invalid(
             "Git destination hostname must be a dotted DNS hostname",
@@ -381,11 +380,6 @@ fn is_public_ipv4(value: &Ipv4Addr) -> bool {
     if octets[0] == 192 && octets[1] == 0 && (octets[2] == 0 || octets[2] == 2) {
         return false;
     }
-    if octets[0] == 192 && octets[1] == 0 && octets[2] == 0 && octets[3] <= 255 {
-        if octets[2] == 0 {
-            return false;
-        }
-    }
     if octets[0] == 192 && octets[1] == 88 && octets[2] == 99 {
         return false;
     }
@@ -396,33 +390,6 @@ fn is_public_ipv4(value: &Ipv4Addr) -> bool {
         return false;
     }
     if octets[0] == 203 && octets[1] == 0 && octets[2] == 113 {
-        return false;
-    }
-    if octets[0] == 192 && octets[1] == 0 && octets[2] == 2 {
-        return false;
-    }
-    if octets[0] == 198 && octets[1] == 51 && octets[2] == 100 {
-        return false;
-    }
-    if octets[0] == 203 && octets[1] == 0 && octets[2] == 113 {
-        return false;
-    }
-    if octets[0] == 198 && octets[1] == 51 && (octets[2] == 100) {
-        return false;
-    }
-    if octets == [192, 0, 2, 0] || octets == [198, 51, 100, 0] || octets == [203, 0, 113, 0] {
-        return false;
-    }
-    if (octets[0] == 192 && octets[1] == 0 && octets[2] == 2)
-        || (octets[0] == 198 && octets[1] == 51 && octets[2] == 100)
-        || (octets[0] == 203 && octets[1] == 0 && octets[2] == 113)
-    {
-        return false;
-    }
-    if octets[0] == 198 && octets[1] >= 18 && octets[1] <= 19 {
-        return false;
-    }
-    if octets[0] == 240 {
         return false;
     }
     if octets[0] >= 240 {

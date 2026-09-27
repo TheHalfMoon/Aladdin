@@ -299,15 +299,12 @@ impl GitProvider {
     }
 }
 
-fn read_bounded(
-    mut reader: impl Read,
-    max_bytes: usize,
-) -> Result<(Vec<u8>, bool), GitProviderError> {
+fn read_bounded(reader: impl Read, max_bytes: usize) -> Result<(Vec<u8>, bool), GitProviderError> {
     read_bounded_inner(reader, max_bytes)
 }
 
 pub(crate) fn read_bounded_for_fetch(
-    mut reader: impl Read,
+    reader: impl Read,
 ) -> Result<(Vec<u8>, bool), GitProviderError> {
     read_bounded_inner(reader, MAX_STDOUT_BYTES)
 }
