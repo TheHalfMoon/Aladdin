@@ -6,6 +6,9 @@ license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
 
+[lib]
+path = "src/sg000015.rs"
+
 [dependencies]
 cotra-contracts = { path = "../cotra-contracts" }
 serde_json.workspace = true
