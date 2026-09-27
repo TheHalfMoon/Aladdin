@@ -89,9 +89,7 @@ impl AppContainerSid {
     fn derive(profile_name: &str) -> Result<Self, String> {
         let name = wide_str(profile_name);
         let mut sid = ptr::null_mut();
-        let result = unsafe {
-            DeriveAppContainerSidFromAppContainerName(name.as_ptr(), &mut sid)
-        };
+        let result = unsafe { DeriveAppContainerSidFromAppContainerName(name.as_ptr(), &mut sid) };
         if result != 0 {
             return Err(format!(
                 "DeriveAppContainerSidFromAppContainerName failed with HRESULT 0x{:08X}",
@@ -145,7 +143,9 @@ impl WorkspaceAclGrant {
             )
         };
         if get_result != 0 {
-            return Err(format!("GetNamedSecurityInfoW failed with Win32 error {get_result}"));
+            return Err(format!(
+                "GetNamedSecurityInfoW failed with Win32 error {get_result}"
+            ));
         }
 
         let trustee = TrusteeW {
@@ -164,14 +164,14 @@ impl WorkspaceAclGrant {
             trustee,
         };
         let mut granted_dacl = ptr::null_mut();
-        let acl_result = unsafe {
-            SetEntriesInAclW(1, &access, original_dacl, &mut granted_dacl)
-        };
+        let acl_result = unsafe { SetEntriesInAclW(1, &access, original_dacl, &mut granted_dacl) };
         if acl_result != 0 {
             if !original_descriptor.is_null() {
                 unsafe { LocalFree(original_descriptor) };
             }
-            return Err(format!("SetEntriesInAclW failed with Win32 error {acl_result}"));
+            return Err(format!(
+                "SetEntriesInAclW failed with Win32 error {acl_result}"
+            ));
         }
 
         let set_result = unsafe {
@@ -190,7 +190,9 @@ impl WorkspaceAclGrant {
                 LocalFree(granted_dacl);
                 LocalFree(original_descriptor);
             }
-            return Err(format!("SetNamedSecurityInfoW grant failed with Win32 error {set_result}"));
+            return Err(format!(
+                "SetNamedSecurityInfoW grant failed with Win32 error {set_result}"
+            ));
         }
 
         Ok(Self {
@@ -218,7 +220,9 @@ impl WorkspaceAclGrant {
             )
         };
         if result != 0 {
-            return Err(format!("SetNamedSecurityInfoW restore failed with Win32 error {result}"));
+            return Err(format!(
+                "SetNamedSecurityInfoW restore failed with Win32 error {result}"
+            ));
         }
         self.restored = true;
         self.free_allocations();
