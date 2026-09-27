@@ -230,10 +230,13 @@ fn fetch_fails_closed_on_stale_head_prior_and_drift() {
         .expect_err("stale prior must fail");
     assert_eq!(error.code, cotra_contracts::FailureCode::TargetStale);
 
+    // The approved pinned address was selected from `first`. The post-approval
+    // fresh resolution must therefore observe `second` to prove drift fails
+    // closed before any network use.
     let drift = DriftResolver {
         first: vec![real_public],
         second: vec!["1.1.1.1".parse().unwrap()],
-        calls: std::cell::Cell::new(0),
+        calls: std::cell::Cell::new(1),
     };
     let pinned = select_pinned_address(&[real_public]).unwrap();
     let error = provider
