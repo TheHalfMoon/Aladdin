@@ -1,11 +1,11 @@
 # Cotra Current Canonical Frontier
 
-Status: COMPLETE_CANONICAL
+Status: ACTIVE_GRAIN
 Date: 2026-09-27
-Governance snapshot base: d6bb05a1b8dbb26b0927b1acce67854c8bdad80d
+Governance snapshot base: 9b70d2629d66b6e79180edc2c813c460ae5b49fb
 Evidence ledger: `.specgrain/canonical-evidence.json`
 
-`Governance snapshot base` records the canonical parent from which this snapshot was authored. It deliberately does not claim the eventual merge SHA of the commit containing this file.
+`Governance snapshot base` records the exact canonical parent from which this activation snapshot was authored. It deliberately does not claim the eventual merge SHA of the commit containing this file.
 
 ## SpecGrain state semantics
 
@@ -17,26 +17,21 @@ The machine-readable evidence for every `CLOSED` grain is recorded in `.specgrai
 
 ## Closed canonical grains
 
-SG-000001 through SG-000013 are `CLOSED` and canonical, subject to exact-head qualification and successful merge/post-merge verification of this recovery closeout.
+SG-000001 through SG-000013 are `CLOSED` and canonical.
 
-SG-000013 implementation evidence remains:
-- implementation PR `#27`;
-- qualified head `74b4a91d7b8e7f582a0df0fc814526658795514f`;
-- exact-head CI `36258473411` — 5/5 SUCCESS;
-- Review Gates `36258472190` — SUCCESS;
-- genuine TypeSafe Jev 2/2 hunks, zero findings/blockers;
-- Alibaba Open Code Review v1.12.9 exact-range delegation SUCCESS;
-- native Windows SG-000013 PowerShell integration tests 4/4 PASS;
-- implementation merge `ddfcb4c9d5f06af446d44e031eb96bd70e4424d9`;
-- implementation post-merge CI `36258601073` — 5/5 SUCCESS.
+SG-000013 recovery closeout merged through PR `#30` as canonical main `9b70d2629d66b6e79180edc2c813c460ae5b49fb`; post-closeout CI `36276793414` completed SUCCESS.
 
-The failed first closeout PR `#28` remains recorded as failed evidence and is not erased. Its post-merge CI `36262599177` exposed a pre-existing Windows parallel temp-workspace collision in `cotra-policy` rather than a PowerShell-containment defect.
+The failed first closeout PR `#28` remains historical failed evidence and is not erased. Forward-only recovery PR `#29` repaired the Windows parallel temp-workspace collision without authority expansion before the successful recovery closeout.
 
-Forward-only recovery PR `#29` repaired that test-isolation defect without authority expansion. Recovery head `d9285db573c11a192fdf51cd8829f010191f5902` merged as `d6bb05a1b8dbb26b0927b1acce67854c8bdad80d`; recovery post-merge CI `36266186799` completed SUCCESS.
+## Active grain
+
+SG-000014 — Workspace-scoped AppContainer filesystem authority qualification — is the sole active COTRA-P05 grain.
+
+This activation authorizes only provider-private qualification of the minimum stable-Windows filesystem authority needed for a zero-capability AppContainer child to read and write inside one explicit test-owned trusted workspace while remaining denied access to Cotra protected state, unrelated user resources, network capability, and inherited authority channels.
+
+No public authority is added by activation.
 
 ## Canonical public authority boundary retained
-
-No authority changed because of the closeout or recovery.
 
 Windows public `process.spawn` remains positively restricted to the exact SG-000010-qualified `%SystemRoot%\System32\whoami.exe` target.
 
@@ -46,6 +41,8 @@ Still denied or absent:
 - direct PowerShell executable authority through `process.spawn`;
 - generic executable-registry widening;
 - additional public `process.spawn` executable targets;
+- broad user-profile or arbitrary filesystem grants;
+- caller-selected ACL targets/security descriptors;
 - `cmd.exe` / raw shell authority;
 - caller-provided process environment overrides;
 - stdin payload injection;
@@ -59,16 +56,20 @@ Still denied or absent:
 - elevation;
 - approval bypass or persistent approval reuse.
 
-## Next lawful frontier
+## Active acceptance frontier
 
-After this closeout is exact-head qualified, merged, and post-merge verified, derive the successor from repository truth before activation.
+SG-000014 must prove on native Windows that the contained AppContainer identity can read and write only within an explicit test-owned trusted workspace after a minimum stable-Windows grant is established, while a sibling resource outside that workspace and Cotra protected state remain denied.
 
-The next COTRA-P05 evidence unit must close the workspace-access gap required by the original Windows containment decision before any generic/public PowerShell authority is exposed. SG-000013 proved PowerShell process containment but did not prove intended read/write access to a trusted workspace. The successor must therefore qualify workspace-scoped AppContainer filesystem authority while retaining denial of Cotra protected state, network, authority-channel inheritance, and unrelated user resources.
+The implementation must retain SG-000011 descendant lifecycle, SG-000012 protected-state/authority-channel isolation, and SG-000013 bounded PowerShell containment regressions. Temporary filesystem-security mutation must be deterministic, test-owned, bounded, and cleaned up.
 
-The Microsoft experimental `CreateProcessInSandbox` / Bound File System path remains research-only because it is experimental and does not support inherited handles required by Cotra's current explicit stdout/stderr/NUL-handle model. The baseline must use stable Windows security primitives unless that compatibility gap is separately resolved and qualified.
+The Microsoft experimental `CreateProcessInSandbox` / Bound File System path remains research-only and is excluded as the production baseline for this grain.
+
+Do not expose public PowerShell or broader process/filesystem authority in SG-000014.
 
 Architecture: Cotra is standalone; Kernux is not a dependency.
 
 Evidence rule: never claim PROVEN or CLOSED without required exact-head, platform, merge, post-merge, and governance evidence.
+
+Qualification rule: genuine TypeSafe Jev and Alibaba Open Code Review are required qualification evidence where integrated. Cubic, Qodo, CodeRabbit, and similar bots are not qualification evidence.
 
 Language rule: all repository technical content is English only.
