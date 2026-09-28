@@ -1,0 +1,72 @@
+{
+  "id": "SG-000020",
+  "title": "Workspace trust management with history UX and emergency revoke",
+  "program": "COTRA-P07",
+  "state": "GRAIN",
+  "risk": "high",
+  "created": "2026-09-28",
+  "base": "35f1f84d45118abd50e5a4b4606294e45311fd78",
+  "dependencies": ["SG-000019"],
+  "objective": "Add workspace trust management, class-labeled approval history UX, and emergency revoke on top of the SG-000018 replay-resistant foundation and SG-000019 STRONG enforcement, so trust changes are explicit, auditable, and STRONG-gated with fail-closed revocation, without weakening one-shot, expiry, digest binding, or STRONG presence.",
+  "scope": {
+    "include": [
+      "workspace trust creation, modification, and revocation through dedicated PRIVILEGED APIs bound to STRONG approval with fresh nonce, expiry, one-shot, digest, workspace, and policy bindings",
+      "approval history UX beyond recorded fields with bounded redacted queries preserving class and presence labels",
+      "emergency revoke broadcast that invalidates pending approvals fail-closed without authorizing new operations",
+      "trust and revoke history recording without secret material",
+      "deterministic unit and security tests for trust changes, revoke invalidation, history UX redaction, replay and drift retention, and separation",
+      "retention of all SG-000018 one-shot, expiry, digest, history, and SG-000019 STRONG enforcement with no behavior change outside trust and revoke",
+      "Windows and Ubuntu exact-head qualification"
+    ],
+    "exclude": [
+      "new privileged capabilities outside workspace trust management",
+      "changes to per-operation digests, prompts, or summaries outside trust and revoke labeling",
+      "new network, browser, UI automation, clipboard, or installer authority",
+      "persistent approval reuse across operations",
+      "approval delegation to remote or MCP callers",
+      "synthetic-input generation or input injection of any kind",
+      "elevation"
+    ]
+  },
+  "authority_delta": {
+    "filesystem": "Trust state appends bounded records to Cotra protected local state; workspace files, Git state, and unrelated paths gain no new writability.",
+    "process": "No new process authority. Trust decisions are policy records, not process execution.",
+    "network": "None. Trust management and revoke are strictly local with no egress.",
+    "browser": "None",
+    "ui_input": "None. No input injection is added; trust decisions are accepted only through the local approval authority with STRONG presence where required.",
+    "secrets": "Trust and revoke records carry identifiers and digests only. Raw secrets and biometric material never enter prompts, records, history, logs, or audit.",
+    "approval": "Workspace trust changes require STRONG approval. Emergency revoke invalidates pending approvals fail-closed. No persistent reuse or remote delegation is introduced.",
+    "privileged": "Workspace trust management only, through dedicated PRIVILEGED APIs with STRONG presence. No other privilege is added."
+  },
+  "invariants": [
+    "Workspace trust changes require STRONG approval and fail closed without verified presence",
+    "Emergency revoke invalidates pending approvals fail-closed and never authorizes execution",
+    "History UX preserves redaction and tamper-evident loading with class and presence labels retained",
+    "STRONG enforcement, one-shot, expiry, digest, workspace, and policy bindings are not weakened",
+    "The agent cannot produce a valid trust change through MCP tools, synthetic input, UI automation, coordinates, or child processes",
+    "No trust-change bypass, persistent reuse, remote delegation, browser, UI, network, or elevation authority is introduced"
+  ],
+  "acceptance": [
+    {"id": "A1", "claim": "Tests prove workspace trust creation, modification, and revocation require STRONG approval and fail closed without verified presence."},
+    {"id": "A2", "claim": "Tests prove emergency revoke invalidates pending approvals fail-closed and never authorizes execution."},
+    {"id": "A3", "claim": "Tests prove history UX returns bounded redacted records with class and presence labels and rejects tampered records."},
+    {"id": "A4", "claim": "Tests prove the agent cannot satisfy trust changes through MCP tools, synthetic input, UI automation, coordinate proposals, child processes, or replayed prior approvals."},
+    {"id": "A5", "claim": "Tests prove replay, expiry, digest mismatch, revision drift, and double-consumption protections remain enforced for both classes."},
+    {"id": "A6", "claim": "Tests prove denied and unavailable trust and revoke decisions are recorded and never authorize execution."},
+    {"id": "A7", "claim": "Tests prove all P06 approval flows and SG-000018/019 regressions still pass with digests unchanged outside trust labeling."},
+    {"id": "A8", "claim": "Tests prove broader process, network, browser, UI, clipboard, installer, and elevation authority remain unreachable."},
+    {"id": "A9", "claim": "Exact-head Windows/Ubuntu Rust, Node, Governance, genuine TypeSafe Jev, Alibaba Open Code Review, exact-diff security review, manual review of excluded security-sensitive files, and zero unresolved blocking review threads all pass."}
+  ],
+  "successor_requirements": {
+    "p07_exit": "COTRA-P07 exits when trust management, history UX, and emergency revoke are proven on top of STRONG enforcement with replay and drift resistance, which this grain must jointly satisfy with SG-000018 and SG-000019."
+  },
+  "review": {
+    "diffcipline": true,
+    "jev_semantic_review": true,
+    "alibaba_open_code_review": "required exact-range qualification where integrated",
+    "security_review": true,
+    "exact_head_ci": true,
+    "native_network_qualification": false
+  },
+  "done_when": "Workspace trust management with STRONG-gated changes, class-labeled history UX, and emergency revoke is merged with fail-closed invalidation, agent-forgery tests, retained replay and drift enforcement, and no new platform authority beyond trust records."
+}
