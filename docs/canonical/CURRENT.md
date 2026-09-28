@@ -1,11 +1,11 @@
 # Cotra Current Canonical Frontier
 
-Status: ACTIVE_GRAIN
+Status: CLOSEOUT_CANDIDATE
 Date: 2026-09-28
-Governance snapshot base: 517c03b58fa898bc5aec2de7debd86ff9969796b
+Governance snapshot base: 263abbdfa68beaefd5d48e1354f32b46c11bfb38
 Evidence ledger: `.specgrain/canonical-evidence.json`
 
-`Governance snapshot base` records the exact canonical parent from which this activation snapshot was authored. It deliberately does not claim the eventual merge SHA of the commit containing this file.
+`Governance snapshot base` records the exact canonical parent from which this closeout snapshot was authored. It deliberately does not claim the eventual merge SHA of the commit containing this file.
 
 ## SpecGrain state semantics
 
@@ -17,7 +17,7 @@ The machine-readable evidence for every `CLOSED` grain is recorded in `.specgrai
 
 ## Closed canonical grains
 
-SG-000001 through SG-000017 are `CLOSED` and canonical.
+SG-000001 through SG-000017 are already `CLOSED` and canonical.
 
 SG-000016 implementation PR `#38` merged as `c85b79f24ce2deef46319d9c5790623fd70c3b0d` after exact-head CI `36339733920`, Review Gates `36339732607`, genuine TypeSafe Jev `15/15` hunk coverage with zero findings/blockers, Alibaba Open Code Review v1.12.9 exact-range delegation plus manual review of both excluded files, and zero unresolved review threads. Implementation post-merge CI `36339937619` completed SUCCESS.
 
@@ -35,29 +35,30 @@ COTRA-P06 is exited at this frontier: branch, stage, unstage, and commit are clo
 
 ## Active grain
 
-SG-000018 — Approval history with replay resistance and broker-level drift enforcement — is the sole active COTRA-P07 grain.
+This closeout candidate records SG-000018 as `CLOSED` using the qualified implementation and merged-tree evidence below. That closeout classification becomes canonical only after this governance change itself merges and the resulting canonical main passes post-merge CI.
 
-This activation authorizes implementation and qualification of the first strong-approval foundation while deliberately keeping strong user-presence verification, trust changes, persistent approval reuse, and remote delegation absent.
+SG-000018 implementation evidence:
+- implementation PR: `#44`;
+- implementation base: `9894f491f8deed47bad97ebd481724682a647ca5`;
+- qualified head: `9ecd534c008ca1fd1c28aacfd1e7e96323d7cea1`;
+- exact-head CI: `36363644307` — SUCCESS;
+- exact-head Review Gates: `36363642475` — SUCCESS;
+- implementation merge: `263abbdfa68beaefd5d48e1354f32b46c11bfb38`;
+- implementation post-merge CI: `36363931388` — SUCCESS.
 
-Authorized target design:
-- broker-level approval nonces bound to the exact normalized approval digest, workspace identity, and policy revision;
-- short approval expiry with fail-closed expiration before execution;
-- one-shot approval consumption so a recorded approval authorizes at most one operation;
-- exact digest binding so a recorded approval never authorizes a changed target, command, destination, ref, or credential reference;
-- workspace and policy revision binding so stale state invalidates recorded approvals;
-- append-only local approval history recording approval id, digest, nonce, timestamps, expiry, reuse scope, decision, workspace, and policy revision without secret material;
-- bounded local history query with redaction guarantees;
-- agent and approval authority separation proof with no MCP approve tool and no forgeable or replayable approval through agent processes;
-- denied and unavailable approval recording with failure-closed behavior preserved;
-- deterministic replay, expiry, mismatch, drift, double-consumption, tamper, and separation tests with all P06 approval regressions retained.
+Genuine TypeSafe Jev reviewed the exact implementation range with `36/36` hunks, zero findings, and zero blocking findings. Alibaba Open Code Review v1.12.9 delegated the same exact range across 11 changed files: 10 reviewable files and one exclusion (`docs/security/SG-000018_APPROVAL_HISTORY_NOTE.md` by unsupported-extension classification). The excluded file was manually reviewed. There were zero unresolved blocking review threads.
 
-## Active acceptance frontier
+Manual exact-diff security review confirmed broker nonces bound to exact digest workspace and policy revision with short expiry and one-shot consumption, append-only checksum-chained redacted history without summaries targets or secrets, tamper-evident loading with fail-closed consumption persistence, explicit approve-like denial through the request surface, migrated file process Git mutation fetch and push dispatch with digests unchanged and consume-before-execute, denied and unavailable recording, agent and approval separation, and retained P06 regressions.
 
-SG-000018 must prove that a previous approval can never authorize a changed operation and that the agent cannot forge approvals through its own surface.
+The canonical SG-000018 authority adds only broker-level approval nonces with short expiry, one-shot exact-digest binding, and an append-only redacted approval history; strong user-presence approval, trust changes, persistent reuse, remote delegation, and approval bypass remain absent.
 
-The broker must bind every recorded approval to a fresh nonce, the exact digest, workspace identity, and policy revision, and must fail closed on replay, expiry, mismatch, drift, or second consumption.
+## Successor frontier
 
-The history must remain append-only and redacted, and the MCP kernel must deny approve-like capabilities while restricted agent children prove unable to forge approvals.
+No successor grain is authorized by this closeout candidate.
+
+After this SG-000018 closeout merges and its post-merge CI succeeds, re-read the canonical architecture, delivery plan, threat model, evidence ledger, open governance records, and this `CURRENT.md` to derive the next lawful COTRA-P07 grain for strong user-presence approval. Do not infer or pre-authorize the next SpecGrain identifier or exact approval design from numbering alone.
+
+A successor strong-presence grain must explicitly define and prove local user-presence verification that the agent cannot produce through its own tool or input surface, built on the SG-000018 replay-resistant foundation without weakening one-shot, expiry, or digest binding. It must not expose browser automation, UI automation, elevation, or approval bypass.
 
 ## Canonical public authority boundary retained
 
