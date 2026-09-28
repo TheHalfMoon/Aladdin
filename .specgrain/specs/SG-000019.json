@@ -1,0 +1,83 @@
+{
+  "id": "SG-000019",
+  "title": "Strong user-presence approval class with platform verification",
+  "program": "COTRA-P07",
+  "state": "GRAIN",
+  "risk": "high",
+  "created": "2026-09-28",
+  "base": "e9728df8535ee64381f1c29dbdced6850d856226",
+  "dependencies": ["SG-000018"],
+  "objective": "Introduce the STRONG approval class on top of the SG-000018 replay-resistant foundation: PRIVILEGED and selected DESTRUCTIVE operations require platform-mediated local user-presence verification (Windows Hello style where feasible) instead of a soft button, with fail-closed denial where strong verification is unavailable, so the agent cannot produce a valid strong approval through its own tool or input surface.",
+  "scope": {
+    "include": [
+      "SOFT versus STRONG approval class in the broker contract with STRONG bound to the existing nonce, expiry, one-shot, digest, workspace, and policy bindings",
+      "policy classification mapping PRIVILEGED operations and selected DESTRUCTIVE operations to the STRONG class while existing file, process, and Git operations retain their current class",
+      "platform user-presence verification boundary with capability detection and a testable provider seam",
+      "Windows Hello style verification path where feasible with fail-closed denial when strong verification is unavailable for STRONG-class operations",
+      "protected-surface enforcement during strong verification with input-lease suspension carried over from the existing approval boundary",
+      "approval history recording of class, presence result, and fallback denials without secret material",
+      "deterministic unit and security tests for class enforcement, unavailable-verification denial, presence forgery through agent surfaces, replay and drift retention, and separation",
+      "retention of all SG-000018 one-shot, expiry, digest, history, and P06 approval flows with no behavior change outside class enforcement",
+      "Windows and Ubuntu exact-head qualification with platform-specific verification tests gated to Windows"
+    ],
+    "exclude": [
+      "workspace trust creation, modification, or revocation",
+      "approval history UX beyond recorded class and presence fields",
+      "emergency revoke broadcast",
+      "changes to per-operation digests, prompts, or summaries outside class labeling",
+      "new privileged capabilities or capability families",
+      "new network, browser, UI automation, clipboard, or installer authority",
+      "persistent approval reuse across operations",
+      "approval delegation to remote or MCP callers",
+      "synthetic-input generation or input injection of any kind",
+      "elevation"
+    ]
+  },
+  "authority_delta": {
+    "filesystem": "No new filesystem writability beyond the existing approval history records, which gain class and presence fields.",
+    "process": "No new process authority. Platform verification is a user-presence check mediated by the operating system, not process execution.",
+    "network": "None. Presence verification is strictly local with no egress.",
+    "browser": "None",
+    "ui_input": "None. No input injection is added; verification is accepted only through the platform-mediated presence result.",
+    "secrets": "Presence results carry verification status only. Raw secrets and biometric material never enter prompts, records, history, logs, or audit.",
+    "approval": "STRONG class requiring platform-mediated presence is added for PRIVILEGED and selected DESTRUCTIVE operations. SOFT behavior is unchanged. No persistent reuse or remote delegation is introduced.",
+    "privileged": "None"
+  },
+  "invariants": [
+    "PRIVILEGED and selected DESTRUCTIVE operations require STRONG approval and fail closed without verified presence",
+    "STRONG approval binds the full SG-000018 record: fresh nonce, exact digest, workspace, policy revision, short expiry, and one-shot consumption",
+    "A soft button alone never satisfies the STRONG class",
+    "The agent cannot produce a valid strong approval through MCP tools, synthetic input, UI automation, coordinates, or child processes",
+    "Presence verification is platform-mediated; Cotra never self-attests presence",
+    "Unavailable platform verification fails closed for STRONG-class operations without downgrading to SOFT",
+    "History records class and presence outcome without secret or biometric material",
+    "Existing SOFT flows keep exact digests, prompts, revalidation, and history behavior",
+    "No trust-change, reuse, delegation, browser, UI, network, or elevation authority is introduced"
+  ],
+  "acceptance": [
+    {"id": "A1", "claim": "Tests prove the broker contract distinguishes SOFT and STRONG classes and binds STRONG to the existing nonce, expiry, one-shot, digest, workspace, and policy record."},
+    {"id": "A2", "claim": "Tests prove policy maps PRIVILEGED operations and selected DESTRUCTIVE operations to STRONG while existing file, process, and Git approvals retain their class."},
+    {"id": "A3", "claim": "Tests prove STRONG approval succeeds only with a platform-mediated presence result and fails closed when verification is unavailable, without SOFT downgrade."},
+    {"id": "A4", "claim": "Tests prove the agent cannot satisfy STRONG through MCP tools, synthetic input, UI automation, coordinate proposals, child processes, or replayed prior approvals."},
+    {"id": "A5", "claim": "Tests prove replay, expiry, digest mismatch, revision drift, and double-consumption protections from SG-000018 remain enforced for both classes."},
+    {"id": "A6", "claim": "Tests prove history records class and presence outcome with redaction and tamper-evident loading retained."},
+    {"id": "A7", "claim": "Tests prove denied and unavailable presence is recorded and never authorizes execution."},
+    {"id": "A8", "claim": "Tests prove all P06 approval flows still pass their regressions with digests unchanged."},
+    {"id": "A9", "claim": "Tests prove trust changes, persistent reuse, remote delegation, and broader process authority remain unreachable."},
+    {"id": "A10", "claim": "Windows-gated tests exercise the real platform verification path where feasible or record its unavailability explicitly without claiming unverified success."},
+    {"id": "A11", "claim": "Exact-head Windows/Ubuntu Rust, Node, Governance, genuine TypeSafe Jev, Alibaba Open Code Review, exact-diff security review, manual review of excluded security-sensitive files, and zero unresolved blocking review threads all pass."}
+  ],
+  "successor_requirements": {
+    "trust_ux": "Workspace trust management, approval history UX, and emergency revoke remain successor work and must build on the class-labeled history without weakening STRONG enforcement, one-shot, expiry, or digest binding.",
+    "p07_exit": "COTRA-P07 exits only when the agent cannot produce a valid strong approval through its own tool or input surface with replay and drift resistance proven, which this grain plus its trust-UX successor must jointly satisfy."
+  },
+  "review": {
+    "diffcipline": true,
+    "jev_semantic_review": true,
+    "alibaba_open_code_review": "required exact-range qualification where integrated",
+    "security_review": true,
+    "exact_head_ci": true,
+    "native_network_qualification": false
+  },
+  "done_when": "STRONG approval class with platform-mediated presence verification is merged for PRIVILEGED and selected DESTRUCTIVE operations with unavailable-verification denial, agent-forgery tests, retained SG-000018 replay and drift enforcement, class-labeled history, and no trust-change, reuse, delegation, or new platform authority."
+}
