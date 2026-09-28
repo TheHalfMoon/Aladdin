@@ -673,8 +673,7 @@ mod tests {
             &mut trust_store,
             &request,
         )
-        .expect("dispatch")
-        .expect("handled");
+        .expect("dispatch");
         assert_eq!(result["trusted"], false);
         assert_eq!(result["revision"], 0);
         let _ = fs::remove_dir_all(root);
@@ -708,9 +707,8 @@ mod tests {
         policy.authorize(&grant).expect("grant authorized");
         let approval_path = temp_trust_path();
         let broker = broker_with_presence(approval_path.clone(), TestPresenceVerifier::verified());
-        let result = dispatch(&policy, &workspace, &broker, &mut trust_store, &grant)
-            .expect("dispatch")
-            .expect("handled");
+        let result =
+            dispatch(&policy, &workspace, &broker, &mut trust_store, &grant).expect("dispatch");
         assert_eq!(result["trusted"], true);
         assert_eq!(result["revision"], 1);
         let history_request = RequestEnvelope {
@@ -730,8 +728,7 @@ mod tests {
             &mut trust_store,
             &history_request,
         )
-        .expect("history")
-        .expect("handled");
+        .expect("history");
         assert_eq!(history["entries"].as_array().expect("entries").len(), 1);
         let weak = dispatch(
             &policy,
@@ -793,8 +790,7 @@ mod tests {
             &mut trust_store,
             &revoke_request,
         )
-        .expect("revoke")
-        .expect("handled");
+        .expect("revoke");
         let expected =
             ConsumeExpectation::strong(prompt.digest.clone(), "default", POLICY_REVISION);
         let error = broker
