@@ -1,0 +1,87 @@
+{
+  "id": "SG-000018",
+  "title": "Approval history with replay resistance and broker-level drift enforcement",
+  "program": "COTRA-P07",
+  "state": "GRAIN",
+  "risk": "high",
+  "created": "2026-09-28",
+  "base": "517c03b58fa898bc5aec2de7debd86ff9969796b",
+  "dependencies": ["SG-000017"],
+  "objective": "Introduce the first COTRA-P07 strong-approval foundation: a broker-level approval record with capability-bound nonces, short expiry, one-shot semantics, and exact digest binding, plus an append-only local approval history, so that a previous approval can never authorize a changed target and an agent cannot forge or replay approvals through its own tool or process surface. Existing per-operation digests and fresh-approval flows remain unchanged; strong user-presence (Windows Hello/WebAuthn style) remains an explicit successor.",
+  "scope": {
+    "include": [
+      "broker-level approval nonce issuance bound to the exact normalized approval digest, workspace identity, and policy revision",
+      "short approval expiry with fail-closed expiration before execution",
+      "one-shot approval consumption so a recorded approval cannot authorize a second operation",
+      "exact digest binding so a recorded approval cannot authorize a changed target, command, destination, ref, or credential reference",
+      "workspace and policy revision binding so stale workspace or policy state invalidates recorded approvals",
+      "append-only local approval history recording approval id, digest, nonce, timestamps, expiry, reuse scope, decision, workspace, and policy revision without secret material",
+      "bounded local history query for audit and trust UX predecessors with redaction guarantees",
+      "agent and approval authority separation proof: no MCP approve tool, kernel denial of approve-like capabilities, and agent-spawned child processes unable to forge or replay approvals",
+      "denied and unavailable approval recording with failure-closed behavior preserved",
+      "deterministic unit and security tests for replay, expiry, digest mismatch, revision drift, double consumption, history tampering, and separation",
+      "retention of all SG-000015 local mutation, SG-000016 fetch, and SG-000017 push approval flows with no behavior change outside the broker hardening",
+      "Windows and Ubuntu exact-head qualification"
+    ],
+    "exclude": [
+      "strong user-presence approval through Windows Hello, WebAuthn, or equivalent platform verification",
+      "workspace trust creation, modification, or revocation UX",
+      "emergency revoke broadcast UX beyond the recorded decision history",
+      "changes to per-operation approval digests, prompts, or summaries",
+      "new privileged capabilities or capability families",
+      "new network, browser, UI automation, clipboard, or installer authority",
+      "persistent approval reuse across operations",
+      "approval delegation to remote or MCP callers",
+      "raw secret storage in approval records",
+      "elevation"
+    ]
+  },
+  "authority_delta": {
+    "filesystem": "Approval history appends bounded redacted records to Cotra protected local state; workspace files, Git state, and unrelated paths gain no new writability.",
+    "process": "No new process authority. The broker remains a local in-process decision boundary; no new executable targets.",
+    "network": "None. Approval history and replay enforcement are strictly local with no egress.",
+    "browser": "None",
+    "ui_input": "None. No new input injection or approval-surface targeting.",
+    "secrets": "Approval records carry digests and reference ids only. Raw secrets never enter approval prompts, records, history queries, logs, or audit.",
+    "approval": "Broker-level one-shot nonces with short expiry and exact digest binding are added. No persistent reuse and no remote delegation are introduced.",
+    "privileged": "None"
+  },
+  "invariants": [
+    "Every recorded approval binds the exact normalized digest, a fresh nonce, workspace identity, and policy revision",
+    "A recorded approval authorizes at most one operation; second consumption fails closed as replay",
+    "A recorded approval never authorizes a changed digest; target, command, destination, ref, or credential drift fails closed",
+    "Expired approvals fail closed before execution regardless of digest match",
+    "Workspace or policy revision drift invalidates recorded approvals",
+    "No MCP tool can produce, approve, or replay an approval; the kernel denies approve-like capabilities",
+    "Agent-spawned child processes receive no approval IPC handles, nonces, or secrets and cannot forge approvals",
+    "Approval records and history contain no raw secret material",
+    "Existing fresh-approval flows for file, process, Git mutation, fetch, and push keep their exact digests and post-approval revalidation",
+    "No strong-presence, trust-change, elevation, browser, UI, or generic network authority is introduced"
+  ],
+  "acceptance": [
+    {"id": "A1", "claim": "Tests prove the broker issues a fresh unpredictable nonce per approval request and binds it to the exact prompt digest, workspace identity, and policy revision."},
+    {"id": "A2", "claim": "Tests prove expired approvals fail closed before execution even when the digest matches."},
+    {"id": "A3", "claim": "Tests prove one-shot consumption: the first execution with a recorded approval succeeds subject to existing revalidation, and any second consumption with the same record fails closed as replay."},
+    {"id": "A4", "claim": "Tests prove digest mismatch fails closed: a recorded approval never authorizes a changed target, argv, branch, ref, destination, pinned address, HEAD, prior, or credential reference."},
+    {"id": "A5", "claim": "Tests prove workspace and policy revision drift invalidate recorded approvals."},
+    {"id": "A6", "claim": "Tests prove denied and unavailable approvals are recorded as such and never authorize execution."},
+    {"id": "A7", "claim": "Tests prove the append-only history records approvals without secret material, rejects tampered records, and serves bounded redacted queries."},
+    {"id": "A8", "claim": "Tests prove agent and approval separation: no MCP approve tool exists, the kernel denies approve-like capabilities, and a restricted agent-spawned child cannot forge or replay an approval."},
+    {"id": "A9", "claim": "Tests prove all existing SG-000015, SG-000016, and SG-000017 approval flows still require fresh approval and pass their regressions with digests unchanged."},
+    {"id": "A10", "claim": "Tests prove strong user-presence approval, trust changes, persistent reuse, remote delegation, and broader process authority remain unreachable."},
+    {"id": "A11", "claim": "Exact-head Windows/Ubuntu Rust, Node, Governance, genuine TypeSafe Jev, Alibaba Open Code Review, exact-diff security review, manual review of excluded security-sensitive files, and zero unresolved blocking review threads all pass."}
+  ],
+  "successor_requirements": {
+    "strong_presence": "A successor grain must add strong local user-presence approval (Windows Hello/WebAuthn style where feasible) for PRIVILEGED and selected DESTRUCTIVE operations on top of this replay-resistant foundation, and must prove the agent cannot produce a valid strong approval through its own tool or input surface.",
+    "trust_ux": "Workspace trust management, approval history UX, and emergency revoke remain successor work and must build on the append-only history without weakening one-shot, expiry, or digest binding."
+  },
+  "review": {
+    "diffcipline": true,
+    "jev_semantic_review": true,
+    "alibaba_open_code_review": "required exact-range qualification where integrated",
+    "security_review": true,
+    "exact_head_ci": true,
+    "native_network_qualification": false
+  },
+  "done_when": "Broker-level approval nonces with short expiry and one-shot exact-digest binding are merged with an append-only redacted approval history, replay expiry mismatch drift and double-consumption tests, agent and approval separation proof, retained P06 approval regressions, and no strong-presence, trust-change, reuse, or delegation authority."
+}
