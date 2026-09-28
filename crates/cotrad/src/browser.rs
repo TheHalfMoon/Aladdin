@@ -3245,7 +3245,6 @@ mod tests {
                     "page_id": page_id,
                     "expected_origin": "https://example.com:443",
                     "expected_generation": 1,
-                    "expected_document_generation": 1,
                 }),
             ),
             profile_root,
