@@ -3,14 +3,341 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, HashSet};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 pub const APPROVAL_TTL_MS: u64 = 5 * 60 * 1_000;
 pub const SINGLE_OPERATION_SCOPE: &str = "single-operation";
-const LEDGER_SCHEMA: &str = "cotra-approval-ledger-v1";
+pub const STRONG_VERIFY_TIMEOUT_MS: u64 = 120_000;
+const LEDGER_SCHEMA: &str = "cotra-approval-ledger-v2";
 
 static NONCE_COUNTER: AtomicU64 = AtomicU64::new(0);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ApprovalClass {
+    #[serde(rename = "SOFT")]
+    Soft,
+    #[serde(rename = "STRONG")]
+    Strong,
+}
+
+impl ApprovalClass {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            ApprovalClass::Soft => "SOFT",
+            ApprovalClass::Strong => "STRONG",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum PresenceOutcome {
+    #[serde(rename = "soft-approved")]
+    SoftApproved,
+    #[serde(rename = "verified-strong")]
+    VerifiedStrong,
+    #[serde(rename = "denied")]
+    Denied,
+    #[serde(rename = "unavailable")]
+    Unavailable,
+}
+
+impl PresenceOutcome {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            PresenceOutcome::SoftApproved => "soft-approved",
+            PresenceOutcome::VerifiedStrong => "verified-strong",
+            PresenceOutcome::Denied => "denied",
+            PresenceOutcome::Unavailable => "unavailable",
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PresenceContext {
+    pub nonce: String,
+    pub digest: String,
+    pub workspace_id: String,
+    pub action: String,
+}
+
+impl PresenceContext {
+    pub fn new(
+        nonce: impl Into<String>,
+        digest: impl Into<String>,
+        workspace_id: impl Into<String>,
+        action: impl Into<String>,
+    ) -> Self {
+        Self {
+            nonce: nonce.into(),
+            digest: digest.into(),
+            workspace_id: workspace_id.into(),
+            action: action.into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PresenceAttestation {
+    pub method: String,
+    pub verified_at_ms: u64,
+    pub nonce: String,
+    pub digest: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PresenceFailureReason {
+    Denied,
+    Cancelled,
+    Timeout,
+    Unavailable,
+    Failed,
+    InvalidResponse,
+}
+
+#[derive(Debug, Clone)]
+pub struct PresenceError {
+    pub code: FailureCode,
+    pub message: String,
+    pub reason: PresenceFailureReason,
+}
+
+impl PresenceError {
+    pub fn denied(message: impl Into<String>) -> Self {
+        Self {
+            code: FailureCode::ApprovalDenied,
+            message: message.into(),
+            reason: PresenceFailureReason::Denied,
+        }
+    }
+
+    pub fn cancelled(message: impl Into<String>) -> Self {
+        Self {
+            code: FailureCode::ApprovalDenied,
+            message: message.into(),
+            reason: PresenceFailureReason::Cancelled,
+        }
+    }
+
+    pub fn timeout(message: impl Into<String>) -> Self {
+        Self {
+            code: FailureCode::ApprovalUnavailable,
+            message: message.into(),
+            reason: PresenceFailureReason::Timeout,
+        }
+    }
+
+    pub fn unavailable(message: impl Into<String>) -> Self {
+        Self {
+            code: FailureCode::ApprovalUnavailable,
+            message: message.into(),
+            reason: PresenceFailureReason::Unavailable,
+        }
+    }
+
+    pub fn failed(message: impl Into<String>) -> Self {
+        Self {
+            code: FailureCode::ApprovalUnavailable,
+            message: message.into(),
+            reason: PresenceFailureReason::Failed,
+        }
+    }
+
+    pub fn invalid(message: impl Into<String>) -> Self {
+        Self {
+            code: FailureCode::ApprovalUnavailable,
+            message: message.into(),
+            reason: PresenceFailureReason::InvalidResponse,
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct InputLeaseGuard {
+    suspended: bool,
+}
+
+impl InputLeaseGuard {
+    pub(crate) fn suspend_for_presence() -> Self {
+        Self { suspended: true }
+    }
+
+    pub fn is_suspended(&self) -> bool {
+        self.suspended
+    }
+}
+
+impl Drop for InputLeaseGuard {
+    fn drop(&mut self) {
+        self.suspended = false;
+    }
+}
+
+pub trait PresenceVerifier: Send + Sync {
+    fn method(&self) -> &'static str;
+    fn is_available(&self) -> bool;
+    fn verify(
+        &self,
+        ctx: &PresenceContext,
+        lease: &InputLeaseGuard,
+    ) -> Result<PresenceAttestation, PresenceError>;
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+pub struct NoPresenceVerifier;
+
+impl PresenceVerifier for NoPresenceVerifier {
+    fn method(&self) -> &'static str {
+        "none"
+    }
+
+    fn is_available(&self) -> bool {
+        false
+    }
+
+    fn verify(
+        &self,
+        _ctx: &PresenceContext,
+        _lease: &InputLeaseGuard,
+    ) -> Result<PresenceAttestation, PresenceError> {
+        Err(PresenceError::unavailable(
+            "strong user-presence verification is unavailable on this platform; STRONG approval fails closed without SOFT downgrade",
+        ))
+    }
+}
+
+#[cfg(windows)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct WindowsHelloPresenceVerifier;
+
+#[cfg(windows)]
+impl WindowsHelloPresenceVerifier {
+    pub fn new() -> Self {
+        Self
+    }
+
+    fn hello_availability(&self) -> bool {
+        if std::env::var("CI").is_ok() || std::env::var("GITHUB_ACTIONS").is_ok() {
+            return false;
+        }
+        check_hello_availability()
+    }
+}
+
+#[cfg(windows)]
+impl PresenceVerifier for WindowsHelloPresenceVerifier {
+    fn method(&self) -> &'static str {
+        "windows-hello"
+    }
+
+    fn is_available(&self) -> bool {
+        self.hello_availability()
+    }
+
+    fn verify(
+        &self,
+        ctx: &PresenceContext,
+        lease: &InputLeaseGuard,
+    ) -> Result<PresenceAttestation, PresenceError> {
+        if !lease.is_suspended() {
+            return Err(PresenceError::invalid(
+                "strong verification requires a suspended input lease",
+            ));
+        }
+        if ctx.nonce.trim().is_empty() || ctx.digest.trim().is_empty() {
+            return Err(PresenceError::invalid(
+                "strong verification context is malformed",
+            ));
+        }
+        if !self.hello_availability() {
+            return Err(PresenceError::unavailable(
+                "Windows Hello verification is unavailable; STRONG approval fails closed",
+            ));
+        }
+        verify_with_hello(ctx, self.method())
+    }
+}
+
+#[cfg(windows)]
+fn check_hello_availability() -> bool {
+    use windows::Security::Credentials::UI::UserConsentVerifier;
+    let result = (|| -> windows::core::Result<bool> {
+        let operation = UserConsentVerifier::CheckAvailabilityAsync()?;
+        let availability = operation.get()?;
+        Ok(availability
+            == windows::Security::Credentials::UI::UserConsentVerifierAvailability::Available)
+    })();
+    result.unwrap_or(false)
+}
+
+#[cfg(windows)]
+fn verify_with_hello(
+    ctx: &PresenceContext,
+    method: &'static str,
+) -> Result<PresenceAttestation, PresenceError> {
+    use std::sync::mpsc::channel;
+    use std::time::Duration;
+    use windows::Security::Credentials::UI::{UserConsentVerificationResult, UserConsentVerifier};
+
+    let nonce_prefix: String = ctx.nonce.chars().take(8).collect();
+    let digest_prefix: String = ctx.digest.chars().take(12).collect();
+    let message = format!(
+        "Cotra STRONG approval {nonce_prefix} {digest_prefix} for {} in workspace {}",
+        ctx.action, ctx.workspace_id
+    );
+    let nonce = ctx.nonce.clone();
+    let digest = ctx.digest.clone();
+    let (sender, receiver) = channel();
+    std::thread::spawn(move || {
+        let outcome = (|| -> windows::core::Result<UserConsentVerificationResult> {
+            let operation = UserConsentVerifier::RequestVerificationAsync(&message.clone().into())?;
+            operation.get()
+        })();
+        let _ = sender.send(outcome);
+    });
+    let outcome = receiver
+        .recv_timeout(Duration::from_millis(STRONG_VERIFY_TIMEOUT_MS))
+        .map_err(|_| {
+            PresenceError::timeout(
+                "strong user-presence verification timed out; STRONG approval fails closed",
+            )
+        })?;
+    let result = outcome.map_err(|_| {
+        PresenceError::failed("Windows Hello verification failed; STRONG approval fails closed")
+    })?;
+    match result {
+        UserConsentVerificationResult::Verified => Ok(PresenceAttestation {
+            method: method.to_owned(),
+            verified_at_ms: now_ms(),
+            nonce,
+            digest,
+        }),
+        UserConsentVerificationResult::DeviceNotPresent
+        | UserConsentVerificationResult::NotConfigured
+        | UserConsentVerificationResult::DisabledByPolicy => Err(PresenceError::unavailable(
+            "Windows Hello is not configured for this device; STRONG approval fails closed",
+        )),
+        UserConsentVerificationResult::Cancelled => Err(PresenceError::cancelled(
+            "strong user-presence verification was cancelled; STRONG approval fails closed",
+        )),
+        UserConsentVerificationResult::RetriesExhausted => Err(PresenceError::denied(
+            "strong user-presence verification retries exhausted; STRONG approval fails closed",
+        )),
+        _ => Err(PresenceError::invalid(
+            "Windows Hello returned an unexpected result; STRONG approval fails closed",
+        )),
+    }
+}
+
+#[cfg(not(windows))]
+pub type DefaultPresenceVerifier = NoPresenceVerifier;
+
+#[cfg(windows)]
+pub type DefaultPresenceVerifier = WindowsHelloPresenceVerifier;
+
+fn default_presence_verifier() -> Arc<dyn PresenceVerifier> {
+    Arc::new(DefaultPresenceVerifier::default())
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ApprovalPrompt {
@@ -24,6 +351,7 @@ pub struct ApprovalPrompt {
     pub requested_at_ms: u64,
     pub expires_at_ms: u64,
     pub reuse_scope: String,
+    pub approval_class: ApprovalClass,
 }
 
 impl ApprovalPrompt {
@@ -55,6 +383,68 @@ impl ApprovalPrompt {
         digest: impl Into<String>,
         now_ms: u64,
     ) -> Self {
+        Self::new_with_class_and_clock(
+            workspace_id,
+            policy_revision,
+            action,
+            target,
+            summary,
+            digest,
+            ApprovalClass::Soft,
+            now_ms,
+        )
+    }
+
+    pub fn new_strong(
+        workspace_id: impl Into<String>,
+        policy_revision: impl Into<String>,
+        action: impl Into<String>,
+        target: impl Into<String>,
+        summary: impl Into<String>,
+        digest: impl Into<String>,
+    ) -> Self {
+        Self::new_strong_with_clock(
+            workspace_id,
+            policy_revision,
+            action,
+            target,
+            summary,
+            digest,
+            now_ms(),
+        )
+    }
+
+    pub fn new_strong_with_clock(
+        workspace_id: impl Into<String>,
+        policy_revision: impl Into<String>,
+        action: impl Into<String>,
+        target: impl Into<String>,
+        summary: impl Into<String>,
+        digest: impl Into<String>,
+        now_ms: u64,
+    ) -> Self {
+        Self::new_with_class_and_clock(
+            workspace_id,
+            policy_revision,
+            action,
+            target,
+            summary,
+            digest,
+            ApprovalClass::Strong,
+            now_ms,
+        )
+    }
+
+    pub fn new_with_class_and_clock(
+        workspace_id: impl Into<String>,
+        policy_revision: impl Into<String>,
+        action: impl Into<String>,
+        target: impl Into<String>,
+        summary: impl Into<String>,
+        digest: impl Into<String>,
+        approval_class: ApprovalClass,
+        now_ms: u64,
+    ) -> Self {
         let digest = digest.into();
         Self {
             workspace_id: workspace_id.into(),
@@ -67,7 +457,15 @@ impl ApprovalPrompt {
             expires_at_ms: now_ms.saturating_add(APPROVAL_TTL_MS),
             reuse_scope: SINGLE_OPERATION_SCOPE.to_owned(),
             digest,
+            approval_class,
         }
+    }
+
+    pub fn with_class(mut self, approval_class: ApprovalClass) -> Self {
+        let now = self.requested_at_ms;
+        self.nonce = fresh_nonce(&self.digest, now);
+        self.approval_class = approval_class;
+        self
     }
 }
 
@@ -113,6 +511,15 @@ impl ApprovalError {
     }
 }
 
+impl From<PresenceError> for ApprovalError {
+    fn from(error: PresenceError) -> Self {
+        Self {
+            code: error.code,
+            message: error.message,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ApprovedToken {
     pub record_id: String,
@@ -121,6 +528,7 @@ pub struct ApprovedToken {
     pub workspace_id: String,
     pub policy_revision: String,
     pub expires_at_ms: u64,
+    pub approval_class: ApprovalClass,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -128,6 +536,7 @@ pub struct ConsumeExpectation {
     pub digest: String,
     pub workspace_id: String,
     pub policy_revision: String,
+    pub approval_class: ApprovalClass,
 }
 
 impl ConsumeExpectation {
@@ -140,7 +549,30 @@ impl ConsumeExpectation {
             digest: digest.into(),
             workspace_id: workspace_id.into(),
             policy_revision: policy_revision.into(),
+            approval_class: ApprovalClass::Soft,
         }
+    }
+
+    pub fn new_with_class(
+        digest: impl Into<String>,
+        workspace_id: impl Into<String>,
+        policy_revision: impl Into<String>,
+        approval_class: ApprovalClass,
+    ) -> Self {
+        Self {
+            digest: digest.into(),
+            workspace_id: workspace_id.into(),
+            policy_revision: policy_revision.into(),
+            approval_class,
+        }
+    }
+
+    pub fn strong(
+        digest: impl Into<String>,
+        workspace_id: impl Into<String>,
+        policy_revision: impl Into<String>,
+    ) -> Self {
+        Self::new_with_class(digest, workspace_id, policy_revision, ApprovalClass::Strong)
     }
 }
 
@@ -160,6 +592,9 @@ struct StoredRecord {
     workspace_id: String,
     policy_revision: String,
     decision: RecordedDecision,
+    approval_class: ApprovalClass,
+    presence_outcome: PresenceOutcome,
+    presence_method: String,
     requested_at_ms: u64,
     decided_at_ms: u64,
     expires_at_ms: u64,
@@ -176,6 +611,9 @@ pub struct ApprovalRecordSummary {
     pub workspace_id: String,
     pub policy_revision: String,
     pub decision: RecordedDecision,
+    pub approval_class: ApprovalClass,
+    pub presence_outcome: PresenceOutcome,
+    pub presence_method: String,
     pub requested_at_ms: u64,
     pub decided_at_ms: u64,
     pub expires_at_ms: u64,
@@ -195,10 +633,11 @@ pub trait ApprovalBroker {
 
     fn request(&self, prompt: &ApprovalPrompt) -> Result<ApprovalDecision, ApprovalError> {
         let token = self.request_token(prompt)?;
-        let expected = ConsumeExpectation::new(
+        let expected = ConsumeExpectation::new_with_class(
             prompt.digest.clone(),
             prompt.workspace_id.clone(),
             prompt.policy_revision.clone(),
+            prompt.approval_class,
         );
         self.consume(&token, &expected, now_ms())?;
         Ok(ApprovalDecision::Approved)
@@ -212,6 +651,7 @@ pub trait ApprovalBroker {
 #[derive(Debug)]
 pub struct LocalApprovalBroker {
     ledger: Mutex<ApprovalLedger>,
+    presence: Arc<dyn PresenceVerifier>,
 }
 
 impl LocalApprovalBroker {
@@ -220,10 +660,30 @@ impl LocalApprovalBroker {
     }
 
     pub fn with_path(path: impl Into<std::path::PathBuf>) -> Self {
+        Self::with_path_and_verifier(path, default_presence_verifier())
+    }
+
+    pub fn with_presence_verifier(presence: Arc<dyn PresenceVerifier>) -> Self {
+        Self::with_path_and_verifier(default_approval_history_path(), presence)
+    }
+
+    pub fn with_path_and_verifier(
+        path: impl Into<std::path::PathBuf>,
+        presence: Arc<dyn PresenceVerifier>,
+    ) -> Self {
         let ledger = ApprovalLedger::load_or_create(path.into());
         Self {
             ledger: Mutex::new(ledger),
+            presence,
         }
+    }
+
+    pub fn presence_method(&self) -> &'static str {
+        self.presence.method()
+    }
+
+    pub fn presence_available(&self) -> bool {
+        self.presence.is_available()
     }
 
     pub fn history(&self, limit: usize) -> Vec<ApprovalRecordSummary> {
@@ -243,31 +703,9 @@ impl Default for LocalApprovalBroker {
 impl ApprovalBroker for LocalApprovalBroker {
     fn request_token(&self, prompt: &ApprovalPrompt) -> Result<ApprovedToken, ApprovalError> {
         validate_prompt(prompt)?;
-        let decision = platform_prompt(prompt);
-        let mut ledger = self
-            .ledger
-            .lock()
-            .map_err(|_| ApprovalError::unavailable("approval ledger is unavailable"))?;
-        match decision {
-            Ok(ApprovalDecision::Approved) => {
-                let record = ledger.record_decision(prompt, RecordedDecision::Approved)?;
-                Ok(ApprovedToken {
-                    record_id: record.id.clone(),
-                    nonce: record.nonce.clone(),
-                    digest: record.digest.clone(),
-                    workspace_id: record.workspace_id.clone(),
-                    policy_revision: record.policy_revision.clone(),
-                    expires_at_ms: record.expires_at_ms,
-                })
-            }
-            Ok(ApprovalDecision::Denied) => {
-                let _ = ledger.record_decision(prompt, RecordedDecision::Denied);
-                Err(ApprovalError::denied("local user denied the operation"))
-            }
-            Err(error) => {
-                let _ = ledger.record_decision(prompt, RecordedDecision::Unavailable);
-                Err(error)
-            }
+        match prompt.approval_class {
+            ApprovalClass::Soft => self.request_soft_token(prompt),
+            ApprovalClass::Strong => self.request_strong_token(prompt),
         }
     }
 
@@ -285,6 +723,132 @@ impl ApprovalBroker for LocalApprovalBroker {
 
     fn history(&self, limit: usize) -> Vec<ApprovalRecordSummary> {
         Self::history(self, limit)
+    }
+}
+
+impl LocalApprovalBroker {
+    fn request_soft_token(&self, prompt: &ApprovalPrompt) -> Result<ApprovedToken, ApprovalError> {
+        let decision = platform_prompt(prompt);
+        let mut ledger = self
+            .ledger
+            .lock()
+            .map_err(|_| ApprovalError::unavailable("approval ledger is unavailable"))?;
+        match decision {
+            Ok(ApprovalDecision::Approved) => {
+                let record = ledger.record_decision(
+                    prompt,
+                    RecordedDecision::Approved,
+                    PresenceOutcome::SoftApproved,
+                    "soft-button",
+                )?;
+                Ok(ApprovedToken {
+                    record_id: record.id.clone(),
+                    nonce: record.nonce.clone(),
+                    digest: record.digest.clone(),
+                    workspace_id: record.workspace_id.clone(),
+                    policy_revision: record.policy_revision.clone(),
+                    expires_at_ms: record.expires_at_ms,
+                    approval_class: ApprovalClass::Soft,
+                })
+            }
+            Ok(ApprovalDecision::Denied) => {
+                let _ = ledger.record_decision(
+                    prompt,
+                    RecordedDecision::Denied,
+                    PresenceOutcome::Denied,
+                    "soft-button",
+                );
+                Err(ApprovalError::denied("local user denied the operation"))
+            }
+            Err(error) => {
+                let _ = ledger.record_decision(
+                    prompt,
+                    RecordedDecision::Unavailable,
+                    PresenceOutcome::Unavailable,
+                    "soft-button",
+                );
+                Err(error)
+            }
+        }
+    }
+
+    fn request_strong_token(
+        &self,
+        prompt: &ApprovalPrompt,
+    ) -> Result<ApprovedToken, ApprovalError> {
+        let lease = InputLeaseGuard::suspend_for_presence();
+        if !lease.is_suspended() {
+            return Err(ApprovalError::unavailable(
+                "strong approval requires a suspended input lease",
+            ));
+        }
+        let ctx = PresenceContext::new(
+            prompt.nonce.clone(),
+            prompt.digest.clone(),
+            prompt.workspace_id.clone(),
+            prompt.action.clone(),
+        );
+        let method = self.presence.method();
+        let attestation = self.presence.verify(&ctx, &lease);
+        let mut ledger = self
+            .ledger
+            .lock()
+            .map_err(|_| ApprovalError::unavailable("approval ledger is unavailable"))?;
+        match attestation {
+            Ok(attestation) => {
+                if attestation.nonce != prompt.nonce || attestation.digest != prompt.digest {
+                    let _ = ledger.record_decision(
+                        prompt,
+                        RecordedDecision::Unavailable,
+                        PresenceOutcome::Unavailable,
+                        method,
+                    );
+                    return Err(ApprovalError::unavailable(
+                        "strong presence result does not match the approved request; STRONG approval fails closed",
+                    ));
+                }
+                if attestation.method != method {
+                    let _ = ledger.record_decision(
+                        prompt,
+                        RecordedDecision::Unavailable,
+                        PresenceOutcome::Unavailable,
+                        method,
+                    );
+                    return Err(ApprovalError::unavailable(
+                        "strong presence method mismatch; STRONG approval fails closed",
+                    ));
+                }
+                let record = ledger.record_decision(
+                    prompt,
+                    RecordedDecision::Approved,
+                    PresenceOutcome::VerifiedStrong,
+                    &attestation.method,
+                )?;
+                Ok(ApprovedToken {
+                    record_id: record.id.clone(),
+                    nonce: record.nonce.clone(),
+                    digest: record.digest.clone(),
+                    workspace_id: record.workspace_id.clone(),
+                    policy_revision: record.policy_revision.clone(),
+                    expires_at_ms: record.expires_at_ms,
+                    approval_class: ApprovalClass::Strong,
+                })
+            }
+            Err(error) => {
+                let outcome = match error.reason {
+                    PresenceFailureReason::Denied | PresenceFailureReason::Cancelled => {
+                        PresenceOutcome::Denied
+                    }
+                    _ => PresenceOutcome::Unavailable,
+                };
+                let decision = match outcome {
+                    PresenceOutcome::Denied => RecordedDecision::Denied,
+                    _ => RecordedDecision::Unavailable,
+                };
+                let _ = ledger.record_decision(prompt, decision, outcome, method);
+                Err(error.into())
+            }
+        }
     }
 }
 
@@ -364,10 +928,19 @@ impl ApprovalLedger {
         &mut self,
         prompt: &ApprovalPrompt,
         decision: RecordedDecision,
+        presence_outcome: PresenceOutcome,
+        presence_method: &str,
     ) -> Result<StoredRecord, ApprovalError> {
         if !self.nonces.insert(prompt.nonce.clone()) {
             return Err(ApprovalError::invalid(
                 "approval nonce was already issued; retry with a fresh prompt",
+            ));
+        }
+        if prompt.approval_class == ApprovalClass::Strong
+            && presence_outcome == PresenceOutcome::SoftApproved
+        {
+            return Err(ApprovalError::invalid(
+                "a soft button alone never satisfies the STRONG class",
             ));
         }
         let decided_at = now_ms();
@@ -384,6 +957,9 @@ impl ApprovalLedger {
             workspace_id: prompt.workspace_id.clone(),
             policy_revision: prompt.policy_revision.clone(),
             decision,
+            approval_class: prompt.approval_class,
+            presence_outcome,
+            presence_method: presence_method.to_owned(),
             requested_at_ms: prompt.requested_at_ms,
             decided_at_ms: decided_at,
             expires_at_ms: prompt.expires_at_ms,
@@ -416,6 +992,18 @@ impl ApprovalLedger {
         if record.nonce != token.nonce {
             return Err(ApprovalError::stale(
                 "approval token nonce does not match the recorded approval",
+            ));
+        }
+        if record.approval_class != token.approval_class {
+            return Err(ApprovalError::stale(
+                "approval class changed after approval; approval cannot be reused",
+            ));
+        }
+        if record.approval_class != expected.approval_class
+            || token.approval_class != expected.approval_class
+        {
+            return Err(ApprovalError::stale(
+                "approval class does not match the expected class; STRONG never downgrades to SOFT",
             ));
         }
         if now_ms > record.expires_at_ms || now_ms > token.expires_at_ms {
@@ -509,6 +1097,9 @@ impl ApprovalLedger {
                 workspace_id: record.workspace_id.clone(),
                 policy_revision: record.policy_revision.clone(),
                 decision: record.decision,
+                approval_class: record.approval_class,
+                presence_outcome: record.presence_outcome,
+                presence_method: record.presence_method.clone(),
                 requested_at_ms: record.requested_at_ms,
                 decided_at_ms: record.decided_at_ms,
                 expires_at_ms: record.expires_at_ms,
@@ -528,6 +1119,9 @@ fn record_checksum(record: &StoredRecord) -> String {
     checksum_field(&mut hasher, record.workspace_id.as_bytes());
     checksum_field(&mut hasher, record.policy_revision.as_bytes());
     checksum_field(&mut hasher, format!("{:?}", record.decision).as_bytes());
+    checksum_field(&mut hasher, record.approval_class.as_str().as_bytes());
+    checksum_field(&mut hasher, record.presence_outcome.as_str().as_bytes());
+    checksum_field(&mut hasher, record.presence_method.as_bytes());
     checksum_field(&mut hasher, record.requested_at_ms.to_string().as_bytes());
     checksum_field(&mut hasher, record.decided_at_ms.to_string().as_bytes());
     checksum_field(&mut hasher, record.expires_at_ms.to_string().as_bytes());
@@ -616,8 +1210,9 @@ fn platform_prompt(prompt: &ApprovalPrompt) -> Result<ApprovalDecision, Approval
         value.encode_utf16().chain(std::iter::once(0)).collect()
     }
 
+    debug_assert_eq!(prompt.approval_class, ApprovalClass::Soft);
     let body = format!(
-        "Cotra requests a local action.\n\nWorkspace: {}\nAction: {}\nTarget: {}\n{}\nDigest: {}\nApproval: {} (single use, expires in 5 minutes)\n\nApprove this exact operation?",
+        "Cotra requests a local action.\n\nWorkspace: {}\nAction: {}\nTarget: {}\n{}\nDigest: {}\nApproval: SOFT {} (single use, expires in 5 minutes)\n\nApprove this exact operation?",
         prompt.workspace_id,
         prompt.action,
         prompt.target,
@@ -626,7 +1221,7 @@ fn platform_prompt(prompt: &ApprovalPrompt) -> Result<ApprovalDecision, Approval
         &prompt.nonce[..prompt.nonce.len().min(8)],
     );
     let body = wide(&body);
-    let caption = wide("Cotra approval");
+    let caption = wide("Cotra approval SOFT");
     let result = unsafe {
         MessageBoxW(
             ptr::null_mut(),
@@ -646,7 +1241,9 @@ fn platform_prompt(prompt: &ApprovalPrompt) -> Result<ApprovalDecision, Approval
 }
 
 #[cfg(not(windows))]
-fn platform_prompt(_prompt: &ApprovalPrompt) -> Result<ApprovalDecision, ApprovalError> {
+fn platform_prompt(prompt: &ApprovalPrompt) -> Result<ApprovalDecision, ApprovalError> {
+    debug_assert_eq!(prompt.approval_class, ApprovalClass::Soft);
+    let _ = prompt;
     Err(ApprovalError::unavailable(
         "local approval UI is Windows-only in the current Cotra runtime",
     ))
@@ -671,6 +1268,111 @@ pub mod test_support {
     #[derive(Debug, Clone, Copy)]
     pub struct FixedApprovalBroker(pub ApprovalDecision);
 
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub enum TestPresenceResult {
+        Verified,
+        Denied,
+        Cancelled,
+        Timeout,
+        Unavailable,
+        Failed,
+        Invalid,
+    }
+
+    #[derive(Debug, Clone, Copy)]
+    pub struct TestPresenceVerifier {
+        pub available: bool,
+        pub result: TestPresenceResult,
+        pub method: &'static str,
+    }
+
+    impl TestPresenceVerifier {
+        pub fn verified() -> Self {
+            Self {
+                available: true,
+                result: TestPresenceResult::Verified,
+                method: "test-hello",
+            }
+        }
+
+        pub fn unavailable() -> Self {
+            Self {
+                available: false,
+                result: TestPresenceResult::Unavailable,
+                method: "test-hello",
+            }
+        }
+
+        pub fn denied() -> Self {
+            Self {
+                available: true,
+                result: TestPresenceResult::Denied,
+                method: "test-hello",
+            }
+        }
+    }
+
+    impl PresenceVerifier for TestPresenceVerifier {
+        fn method(&self) -> &'static str {
+            self.method
+        }
+
+        fn is_available(&self) -> bool {
+            self.available
+        }
+
+        fn verify(
+            &self,
+            ctx: &PresenceContext,
+            lease: &InputLeaseGuard,
+        ) -> Result<PresenceAttestation, PresenceError> {
+            if !lease.is_suspended() {
+                return Err(PresenceError::invalid(
+                    "test presence requires a suspended input lease",
+                ));
+            }
+            if ctx.nonce.trim().is_empty() || ctx.digest.trim().is_empty() {
+                return Err(PresenceError::invalid("test presence context is malformed"));
+            }
+            if !self.available {
+                return Err(PresenceError::unavailable(
+                    "test presence provider is unavailable",
+                ));
+            }
+            match self.result {
+                TestPresenceResult::Verified => Ok(PresenceAttestation {
+                    method: self.method.to_owned(),
+                    verified_at_ms: ctx.nonce.len() as u64,
+                    nonce: ctx.nonce.clone(),
+                    digest: ctx.digest.clone(),
+                }),
+                TestPresenceResult::Denied => {
+                    Err(PresenceError::denied("test presence denied the operation"))
+                }
+                TestPresenceResult::Cancelled => Err(PresenceError::cancelled(
+                    "test presence cancelled the operation",
+                )),
+                TestPresenceResult::Timeout => {
+                    Err(PresenceError::timeout("test presence timed out"))
+                }
+                TestPresenceResult::Unavailable => {
+                    Err(PresenceError::unavailable("test presence is unavailable"))
+                }
+                TestPresenceResult::Failed => Err(PresenceError::failed("test presence failed")),
+                TestPresenceResult::Invalid => Err(PresenceError::invalid(
+                    "test presence returned invalid data",
+                )),
+            }
+        }
+    }
+
+    pub fn broker_with_presence(
+        path: std::path::PathBuf,
+        verifier: TestPresenceVerifier,
+    ) -> LocalApprovalBroker {
+        LocalApprovalBroker::with_path_and_verifier(path, Arc::new(verifier))
+    }
+
     fn test_record(prompt: &ApprovalPrompt) -> StoredRecord {
         StoredRecord {
             schema: LEDGER_SCHEMA.to_owned(),
@@ -680,6 +1382,12 @@ pub mod test_support {
             workspace_id: prompt.workspace_id.clone(),
             policy_revision: prompt.policy_revision.clone(),
             decision: RecordedDecision::Approved,
+            approval_class: prompt.approval_class,
+            presence_outcome: match prompt.approval_class {
+                ApprovalClass::Soft => PresenceOutcome::SoftApproved,
+                ApprovalClass::Strong => PresenceOutcome::VerifiedStrong,
+            },
+            presence_method: String::from("test"),
             requested_at_ms: prompt.requested_at_ms,
             decided_at_ms: prompt.requested_at_ms,
             expires_at_ms: prompt.expires_at_ms,
@@ -693,6 +1401,11 @@ pub mod test_support {
     impl ApprovalBroker for FixedApprovalBroker {
         fn request_token(&self, prompt: &ApprovalPrompt) -> Result<ApprovedToken, ApprovalError> {
             validate_prompt(prompt)?;
+            if prompt.approval_class == ApprovalClass::Strong {
+                return Err(ApprovalError::unavailable(
+                    "STRONG approval requires platform-mediated presence; a soft test button never satisfies STRONG",
+                ));
+            }
             match self.0 {
                 ApprovalDecision::Approved => {
                     let mut issued = issued().lock().expect("test ledger");
@@ -709,6 +1422,7 @@ pub mod test_support {
                         workspace_id: prompt.workspace_id.clone(),
                         policy_revision: prompt.policy_revision.clone(),
                         expires_at_ms: prompt.expires_at_ms,
+                        approval_class: ApprovalClass::Soft,
                     })
                 }
                 ApprovalDecision::Denied => Err(ApprovalError::denied(
@@ -723,6 +1437,11 @@ pub mod test_support {
             expected: &ConsumeExpectation,
             now_ms: u64,
         ) -> Result<(), ApprovalError> {
+            if token.approval_class != expected.approval_class {
+                return Err(ApprovalError::stale(
+                    "test approval class does not match; STRONG never downgrades to SOFT",
+                ));
+            }
             let issued = issued().lock().expect("test ledger");
             let record = issued
                 .get(&token.nonce)
@@ -752,14 +1471,28 @@ pub mod test_support {
 
 #[cfg(test)]
 mod tests {
-    use super::test_support::FixedApprovalBroker;
+    use super::test_support::{
+        broker_with_presence, FixedApprovalBroker, TestPresenceResult, TestPresenceVerifier,
+    };
     use super::*;
 
     fn prompt_with(digest: &str, now: u64) -> ApprovalPrompt {
         ApprovalPrompt::new_with_clock(
             "default",
-            "sg-000018-v1",
+            "sg-000019-v1",
             "test action",
+            "target",
+            "summary",
+            digest,
+            now,
+        )
+    }
+
+    fn strong_prompt_with(digest: &str, now: u64) -> ApprovalPrompt {
+        ApprovalPrompt::new_strong_with_clock(
+            "default",
+            "sg-000019-v1",
+            "privileged test action",
             "target",
             "summary",
             digest,
@@ -779,6 +1512,18 @@ mod tests {
         std::env::temp_dir().join(format!("cotra-approval-{name}-{suffix}.jsonl"))
     }
 
+    fn token_from(record: &StoredRecord) -> ApprovedToken {
+        ApprovedToken {
+            record_id: record.id.clone(),
+            nonce: record.nonce.clone(),
+            digest: record.digest.clone(),
+            workspace_id: record.workspace_id.clone(),
+            policy_revision: record.policy_revision.clone(),
+            expires_at_ms: record.expires_at_ms,
+            approval_class: record.approval_class,
+        }
+    }
+
     #[test]
     fn nonces_are_fresh_unique_and_bound_to_digest() {
         let first = prompt_with("digest-a", 1_000);
@@ -786,8 +1531,18 @@ mod tests {
         assert_ne!(first.nonce, second.nonce);
         assert_eq!(first.expires_at_ms, 1_000 + APPROVAL_TTL_MS);
         assert_eq!(first.reuse_scope, SINGLE_OPERATION_SCOPE);
+        assert_eq!(first.approval_class, ApprovalClass::Soft);
         let other = prompt_with("digest-b", 1_000);
         assert_ne!(first.nonce, other.nonce);
+    }
+
+    #[test]
+    fn broker_contract_distinguishes_soft_and_strong_classes() {
+        let soft = prompt_with("digest-soft", 1_000);
+        let strong = strong_prompt_with("digest-strong", 1_000);
+        assert_eq!(soft.approval_class, ApprovalClass::Soft);
+        assert_eq!(strong.approval_class, ApprovalClass::Strong);
+        assert_ne!(soft.nonce, strong.nonce);
     }
 
     #[test]
@@ -796,17 +1551,15 @@ mod tests {
         let mut ledger = ledger_in(&path);
         let prompt = prompt_with("digest-replay", 5_000);
         let record = ledger
-            .record_decision(&prompt, RecordedDecision::Approved)
+            .record_decision(
+                &prompt,
+                RecordedDecision::Approved,
+                PresenceOutcome::SoftApproved,
+                "soft-button",
+            )
             .expect("record");
-        let token = ApprovedToken {
-            record_id: record.id.clone(),
-            nonce: record.nonce.clone(),
-            digest: record.digest.clone(),
-            workspace_id: record.workspace_id.clone(),
-            policy_revision: record.policy_revision.clone(),
-            expires_at_ms: record.expires_at_ms,
-        };
-        let expected = ConsumeExpectation::new(record.digest.clone(), "default", "sg-000018-v1");
+        let token = token_from(&record);
+        let expected = ConsumeExpectation::new(record.digest.clone(), "default", "sg-000019-v1");
         ledger.consume(&token, &expected, 6_000).expect("first use");
         let replay = ledger
             .consume(&token, &expected, 6_000)
@@ -816,41 +1569,207 @@ mod tests {
     }
 
     #[test]
+    fn strong_consumes_once_then_rejects_replay() {
+        let path = temp_path("strong-replay");
+        let mut ledger = ledger_in(&path);
+        let prompt = strong_prompt_with("digest-strong-replay", 5_000);
+        let record = ledger
+            .record_decision(
+                &prompt,
+                RecordedDecision::Approved,
+                PresenceOutcome::VerifiedStrong,
+                "test-hello",
+            )
+            .expect("record");
+        assert_eq!(record.approval_class, ApprovalClass::Strong);
+        let token = token_from(&record);
+        let expected = ConsumeExpectation::strong(record.digest.clone(), "default", "sg-000019-v1");
+        ledger.consume(&token, &expected, 6_000).expect("first use");
+        let replay = ledger
+            .consume(&token, &expected, 6_000)
+            .expect_err("replay");
+        assert_eq!(replay.code, FailureCode::ApprovalDenied);
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn soft_button_never_satisfies_strong_class() {
+        let broker = FixedApprovalBroker(ApprovalDecision::Approved);
+        let strong = strong_prompt_with("digest-strong-soft", 9_000);
+        let error = broker.request_token(&strong).expect_err("STRONG via soft");
+        assert_eq!(error.code, FailureCode::ApprovalUnavailable);
+    }
+
+    #[test]
+    fn strong_requires_platform_presence_and_fails_closed_when_unavailable() {
+        let path = temp_path("strong-unavailable");
+        let broker = broker_with_presence(path.clone(), TestPresenceVerifier::unavailable());
+        let prompt = strong_prompt_with("digest-unavailable", 5_000);
+        let error = broker.request_token(&prompt).expect_err("unavailable");
+        assert_eq!(error.code, FailureCode::ApprovalUnavailable);
+        let history = broker.history(10);
+        assert_eq!(history.len(), 1);
+        assert_eq!(history[0].approval_class, ApprovalClass::Strong);
+        assert_eq!(history[0].presence_outcome, PresenceOutcome::Unavailable);
+        assert_eq!(history[0].decision, RecordedDecision::Unavailable);
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn strong_succeeds_only_with_verified_presence() {
+        let path = temp_path("strong-verified");
+        let broker = broker_with_presence(path.clone(), TestPresenceVerifier::verified());
+        let prompt = strong_prompt_with("digest-verified", 5_000);
+        let token = broker.request_token(&prompt).expect("verified");
+        assert_eq!(token.approval_class, ApprovalClass::Strong);
+        let expected = ConsumeExpectation::strong(prompt.digest.clone(), "default", "sg-000019-v1");
+        broker.consume(&token, &expected, 6_000).expect("consume");
+        let history = broker.history(10);
+        assert_eq!(history.len(), 1);
+        assert_eq!(history[0].presence_outcome, PresenceOutcome::VerifiedStrong);
+        assert_eq!(history[0].presence_method, "test-hello");
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn strong_denial_cancellation_timeout_and_failure_fail_closed() {
+        for result in [
+            TestPresenceResult::Denied,
+            TestPresenceResult::Cancelled,
+            TestPresenceResult::Timeout,
+            TestPresenceResult::Failed,
+            TestPresenceResult::Invalid,
+        ] {
+            let path = temp_path("strong-negative");
+            let broker = broker_with_presence(
+                path.clone(),
+                TestPresenceVerifier {
+                    available: true,
+                    result,
+                    method: "test-hello",
+                },
+            );
+            let prompt = strong_prompt_with("digest-negative", 5_000);
+            let error = broker.request_token(&prompt).expect_err("must fail closed");
+            assert!(
+                matches!(
+                    error.code,
+                    FailureCode::ApprovalDenied | FailureCode::ApprovalUnavailable
+                ),
+                "unexpected code for {result:?}"
+            );
+            let history = broker.history(10);
+            assert_eq!(history.len(), 1);
+            assert_eq!(history[0].decision != RecordedDecision::Approved, true);
+            let _ = std::fs::remove_file(path);
+        }
+    }
+
+    #[test]
+    fn strong_never_downgrades_to_soft() {
+        let path = temp_path("strong-no-downgrade");
+        let broker = broker_with_presence(path.clone(), TestPresenceVerifier::verified());
+        let prompt = strong_prompt_with("digest-no-downgrade", 5_000);
+        let token = broker.request_token(&prompt).expect("verified");
+        let soft_expected =
+            ConsumeExpectation::new(prompt.digest.clone(), "default", "sg-000019-v1");
+        let error = broker
+            .consume(&token, &soft_expected, 6_000)
+            .expect_err("downgrade");
+        assert_eq!(error.code, FailureCode::TargetStale);
+        let strong_expected =
+            ConsumeExpectation::strong(prompt.digest.clone(), "default", "sg-000019-v1");
+        broker
+            .consume(&token, &strong_expected, 6_000)
+            .expect("strong consume");
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn weak_approval_cannot_satisfy_strong_expectation() {
+        let path = temp_path("weak-for-strong");
+        let mut ledger = ledger_in(&path);
+        let soft_prompt = prompt_with("digest-weak", 5_000);
+        let record = ledger
+            .record_decision(
+                &soft_prompt,
+                RecordedDecision::Approved,
+                PresenceOutcome::SoftApproved,
+                "soft-button",
+            )
+            .expect("record");
+        let token = token_from(&record);
+        let strong_expected =
+            ConsumeExpectation::strong(record.digest.clone(), "default", "sg-000019-v1");
+        let error = ledger
+            .consume(&token, &strong_expected, 6_000)
+            .expect_err("weak for strong");
+        assert_eq!(error.code, FailureCode::TargetStale);
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn forged_attestation_without_broker_token_cannot_authorize() {
+        let path = temp_path("forged");
+        let mut ledger = ledger_in(&path);
+        let prompt = strong_prompt_with("digest-forged", 5_000);
+        let forged = ApprovedToken {
+            record_id: "apr-forged".to_owned(),
+            nonce: prompt.nonce.clone(),
+            digest: prompt.digest.clone(),
+            workspace_id: prompt.workspace_id.clone(),
+            policy_revision: prompt.policy_revision.clone(),
+            expires_at_ms: prompt.expires_at_ms,
+            approval_class: ApprovalClass::Strong,
+        };
+        let expected = ConsumeExpectation::strong(prompt.digest.clone(), "default", "sg-000019-v1");
+        let error = ledger
+            .consume(&forged, &expected, 6_000)
+            .expect_err("forged");
+        assert_eq!(error.code, FailureCode::InvalidRequest);
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
     fn ledger_rejects_expiry_mismatch_and_drift() {
         let path = temp_path("drift");
         let mut ledger = ledger_in(&path);
         let prompt = prompt_with("digest-drift", 5_000);
         let record = ledger
-            .record_decision(&prompt, RecordedDecision::Approved)
+            .record_decision(
+                &prompt,
+                RecordedDecision::Approved,
+                PresenceOutcome::SoftApproved,
+                "soft-button",
+            )
             .expect("record");
-        let token = ApprovedToken {
-            record_id: record.id.clone(),
-            nonce: record.nonce.clone(),
-            digest: record.digest.clone(),
-            workspace_id: record.workspace_id.clone(),
-            policy_revision: record.policy_revision.clone(),
-            expires_at_ms: record.expires_at_ms,
-        };
-        let expected = ConsumeExpectation::new(record.digest.clone(), "default", "sg-000018-v1");
+        let token = token_from(&record);
+        let expected = ConsumeExpectation::new(record.digest.clone(), "default", "sg-000019-v1");
         let expired = ledger
             .consume(&token, &expected, record.expires_at_ms + 1)
             .expect_err("expired");
         assert_eq!(expired.code, FailureCode::ApprovalDenied);
-        let changed = ConsumeExpectation::new("other-digest", "default", "sg-000018-v1");
+        let changed = ConsumeExpectation::new("other-digest", "default", "sg-000019-v1");
         let mismatch = ledger
             .consume(&token, &changed, 6_000)
             .expect_err("mismatch");
         assert_eq!(mismatch.code, FailureCode::TargetStale);
         let moved =
-            ConsumeExpectation::new(record.digest.clone(), "other-workspace", "sg-000018-v1");
+            ConsumeExpectation::new(record.digest.clone(), "other-workspace", "sg-000019-v1");
         let drift = ledger.consume(&token, &moved, 6_000).expect_err("drift");
         assert_eq!(drift.code, FailureCode::TargetStale);
         let stale_policy =
-            ConsumeExpectation::new(record.digest.clone(), "default", "sg-000017-v1");
+            ConsumeExpectation::new(record.digest.clone(), "default", "sg-000018-v1");
         let revision = ledger
             .consume(&token, &stale_policy, 6_000)
             .expect_err("revision drift");
         assert_eq!(revision.code, FailureCode::TargetStale);
+        let class_drift =
+            ConsumeExpectation::strong(record.digest.clone(), "default", "sg-000019-v1");
+        let class_error = ledger
+            .consume(&token, &class_drift, 6_000)
+            .expect_err("class drift");
+        assert_eq!(class_error.code, FailureCode::TargetStale);
         let _ = std::fs::remove_file(path);
     }
 
@@ -860,21 +1779,70 @@ mod tests {
         let mut ledger = ledger_in(&path);
         let prompt = prompt_with("digest-denied", 5_000);
         let record = ledger
-            .record_decision(&prompt, RecordedDecision::Denied)
+            .record_decision(
+                &prompt,
+                RecordedDecision::Denied,
+                PresenceOutcome::Denied,
+                "soft-button",
+            )
             .expect("record");
-        let token = ApprovedToken {
-            record_id: record.id.clone(),
-            nonce: record.nonce.clone(),
-            digest: record.digest.clone(),
-            workspace_id: record.workspace_id.clone(),
-            policy_revision: record.policy_revision.clone(),
-            expires_at_ms: record.expires_at_ms,
-        };
-        let expected = ConsumeExpectation::new(record.digest.clone(), "default", "sg-000018-v1");
+        let token = token_from(&record);
+        let expected = ConsumeExpectation::new(record.digest.clone(), "default", "sg-000019-v1");
         let error = ledger
             .consume(&token, &expected, 6_000)
             .expect_err("denied");
         assert_eq!(error.code, FailureCode::ApprovalDenied);
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn strong_denied_records_never_authorize() {
+        let path = temp_path("strong-denied");
+        let broker = broker_with_presence(path.clone(), TestPresenceVerifier::denied());
+        let prompt = strong_prompt_with("digest-strong-denied", 5_000);
+        let error = broker.request_token(&prompt).expect_err("denied");
+        assert_eq!(error.code, FailureCode::ApprovalDenied);
+        let history = broker.history(10);
+        assert_eq!(history.len(), 1);
+        assert_eq!(history[0].presence_outcome, PresenceOutcome::Denied);
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn history_records_class_and_presence_without_secrets() {
+        let path = temp_path("history-class");
+        let soft_broker = broker_with_presence(path.clone(), TestPresenceVerifier::unavailable());
+        let soft_prompt = prompt_with("digest-soft-history", 5_000);
+        let _ = soft_broker.ledger.lock().map(|mut ledger| {
+            ledger
+                .record_decision(
+                    &soft_prompt,
+                    RecordedDecision::Approved,
+                    PresenceOutcome::SoftApproved,
+                    "soft-button",
+                )
+                .expect("soft record")
+        });
+        let strong_broker = broker_with_presence(path.clone(), TestPresenceVerifier::verified());
+        drop(strong_broker);
+        let mut ledger = ledger_in(&path);
+        let strong_prompt = strong_prompt_with("digest-strong-history", 5_000);
+        ledger
+            .record_decision(
+                &strong_prompt,
+                RecordedDecision::Approved,
+                PresenceOutcome::VerifiedStrong,
+                "test-hello",
+            )
+            .expect("strong record");
+        let full = ledger.history(200);
+        assert!(full.len() >= 2);
+        let rendered = format!("{full:?}");
+        assert!(!rendered.contains("summary"));
+        assert!(!rendered.contains("target"));
+        assert!(!rendered.contains("biometric"));
+        assert!(!rendered.contains("secret"));
+        assert!(rendered.contains("Soft") || rendered.contains("Strong"));
         let _ = std::fs::remove_file(path);
     }
 
@@ -885,7 +1853,12 @@ mod tests {
         for digest in ["digest-one", "digest-two", "digest-three"] {
             let prompt = prompt_with(digest, 5_000);
             ledger
-                .record_decision(&prompt, RecordedDecision::Approved)
+                .record_decision(
+                    &prompt,
+                    RecordedDecision::Approved,
+                    PresenceOutcome::SoftApproved,
+                    "soft-button",
+                )
                 .expect("record");
         }
         let full = ledger.history(200);
@@ -905,11 +1878,33 @@ mod tests {
     }
 
     #[test]
+    fn forged_history_is_rejected() {
+        let path = temp_path("history-forge");
+        let mut ledger = ledger_in(&path);
+        let prompt = strong_prompt_with("digest-forge", 5_000);
+        ledger
+            .record_decision(
+                &prompt,
+                RecordedDecision::Approved,
+                PresenceOutcome::VerifiedStrong,
+                "test-hello",
+            )
+            .expect("record");
+        drop(ledger);
+        let mut text = std::fs::read_to_string(&path).expect("read");
+        text = text.replace("verified-strong", "soft-approved");
+        std::fs::write(&path, text).expect("tamper");
+        let reloaded = ledger_in(&path);
+        assert!(reloaded.records.is_empty());
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
     fn fixed_broker_enforces_one_shot_without_real_ui() {
         let broker = FixedApprovalBroker(ApprovalDecision::Approved);
         let prompt = prompt_with("digest-fixed", 9_000);
         let token = broker.request_token(&prompt).expect("token");
-        let expected = ConsumeExpectation::new("digest-fixed", "default", "sg-000018-v1");
+        let expected = ConsumeExpectation::new("digest-fixed", "default", "sg-000019-v1");
         broker.consume(&token, &expected, 9_500).expect("first use");
         let replay = broker
             .consume(&token, &expected, 9_500)
@@ -918,5 +1913,109 @@ mod tests {
         let denied = FixedApprovalBroker(ApprovalDecision::Denied);
         let error = denied.request_token(&prompt).expect_err("denied");
         assert_eq!(error.code, FailureCode::ApprovalDenied);
+    }
+
+    #[test]
+    fn duplicate_consumption_is_replay_for_strong() {
+        let path = temp_path("strong-double");
+        let broker = broker_with_presence(path.clone(), TestPresenceVerifier::verified());
+        let prompt = strong_prompt_with("digest-double", 5_000);
+        let token = broker.request_token(&prompt).expect("token");
+        let expected = ConsumeExpectation::strong(prompt.digest.clone(), "default", "sg-000019-v1");
+        broker.consume(&token, &expected, 6_000).expect("first");
+        let replay = broker
+            .consume(&token, &expected, 6_000)
+            .expect_err("replay");
+        assert_eq!(replay.code, FailureCode::ApprovalDenied);
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn expired_strong_approval_fails_closed() {
+        let path = temp_path("strong-expired");
+        let broker = broker_with_presence(path.clone(), TestPresenceVerifier::verified());
+        let prompt = strong_prompt_with("digest-expired", 5_000);
+        let token = broker.request_token(&prompt).expect("token");
+        let expected = ConsumeExpectation::strong(prompt.digest.clone(), "default", "sg-000019-v1");
+        let error = broker
+            .consume(&token, &expected, prompt.expires_at_ms + 1)
+            .expect_err("expired");
+        assert_eq!(error.code, FailureCode::ApprovalDenied);
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn wrong_nonce_workspace_and_revision_fail_closed_for_strong() {
+        let path = temp_path("strong-drift");
+        let broker = broker_with_presence(path.clone(), TestPresenceVerifier::verified());
+        let prompt = strong_prompt_with("digest-drift", 5_000);
+        let token = broker.request_token(&prompt).expect("token");
+        let wrong_digest = ConsumeExpectation::strong("other-digest", "default", "sg-000019-v1");
+        assert_eq!(
+            broker
+                .consume(&token, &wrong_digest, 6_000)
+                .expect_err("digest")
+                .code,
+            FailureCode::TargetStale
+        );
+        let wrong_workspace =
+            ConsumeExpectation::strong(prompt.digest.clone(), "other", "sg-000019-v1");
+        let path2 = temp_path("strong-drift-2");
+        let broker2 = broker_with_presence(path2.clone(), TestPresenceVerifier::verified());
+        let prompt2 = strong_prompt_with("digest-drift", 5_000);
+        let token2 = broker2.request_token(&prompt2).expect("token");
+        assert_eq!(
+            broker2
+                .consume(&token2, &wrong_workspace, 6_000)
+                .expect_err("workspace")
+                .code,
+            FailureCode::TargetStale
+        );
+        let wrong_revision =
+            ConsumeExpectation::strong(prompt2.digest.clone(), "default", "sg-000018-v1");
+        let path3 = temp_path("strong-drift-3");
+        let broker3 = broker_with_presence(path3.clone(), TestPresenceVerifier::verified());
+        let prompt3 = strong_prompt_with("digest-drift", 5_000);
+        let token3 = broker3.request_token(&prompt3).expect("token");
+        assert_eq!(
+            broker3
+                .consume(&token3, &wrong_revision, 6_000)
+                .expect_err("revision")
+                .code,
+            FailureCode::TargetStale
+        );
+        let _ = std::fs::remove_file(path);
+        let _ = std::fs::remove_file(path2);
+        let _ = std::fs::remove_file(path3);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_real_presence_path_reports_availability_explicitly() {
+        let verifier = WindowsHelloPresenceVerifier::new();
+        let available = verifier.is_available();
+        let method = verifier.method();
+        assert_eq!(method, "windows-hello");
+        if available {
+            assert!(available);
+        } else {
+            let ctx = PresenceContext::new("nonce-probe", "digest-probe", "default", "probe");
+            let lease = InputLeaseGuard::suspend_for_presence();
+            let error = verifier
+                .verify(&ctx, &lease)
+                .expect_err("unavailable fails closed");
+            assert_eq!(error.code, FailureCode::ApprovalUnavailable);
+        }
+    }
+
+    #[cfg(not(windows))]
+    #[test]
+    fn non_windows_default_presence_is_unavailable_fail_closed() {
+        let verifier = NoPresenceVerifier;
+        assert!(!verifier.is_available());
+        let ctx = PresenceContext::new("nonce-probe", "digest-probe", "default", "probe");
+        let lease = InputLeaseGuard::suspend_for_presence();
+        let error = verifier.verify(&ctx, &lease).expect_err("unavailable");
+        assert_eq!(error.code, FailureCode::ApprovalUnavailable);
     }
 }

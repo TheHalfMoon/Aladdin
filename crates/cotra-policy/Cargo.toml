@@ -7,8 +7,9 @@ repository.workspace = true
 rust-version.workspace = true
 
 [lib]
-path = "src/sg000018.rs"
+path = "src/sg000019.rs"
 
 [dependencies]
+cotra-approval = { path = "../cotra-approval" }
 cotra-contracts = { path = "../cotra-contracts" }
 serde_json.workspace = true
