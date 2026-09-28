@@ -1,0 +1,85 @@
+{
+  "id": "SG-000023",
+  "title": "Read-only DOM and accessibility observation with typed node identity",
+  "program": "COTRA-P08",
+  "state": "GRAIN",
+  "risk": "high",
+  "created": "2026-09-28",
+  "base": "28e0d912b88961134a41bda87b3545211f06f6e9",
+  "dependencies": ["SG-000022"],
+  "objective": "Establish read-only structured browser observation on top of the SG-000021 isolated automation profile and the SG-000022 typed page lifecycle with origin binding: a typed snapshot contract that returns bounded document metadata, DOM structure, and accessibility roles, names, states, and safe values through server-allocated typed node identities bound to profile, page, page generation, current origin, document generation, and policy revision, while keeping DOM actuation, downloads, uploads, personal-profile mode, debugging, scripting, credential access, MCP browser tools, and network egress absent.",
+  "scope": {
+    "include": [
+      "browser.snapshot observe as the single read-only structured observation entry point bound to one known page with expected origin and expected generation",
+      "observation allowed only on active pages with a non-empty current origin bound to the isolated automation profile, one workspace, and the current policy revision",
+      "server-allocated typed node identities bound to profile identity, page identity, page generation, current origin, document generation, node index, and policy revision with stale closed after navigation, generation change, origin drift, or policy drift",
+      "bounded observation with explicit max_nodes, max_depth, and max_bytes limits, bounded tree depth and node count, deterministic size caps, and fail-closed oversized requests",
+      "data minimization with redaction of password field values, hidden secret material, cookies, credentials, and session stores, and no arbitrary JavaScript evaluation",
+      "origin and page binding retained from SG-000022 with revalidation of workspace, profile, origin, generation, and policy revision before any observation material is returned",
+      "explicit denial of all actuation shapes including click, fill, type, press, select, submit, keyboard input, toggle, upload, download, scripting, CDP, DevTools, and coordinate fallback",
+      "deterministic unit and security tests for snapshot binding, stale page and node denial, wrong profile, wrong origin, wrong generation, oversized observation, password and secret redaction, actuation denial, replay and drift retention, and separation",
+      "retention of all SG-000018 one-shot, expiry, digest, history, SG-000019 STRONG enforcement, SG-000020 trust and revoke, SG-000021 profile and destination, and SG-000022 page lifecycle and navigation behavior with no change outside observation policy",
+      "Windows and Ubuntu exact-head qualification"
+    ],
+    "exclude": [
+      "DOM or accessibility-tree actuation of any kind including click, fill, type, press, select, submit, toggle, and keyboard input",
+      "screenshots and visual or coordinate control",
+      "downloads and uploads",
+      "actual page rendering or page loading by a browser engine beyond local registry-bound snapshot material",
+      "cross-origin snapshot widening beyond the current page origin",
+      "personal browser profile mode",
+      "stored credential, cookie, password, or session store access",
+      "arbitrary DevTools, CDP commands, browser scripting, or JavaScript evaluation",
+      "network egress beyond local destination validation and DNS resolution",
+      "MCP browser tools",
+      "persistent approval reuse across operations",
+      "approval delegation to remote or MCP callers",
+      "elevation"
+    ]
+  },
+  "authority_delta": {
+    "filesystem": "No new filesystem writability. Snapshots are computed read-only from the existing page registry under Cotra protected local state; personal browser data, workspace files, Git state, and unrelated paths gain no new readability or writability.",
+    "process": "No new process authority. No browser is launched or attached in this grain; observation reads page identity and origin from the Cotra registry only.",
+    "network": "None beyond SG-000021 destination validation and SG-000022 DNS resolution. No fetch, socket, page-load, or tunnel authority is added.",
+    "browser": "Read-only snapshot observation only. DOM actuation, downloads, uploads, personal-profile access, debugging, scripting, and actual page loading remain absent.",
+    "ui_input": "None. No input injection or UI automation is added.",
+    "secrets": "No cookie, credential, password, or session material enters prompts, records, history, logs, MCP responses, snapshots, node identities, or evidence packets. Password field values are redacted and secret stores are unreachable.",
+    "approval": "Snapshot observation requires no fresh approval as a local read of an already-authorized page and origin. No persistent reuse or remote delegation is introduced.",
+    "privileged": "None"
+  },
+  "invariants": [
+    "Every snapshot binds one known active page on the isolated automation profile, one workspace, its current origin, its current generation, and the current policy revision",
+    "Every node identity binds profile identity, page identity, page generation, current origin, document generation, node index, and policy revision",
+    "Stale, unknown, foreign-profile, foreign-workspace, origin-drifted, generation-drifted, and policy-drifted pages and nodes fail closed",
+    "Observation responses are bounded by max_nodes, max_depth, and max_bytes and oversized requests fail closed",
+    "Password field values, hidden secrets, cookies, credentials, and session stores never enter snapshots, evidence, logs, or MCP responses",
+    "All DOM actuation, download, upload, scripting, debugging, coordinate, and egress shapes fail closed as denied in this grain",
+    "No actuation, personal-profile, debugging, credential, network-egress, reuse, delegation, or elevation authority is introduced"
+  ],
+  "acceptance": [
+    {"id": "A1", "claim": "Tests prove snapshots bind one active page on the Cotra automation profile with workspace, profile, origin, generation, and policy revision checks and that open pages with empty origin fail closed."},
+    {"id": "A2", "claim": "Tests prove node identities bind profile, page, page generation, origin, document generation, node index, and policy revision and that stale page, prior navigation, wrong page, wrong profile, wrong origin, wrong generation, and policy drift nodes are denied."},
+    {"id": "A3", "claim": "Tests prove observation is bounded by max_nodes, max_depth, and max_bytes with deterministic caps and that oversized snapshot requests fail closed."},
+    {"id": "A4", "claim": "Tests prove password field values are redacted, hidden secrets, cookies, credentials, and session stores are unreachable, and arbitrary JavaScript evaluation is denied."},
+    {"id": "A5", "claim": "Tests prove DOM actuation shapes including click, fill, type, press, select, submit, toggle, upload, download, scripting, CDP, and DevTools fail closed as denied capability shapes with no silent coordinate fallback."},
+    {"id": "A6", "claim": "Tests prove the agent cannot satisfy snapshot capability through MCP tools, synthetic input, UI automation, coordinate proposals, child processes, or replayed prior approvals."},
+    {"id": "A7", "claim": "Tests prove replay, expiry, digest mismatch, revision drift, and double-consumption protections remain enforced for both classes."},
+    {"id": "A8", "claim": "Tests prove all P06 approval flows and SG-000018/019/020/021/022 regressions still pass with digests unchanged outside observation labeling."},
+    {"id": "A9", "claim": "Tests prove personal-profile mode, arbitrary DevTools or CDP, browser scripting, credential stores, and network egress remain unreachable."},
+    {"id": "A10", "claim": "Exact-head Windows/Ubuntu Rust, Node, Governance, genuine TypeSafe Jev, Alibaba Open Code Review, exact-diff security review, manual review of excluded security-sensitive files, and zero unresolved blocking review threads all pass."}
+  ],
+  "successor_requirements": {
+    "p08_actuation": "Structured DOM and accessibility-tree actuation remains successor work and must consume the SG-000023 typed node identities with exact page, generation, origin, node, role, state, policy revision, and approval binding with stale-node fail-closed and no silent coordinate fallback.",
+    "p08_transfers": "Scoped downloads and uploads remain successor work and must build on navigation and observation evidence without silent auto-download behavior.",
+    "p08_exit": "COTRA-P08 exits when structured browser operations are proven with SSRF tests, redirect-widening tests, and the personal profile disabled by default, which SG-000021, SG-000022, this grain, and its successors must jointly satisfy."
+  },
+  "review": {
+    "diffcipline": true,
+    "jev_semantic_review": true,
+    "alibaba_open_code_review": "required exact-range qualification where integrated",
+    "security_review": true,
+    "exact_head_ci": true,
+    "native_network_qualification": false
+  },
+  "done_when": "Read-only snapshot observation with typed node identity is merged with page-bound stale-checked reads, bounded data-minimized responses, password and secret redaction, actuation denial, agent-forgery tests, retained replay and drift enforcement, and no new actuation, download, upload, personal-profile, debugging, scripting, credential, or network-egress authority."
+}
