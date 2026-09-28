@@ -2852,6 +2852,20 @@ pub fn is_well_formed_download_source_id(candidate: &str) -> bool {
             .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
 }
 
+/// True when `candidate` is exactly a `COTRA_BROWSER_UPLOAD_SOURCE_V1`
+/// identity: the `ul-` prefix followed by 64 lowercase hex characters. Submit
+/// accepts a source identity, so a caller-typed path fragment must never reach
+/// the upload registry.
+pub fn is_well_formed_upload_source_id(candidate: &str) -> bool {
+    let Some(digest) = candidate.strip_prefix(UPLOAD_SOURCE_PREFIX) else {
+        return false;
+    };
+    digest.len() == UPLOAD_SOURCE_DIGEST_HEX
+        && digest
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+}
+
 #[allow(clippy::too_many_arguments)]
 pub fn download_source_id_for(
     workspace_id: &str,
@@ -3332,6 +3346,7 @@ pub fn write_download_file(
     }
     Ok(())
 }
+
 // ---------------------------------------------------------------------------
 // SG-000026 scoped bounded browser uploads. The only admissible upload source
 // is a file already recorded by the SG-000025 download registry inside the
@@ -3346,6 +3361,8 @@ pub fn write_download_file(
 
 /// Prefix for server-allocated one-shot upload source identities.
 pub const UPLOAD_SOURCE_PREFIX: &str = "ul-";
+/// Number of lowercase hex characters in an upload source identity digest.
+pub const UPLOAD_SOURCE_DIGEST_HEX: usize = 64;
 /// Prefix for upload identities recorded in upload evidence.
 pub const UPLOAD_ID_PREFIX: &str = "up-";
 /// Revision of the upload source and target policy itself.
@@ -6403,6 +6420,33 @@ mod tests {
             5,
         ));
         assert!(record.source_id.starts_with(UPLOAD_SOURCE_PREFIX));
+        assert!(is_well_formed_upload_source_id(&record.source_id));
+        for malformed in [
+            "",
+            "ul-",
+            "ul-zz",
+            "ul-zz/../x",
+            "not-a-source",
+            "not-an-upload-source-at-all",
+        ] {
+            assert!(
+                !is_well_formed_upload_source_id(malformed),
+                "{malformed:?} must not be accepted as an upload source identity"
+            );
+        }
+        for malformed in [
+            "",
+            "dl-",
+            "dl-zz",
+            "not-a-source",
+            "../../id_rsa",
+            "dl-zz/../artifact.txt",
+        ] {
+            assert!(
+                !is_well_formed_download_source_id(malformed),
+                "{malformed:?} must not be accepted as a download source identity"
+            );
+        }
         let verified = check_upload_source(
             &record,
             &page,

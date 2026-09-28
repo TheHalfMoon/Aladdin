@@ -339,7 +339,7 @@ fn validate_upload_submit_arguments(
     required_shape_u64(shape, arguments, "expected_generation")?;
     required_shape_u64(shape, arguments, "expected_document_generation")?;
     let source_id = required_shape_string(shape, arguments, "source_id")?;
-    if !source_id.starts_with(cotra_provider_browser::UPLOAD_SOURCE_PREFIX) {
+    if !cotra_provider_browser::is_well_formed_upload_source_id(source_id) {
         return Err(policy_error(
             FailureCode::InvalidRequest,
             format!("{shape} source_id is malformed"),

@@ -1909,7 +1909,7 @@ fn preview_upload(
     let expected_state = required_upload_string(request, "expected_state")?;
     let expected_trust_revision = required_upload_u64(request, "expected_trust_revision")?;
     let artifact_source_id = required_upload_string(request, "artifact_source_id")?;
-    if !artifact_source_id.starts_with(cotra_provider_browser::DOWNLOAD_SOURCE_PREFIX) {
+    if !cotra_provider_browser::is_well_formed_download_source_id(artifact_source_id) {
         return Err(ProviderError::new(
             FailureCode::InvalidRequest,
             "browser upload artifact_source_id is malformed",
@@ -2112,7 +2112,7 @@ fn submit_upload(
     let expected_document_generation =
         required_upload_u64(request, "expected_document_generation")?;
     let source_id = required_upload_string(request, "source_id")?;
-    if !source_id.starts_with(cotra_provider_browser::UPLOAD_SOURCE_PREFIX) {
+    if !cotra_provider_browser::is_well_formed_upload_source_id(source_id) {
         return Err(ProviderError::new(
             FailureCode::InvalidRequest,
             "browser upload source_id is malformed",
