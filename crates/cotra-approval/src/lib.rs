@@ -173,7 +173,7 @@ impl Drop for InputLeaseGuard {
     }
 }
 
-pub trait PresenceVerifier: Send + Sync {
+pub trait PresenceVerifier: Send + Sync + std::fmt::Debug {
     fn method(&self) -> &'static str;
     fn is_available(&self) -> bool;
     fn verify(
@@ -313,11 +313,12 @@ fn verify_with_hello(
             digest,
         }),
         UserConsentVerificationResult::DeviceNotPresent
-        | UserConsentVerificationResult::NotConfigured
-        | UserConsentVerificationResult::DisabledByPolicy => Err(PresenceError::unavailable(
+        | UserConsentVerificationResult::NotConfiguredForUser
+        | UserConsentVerificationResult::DisabledByPolicy
+        | UserConsentVerificationResult::DeviceBusy => Err(PresenceError::unavailable(
             "Windows Hello is not configured for this device; STRONG approval fails closed",
         )),
-        UserConsentVerificationResult::Cancelled => Err(PresenceError::cancelled(
+        UserConsentVerificationResult::Canceled => Err(PresenceError::cancelled(
             "strong user-presence verification was cancelled; STRONG approval fails closed",
         )),
         UserConsentVerificationResult::RetriesExhausted => Err(PresenceError::denied(
@@ -435,6 +436,7 @@ impl ApprovalPrompt {
         )
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn new_with_class_and_clock(
         workspace_id: impl Into<String>,
         policy_revision: impl Into<String>,
@@ -1660,7 +1662,7 @@ mod tests {
             );
             let history = broker.history(10);
             assert_eq!(history.len(), 1);
-            assert_eq!(history[0].decision != RecordedDecision::Approved, true);
+            assert_ne!(history[0].decision, RecordedDecision::Approved);
             let _ = std::fs::remove_file(path);
         }
     }
