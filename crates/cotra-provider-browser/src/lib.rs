@@ -1915,10 +1915,12 @@ pub fn parse_actuation_action(action: &str) -> Result<&str, ProviderError> {
 
 /// Server-side record of an observed node, persisted at snapshot time so
 /// later actuation verifies role and state against server records rather
-/// than caller assertions. Raw browser-internal handles, cookies,
-/// credentials, and session material never enter this record.
+/// than caller assertions. Records are created only by [`NodeStore`];
+/// callers hold identities, never these records. Raw browser-internal
+/// handles, cookies, credentials, and session material never enter this
+/// record.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-struct StoredNode {
+pub struct StoredNode {
     schema: String,
     node_id: String,
     page_id: String,
