@@ -967,6 +967,663 @@ fn required_actuation_string<'a>(
         })
 }
 
+/// Dispatch SG-000025 scoped bounded downloads. Returns `Ok(None)` for
+/// non-download shapes so the caller falls through to the actuation,
+/// observation, navigation, and SG-000021 dispatches. Preview requires no
+/// approval, mutates nothing, and returns a server-allocated one-shot source
+/// identity. Download requires a fresh SOFT approval with digest binding over
+/// the full binding set including the actual content digest, then creates
+/// exactly one new file at exactly one canonical relative destination inside
+/// the approved workspace download root. Downloaded content is never executed,
+/// opened, extracted, or launched.
+pub fn dispatch_download(
+    workspace: &Workspace,
+    approval: &impl ApprovalBroker,
+    request: &RequestEnvelope,
+    resolver: &impl DnsResolver,
+    profile_root: &Path,
+) -> Result<Option<Value>, ProviderError> {
+    match (request.capability.as_str(), request.operation.as_str()) {
+        ("browser.download", "preview") => {
+            preview_download(workspace, request, resolver, profile_root).map(Some)
+        }
+        ("browser.download", "download") => {
+            download_with_approval(workspace, approval, request, profile_root).map(Some)
+        }
+        _ => Ok(None),
+    }
+}
+
+const DOWNLOAD_PREVIEW_ARGUMENTS: &[&str] = &[
+    "page_id",
+    "expected_origin",
+    "expected_generation",
+    "expected_document_generation",
+    "source_url",
+    "declared_filename",
+    "declared_media_type",
+    "declared_size_bytes",
+    "relative_destination",
+    "redirect_chain",
+];
+
+const DOWNLOAD_BODY_ARGUMENTS: &[&str] = &[
+    "page_id",
+    "expected_origin",
+    "expected_generation",
+    "expected_document_generation",
+    "source_id",
+    "content_base64",
+];
+
+/// Require the page to be active on the authorized origin at the exact
+/// expected generation and document generation.
+#[allow(clippy::too_many_arguments)]
+fn check_download_page_state(
+    page: &cotra_provider_browser::PageRecord,
+    page_store: &cotra_provider_browser::PageStore,
+    page_id: &str,
+    expected_origin: &str,
+    expected_generation: u64,
+    expected_document_generation: u64,
+) -> Result<(), ProviderError> {
+    if page.state != cotra_provider_browser::PageState::Active {
+        return Err(ProviderError::new(
+            FailureCode::TargetStale,
+            "browser download requires an active page with a current origin; pages with no document fail closed",
+        ));
+    }
+    if page.current_origin != expected_origin {
+        return Err(ProviderError::new(
+            FailureCode::TargetStale,
+            "browser page origin changed since observation; stale download sources fail closed",
+        ));
+    }
+    if page.generation != expected_generation {
+        return Err(ProviderError::new(
+            FailureCode::TargetStale,
+            "browser page generation changed since observation; stale download sources fail closed",
+        ));
+    }
+    if page.generation != expected_document_generation {
+        return Err(ProviderError::new(
+            FailureCode::TargetStale,
+            "browser document was replaced since observation; stale download sources fail closed",
+        ));
+    }
+    if page_store.get(page_id).is_none() {
+        return Err(ProviderError::new(
+            FailureCode::TargetStale,
+            "browser page handle is unknown; stale page handles fail closed",
+        ));
+    }
+    Ok(())
+}
+
+fn preview_download(
+    workspace: &Workspace,
+    request: &RequestEnvelope,
+    resolver: &impl DnsResolver,
+    profile_root: &Path,
+) -> Result<Value, ProviderError> {
+    reject_download_target(request)?;
+    reject_download_arguments(request, DOWNLOAD_PREVIEW_ARGUMENTS)?;
+    let page_id = required_download_string(request, "page_id")?;
+    if !page_id.starts_with(cotra_provider_browser::PAGE_ID_PREFIX) {
+        return Err(ProviderError::new(
+            FailureCode::InvalidRequest,
+            "browser download page_id is malformed",
+        ));
+    }
+    let expected_origin = required_download_string(request, "expected_origin")?;
+    let expected_generation = required_download_u64(request, "expected_generation")?;
+    let expected_document_generation =
+        required_download_u64(request, "expected_document_generation")?;
+    let source_url = required_download_string(request, "source_url")?;
+    let declared_filename = required_download_string(request, "declared_filename")?;
+    let declared_media_type = required_download_string(request, "declared_media_type")?;
+    let declared_size_bytes = required_download_u64(request, "declared_size_bytes")?;
+    let relative_destination = required_download_string(request, "relative_destination")?;
+    let chain = optional_download_redirect_chain(request)?;
+
+    let (canonical_relative, filename) =
+        cotra_provider_browser::validate_download_relative_path(relative_destination)
+            .map_err(|error| ProviderError::new(error.code, error.message))?;
+    if filename != declared_filename {
+        return Err(ProviderError::new(
+            FailureCode::InvalidRequest,
+            "browser download declared_filename must equal the canonical destination file name",
+        ));
+    }
+    if declared_size_bytes == 0 || declared_size_bytes > cotra_provider_browser::MAX_DOWNLOAD_BYTES
+    {
+        return Err(ProviderError::new(
+            FailureCode::InvalidRequest,
+            format!(
+                "browser download declared_size_bytes must be between 1 and at most {} bytes",
+                cotra_provider_browser::MAX_DOWNLOAD_BYTES
+            ),
+        ));
+    }
+    if !cotra_provider_browser::is_allowed_download_media_type(declared_media_type) {
+        return Err(ProviderError::new(
+            FailureCode::CapabilityDenied,
+            "browser download declared media type is not in the authorized allowlist",
+        ));
+    }
+    let extension_media_type = cotra_provider_browser::download_media_type_for_filename(&filename)
+        .map_err(|error| ProviderError::new(error.code, error.message))?;
+    if extension_media_type != declared_media_type {
+        return Err(ProviderError::new(
+            FailureCode::CapabilityDenied,
+            "browser download declared media type does not match the destination extension; filename, declared type, and content must agree",
+        ));
+    }
+
+    let profile = cotra_provider_browser::ensure_isolated_profile(profile_root)
+        .map_err(|error| ProviderError::new(error.code, error.message))?;
+    let page_store = cotra_provider_browser::PageStore::load_or_create(
+        cotra_provider_browser::default_page_registry_path(&profile.root),
+    );
+    let page = page_store.get(page_id).cloned().ok_or_else(|| {
+        ProviderError::new(
+            FailureCode::TargetStale,
+            "browser page handle is unknown; stale page handles fail closed",
+        )
+    })?;
+    check_page_binding(workspace, &profile.identity, &page)?;
+    check_download_page_state(
+        &page,
+        &page_store,
+        page_id,
+        expected_origin,
+        expected_generation,
+        expected_document_generation,
+    )?;
+
+    let source = cotra_provider_browser::validate_destination(source_url, resolver)
+        .map_err(|error| ProviderError::new(error.code, error.message))?;
+    if source.origin != page.current_origin {
+        return Err(ProviderError::new(
+            FailureCode::CapabilityDenied,
+            "browser download source origin is not the authorized current page origin; unauthorized download origins are denied",
+        ));
+    }
+    let (pinned_address, redirect_count) = if chain.is_empty() {
+        (source.pinned_address, 0)
+    } else {
+        let (final_destination, count, _final_origin) =
+            cotra_provider_browser::validate_redirect_chain(&page.current_origin, &chain, resolver)
+                .map_err(|error| ProviderError::new(error.code, error.message))?;
+        if final_destination.origin != page.current_origin {
+            return Err(ProviderError::new(
+                FailureCode::CapabilityDenied,
+                "browser download redirect widened beyond the authorized page origin; redirect widening is denied",
+            ));
+        }
+        (final_destination.pinned_address, count)
+    };
+
+    let root = cotra_provider_browser::resolve_download_root(&workspace.root)
+        .map_err(|error| ProviderError::new(error.code, error.message))?;
+    let destination =
+        cotra_provider_browser::resolve_download_destination(&root, &canonical_relative)
+            .map_err(|error| ProviderError::new(error.code, error.message))?;
+    if destination.exists() {
+        return Err(ProviderError::new(
+            FailureCode::PostconditionFailed,
+            "browser download destination already exists; downloads never overwrite existing files",
+        ));
+    }
+    let destination_root_identity = cotra_provider_browser::download_root_identity(&root);
+
+    let issued_at_ms = now_ms();
+    let expires_at_ms = issued_at_ms.saturating_add(cotra_provider_browser::DOWNLOAD_SOURCE_TTL_MS);
+    let source_url_digest = cotra_provider_browser::sha256_hex(source_url.as_bytes());
+    let source_id = cotra_provider_browser::download_source_id_for(
+        &workspace.id,
+        POLICY_REVISION,
+        &profile.identity,
+        page_id,
+        expected_origin,
+        expected_generation,
+        expected_document_generation,
+        &page.current_origin,
+        &source_url_digest,
+        &canonical_relative,
+        declared_media_type,
+        declared_size_bytes,
+        cotra_provider_browser::DOWNLOAD_POLICY_REVISION,
+        issued_at_ms,
+    );
+    let preview_digest = cotra_provider_browser::download_approval_digest(
+        &workspace.id,
+        POLICY_REVISION,
+        &profile.identity,
+        page_id,
+        expected_origin,
+        expected_generation,
+        expected_document_generation,
+        &source_id,
+        &page.current_origin,
+        &canonical_relative,
+        declared_media_type,
+        declared_size_bytes,
+        "",
+        cotra_provider_browser::DOWNLOAD_POLICY_REVISION,
+    );
+
+    let mut download_store = cotra_provider_browser::DownloadStore::load_or_create(
+        cotra_provider_browser::default_download_registry_path(&profile.root),
+    );
+    if download_store.pending_count(&workspace.id)
+        >= cotra_provider_browser::MAX_PENDING_DOWNLOADS_PER_WORKSPACE
+    {
+        return Err(ProviderError::new(
+            FailureCode::CapabilityDenied,
+            format!(
+                "workspace already holds at most {} pending download sources; download holds are bounded",
+                cotra_provider_browser::MAX_PENDING_DOWNLOADS_PER_WORKSPACE
+            ),
+        ));
+    }
+    download_store.record_pending(cotra_provider_browser::StoredDownload {
+        schema: cotra_provider_browser::DOWNLOAD_REGISTRY_SCHEMA.to_owned(),
+        source_id: source_id.clone(),
+        workspace_id: workspace.id.clone(),
+        policy_revision: POLICY_REVISION.to_owned(),
+        profile_identity: profile.identity.clone(),
+        page_id: page.page_id.clone(),
+        origin: page.current_origin.clone(),
+        page_generation: expected_generation,
+        document_generation: expected_document_generation,
+        source_origin: page.current_origin.clone(),
+        source_url_digest: source_url_digest.clone(),
+        canonical_relative_destination: canonical_relative.clone(),
+        declared_filename: filename.clone(),
+        declared_media_type: declared_media_type.to_owned(),
+        declared_size_bytes,
+        download_policy_revision: cotra_provider_browser::DOWNLOAD_POLICY_REVISION.to_owned(),
+        issued_at_ms,
+        expires_at_ms,
+        state: cotra_provider_browser::DOWNLOAD_SOURCE_PENDING.to_owned(),
+        download_id: String::new(),
+    });
+
+    let preview = cotra_provider_browser::DownloadPreview {
+        source_id,
+        page_id: page.page_id.clone(),
+        workspace_id: workspace.id.clone(),
+        policy_revision: POLICY_REVISION.to_owned(),
+        profile_identity: profile.identity.clone(),
+        origin: page.current_origin.clone(),
+        page_generation: expected_generation,
+        document_generation: expected_document_generation,
+        source_origin: page.current_origin.clone(),
+        source_url_digest,
+        pinned_address,
+        redirect_count,
+        declared_filename: filename,
+        declared_media_type: declared_media_type.to_owned(),
+        canonical_relative_destination: canonical_relative,
+        destination_root_identity,
+        declared_size_bytes,
+        max_download_bytes: cotra_provider_browser::MAX_DOWNLOAD_BYTES,
+        download_policy_revision: cotra_provider_browser::DOWNLOAD_POLICY_REVISION.to_owned(),
+        issued_at_ms,
+        expires_at_ms,
+        preview_digest,
+    };
+    Ok(preview.to_json())
+}
+
+fn download_with_approval(
+    workspace: &Workspace,
+    approval: &impl ApprovalBroker,
+    request: &RequestEnvelope,
+    profile_root: &Path,
+) -> Result<Value, ProviderError> {
+    reject_download_target(request)?;
+    reject_download_arguments(request, DOWNLOAD_BODY_ARGUMENTS)?;
+    let page_id = required_download_string(request, "page_id")?;
+    if !page_id.starts_with(cotra_provider_browser::PAGE_ID_PREFIX) {
+        return Err(ProviderError::new(
+            FailureCode::InvalidRequest,
+            "browser download page_id is malformed",
+        ));
+    }
+    let expected_origin = required_download_string(request, "expected_origin")?;
+    let expected_generation = required_download_u64(request, "expected_generation")?;
+    let expected_document_generation =
+        required_download_u64(request, "expected_document_generation")?;
+    let source_id = required_download_string(request, "source_id")?;
+    if !source_id.starts_with(cotra_provider_browser::DOWNLOAD_SOURCE_PREFIX) {
+        return Err(ProviderError::new(
+            FailureCode::InvalidRequest,
+            "browser download source_id is malformed",
+        ));
+    }
+    let content_base64 = required_download_string(request, "content_base64")?;
+
+    let profile = cotra_provider_browser::ensure_isolated_profile(profile_root)
+        .map_err(|error| ProviderError::new(error.code, error.message))?;
+    let page_store = cotra_provider_browser::PageStore::load_or_create(
+        cotra_provider_browser::default_page_registry_path(&profile.root),
+    );
+    let page = page_store.get(page_id).cloned().ok_or_else(|| {
+        ProviderError::new(
+            FailureCode::TargetStale,
+            "browser page handle is unknown; stale page handles fail closed",
+        )
+    })?;
+    check_page_binding(workspace, &profile.identity, &page)?;
+    check_download_page_state(
+        &page,
+        &page_store,
+        page_id,
+        expected_origin,
+        expected_generation,
+        expected_document_generation,
+    )?;
+
+    let mut download_store = cotra_provider_browser::DownloadStore::load_or_create(
+        cotra_provider_browser::default_download_registry_path(&profile.root),
+    );
+    let record = download_store.get(source_id).cloned().ok_or_else(|| {
+        ProviderError::new(
+            FailureCode::TargetStale,
+            "browser download source handle is unknown; stale download sources fail closed",
+        )
+    })?;
+    let now = now_ms();
+    cotra_provider_browser::check_download_source(
+        &record,
+        &page,
+        &profile.identity,
+        POLICY_REVISION,
+        expected_generation,
+        expected_document_generation,
+        now,
+    )
+    .map_err(|error| ProviderError::new(error.code, error.message))?;
+
+    let bytes = cotra_provider_browser::decode_download_body(content_base64)
+        .map_err(|error| ProviderError::new(error.code, error.message))?;
+    if bytes.len() as u64 != record.declared_size_bytes {
+        return Err(ProviderError::new(
+            FailureCode::PostconditionFailed,
+            "browser download payload size does not match the approved declared size; declared and actual size disagreement fails closed",
+        ));
+    }
+    let sniffed_media_type = cotra_provider_browser::sniff_download_media_type(&bytes);
+    if !cotra_provider_browser::is_allowed_download_media_type(sniffed_media_type) {
+        return Err(ProviderError::new(
+            FailureCode::CapabilityDenied,
+            "browser download content is an executable, script, archive, macro-capable, or otherwise unauthorized class; such content never becomes an approved download",
+        ));
+    }
+    if !cotra_provider_browser::content_matches_declared_media_type(
+        &record.declared_media_type,
+        sniffed_media_type,
+    ) {
+        return Err(ProviderError::new(
+            FailureCode::CapabilityDenied,
+            "browser download content does not match the declared media type; filename, declared type, and content must agree",
+        ));
+    }
+    let extension_media_type =
+        cotra_provider_browser::download_media_type_for_filename(&record.declared_filename)
+            .map_err(|error| ProviderError::new(error.code, error.message))?;
+
+    if extension_media_type != record.declared_media_type {
+        return Err(ProviderError::new(
+            FailureCode::CapabilityDenied,
+            "browser download destination extension drifted from the declared media type; download policy drift fails closed",
+        ));
+    }
+
+    let root = cotra_provider_browser::resolve_download_root(&workspace.root)
+        .map_err(|error| ProviderError::new(error.code, error.message))?;
+    let destination = cotra_provider_browser::resolve_download_destination(
+        &root,
+        &record.canonical_relative_destination,
+    )
+    .map_err(|error| ProviderError::new(error.code, error.message))?;
+    if destination.exists() {
+        return Err(ProviderError::new(
+            FailureCode::PostconditionFailed,
+            "browser download destination already exists; downloads never overwrite existing files",
+        ));
+    }
+    let destination_root_identity = cotra_provider_browser::download_root_identity(&root);
+    let content_sha256 = cotra_provider_browser::sha256_hex(&bytes);
+
+    let digest = cotra_provider_browser::download_approval_digest(
+        &workspace.id,
+        POLICY_REVISION,
+        &profile.identity,
+        page_id,
+        expected_origin,
+        expected_generation,
+        expected_document_generation,
+        source_id,
+        &record.source_origin,
+        &record.canonical_relative_destination,
+        &record.declared_media_type,
+        record.declared_size_bytes,
+        &content_sha256,
+        cotra_provider_browser::DOWNLOAD_POLICY_REVISION,
+    );
+    let prompt = ApprovalPrompt::new(
+        workspace.id.clone(),
+        POLICY_REVISION,
+        "download approved file into the workspace",
+        record.canonical_relative_destination.clone(),
+        format!(
+            "page={page_id} source={source_id} origin={expected_origin} type={} bytes={} -> {}",
+            record.declared_media_type,
+            record.declared_size_bytes,
+            record.canonical_relative_destination
+        ),
+        digest.clone(),
+    );
+    let token = approval
+        .request_token(&prompt)
+        .map_err(|error| ProviderError::new(error.code, error.message))?;
+    approval
+        .consume(
+            &token,
+            &ConsumeExpectation::new(digest, workspace.id.clone(), POLICY_REVISION),
+            now,
+        )
+        .map_err(|error| ProviderError::new(error.code, error.message))?;
+
+    // The source identity is spent before the write so a failed write can
+    // never be replayed against a second destination.
+    let download_id = cotra_provider_browser::download_id_for(
+        source_id,
+        &record.canonical_relative_destination,
+        &content_sha256,
+    );
+    download_store
+        .mark_consumed(source_id, &download_id)
+        .map_err(|error| ProviderError::new(error.code, error.message))?;
+
+    cotra_provider_browser::write_download_file(&root, &destination, &bytes)
+        .map_err(|error| ProviderError::new(error.code, error.message))?;
+
+    let evidence = cotra_provider_browser::DownloadEvidence {
+        download_id,
+        source_id: source_id.to_owned(),
+        page_id: page.page_id.clone(),
+        workspace_id: workspace.id.clone(),
+        policy_revision: POLICY_REVISION.to_owned(),
+        profile_identity: profile.identity.clone(),
+        origin: page.current_origin.clone(),
+        page_generation: expected_generation,
+        document_generation: expected_document_generation,
+        source_origin: record.source_origin.clone(),
+        source_url_digest: record.source_url_digest.clone(),
+        canonical_relative_destination: record.canonical_relative_destination.clone(),
+        destination_root_identity,
+        declared_filename: record.declared_filename.clone(),
+        declared_media_type: record.declared_media_type.clone(),
+        extension_media_type: extension_media_type.to_owned(),
+        sniffed_media_type: sniffed_media_type.to_owned(),
+        content_type_consistent: true,
+        declared_size_bytes: record.declared_size_bytes,
+        actual_size_bytes: bytes.len() as u64,
+        content_sha256,
+        download_policy_revision: cotra_provider_browser::DOWNLOAD_POLICY_REVISION.to_owned(),
+        state: cotra_provider_browser::DOWNLOAD_SOURCE_CONSUMED.to_owned(),
+    };
+    Ok(evidence.to_json(&token.record_id))
+}
+
+fn reject_download_target(request: &RequestEnvelope) -> Result<(), ProviderError> {
+    if request.target.is_some() {
+        return Err(ProviderError::new(
+            FailureCode::InvalidRequest,
+            "browser download shapes do not accept a target field",
+        ));
+    }
+    Ok(())
+}
+
+fn reject_download_arguments(
+    request: &RequestEnvelope,
+    allowed: &[&str],
+) -> Result<(), ProviderError> {
+    let arguments = request.arguments.as_object().ok_or_else(|| {
+        ProviderError::new(
+            FailureCode::InvalidRequest,
+            "browser arguments must be an object",
+        )
+    })?;
+    if let Some(key) = arguments
+        .keys()
+        .find(|key| !allowed.contains(&key.as_str()))
+    {
+        if matches!(
+            key.as_str(),
+            "profile_root"
+                | "root"
+                | "path"
+                | "destination_root"
+                | "download_root"
+                | "absolute_destination"
+                | "drive"
+                | "unc"
+                | "argv"
+                | "executable"
+                | "script"
+                | "javascript"
+                | "command"
+                | "personal"
+                | "credentials"
+                | "cookies"
+                | "passwords"
+                | "session"
+                | "extensions"
+                | "devtools"
+                | "cdp"
+                | "approval"
+                | "token"
+                | "nonce"
+                | "digest"
+                | "selector"
+                | "coordinate"
+                | "x"
+                | "y"
+                | "execute"
+                | "open"
+                | "extract"
+                | "spawn"
+                | "shell"
+                | "run"
+                | "archive"
+                | "output"
+                | "overwrite"
+        ) {
+            return Err(ProviderError::new(
+                FailureCode::CapabilityDenied,
+                format!(
+                    "browser request must not carry authority-widening field: {key}; caller-selected destinations, caller-selected profiles, coordinates, selectors, browser argv, scripting, credential material, caller-supplied approval material, and downloaded-file execution, opening, and extraction are denied"
+                ),
+            ));
+        }
+        return Err(ProviderError::new(
+            FailureCode::InvalidRequest,
+            format!("browser download request does not accept argument field: {key}"),
+        ));
+    }
+    Ok(())
+}
+
+fn required_download_string<'a>(
+    request: &'a RequestEnvelope,
+    name: &str,
+) -> Result<&'a str, ProviderError> {
+    request
+        .arguments
+        .get(name)
+        .and_then(Value::as_str)
+        .ok_or_else(|| {
+            ProviderError::new(
+                FailureCode::InvalidRequest,
+                format!("browser download requires arguments.{name}"),
+            )
+        })
+}
+
+fn required_download_u64(request: &RequestEnvelope, name: &str) -> Result<u64, ProviderError> {
+    request
+        .arguments
+        .get(name)
+        .and_then(Value::as_u64)
+        .ok_or_else(|| {
+            ProviderError::new(
+                FailureCode::InvalidRequest,
+                format!("browser download requires arguments.{name} as an unsigned integer"),
+            )
+        })
+}
+
+fn optional_download_redirect_chain(
+    request: &RequestEnvelope,
+) -> Result<Vec<String>, ProviderError> {
+    match request.arguments.get("redirect_chain") {
+        None => Ok(Vec::new()),
+        Some(value) => {
+            let hops = value.as_array().ok_or_else(|| {
+                ProviderError::new(
+                    FailureCode::InvalidRequest,
+                    "browser.download redirect_chain must be an array of strings",
+                )
+            })?;
+            if hops.len() > cotra_provider_browser::MAX_REDIRECT_HOPS {
+                return Err(ProviderError::new(
+                    FailureCode::InvalidRequest,
+                    format!(
+                        "browser.download redirect_chain exceeds at most {} hops",
+                        cotra_provider_browser::MAX_REDIRECT_HOPS
+                    ),
+                ));
+            }
+            hops.iter()
+                .map(|hop| {
+                    hop.as_str().map(str::to_owned).ok_or_else(|| {
+                        ProviderError::new(
+                            FailureCode::InvalidRequest,
+                            "browser.download redirect_chain entries must be strings",
+                        )
+                    })
+                })
+                .collect()
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1153,7 +1810,12 @@ mod tests {
         for (capability, operation) in [
             ("browser.navigate", "navigate"),
             ("browser.dom", "click"),
+            // NOTE (SG-000025 successor): browser.download/download is handled
+            // by the dedicated SG-000025 download dispatch, not by the
+            // SG-000021 base dispatch asserted here. Downloaded-file execution
+            // stays unreachable from the base dispatch as well.
             ("browser.download", "download"),
+            ("browser.download", "execute"),
         ] {
             let result = dispatch(
                 &workspace(&root),
@@ -1469,6 +2131,474 @@ mod tests {
         )
         .expect_err("replayed generation must fail");
         assert_eq!(replay.code, FailureCode::TargetStale);
+        let _ = std::fs::remove_dir_all(root);
+        let _ = std::fs::remove_dir_all(profile_root);
+    }
+    fn active_page_id(workspace_root: &std::path::Path, profile_root: &std::path::Path) -> String {
+        use cotra_approval::test_support::FixedApprovalBroker;
+        use cotra_approval::ApprovalDecision;
+        let workspace = workspace(workspace_root);
+        let page = open_page_for_test(workspace_root, profile_root);
+        let page_id = page["page_id"].as_str().expect("page id").to_owned();
+        dispatch_navigation(
+            &workspace,
+            &FixedApprovalBroker(ApprovalDecision::Approved),
+            &request(
+                "browser.navigation",
+                "navigate",
+                json!({
+                    "page_id": page_id,
+                    "url": "https://example.com/docs",
+                    "expected_origin": "",
+                    "expected_generation": 0,
+                    "expected_pinned_address": "93.184.216.34",
+                }),
+            ),
+            &public_resolver(),
+            profile_root,
+        )
+        .expect("navigate")
+        .expect("handled");
+        page_id
+    }
+
+    fn preview_arguments(page_id: &str, destination: &str, filename: &str, size: u64) -> Value {
+        json!({
+            "page_id": page_id,
+            "expected_origin": "https://example.com:443",
+            "expected_generation": 1,
+            "expected_document_generation": 1,
+            "source_url": "https://example.com/files/notes.txt",
+            "declared_filename": filename,
+            "declared_media_type": "text/plain",
+            "declared_size_bytes": size,
+            "relative_destination": destination,
+        })
+    }
+
+    fn body_arguments(page_id: &str, source_id: &str, body: &str) -> Value {
+        json!({
+            "page_id": page_id,
+            "expected_origin": "https://example.com:443",
+            "expected_generation": 1,
+            "expected_document_generation": 1,
+            "source_id": source_id,
+            "content_base64": body,
+        })
+    }
+
+    fn preview_download(
+        workspace_root: &std::path::Path,
+        profile_root: &std::path::Path,
+        arguments: Value,
+    ) -> Result<Option<Value>, ProviderError> {
+        dispatch_download(
+            &workspace(workspace_root),
+            &DenyBroker,
+            &request("browser.download", "preview", arguments),
+            &public_resolver(),
+            profile_root,
+        )
+    }
+
+    #[test]
+    fn download_preview_allocates_one_shot_source_without_approval_or_write() {
+        use cotra_approval::test_support::FixedApprovalBroker;
+        use cotra_approval::ApprovalDecision;
+        let root = temp_root("dl-preview");
+        let profile_root = profile_dir("dl-preview");
+        let page_id = active_page_id(&root, &profile_root);
+        let preview = preview_download(
+            &root,
+            &profile_root,
+            preview_arguments(&page_id, "notes.txt", "notes.txt", 5),
+        )
+        .expect("preview")
+        .expect("handled");
+        assert!(preview["source_id"]
+            .as_str()
+            .is_some_and(|value| value.starts_with("dl-")));
+        assert_eq!(preview["canonical_relative_destination"], "notes.txt");
+        assert_eq!(preview["declared_media_type"], "text/plain");
+        assert_eq!(preview["source_origin"], "https://example.com:443");
+        assert!(preview["destination_root_identity"]
+            .as_str()
+            .is_some_and(|value| !value.is_empty()));
+        assert!(
+            preview["expires_at_ms"].as_u64().expect("expiry")
+                > preview["issued_at_ms"].as_u64().expect("issued")
+        );
+        assert_eq!(preview["executed"], false);
+        assert_eq!(preview["opened"], false);
+        assert_eq!(preview["extracted"], false);
+        assert_eq!(preview["cookies"], false);
+        assert_eq!(preview["credentials"], false);
+        assert!(preview.get("source_url").is_none());
+        assert!(
+            !std::path::Path::new(&root).join("notes.txt").exists(),
+            "preview must never write a file"
+        );
+        assert!(dispatch_download(
+            &workspace(&root),
+            &FixedApprovalBroker(ApprovalDecision::Approved),
+            &request("browser.profile", "status", json!({})),
+            &public_resolver(),
+            &profile_root,
+        )
+        .expect("dispatch returns")
+        .is_none());
+        let _ = std::fs::remove_dir_all(root);
+        let _ = std::fs::remove_dir_all(profile_root);
+    }
+
+    #[test]
+    fn download_requires_approval_and_creates_exactly_one_new_file() {
+        use cotra_approval::test_support::FixedApprovalBroker;
+        use cotra_approval::ApprovalDecision;
+        let root = temp_root("dl-approve");
+        let profile_root = profile_dir("dl-approve");
+        let page_id = active_page_id(&root, &profile_root);
+        let workspace = workspace(&root);
+
+        let preview = preview_download(
+            &root,
+            &profile_root,
+            preview_arguments(&page_id, "notes.txt", "notes.txt", 5),
+        )
+        .expect("preview")
+        .expect("handled");
+        let source_id = preview["source_id"].as_str().expect("source").to_owned();
+
+        let denied = dispatch_download(
+            &workspace,
+            &DenyBroker,
+            &request(
+                "browser.download",
+                "download",
+                body_arguments(&page_id, &source_id, "aGVsbG8="),
+            ),
+            &public_resolver(),
+            &profile_root,
+        )
+        .expect_err("download without approval must fail closed");
+        assert_eq!(denied.code, FailureCode::ApprovalDenied);
+        assert!(!std::path::Path::new(&root).join("notes.txt").exists());
+
+        let evidence = dispatch_download(
+            &workspace,
+            &FixedApprovalBroker(ApprovalDecision::Approved),
+            &request(
+                "browser.download",
+                "download",
+                body_arguments(&page_id, &source_id, "aGVsbG8="),
+            ),
+            &public_resolver(),
+            &profile_root,
+        )
+        .expect("download")
+        .expect("handled");
+        assert!(evidence["download_id"]
+            .as_str()
+            .is_some_and(|value| value.starts_with("dn-")));
+        assert_eq!(evidence["canonical_relative_destination"], "notes.txt");
+        assert_eq!(evidence["declared_size_bytes"], 5);
+        assert_eq!(evidence["actual_size_bytes"], 5);
+        assert_eq!(evidence["sniffed_media_type"], "text/plain");
+        assert_eq!(evidence["extension_media_type"], "text/plain");
+        assert_eq!(evidence["content_type_consistent"], true);
+        assert_eq!(evidence["state"], "consumed");
+        assert_eq!(evidence["executed"], false);
+        assert_eq!(evidence["opened"], false);
+        assert_eq!(evidence["extracted"], false);
+        assert_eq!(evidence["cookies"], false);
+        assert_eq!(evidence["credentials"], false);
+        assert!(evidence.get("approval_record_id").is_some());
+        assert!(evidence.get("content_base64").is_none());
+        let written = std::path::Path::new(&root).join("notes.txt");
+        assert_eq!(std::fs::read(&written).expect("read"), &b"hello"[..]);
+
+        let replay = dispatch_download(
+            &workspace,
+            &FixedApprovalBroker(ApprovalDecision::Approved),
+            &request(
+                "browser.download",
+                "download",
+                body_arguments(&page_id, &source_id, "aGVsbG8="),
+            ),
+            &public_resolver(),
+            &profile_root,
+        )
+        .expect_err("a consumed source must never authorize a second download");
+        assert_eq!(replay.code, FailureCode::CapabilityDenied);
+        assert_eq!(std::fs::read(&written).expect("read"), &b"hello"[..]);
+
+        let existing = preview_download(
+            &root,
+            &profile_root,
+            preview_arguments(&page_id, "notes.txt", "notes.txt", 5),
+        )
+        .expect_err("preview must refuse a destination that already exists");
+        assert_eq!(existing.code, FailureCode::PostconditionFailed);
+        assert_eq!(
+            std::fs::read(&written).expect("read"),
+            &b"hello"[..],
+            "an approved download must never overwrite an existing file"
+        );
+
+        // A file that appears between preview and download must also fail
+        // closed: create-only is enforced at write time, not only at preview.
+        let racing = preview_download(
+            &root,
+            &profile_root,
+            preview_arguments(&page_id, "racing.txt", "racing.txt", 5),
+        )
+        .expect("preview")
+        .expect("handled");
+        let racing_source = racing["source_id"].as_str().expect("source").to_owned();
+        let seeded = std::path::Path::new(&root).join("racing.txt");
+        std::fs::write(&seeded, b"taken").expect("seed");
+        let race = dispatch_download(
+            &workspace,
+            &FixedApprovalBroker(ApprovalDecision::Approved),
+            &request(
+                "browser.download",
+                "download",
+                body_arguments(&page_id, &racing_source, "aGVsbG8="),
+            ),
+            &public_resolver(),
+            &profile_root,
+        )
+        .expect_err("an existing destination must fail closed");
+        assert_eq!(race.code, FailureCode::PostconditionFailed);
+        assert_eq!(
+            std::fs::read(&seeded).expect("read"),
+            &b"taken"[..],
+            "an approved download must never overwrite a seeded file"
+        );
+        let _ = std::fs::remove_dir_all(root);
+        let _ = std::fs::remove_dir_all(profile_root);
+    }
+
+    #[test]
+    fn download_denies_destination_type_origin_and_redirect_drift() {
+        let root = temp_root("dl-dest");
+        let profile_root = profile_dir("dl-dest");
+        let page_id = active_page_id(&root, &profile_root);
+
+        for (arguments, code) in [
+            (
+                preview_arguments(&page_id, "C:\\Windows\\notes.txt", "notes.txt", 5),
+                FailureCode::PathEscape,
+            ),
+            (
+                preview_arguments(&page_id, "../escape.txt", "notes.txt", 5),
+                FailureCode::PathEscape,
+            ),
+            (
+                preview_arguments(&page_id, "notes.txt:hidden", "notes.txt", 5),
+                FailureCode::PathEscape,
+            ),
+            (
+                preview_arguments(&page_id, "CON.txt", "CON.txt", 5),
+                FailureCode::PathEscape,
+            ),
+            (
+                preview_arguments(&page_id, "tool.exe", "tool.exe", 5),
+                FailureCode::CapabilityDenied,
+            ),
+            (
+                preview_arguments(&page_id, "archive.zip", "archive.zip", 5),
+                FailureCode::CapabilityDenied,
+            ),
+            (
+                preview_arguments(&page_id, "notes.txt", "other.txt", 5),
+                FailureCode::InvalidRequest,
+            ),
+        ] {
+            let error = preview_download(&root, &profile_root, arguments)
+                .expect_err("destination policy must fail closed");
+            assert_eq!(error.code, code);
+        }
+
+        let mut widening = preview_arguments(&page_id, "notes.txt", "notes.txt", 5);
+        widening
+            .as_object_mut()
+            .expect("object")
+            .insert("destination_root".to_owned(), json!("C:\\other"));
+        assert_eq!(
+            preview_download(&root, &profile_root, widening)
+                .expect_err("caller-selected destinations must fail closed")
+                .code,
+            FailureCode::CapabilityDenied
+        );
+
+        let mut foreign_origin = preview_arguments(&page_id, "notes.txt", "notes.txt", 5);
+        foreign_origin.as_object_mut().expect("object").insert(
+            "source_url".to_owned(),
+            json!("https://evil.example.com/files/notes.txt"),
+        );
+        assert_eq!(
+            preview_download(&root, &profile_root, foreign_origin)
+                .expect_err("an unauthorized download origin must fail closed")
+                .code,
+            FailureCode::CapabilityDenied
+        );
+
+        let mut widened = preview_arguments(&page_id, "notes.txt", "notes.txt", 5);
+        widened.as_object_mut().expect("object").insert(
+            "redirect_chain".to_owned(),
+            json!(["https://evil.example.com/files/notes.txt"]),
+        );
+        assert_eq!(
+            preview_download(&root, &profile_root, widened)
+                .expect_err("redirect widening must fail closed")
+                .code,
+            FailureCode::CapabilityDenied
+        );
+
+        let mut ssrf = preview_arguments(&page_id, "notes.txt", "notes.txt", 5);
+        ssrf.as_object_mut().expect("object").insert(
+            "source_url".to_owned(),
+            json!("https://localhost/notes.txt"),
+        );
+        assert!(preview_download(&root, &profile_root, ssrf).is_err());
+
+        let mut stale = preview_arguments(&page_id, "notes.txt", "notes.txt", 5);
+        stale
+            .as_object_mut()
+            .expect("object")
+            .insert("expected_generation".to_owned(), json!(9));
+        assert_eq!(
+            preview_download(&root, &profile_root, stale)
+                .expect_err("generation drift must fail closed")
+                .code,
+            FailureCode::TargetStale
+        );
+
+        let mut wrong_origin = preview_arguments(&page_id, "notes.txt", "notes.txt", 5);
+        wrong_origin.as_object_mut().expect("object").insert(
+            "expected_origin".to_owned(),
+            json!("https://other.example:443"),
+        );
+        assert_eq!(
+            preview_download(&root, &profile_root, wrong_origin)
+                .expect_err("origin drift must fail closed")
+                .code,
+            FailureCode::TargetStale
+        );
+        let _ = std::fs::remove_dir_all(root);
+        let _ = std::fs::remove_dir_all(profile_root);
+    }
+
+    #[test]
+    fn download_denies_unknown_source_size_and_content_drift() {
+        use cotra_approval::test_support::FixedApprovalBroker;
+        use cotra_approval::ApprovalDecision;
+        let root = temp_root("dl-body");
+        let profile_root = profile_dir("dl-body");
+        let page_id = active_page_id(&root, &profile_root);
+        let workspace = workspace(&root);
+        let broker = FixedApprovalBroker(ApprovalDecision::Approved);
+
+        assert_eq!(
+            dispatch_download(
+                &workspace,
+                &broker,
+                &request(
+                    "browser.download",
+                    "download",
+                    body_arguments(&page_id, "dl-unknown", "aGVsbG8="),
+                ),
+                &public_resolver(),
+                &profile_root,
+            )
+            .expect_err("an unknown source identity must fail closed")
+            .code,
+            FailureCode::TargetStale
+        );
+
+        let fresh = |name: &str, size: u64| {
+            let preview = preview_download(
+                &root,
+                &profile_root,
+                preview_arguments(&page_id, name, name, size),
+            )
+            .expect("preview")
+            .expect("handled");
+            preview["source_id"].as_str().expect("source").to_owned()
+        };
+
+        let size_source = fresh("size.txt", 5);
+        assert_eq!(
+            dispatch_download(
+                &workspace,
+                &broker,
+                &request(
+                    "browser.download",
+                    "download",
+                    body_arguments(&page_id, &size_source, "aGVsbG8h"),
+                ),
+                &public_resolver(),
+                &profile_root,
+            )
+            .expect_err("declared and actual size disagreement must fail closed")
+            .code,
+            FailureCode::PostconditionFailed
+        );
+
+        let executable_source = fresh("payload.txt", 2);
+        assert_eq!(
+            dispatch_download(
+                &workspace,
+                &broker,
+                &request(
+                    "browser.download",
+                    "download",
+                    body_arguments(&page_id, &executable_source, "TVo="),
+                ),
+                &public_resolver(),
+                &profile_root,
+            )
+            .expect_err("an executable payload must fail closed")
+            .code,
+            FailureCode::CapabilityDenied
+        );
+
+        let script_source = fresh("launcher.txt", 10);
+        assert_eq!(
+            dispatch_download(
+                &workspace,
+                &broker,
+                &request(
+                    "browser.download",
+                    "download",
+                    body_arguments(&page_id, &script_source, "IyEvYmluL3NoCg=="),
+                ),
+                &public_resolver(),
+                &profile_root,
+            )
+            .expect_err("a script payload must fail closed")
+            .code,
+            FailureCode::CapabilityDenied
+        );
+
+        let image_source = fresh("picture.txt", 8);
+        assert_eq!(
+            dispatch_download(
+                &workspace,
+                &broker,
+                &request(
+                    "browser.download",
+                    "download",
+                    body_arguments(&page_id, &image_source, "iVBORw0KGgo="),
+                ),
+                &public_resolver(),
+                &profile_root,
+            )
+            .expect_err("content that contradicts the declared type must fail closed")
+            .code,
+            FailureCode::CapabilityDenied
+        );
         let _ = std::fs::remove_dir_all(root);
         let _ = std::fs::remove_dir_all(profile_root);
     }

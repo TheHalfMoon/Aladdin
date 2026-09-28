@@ -18,8 +18,10 @@ const MAX_HOST_BYTES: usize = 253;
 /// SG-000022 authorizes only page lifecycle and origin-bound navigation.
 /// SG-000023 additionally authorizes read-only snapshot observation.
 /// SG-000024 additionally authorizes structured invoke (click) and
-/// value-entry (fill) on typed node identities; every other actuation verb
-/// and every shape listed here must fail closed.
+/// value-entry (fill) on typed node identities. SG-000025 additionally
+/// authorizes scoped bounded download preview and download; every other
+/// actuation verb, download-adjacent shape, and every shape listed here must
+/// fail closed.
 pub const DENIED_BROWSER_SHAPES: &[(&str, &str)] = &[
     ("browser.navigate", "navigate"),
     ("browser.snapshot", "capture"),
@@ -33,8 +35,17 @@ pub const DENIED_BROWSER_SHAPES: &[(&str, &str)] = &[
     ("browser.accessibility", "query"),
     ("browser.page", "close"),
     ("browser.navigation", "back"),
-    ("browser.download", "download"),
+    ("browser.download", "execute"),
+    ("browser.download", "open"),
+    ("browser.download", "extract"),
+    ("browser.download", "launch"),
+    ("browser.download", "resume"),
+    ("browser.file", "execute"),
+    ("browser.file", "open"),
+    ("browser.archive", "extract"),
+    ("browser.shell", "run"),
     ("browser.upload", "upload"),
+    ("browser.upload", "preview"),
     ("browser.profile", "use_personal"),
     ("browser.profile", "attach"),
     ("browser.profile", "launch"),
@@ -52,11 +63,12 @@ pub const DENIED_BROWSER_SHAPES: &[(&str, &str)] = &[
     ("playwright", "command"),
 ];
 
-/// The typed operations SG-000024 authorizes: the two SG-000021 reads, the
+/// The typed operations SG-000025 authorizes: the two SG-000021 reads, the
 /// SG-000022 page lifecycle and origin-bound navigation, the SG-000023
-/// read-only snapshot observation, plus structured invoke (click) and
-/// value-entry (fill) on typed node identities. Everything else under a
-/// browser-like capability must fail closed.
+/// read-only snapshot observation, structured invoke (click) and value-entry
+/// (fill) on typed node identities, plus the SG-000025 scoped download preview
+/// and download shapes. Everything else under a browser-like capability must
+/// fail closed.
 pub fn is_allowed_browser_shape(capability: &str, operation: &str) -> bool {
     matches!(
         (capability, operation),
@@ -68,6 +80,8 @@ pub fn is_allowed_browser_shape(capability: &str, operation: &str) -> bool {
             | ("browser.snapshot", "observe")
             | ("browser.dom", "click")
             | ("browser.dom", "fill")
+            | ("browser.download", "preview")
+            | ("browser.download", "download")
     )
 }
 
@@ -112,6 +126,10 @@ impl ProviderError {
 
     fn denied(message: impl Into<String>) -> Self {
         Self::new(FailureCode::CapabilityDenied, message)
+    }
+
+    fn io(context: &str, error: std::io::Error) -> Self {
+        Self::new(FailureCode::InternalError, format!("{context}: {error}"))
     }
 }
 
@@ -609,7 +627,9 @@ pub fn select_pinned_address(addresses: &[IpAddr]) -> Result<IpAddr, ProviderErr
     Ok(public[0])
 }
 
-fn sha256_hex(bytes: &[u8]) -> String {
+/// Lowercase hex SHA-256 of the exact bytes. Exposed so typed evidence
+/// digests are computed by one implementation everywhere.
+pub fn sha256_hex(bytes: &[u8]) -> String {
     use std::fmt::Write as _;
     let digest = Sha256::digest(bytes);
     let mut output = String::with_capacity(digest.len() * 2);
@@ -2267,6 +2287,995 @@ impl ActuationEvidence {
     }
 }
 
+// ---------------------------------------------------------------------------
+// SG-000025 scoped bounded browser downloads. A download is authorized as a
+// bounded create-only write of exactly one payload into exactly one canonical
+// relative destination under the approved workspace root. No browser is
+// launched or attached, Cotra performs no network transfer, and downloaded
+// content is never executed, opened, extracted, or launched.
+// ---------------------------------------------------------------------------
+
+/// Prefix for server-allocated one-shot download source identities.
+pub const DOWNLOAD_SOURCE_PREFIX: &str = "dl-";
+/// Prefix for download identities recorded in download evidence.
+pub const DOWNLOAD_ID_PREFIX: &str = "dn-";
+/// Revision of the download destination and content-type policy itself.
+pub const DOWNLOAD_POLICY_REVISION: &str = "sg-000025-download-v1";
+/// Schema for the download registry file stored under Cotra protected state.
+pub const DOWNLOAD_REGISTRY_SCHEMA: &str = "cotra-browser-downloads-v1";
+/// File name for the download registry inside the isolated profile directory.
+pub const DOWNLOAD_REGISTRY_FILE: &str = "downloads.jsonl";
+/// Hard bound on the decoded payload of a single download.
+pub const MAX_DOWNLOAD_BYTES: u64 = 8 * 1024 * 1024;
+/// Bound on one destination path component in bytes.
+pub const MAX_DOWNLOAD_COMPONENT_BYTES: usize = 128;
+/// Bound on a canonical relative destination in bytes.
+pub const MAX_DOWNLOAD_RELATIVE_BYTES: usize = 512;
+/// Bound on the encoded body argument accepted by a download request.
+pub const MAX_DOWNLOAD_BODY_BYTES: usize = ((MAX_DOWNLOAD_BYTES as usize) / 3 + 1) * 4;
+/// Bound on simultaneously pending download sources per workspace.
+pub const MAX_PENDING_DOWNLOADS_PER_WORKSPACE: usize = 8;
+/// Deterministic lifetime of a download source identity in milliseconds.
+pub const DOWNLOAD_SOURCE_TTL_MS: u64 = 120_000;
+/// Media types a download may declare and carry. Anything else fails closed.
+pub const ALLOWED_DOWNLOAD_MEDIA_TYPES: &[&str] = &[
+    "text/plain",
+    "text/markdown",
+    "text/csv",
+    "application/json",
+    "image/png",
+    "image/jpeg",
+    "image/gif",
+    "image/webp",
+];
+/// Media type returned when content matches no authorized class.
+pub const UNKNOWN_DOWNLOAD_MEDIA_TYPE: &str = "application/octet-stream";
+/// Suffix families that always fail closed. Executables, scripts, installers,
+/// command files, archives, shortcuts, and macro-capable documents must never
+/// become approved download destinations.
+pub const DENIED_DOWNLOAD_SUFFIXES: &[&str] = &[
+    "exe", "dll", "com", "bat", "cmd", "msi", "msix", "appx", "scr", "pif", "cpl", "sys", "drv",
+    "ocx", "ps1", "psm1", "psd1", "vbs", "vbe", "js", "mjs", "cjs", "jse", "wsf", "wsh", "hta",
+    "sh", "bash", "py", "rb", "pl", "jar", "class", "lnk", "url", "scf", "reg", "inf", "job",
+    "zip", "7z", "rar", "tar", "gz", "bz2", "xz", "tgz", "iso", "img", "vhd", "vhdx", "cab", "deb",
+    "rpm", "dmg", "pkg", "apk", "crx", "xpi", "docm", "xlsm", "pptm", "dotm", "xltm", "potm",
+    "doc", "xls", "ppt",
+];
+
+/// Returns true when a path component names a reserved Windows device. Such
+/// names address devices, not files, and must never be written.
+pub fn is_reserved_device_name(component: &str) -> bool {
+    let base = component.split('.').next().unwrap_or(component);
+    let base = base.trim_end_matches(' ').trim_end_matches('.');
+    let upper = base.to_ascii_uppercase();
+    if matches!(
+        upper.as_str(),
+        "CON" | "PRN" | "AUX" | "NUL" | "CONIN$" | "CONOUT$"
+    ) {
+        return true;
+    }
+    for prefix in ["COM", "LPT"] {
+        if let Some(digit) = upper.strip_prefix(prefix) {
+            if digit.len() == 1 && digit.chars().all(|character| character.is_ascii_digit()) {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+/// Validate a caller-proposed canonical relative download destination and
+/// return `(canonical_relative, filename)` with forward slashes. Absolute
+/// paths, drive prefixes, UNC paths, device paths, NT namespace paths,
+/// alternate data streams, parent traversal, empty or duplicate separators,
+/// trailing dots and spaces, reserved device names, illegal characters, and
+/// over-length components fail closed. The returned value is the exact
+/// destination recorded in evidence and bound into approval digests.
+pub fn validate_download_relative_path(relative: &str) -> Result<(String, String), ProviderError> {
+    if relative.is_empty() {
+        return Err(ProviderError::invalid(
+            "browser download destination is empty",
+        ));
+    }
+    if relative.len() > MAX_DOWNLOAD_RELATIVE_BYTES {
+        return Err(ProviderError::invalid(format!(
+            "browser download destination exceeds at most {MAX_DOWNLOAD_RELATIVE_BYTES} bytes"
+        )));
+    }
+    if relative.bytes().any(|byte| byte < 0x20 || byte == 0x7f) {
+        return Err(ProviderError::denied(
+            "browser download destination contains control characters; caller paths must be canonical relative destinations",
+        ));
+    }
+    let normalized = relative.replace('/', "\\");
+    let bytes = normalized.as_bytes();
+    if bytes.len() >= 2 && bytes[1] == b':' {
+        return Err(ProviderError::new(
+            FailureCode::PathEscape,
+            "browser download destination must not carry a drive prefix; absolute destinations are denied",
+        ));
+    }
+    if normalized.starts_with('\\') {
+        return Err(ProviderError::new(
+            FailureCode::PathEscape,
+            "browser download destination must be relative; UNC, device, and NT namespace destinations are denied",
+        ));
+    }
+    if normalized.contains(':') {
+        return Err(ProviderError::new(
+            FailureCode::PathEscape,
+            "browser download destination must not contain ':'; alternate data streams and stream syntax are denied",
+        ));
+    }
+    let mut components: Vec<&str> = Vec::new();
+    for component in normalized.split('\\') {
+        if component.is_empty() {
+            return Err(ProviderError::new(
+                FailureCode::PathEscape,
+                "browser download destination contains an empty path component",
+            ));
+        }
+        if component == "." || component == ".." {
+            return Err(ProviderError::new(
+                FailureCode::PathEscape,
+                "browser download destination must not contain '.', '..', or parent traversal components",
+            ));
+        }
+        if component.ends_with('.') || component.ends_with(' ') {
+            return Err(ProviderError::new(
+                FailureCode::PathEscape,
+                "browser download destination components must not end with a dot or a space",
+            ));
+        }
+        if component.len() > MAX_DOWNLOAD_COMPONENT_BYTES {
+            return Err(ProviderError::invalid(format!(
+                "browser download destination component exceeds at most {MAX_DOWNLOAD_COMPONENT_BYTES} bytes"
+            )));
+        }
+        if component
+            .bytes()
+            .any(|byte| matches!(byte, b'<' | b'>' | b'"' | b'|' | b'?' | b'*'))
+        {
+            return Err(ProviderError::new(
+                FailureCode::PathEscape,
+                "browser download destination contains characters that are illegal in Windows path components",
+            ));
+        }
+        if is_reserved_device_name(component) {
+            return Err(ProviderError::new(
+                FailureCode::PathEscape,
+                "browser download destination component is a reserved Windows device name",
+            ));
+        }
+        components.push(component);
+    }
+    let filename = components.last().copied().unwrap_or("").to_owned();
+    let canonical = components.join("/");
+    Ok((canonical, filename))
+}
+
+/// Map a declared download filename to its authorized media type. The
+/// extension allowlist is the authority: executables, scripts, installers,
+/// command files, archives, shortcuts, macro-capable documents, extensionless
+/// names, and every unlisted extension fail closed.
+pub fn download_media_type_for_filename(filename: &str) -> Result<&'static str, ProviderError> {
+    let lower = filename.to_ascii_lowercase();
+    let extension = lower.rsplit_once('.').map(|(_, extension)| extension);
+    let Some(extension) = extension.filter(|extension| !extension.is_empty()) else {
+        return Err(ProviderError::denied(
+            "browser download filename must carry a recognized authorized extension; extensionless downloads are denied",
+        ));
+    };
+    if DENIED_DOWNLOAD_SUFFIXES.contains(&extension) {
+        return Err(ProviderError::denied(format!(
+            "browser download extension '{}' is denied; executables, scripts, installers, command files, archives, shortcuts, and macro-capable documents never become approved download destinations",
+            extension
+        )));
+    }
+    let media_type = match extension {
+        "txt" => "text/plain",
+        "md" => "text/markdown",
+        "csv" => "text/csv",
+        "json" => "application/json",
+        "png" => "image/png",
+        "jpg" | "jpeg" => "image/jpeg",
+        "gif" => "image/gif",
+        "webp" => "image/webp",
+        _ => {
+            return Err(ProviderError::denied(format!(
+                "browser download extension '{}' is not in the authorized allowlist; only inert text, JSON, and image downloads are authorized",
+                extension
+            )))
+        }
+    };
+    Ok(media_type)
+}
+
+/// Returns true when a declared media type is in the authorized allowlist.
+pub fn is_allowed_download_media_type(media_type: &str) -> bool {
+    ALLOWED_DOWNLOAD_MEDIA_TYPES.contains(&media_type)
+}
+
+/// Determine the media type of downloaded content from its bytes. Executable,
+/// script, archive, and OLE compound signatures return their own class so they
+/// can never be mistaken for authorized inert content.
+pub fn sniff_download_media_type(bytes: &[u8]) -> &'static str {
+    if bytes.starts_with(b"MZ") {
+        return "application/x-msdownload";
+    }
+    if bytes.starts_with(b"\x7fELF") {
+        return "application/x-elf";
+    }
+    if bytes.starts_with(&[0xfe, 0xed, 0xfa, 0xce])
+        || bytes.starts_with(&[0xfe, 0xed, 0xfa, 0xcf])
+        || bytes.starts_with(&[0xcf, 0xfa, 0xed, 0xfe])
+        || bytes.starts_with(&[0xca, 0xfe, 0xba, 0xbe])
+    {
+        return "application/x-mach-binary";
+    }
+    if bytes.starts_with(&[0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]) {
+        return "application/x-ole-storage";
+    }
+    if bytes.starts_with(b"#!") {
+        return "text/x-shellscript";
+    }
+    if bytes.starts_with(b"PK\x03\x04")
+        || bytes.starts_with(b"PK\x05\x06")
+        || bytes.starts_with(b"PK\x07\x08")
+    {
+        return "application/zip";
+    }
+    if bytes.starts_with(b"%PDF-") {
+        return "application/pdf";
+    }
+    if bytes.starts_with(&[0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a]) {
+        return "image/png";
+    }
+    if bytes.starts_with(&[0xff, 0xd8, 0xff]) {
+        return "image/jpeg";
+    }
+    if bytes.starts_with(b"GIF87a") || bytes.starts_with(b"GIF89a") {
+        return "image/gif";
+    }
+    if bytes.len() >= 12 && bytes.starts_with(b"RIFF") && &bytes[8..12] == b"WEBP" {
+        return "image/webp";
+    }
+    if bytes.is_empty() {
+        return UNKNOWN_DOWNLOAD_MEDIA_TYPE;
+    }
+    let text_like = std::str::from_utf8(bytes).is_ok()
+        && !bytes.contains(&0)
+        && !bytes
+            .iter()
+            .any(|byte| *byte < 0x20 && !matches!(*byte, b'\t' | b'\n' | b'\r'));
+    if text_like {
+        return "text/plain";
+    }
+    UNKNOWN_DOWNLOAD_MEDIA_TYPE
+}
+/// Returns true when sniffed content is compatible with the declared media
+/// type. Text and JSON declarations require text content; image declarations
+/// require the exact matching image class. Any other pairing fails closed.
+pub fn content_matches_declared_media_type(declared: &str, sniffed: &str) -> bool {
+    if declared.starts_with("image/") {
+        declared == sniffed
+    } else {
+        sniffed == "text/plain"
+    }
+}
+
+/// Strictly decode one bounded standard-base64 body. Padding shape, alphabet,
+/// length, and the decoded size bound are all enforced before any byte is
+/// returned so a malformed body can never reach the filesystem.
+pub fn decode_download_body(encoded: &str) -> Result<Vec<u8>, ProviderError> {
+    if encoded.is_empty() {
+        return Err(ProviderError::invalid(
+            "browser download body is empty; empty downloads are denied",
+        ));
+    }
+    if encoded.len() > MAX_DOWNLOAD_BODY_BYTES {
+        return Err(ProviderError::invalid(format!(
+            "browser download body exceeds at most {MAX_DOWNLOAD_BODY_BYTES} encoded bytes"
+        )));
+    }
+    if encoded.len() % 4 != 0 {
+        return Err(ProviderError::invalid(
+            "browser download body is not a whole number of base64 groups",
+        ));
+    }
+    let bytes = encoded.as_bytes();
+    let padding = bytes.iter().rev().take_while(|byte| **byte == b'=').count();
+    if padding > 2 {
+        return Err(ProviderError::invalid(
+            "browser download body carries an invalid base64 padding shape",
+        ));
+    }
+    let body_end = bytes.len() - padding;
+    if bytes[..body_end].contains(&b'=') {
+        return Err(ProviderError::invalid(
+            "browser download body carries padding outside the base64 tail",
+        ));
+    }
+    let decoded_len = (bytes.len() / 4) * 3 - padding;
+    if decoded_len as u64 > MAX_DOWNLOAD_BYTES {
+        return Err(ProviderError::new(
+            FailureCode::OutputLimit,
+            format!("decoded browser download exceeds the maximum of {MAX_DOWNLOAD_BYTES} bytes"),
+        ));
+    }
+    let value = |byte: u8| -> Result<u32, ProviderError> {
+        match byte {
+            b'A'..=b'Z' => Ok(u32::from(byte - b'A')),
+            b'a'..=b'z' => Ok(u32::from(byte - b'a') + 26),
+            b'0'..=b'9' => Ok(u32::from(byte - b'0') + 52),
+            b'+' => Ok(62),
+            b'/' => Ok(63),
+            _ => Err(ProviderError::invalid(
+                "browser download body contains characters outside the base64 alphabet",
+            )),
+        }
+    };
+    let mut out = Vec::with_capacity(decoded_len);
+    for group in bytes[..body_end].chunks(4) {
+        let mut accum = 0u32;
+        for byte in group {
+            accum = (accum << 6) | value(*byte)?;
+        }
+        let octets = match group.len() {
+            4 => 3,
+            3 => 2,
+            2 => 1,
+            _ => {
+                return Err(ProviderError::invalid(
+                    "browser download body carries a truncated base64 group",
+                ))
+            }
+        };
+        let padded = accum << ((4 - group.len()) * 6);
+        for index in 0..octets {
+            out.push(((padded >> (16 - 8 * index)) & 0xff) as u8);
+        }
+        if out.len() > decoded_len {
+            return Err(ProviderError::invalid(
+                "browser download body base64 shape does not match its declared length",
+            ));
+        }
+    }
+    if out.len() != decoded_len {
+        return Err(ProviderError::invalid(
+            "browser download body base64 shape does not match its declared length",
+        ));
+    }
+
+    Ok(out)
+}
+
+/// State of a download source identity. Pending sources may be consumed once;
+/// consumed sources never authorize a second download.
+pub const DOWNLOAD_SOURCE_PENDING: &str = "pending";
+/// Consumed source state. A consumed source is permanently spent.
+pub const DOWNLOAD_SOURCE_CONSUMED: &str = "consumed";
+
+/// Server-side record of one authorized download source. Records are created
+/// only by [`DownloadStore`]; callers hold identities, never these records.
+/// Cookies, Authorization headers, credentials, tokens, session material, and
+/// personal browser state never enter this record, and the raw source URL is
+/// never persisted: only the source origin and a source URL digest are bound.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct StoredDownload {
+    pub schema: String,
+    pub source_id: String,
+    pub workspace_id: String,
+    pub policy_revision: String,
+    pub profile_identity: String,
+    pub page_id: String,
+    pub origin: String,
+    pub page_generation: u64,
+    pub document_generation: u64,
+    pub source_origin: String,
+    pub source_url_digest: String,
+    pub canonical_relative_destination: String,
+    pub declared_filename: String,
+    pub declared_media_type: String,
+    pub declared_size_bytes: u64,
+    pub download_policy_revision: String,
+    pub issued_at_ms: u64,
+    pub expires_at_ms: u64,
+    pub state: String,
+    pub download_id: String,
+}
+
+/// File-backed download registry stored under Cotra protected local state.
+/// Download dispatch resolves caller-supplied source identities through this
+/// registry; identities absent here fail closed as stale handles.
+#[derive(Debug)]
+pub struct DownloadStore {
+    path: PathBuf,
+    downloads: std::collections::BTreeMap<String, StoredDownload>,
+}
+
+impl DownloadStore {
+    pub fn load_or_create(path: PathBuf) -> Self {
+        let mut store = Self {
+            path,
+            downloads: std::collections::BTreeMap::new(),
+        };
+        if store.path.is_file() {
+            if let Ok(text) = std::fs::read_to_string(&store.path) {
+                for line in text.lines() {
+                    if line.trim().is_empty() {
+                        continue;
+                    }
+                    if let Ok(record) = serde_json::from_str::<StoredDownload>(line) {
+                        if record.schema != DOWNLOAD_REGISTRY_SCHEMA || record.source_id.is_empty()
+                        {
+                            break;
+                        }
+                        store.downloads.insert(record.source_id.clone(), record);
+                    }
+                }
+            }
+        } else if let Some(parent) = store.path.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        store
+    }
+
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
+
+    pub fn get(&self, source_id: &str) -> Option<&StoredDownload> {
+        self.downloads.get(source_id)
+    }
+
+    /// Count unconsumed download sources for one workspace so pending hold on
+    /// protected state stays bounded.
+    pub fn pending_count(&self, workspace_id: &str) -> usize {
+        self.downloads
+            .values()
+            .filter(|record| {
+                record.workspace_id == workspace_id && record.state == DOWNLOAD_SOURCE_PENDING
+            })
+            .count()
+    }
+
+    /// Persist a freshly authorized download source as a server-side record.
+    /// Records are append-only; the latest record for a source identity wins.
+    pub fn record_pending(&mut self, record: StoredDownload) {
+        self.persist(&record);
+        self.downloads.insert(record.source_id.clone(), record);
+    }
+
+    /// Mark one source identity consumed so it never authorizes a second
+    /// download. Unknown identities fail closed.
+    pub fn mark_consumed(
+        &mut self,
+        source_id: &str,
+        download_id: &str,
+    ) -> Result<(), ProviderError> {
+        let mut record = self.downloads.get(source_id).cloned().ok_or_else(|| {
+            ProviderError::new(
+                FailureCode::TargetStale,
+                "browser download source handle is unknown; stale download sources fail closed",
+            )
+        })?;
+        record.state = DOWNLOAD_SOURCE_CONSUMED.to_owned();
+        record.download_id = download_id.to_owned();
+        self.persist(&record);
+        self.downloads.insert(record.source_id.clone(), record);
+        Ok(())
+    }
+
+    fn persist(&self, record: &StoredDownload) {
+        use std::io::Write as _;
+        if let Some(parent) = self.path.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        if let Ok(mut file) = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&self.path)
+        {
+            let _ = serde_json::to_writer(&mut file, record);
+            let _ = file.write_all(b"\n");
+            let _ = file.flush();
+        }
+    }
+}
+
+/// Canonical path for the download registry file. Tests override it with
+/// `COTRA_BROWSER_STATE_DIR`; production keeps it inside the isolated profile
+/// directory under Cotra protected local state.
+pub fn default_download_registry_path(profile_root: &Path) -> PathBuf {
+    profile_root.join(DOWNLOAD_REGISTRY_FILE)
+}
+
+/// Compute the server-allocated one-shot download source identity. The digest
+/// binds workspace, policy revision, profile identity, page identity, origin,
+/// page and document generation, source origin, source URL digest, canonical
+/// relative destination, declared media type and size, download policy
+/// revision, and issue time under `COTRA_BROWSER_DOWNLOAD_SOURCE_V1`.
+#[allow(clippy::too_many_arguments)]
+pub fn download_source_id_for(
+    workspace_id: &str,
+    policy_revision: &str,
+    profile_identity: &str,
+    page_id: &str,
+    origin: &str,
+    page_generation: u64,
+    document_generation: u64,
+    source_origin: &str,
+    source_url_digest: &str,
+    canonical_relative_destination: &str,
+    declared_media_type: &str,
+    declared_size_bytes: u64,
+    download_policy_revision: &str,
+    issued_at_ms: u64,
+) -> String {
+    let mut hasher = Sha256::new();
+    digest_bytes(&mut hasher, b"COTRA_BROWSER_DOWNLOAD_SOURCE_V1");
+    digest_bytes(&mut hasher, workspace_id.as_bytes());
+    digest_bytes(&mut hasher, policy_revision.as_bytes());
+    digest_bytes(&mut hasher, profile_identity.as_bytes());
+    digest_bytes(&mut hasher, page_id.as_bytes());
+    digest_bytes(&mut hasher, origin.as_bytes());
+    digest_bytes(&mut hasher, page_generation.to_string().as_bytes());
+    digest_bytes(&mut hasher, document_generation.to_string().as_bytes());
+    digest_bytes(&mut hasher, source_origin.as_bytes());
+    digest_bytes(&mut hasher, source_url_digest.as_bytes());
+    digest_bytes(&mut hasher, canonical_relative_destination.as_bytes());
+    digest_bytes(&mut hasher, declared_media_type.as_bytes());
+    digest_bytes(&mut hasher, declared_size_bytes.to_string().as_bytes());
+    digest_bytes(&mut hasher, download_policy_revision.as_bytes());
+    digest_bytes(&mut hasher, issued_at_ms.to_string().as_bytes());
+    let digest = hasher.finalize();
+    let mut hex = String::with_capacity(32);
+    use std::fmt::Write as _;
+    for byte in digest.iter().take(16) {
+        let _ = write!(&mut hex, "{byte:02x}");
+    }
+    format!("{DOWNLOAD_SOURCE_PREFIX}{hex}")
+}
+
+/// Compute the SOFT approval digest for one download. The digest binds
+/// workspace, policy revision, profile identity, page identity, origin, page
+/// and document generation, source identity, source origin, canonical relative
+/// destination, declared media type and size, the actual content digest, and
+/// the download policy revision under `COTRA_BROWSER_DOWNLOAD_V1`. Preview
+/// passes an empty content digest; download passes the real one, so any
+/// material drift including payload substitution invalidates the approval.
+#[allow(clippy::too_many_arguments)]
+pub fn download_approval_digest(
+    workspace_id: &str,
+    policy_revision: &str,
+    profile_identity: &str,
+    page_id: &str,
+    origin: &str,
+    page_generation: u64,
+    document_generation: u64,
+    source_id: &str,
+    source_origin: &str,
+    canonical_relative_destination: &str,
+    declared_media_type: &str,
+    declared_size_bytes: u64,
+    content_sha256: &str,
+    download_policy_revision: &str,
+) -> String {
+    let mut hasher = Sha256::new();
+    digest_bytes(&mut hasher, b"COTRA_BROWSER_DOWNLOAD_V1");
+    digest_bytes(&mut hasher, workspace_id.as_bytes());
+    digest_bytes(&mut hasher, policy_revision.as_bytes());
+    digest_bytes(&mut hasher, profile_identity.as_bytes());
+    digest_bytes(&mut hasher, page_id.as_bytes());
+    digest_bytes(&mut hasher, origin.as_bytes());
+    digest_bytes(&mut hasher, page_generation.to_string().as_bytes());
+    digest_bytes(&mut hasher, document_generation.to_string().as_bytes());
+    digest_bytes(&mut hasher, source_id.as_bytes());
+    digest_bytes(&mut hasher, source_origin.as_bytes());
+    digest_bytes(&mut hasher, canonical_relative_destination.as_bytes());
+    digest_bytes(&mut hasher, declared_media_type.as_bytes());
+    digest_bytes(&mut hasher, declared_size_bytes.to_string().as_bytes());
+    digest_bytes(&mut hasher, content_sha256.as_bytes());
+    digest_bytes(&mut hasher, download_policy_revision.as_bytes());
+    let digest = hasher.finalize();
+    let mut output = String::with_capacity(digest.len() * 2);
+    use std::fmt::Write as _;
+    for byte in digest {
+        let _ = write!(&mut output, "{byte:02x}");
+    }
+    output
+}
+
+/// Compute the download identity recorded in evidence. The digest binds the
+/// source identity, the canonical relative destination, and the content
+/// digest under `COTRA_BROWSER_DOWNLOAD_ID_V1`.
+pub fn download_id_for(
+    source_id: &str,
+    canonical_relative_destination: &str,
+    content_sha256: &str,
+) -> String {
+    let mut hasher = Sha256::new();
+    digest_bytes(&mut hasher, b"COTRA_BROWSER_DOWNLOAD_ID_V1");
+    digest_bytes(&mut hasher, source_id.as_bytes());
+    digest_bytes(&mut hasher, canonical_relative_destination.as_bytes());
+    digest_bytes(&mut hasher, content_sha256.as_bytes());
+    let digest = hasher.finalize();
+    let mut hex = String::with_capacity(32);
+    use std::fmt::Write as _;
+    for byte in digest.iter().take(16) {
+        let _ = write!(&mut hex, "{byte:02x}");
+    }
+    format!("{DOWNLOAD_ID_PREFIX}{hex}")
+}
+
+/// Digest the approved destination root so evidence carries a stable root
+/// identity without depending on caller-supplied path text.
+pub fn download_root_identity(root: &Path) -> String {
+    sha256_hex(path_key(root).as_bytes())
+}
+
+/// Verify a server-side download source record against the current page,
+/// profile, policy revision, download policy revision, and time. Stale
+/// generations, replaced documents, origin drift, foreign profiles, foreign
+/// pages, forged identities, policy drift, consumed sources, and expired
+/// sources all fail closed.
+#[allow(clippy::too_many_arguments)]
+pub fn check_download_source(
+    record: &StoredDownload,
+    page: &PageRecord,
+    profile_identity: &str,
+    policy_revision: &str,
+    expected_generation: u64,
+    expected_document_generation: u64,
+    now_ms: u64,
+) -> Result<(), ProviderError> {
+    if record.page_id != page.page_id {
+        return Err(ProviderError::new(
+        FailureCode::TargetStale,
+        "browser download source belongs to a different page; stale download sources fail closed",
+    ));
+    }
+    if page.state == PageState::Closed {
+        return Err(ProviderError::new(
+            FailureCode::TargetStale,
+            "browser page is closed; stale download sources fail closed",
+        ));
+    }
+    if record.workspace_id != page.workspace_id {
+        return Err(ProviderError::new(
+        FailureCode::WorkspaceDenied,
+        "browser download source belongs to a different workspace; foreign download sources fail closed",
+    ));
+    }
+    if record.profile_identity != profile_identity {
+        return Err(ProviderError::denied(
+        "browser download source belongs to a different isolated profile; foreign download sources fail closed",
+    ));
+    }
+    if record.page_generation != expected_generation || page.generation != expected_generation {
+        return Err(ProviderError::new(
+            FailureCode::TargetStale,
+            "browser page generation changed since preview; stale download sources fail closed",
+        ));
+    }
+    if record.document_generation != expected_document_generation
+        || page.generation != expected_document_generation
+    {
+        return Err(ProviderError::new(
+            FailureCode::TargetStale,
+            "browser document was replaced since preview; stale download sources fail closed",
+        ));
+    }
+    if record.origin != page.current_origin {
+        return Err(ProviderError::new(
+            FailureCode::TargetStale,
+            "browser page origin changed since preview; stale download sources fail closed",
+        ));
+    }
+    if record.policy_revision != policy_revision || page.policy_revision != policy_revision {
+        return Err(ProviderError::new(
+            FailureCode::TargetStale,
+            "browser policy revision drifted since preview; stale download sources fail closed",
+        ));
+    }
+    if record.download_policy_revision != DOWNLOAD_POLICY_REVISION {
+        return Err(ProviderError::new(
+        FailureCode::TargetStale,
+        "browser download policy revision drifted since preview; stale download sources fail closed",
+    ));
+    }
+    let expected = download_source_id_for(
+        &record.workspace_id,
+        &record.policy_revision,
+        &record.profile_identity,
+        &record.page_id,
+        &record.origin,
+        record.page_generation,
+        record.document_generation,
+        &record.source_origin,
+        &record.source_url_digest,
+        &record.canonical_relative_destination,
+        &record.declared_media_type,
+        record.declared_size_bytes,
+        &record.download_policy_revision,
+        record.issued_at_ms,
+    );
+    if expected != record.source_id {
+        return Err(ProviderError::new(
+        FailureCode::TargetStale,
+        "browser download source identity does not match the current profile, page, generation, origin, destination, and policy revision; stale download sources fail closed",
+    ));
+    }
+    if record.source_origin != page.current_origin {
+        return Err(ProviderError::denied(
+        "browser download source origin is not the authorized current page origin; unauthorized download origins are denied",
+    ));
+    }
+    if record.state == DOWNLOAD_SOURCE_CONSUMED {
+        return Err(ProviderError::denied(
+        "browser download source was already consumed; downloads are one-shot and replay is denied",
+    ));
+    }
+    if record.state != DOWNLOAD_SOURCE_PENDING {
+        return Err(ProviderError::new(
+            FailureCode::TargetStale,
+            "browser download source is not in a pending state; stale download sources fail closed",
+        ));
+    }
+    if now_ms > record.expires_at_ms {
+        return Err(ProviderError::new(
+            FailureCode::TargetStale,
+            "browser download source expired before use; stale download sources fail closed",
+        ));
+    }
+    Ok(())
+}
+
+/// Typed bounded download preview material. Preview performs full page, origin,
+/// generation, destination, and type-policy evaluation without mutating page
+/// state and without requiring approval. The caller uses the preview to build
+/// one download request with exact expected state plus the server-allocated
+/// source identity. Cookies, credentials, tokens, session material, and raw
+/// source URL text never enter this packet.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DownloadPreview {
+    pub source_id: String,
+    pub page_id: String,
+    pub workspace_id: String,
+    pub policy_revision: String,
+    pub profile_identity: String,
+    pub origin: String,
+    pub page_generation: u64,
+    pub document_generation: u64,
+    pub source_origin: String,
+    pub source_url_digest: String,
+    pub pinned_address: IpAddr,
+    pub redirect_count: usize,
+    pub declared_filename: String,
+    pub declared_media_type: String,
+    pub canonical_relative_destination: String,
+    pub destination_root_identity: String,
+    pub declared_size_bytes: u64,
+    pub max_download_bytes: u64,
+    pub download_policy_revision: String,
+    pub issued_at_ms: u64,
+    pub expires_at_ms: u64,
+    pub preview_digest: String,
+}
+
+impl DownloadPreview {
+    pub fn to_json(&self) -> Value {
+        json!({
+            "source_id": self.source_id,
+            "page_id": self.page_id,
+            "workspace_id": self.workspace_id,
+            "policy_revision": self.policy_revision,
+            "profile_identity": self.profile_identity,
+            "origin": self.origin,
+            "page_generation": self.page_generation,
+            "document_generation": self.document_generation,
+            "source_origin": self.source_origin,
+            "source_url_digest": self.source_url_digest,
+            "pinned_address": self.pinned_address.to_string(),
+            "redirect_count": self.redirect_count,
+            "declared_filename": self.declared_filename,
+            "declared_media_type": self.declared_media_type,
+            "canonical_relative_destination": self.canonical_relative_destination,
+            "destination_root_identity": self.destination_root_identity,
+            "declared_size_bytes": self.declared_size_bytes,
+            "max_download_bytes": self.max_download_bytes,
+            "download_policy_revision": self.download_policy_revision,
+            "issued_at_ms": self.issued_at_ms,
+            "expires_at_ms": self.expires_at_ms,
+            "preview_digest": self.preview_digest,
+            "executed": false,
+            "opened": false,
+            "extracted": false,
+            "cookies": false,
+            "credentials": false,
+        })
+    }
+}
+
+/// Typed bounded download evidence. Contains only identity, binding, origin
+/// metadata, bounds, and digest material plus the approval linkage. Cookies,
+/// Authorization headers, credentials, tokens, session material, personal
+/// browser state, and raw source URL text never enter this packet.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DownloadEvidence {
+    pub download_id: String,
+    pub source_id: String,
+    pub page_id: String,
+    pub workspace_id: String,
+    pub policy_revision: String,
+    pub profile_identity: String,
+    pub origin: String,
+    pub page_generation: u64,
+    pub document_generation: u64,
+    pub source_origin: String,
+    pub source_url_digest: String,
+    pub canonical_relative_destination: String,
+    pub destination_root_identity: String,
+    pub declared_filename: String,
+    pub declared_media_type: String,
+    pub extension_media_type: String,
+    pub sniffed_media_type: String,
+    pub content_type_consistent: bool,
+    pub declared_size_bytes: u64,
+    pub actual_size_bytes: u64,
+    pub content_sha256: String,
+    pub download_policy_revision: String,
+    pub state: String,
+}
+
+impl DownloadEvidence {
+    pub fn to_json(&self, approval_record_id: &str) -> Value {
+        json!({
+            "download_id": self.download_id,
+            "source_id": self.source_id,
+            "page_id": self.page_id,
+            "workspace_id": self.workspace_id,
+            "policy_revision": self.policy_revision,
+            "profile_identity": self.profile_identity,
+            "origin": self.origin,
+            "page_generation": self.page_generation,
+            "document_generation": self.document_generation,
+            "source_origin": self.source_origin,
+            "source_url_digest": self.source_url_digest,
+            "canonical_relative_destination": self.canonical_relative_destination,
+            "destination_root_identity": self.destination_root_identity,
+            "declared_filename": self.declared_filename,
+            "declared_media_type": self.declared_media_type,
+            "extension_media_type": self.extension_media_type,
+            "sniffed_media_type": self.sniffed_media_type,
+            "content_type_consistent": self.content_type_consistent,
+            "declared_size_bytes": self.declared_size_bytes,
+            "actual_size_bytes": self.actual_size_bytes,
+            "content_sha256": self.content_sha256,
+            "download_policy_revision": self.download_policy_revision,
+            "state": self.state,
+            "approval_record_id": approval_record_id,
+            "executed": false,
+            "opened": false,
+            "extracted": false,
+            "cookies": false,
+            "credentials": false,
+        })
+    }
+}
+
+fn real_path(path: &Path) -> Result<PathBuf, ProviderError> {
+    std::fs::canonicalize(path)
+        .map_err(|error| ProviderError::io("resolve canonical download path", error))
+}
+
+fn path_key(path: &Path) -> String {
+    let text = path.to_string_lossy().replace('/', "\\");
+    let trimmed = text.trim_end_matches('\\');
+    if cfg!(windows) {
+        trimmed.to_lowercase()
+    } else {
+        trimmed.to_owned()
+    }
+}
+
+/// Canonical containment test. Both sides are canonicalized through real
+/// filesystem identity first, so reparse points, junctions, and symlinks are
+/// already resolved when the comparison runs. Naive string prefix comparison
+/// is never trusted on its own: the separator boundary is part of the key.
+pub fn path_is_within(root: &Path, candidate: &Path) -> bool {
+    let root_key = path_key(root);
+    let candidate_key = path_key(candidate);
+    candidate_key == root_key || candidate_key.starts_with(&(root_key + "\\"))
+}
+
+/// Resolve the approved download root from the policy-provided workspace root.
+/// The root is always the workspace root; the caller can never widen it.
+pub fn resolve_download_root(workspace_root: &Path) -> Result<PathBuf, ProviderError> {
+    let root = real_path(workspace_root)?;
+    if !root.is_dir() {
+        return Err(ProviderError::invalid(
+            "approved workspace download root is not a directory",
+        ));
+    }
+    Ok(root)
+}
+
+/// Resolve one canonical relative destination under the approved root and
+/// fail closed unless the resolved existing parent directory is genuinely
+/// inside that root. Directories are never created by a download.
+pub fn resolve_download_destination(
+    root: &Path,
+    canonical_relative: &str,
+) -> Result<PathBuf, ProviderError> {
+    let destination = root.join(canonical_relative.replace('/', std::path::MAIN_SEPARATOR_STR));
+    let parent = destination.parent().ok_or_else(|| {
+        ProviderError::invalid("browser download destination has no parent directory")
+    })?;
+    if !parent.is_dir() {
+        return Err(ProviderError::denied(
+        "browser download destination parent directory does not exist; downloads never create directories",
+    ));
+    }
+    let parent_real = real_path(parent)?;
+    if !path_is_within(root, &parent_real) {
+        return Err(ProviderError::new(
+        FailureCode::PathEscape,
+        "browser download destination escapes the approved workspace root through a reparse point; destinations outside the approved root are denied",
+    ));
+    }
+    Ok(destination)
+}
+
+/// Create exactly one new file at the resolved destination and write the
+/// bounded payload. Existing files are never overwritten. After the write the
+/// file's real path, byte length, and SHA-256 digest are all re-verified, and
+/// a mismatching write is reverted.
+pub fn write_download_file(
+    root: &Path,
+    destination: &Path,
+    bytes: &[u8],
+) -> Result<(), ProviderError> {
+    use std::io::Write as _;
+    let mut file = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(destination)
+        .map_err(|error| {
+            match error.kind() {
+        std::io::ErrorKind::AlreadyExists => ProviderError::new(
+            FailureCode::PostconditionFailed,
+            "browser download destination already exists; downloads never overwrite existing files",
+        ),
+        _ => ProviderError::io("create browser download destination", error),
+    }
+        })?;
+    file.write_all(bytes)
+        .map_err(|error| ProviderError::io("write browser download destination", error))?;
+    file.flush()
+        .map_err(|error| ProviderError::io("flush browser download destination", error))?;
+    drop(file);
+
+    let file_real = real_path(destination)?;
+    if !path_is_within(root, &file_real) {
+        let _ = std::fs::remove_file(destination);
+        return Err(ProviderError::new(
+        FailureCode::PathEscape,
+        "written download file resolves outside the approved workspace root; the write was reverted and the download is denied",
+    ));
+    }
+    let written = std::fs::read(destination)
+        .map_err(|error| ProviderError::io("read back browser download", error))?;
+    if written.len() != bytes.len() || sha256_hex(&written) != sha256_hex(bytes) {
+        let _ = std::fs::remove_file(destination);
+        return Err(ProviderError::new(
+            FailureCode::PostconditionFailed,
+            "written download does not match the approved payload; the download failed closed",
+        ));
+    }
+    Ok(())
+}
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2300,7 +3309,7 @@ mod tests {
     }
 
     #[test]
-    fn allowed_shapes_are_exactly_profile_status_destination_page_navigation_snapshot_observe_and_structured_actuation(
+    fn allowed_shapes_are_exactly_profile_status_destination_page_navigation_snapshot_observe_structured_actuation_and_scoped_download(
     ) {
         assert!(is_allowed_browser_shape("browser.profile", "status"));
         assert!(is_allowed_browser_shape("browser.destination", "validate"));
@@ -2310,6 +3319,8 @@ mod tests {
         assert!(is_allowed_browser_shape("browser.snapshot", "observe"));
         assert!(is_allowed_browser_shape("browser.dom", "click"));
         assert!(is_allowed_browser_shape("browser.dom", "fill"));
+        assert!(is_allowed_browser_shape("browser.download", "preview"));
+        assert!(is_allowed_browser_shape("browser.download", "download"));
         for (capability, operation) in DENIED_BROWSER_SHAPES {
             assert!(
                 !is_allowed_browser_shape(capability, operation),
@@ -2336,7 +3347,17 @@ mod tests {
             ("browser.snapshot", "actuate"),
             ("browser.page", "close"),
             ("browser.navigation", "back"),
-            ("browser.download", "download"),
+            // NOTE (SG-000025 successor): browser.download/download and
+            // browser.download/preview are lawfully authorized by the
+            // SG-000025 successor grain and are no longer denied shapes.
+            // Downloaded-file execution, opening, extraction, and upload
+            // remain denied in every successor grain.
+            ("browser.download", "execute"),
+            ("browser.download", "open"),
+            ("browser.download", "extract"),
+            ("browser.file", "execute"),
+            ("browser.archive", "extract"),
+            ("browser.shell", "run"),
             ("browser.upload", "upload"),
             ("browser.profile", "use_personal"),
             ("browser.debug", "attach"),
@@ -3588,5 +4609,808 @@ mod tests {
 
     fn marker_body(root: &Path) -> String {
         std::fs::read_to_string(root.join(PROFILE_MARKER_FILE)).expect("marker")
+    }
+    fn temp_download_root(label: &str) -> PathBuf {
+        let suffix = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("clock")
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!(
+            "cotra-download-root-{label}-{}-{suffix}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&root).expect("root");
+        root
+    }
+
+    fn temp_download_registry(label: &str) -> PathBuf {
+        let suffix = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("clock")
+            .as_nanos();
+        std::env::temp_dir().join(format!(
+            "cotra-download-registry-{label}-{}-{suffix}.jsonl",
+            std::process::id()
+        ))
+    }
+
+    fn download_test_page() -> PageRecord {
+        PageRecord {
+            page_id: "pg-1".into(),
+            workspace_id: "default".into(),
+            profile_identity: "profile-a".into(),
+            current_origin: "https://example.com:443".into(),
+            generation: 1,
+            state: PageState::Active,
+            policy_revision: "sg-000025-v1".into(),
+        }
+    }
+
+    fn download_test_record(index: u64) -> StoredDownload {
+        StoredDownload {
+            schema: DOWNLOAD_REGISTRY_SCHEMA.into(),
+            source_id: String::new(),
+            workspace_id: "default".into(),
+            policy_revision: "sg-000025-v1".into(),
+            profile_identity: "profile-a".into(),
+            page_id: "pg-1".into(),
+            origin: "https://example.com:443".into(),
+            page_generation: 1,
+            document_generation: 1,
+            source_origin: "https://example.com:443".into(),
+            source_url_digest: "digest".into(),
+            canonical_relative_destination: "notes.txt".into(),
+            declared_filename: "notes.txt".into(),
+            declared_media_type: "text/plain".into(),
+            declared_size_bytes: 5,
+            download_policy_revision: DOWNLOAD_POLICY_REVISION.into(),
+            issued_at_ms: 1_000 + index,
+            expires_at_ms: 1_000 + index + DOWNLOAD_SOURCE_TTL_MS,
+            state: DOWNLOAD_SOURCE_PENDING.into(),
+            download_id: String::new(),
+        }
+    }
+
+    fn seal_download_record(mut record: StoredDownload) -> StoredDownload {
+        record.source_id = download_source_id_for(
+            &record.workspace_id,
+            &record.policy_revision,
+            &record.profile_identity,
+            &record.page_id,
+            &record.origin,
+            record.page_generation,
+            record.document_generation,
+            &record.source_origin,
+            &record.source_url_digest,
+            &record.canonical_relative_destination,
+            &record.declared_media_type,
+            record.declared_size_bytes,
+            &record.download_policy_revision,
+            record.issued_at_ms,
+        );
+        record
+    }
+
+    #[test]
+    fn download_destination_validation_denies_escape_traversal_ads_device_and_reserved_names() {
+        let (canonical, filename) = validate_download_relative_path("docs/notes.txt").expect("ok");
+        assert_eq!(canonical, "docs/notes.txt");
+        assert_eq!(filename, "notes.txt");
+        let (mixed, mixed_name) = validate_download_relative_path("docs\\notes.txt").expect("ok");
+        assert_eq!(mixed, "docs/notes.txt");
+        assert_eq!(mixed_name, "notes.txt");
+
+        for denied in [
+            "C:\\Windows\\notes.txt",
+            "\\\\server\\share\\notes.txt",
+            "\\\\?\\C:\\notes.txt",
+            "\\\\.\\C:\\notes.txt",
+            "../escape.txt",
+            "docs/../../escape.txt",
+            "notes.txt:hidden",
+            "CON.txt",
+            "com1.txt",
+            "LPT1",
+            "NUL",
+            "docs//notes.txt",
+            "docs./notes.txt",
+            "docs /notes.txt",
+            "a<b.txt",
+            "a|b.txt",
+            "a*b.txt",
+            "./notes.txt",
+            "docs/./notes.txt",
+            "docs/../notes.txt",
+        ] {
+            let error = validate_download_relative_path(denied).expect_err("must fail closed");
+            assert_eq!(
+                error.code,
+                FailureCode::PathEscape,
+                "{denied} must fail closed as a path escape"
+            );
+        }
+
+        assert!(validate_download_relative_path("").is_err());
+        assert!(validate_download_relative_path("notes\n.txt").is_err());
+        let long_component = format!("{}.txt", "a".repeat(MAX_DOWNLOAD_COMPONENT_BYTES + 1));
+        assert!(validate_download_relative_path(&long_component).is_err());
+        let long_path = vec!["d".repeat(MAX_DOWNLOAD_COMPONENT_BYTES); 8].join("/");
+        assert!(long_path.len() > MAX_DOWNLOAD_RELATIVE_BYTES);
+        assert!(validate_download_relative_path(&long_path).is_err());
+        assert!(is_reserved_device_name("con.txt"));
+        assert!(is_reserved_device_name("AUX"));
+        assert!(!is_reserved_device_name("console.txt"));
+    }
+
+    #[test]
+    fn download_type_policy_denies_dangerous_extensions_and_unexpected_content() {
+        for (name, expected) in [
+            ("notes.txt", "text/plain"),
+            ("notes.md", "text/markdown"),
+            ("notes.csv", "text/csv"),
+            ("notes.json", "application/json"),
+            ("image.png", "image/png"),
+            ("image.JPG", "image/jpeg"),
+            ("image.jpeg", "image/jpeg"),
+            ("image.gif", "image/gif"),
+            ("image.webp", "image/webp"),
+        ] {
+            assert_eq!(
+                download_media_type_for_filename(name).expect("allowlisted"),
+                expected
+            );
+            assert!(is_allowed_download_media_type(expected));
+        }
+        for denied in [
+            "tool.exe",
+            "lib.dll",
+            "run.bat",
+            "cmd.cmd",
+            "pkg.msi",
+            "bundle.msix",
+            "s.ps1",
+            "s.vbs",
+            "s.js",
+            "a.zip",
+            "a.7z",
+            "a.tar",
+            "a.iso",
+            "link.lnk",
+            "book.docm",
+            "sheet.xlsm",
+            "noextension",
+            "data.bin",
+            "shell.sh",
+            "app.apk",
+        ] {
+            let error = download_media_type_for_filename(denied).expect_err("must fail closed");
+            assert_eq!(
+                error.code,
+                FailureCode::CapabilityDenied,
+                "{denied} must be denied"
+            );
+        }
+
+        assert_eq!(
+            sniff_download_media_type(b"MZ\x90\x00"),
+            "application/x-msdownload"
+        );
+        assert_eq!(
+            sniff_download_media_type(b"\x7fELF\x02"),
+            "application/x-elf"
+        );
+        assert_eq!(
+            sniff_download_media_type(b"\xcf\xfa\xed\xfe"),
+            "application/x-mach-binary"
+        );
+        assert_eq!(
+            sniff_download_media_type(b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"),
+            "application/x-ole-storage"
+        );
+        assert_eq!(sniff_download_media_type(b"PK\x03\x04"), "application/zip");
+        assert_eq!(
+            sniff_download_media_type(b"#!/bin/sh\n"),
+            "text/x-shellscript"
+        );
+        assert_eq!(sniff_download_media_type(b"%PDF-1.7"), "application/pdf");
+        assert_eq!(sniff_download_media_type(b"hello\n"), "text/plain");
+        assert_eq!(
+            sniff_download_media_type(&[
+                0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0
+            ]),
+            "image/png"
+        );
+        assert_eq!(
+            sniff_download_media_type(&[0xff, 0xd8, 0xff, 0xe0]),
+            "image/jpeg"
+        );
+        assert_eq!(sniff_download_media_type(b"GIF89a0000"), "image/gif");
+        assert_eq!(sniff_download_media_type(b"RIFF____WEBPVP8 "), "image/webp");
+        assert_eq!(
+            sniff_download_media_type(&[0u8, 1, 2]),
+            UNKNOWN_DOWNLOAD_MEDIA_TYPE
+        );
+        assert_eq!(sniff_download_media_type(b""), UNKNOWN_DOWNLOAD_MEDIA_TYPE);
+
+        for payload in [
+            &b"MZ\x90\x00"[..],
+            &b"#!/bin/sh\n"[..],
+            &b"PK\x03\x04"[..],
+            &b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"[..],
+            &b"\x7fELF\x02"[..],
+            &b"%PDF-1.7"[..],
+            &b"\xcf\xfa\xed\xfe"[..],
+        ] {
+            let sniffed = sniff_download_media_type(payload);
+            assert!(
+                !is_allowed_download_media_type(sniffed),
+                "{sniffed} must never be an authorized download class"
+            );
+        }
+
+        assert!(content_matches_declared_media_type(
+            "text/plain",
+            "text/plain"
+        ));
+        assert!(content_matches_declared_media_type(
+            "text/markdown",
+            "text/plain"
+        ));
+        assert!(content_matches_declared_media_type(
+            "application/json",
+            "text/plain"
+        ));
+        assert!(content_matches_declared_media_type(
+            "image/png",
+            "image/png"
+        ));
+        assert!(!content_matches_declared_media_type(
+            "image/png",
+            "text/plain"
+        ));
+        assert!(!content_matches_declared_media_type(
+            "text/plain",
+            "image/png"
+        ));
+    }
+
+    #[test]
+    fn download_base64_body_decoding_is_strict_and_bounded() {
+        assert_eq!(decode_download_body("QQ==").expect("decode"), &b"A"[..]);
+        assert_eq!(decode_download_body("QUI=").expect("decode"), &b"AB"[..]);
+        assert_eq!(
+            decode_download_body("aGVsbG8=").expect("decode"),
+            &b"hello"[..]
+        );
+        assert_eq!(
+            decode_download_body("aGVsbG8h").expect("decode"),
+            &b"hello!"[..]
+        );
+        for denied in [
+            "",
+            "abc",
+            "aGVsbG8",
+            "aGVs bG8=",
+            "====",
+            "A===",
+            "aGVsbG8=extra!",
+            "****",
+        ] {
+            assert!(
+                decode_download_body(denied).is_err(),
+                "{denied} must fail closed"
+            );
+        }
+        let oversized_body = "A".repeat(MAX_DOWNLOAD_BODY_BYTES + 4);
+        assert!(decode_download_body(&oversized_body).is_err());
+        let over_decoded_bound = "A".repeat(((MAX_DOWNLOAD_BYTES as usize) / 3 + 1) * 4);
+        assert_eq!(
+            decode_download_body(&over_decoded_bound).unwrap_err().code,
+            FailureCode::OutputLimit
+        );
+    }
+
+    #[test]
+    fn download_source_identity_is_one_shot_expiring_and_drift_checked() {
+        let page = download_test_page();
+        let record = seal_download_record(download_test_record(0));
+        assert!(record.source_id.starts_with(DOWNLOAD_SOURCE_PREFIX));
+        check_download_source(&record, &page, "profile-a", "sg-000025-v1", 1, 1, 2_000)
+            .expect("fresh one-shot source is usable");
+
+        let stale_generation =
+            check_download_source(&record, &page, "profile-a", "sg-000025-v1", 2, 1, 2_000)
+                .expect_err("generation drift must fail closed");
+        assert_eq!(stale_generation.code, FailureCode::TargetStale);
+        let replaced_document =
+            check_download_source(&record, &page, "profile-a", "sg-000025-v1", 1, 2, 2_000)
+                .expect_err("document replacement must fail closed");
+        assert_eq!(replaced_document.code, FailureCode::TargetStale);
+        let foreign_profile =
+            check_download_source(&record, &page, "profile-b", "sg-000025-v1", 1, 1, 2_000)
+                .expect_err("foreign profile must fail closed");
+        assert_eq!(foreign_profile.code, FailureCode::CapabilityDenied);
+        let policy_drift =
+            check_download_source(&record, &page, "profile-a", "sg-000024-v1", 1, 1, 2_000)
+                .expect_err("policy drift must fail closed");
+        assert_eq!(policy_drift.code, FailureCode::TargetStale);
+        let expired = check_download_source(
+            &record,
+            &page,
+            "profile-a",
+            "sg-000025-v1",
+            1,
+            1,
+            record.expires_at_ms + 1,
+        )
+        .expect_err("expired source must fail closed");
+        assert_eq!(expired.code, FailureCode::TargetStale);
+
+        let mut consumed = record.clone();
+        consumed.state = DOWNLOAD_SOURCE_CONSUMED.into();
+        let replayed =
+            check_download_source(&consumed, &page, "profile-a", "sg-000025-v1", 1, 1, 2_000)
+                .expect_err("consumed source must fail closed");
+        assert_eq!(replayed.code, FailureCode::CapabilityDenied);
+
+        let mut forged_destination = record.clone();
+        forged_destination.canonical_relative_destination = "other.txt".into();
+        assert_eq!(
+            check_download_source(
+                &forged_destination,
+                &page,
+                "profile-a",
+                "sg-000025-v1",
+                1,
+                1,
+                2_000
+            )
+            .unwrap_err()
+            .code,
+            FailureCode::TargetStale
+        );
+
+        let mut other_page = page.clone();
+        other_page.page_id = "pg-2".into();
+        assert_eq!(
+            check_download_source(
+                &record,
+                &other_page,
+                "profile-a",
+                "sg-000025-v1",
+                1,
+                1,
+                2_000
+            )
+            .unwrap_err()
+            .code,
+            FailureCode::TargetStale
+        );
+        let mut drifted_origin = page.clone();
+        drifted_origin.current_origin = "https://other.example:443".into();
+        assert_eq!(
+            check_download_source(
+                &record,
+                &drifted_origin,
+                "profile-a",
+                "sg-000025-v1",
+                1,
+                1,
+                2_000
+            )
+            .unwrap_err()
+            .code,
+            FailureCode::TargetStale
+        );
+        let mut closed_page = page.clone();
+        closed_page.state = PageState::Closed;
+        assert_eq!(
+            check_download_source(
+                &record,
+                &closed_page,
+                "profile-a",
+                "sg-000025-v1",
+                1,
+                1,
+                2_000
+            )
+            .unwrap_err()
+            .code,
+            FailureCode::TargetStale
+        );
+        let mut foreign_workspace = page.clone();
+        foreign_workspace.workspace_id = "other".into();
+        assert_eq!(
+            check_download_source(
+                &record,
+                &foreign_workspace,
+                "profile-a",
+                "sg-000025-v1",
+                1,
+                1,
+                2_000
+            )
+            .unwrap_err()
+            .code,
+            FailureCode::WorkspaceDenied
+        );
+    }
+
+    #[test]
+    fn download_registry_is_append_only_one_shot_and_bounded() {
+        let path = temp_download_registry("store");
+        let page = download_test_page();
+        let mut store = DownloadStore::load_or_create(path.clone());
+        assert!(store.get("dl-missing").is_none());
+        assert_eq!(
+            store.mark_consumed("dl-missing", "dn-1").unwrap_err().code,
+            FailureCode::TargetStale
+        );
+        assert_eq!(store.pending_count("default"), 0);
+
+        for index in 0..MAX_PENDING_DOWNLOADS_PER_WORKSPACE as u64 {
+            store.record_pending(seal_download_record(download_test_record(index)));
+        }
+        assert_eq!(
+            store.pending_count("default"),
+            MAX_PENDING_DOWNLOADS_PER_WORKSPACE
+        );
+
+        let reloaded = DownloadStore::load_or_create(path.clone());
+        assert_eq!(
+            reloaded.pending_count("default"),
+            MAX_PENDING_DOWNLOADS_PER_WORKSPACE
+        );
+
+        let mut store = DownloadStore::load_or_create(path.clone());
+        let first = seal_download_record(download_test_record(0)).source_id;
+        let source_id = store
+            .get(&first)
+            .map(|record| record.source_id.clone())
+            .expect("recorded source");
+        check_download_source(
+            store.get(&source_id).expect("source"),
+            &page,
+            "profile-a",
+            "sg-000025-v1",
+            1,
+            1,
+            2_000,
+        )
+        .expect("pending source");
+        store.mark_consumed(&source_id, "dn-test").expect("consume");
+        assert_eq!(
+            store.pending_count("default"),
+            MAX_PENDING_DOWNLOADS_PER_WORKSPACE - 1
+        );
+        let spent = DownloadStore::load_or_create(path.clone());
+        assert_eq!(
+            spent.get(&source_id).expect("source").state,
+            DOWNLOAD_SOURCE_CONSUMED
+        );
+        assert_eq!(
+            check_download_source(
+                spent.get(&source_id).expect("source"),
+                &page,
+                "profile-a",
+                "sg-000025-v1",
+                1,
+                1,
+                2_000
+            )
+            .unwrap_err()
+            .code,
+            FailureCode::CapabilityDenied
+        );
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn download_destination_write_is_create_only_and_root_bounded() {
+        let root = temp_download_root("write");
+        let resolved = resolve_download_root(&root).expect("root");
+        assert!(path_is_within(&resolved, &resolved));
+        assert!(!path_is_within(
+            &resolved,
+            &std::env::temp_dir().join("cotra-outside-the-workspace.txt")
+        ));
+
+        let destination =
+            resolve_download_destination(&resolved, "notes.txt").expect("destination");
+        assert!(path_is_within(&resolved, &destination));
+        write_download_file(&resolved, &destination, b"hello").expect("write");
+        assert_eq!(std::fs::read(&destination).expect("read"), &b"hello"[..]);
+
+        assert_eq!(
+            write_download_file(&resolved, &destination, b"other")
+                .unwrap_err()
+                .code,
+            FailureCode::PostconditionFailed
+        );
+        assert_eq!(
+            std::fs::read(&destination).expect("read"),
+            &b"hello"[..],
+            "an existing file must never be overwritten"
+        );
+
+        assert_eq!(
+            resolve_download_destination(&resolved, "missing/notes.txt")
+                .unwrap_err()
+                .code,
+            FailureCode::CapabilityDenied
+        );
+
+        std::fs::create_dir(resolved.join("docs")).expect("docs");
+        let nested_destination =
+            resolve_download_destination(&resolved, "docs/report.txt").expect("nested destination");
+        assert!(path_is_within(&resolved, &nested_destination));
+        write_download_file(&resolved, &nested_destination, b"report").expect("nested write");
+        assert_eq!(
+            std::fs::read(&nested_destination).expect("read"),
+            &b"report"[..]
+        );
+
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn download_junction_escape_out_of_the_workspace_root_fails_closed() {
+        let root = temp_download_root("junction-root");
+        let outside = temp_download_root("junction-outside");
+        let resolved = resolve_download_root(&root).expect("root");
+        let link = resolved.join("escape");
+        let output = std::process::Command::new("cmd")
+            .args([
+                "/c",
+                "mklink",
+                "/J",
+                &link.to_string_lossy(),
+                &outside.to_string_lossy(),
+            ])
+            .output()
+            .expect("mklink runs");
+        assert!(
+            output.status.success(),
+            "junction creation must succeed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert!(link.is_dir(), "the junction must resolve as a directory");
+        let escaped = resolve_download_destination(&resolved, "escape/notes.txt")
+            .expect_err("a reparse point must not extend the approved root");
+        assert_eq!(escaped.code, FailureCode::PathEscape);
+        assert!(!path_is_within(
+            &resolved,
+            &std::fs::canonicalize(&link).expect("canonical link")
+        ));
+        let _ = std::fs::remove_dir_all(root);
+        let _ = std::fs::remove_dir_all(outside);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn download_symlink_escape_out_of_the_workspace_root_fails_closed() {
+        let root = temp_download_root("symlink-root");
+        let outside = temp_download_root("symlink-outside");
+        let resolved = resolve_download_root(&root).expect("root");
+        std::os::unix::fs::symlink(&outside, resolved.join("escape")).expect("symlink");
+        let escaped = resolve_download_destination(&resolved, "escape/notes.txt")
+            .expect_err("a symlink must not extend the approved root");
+        assert_eq!(escaped.code, FailureCode::PathEscape);
+        let _ = std::fs::remove_dir_all(root);
+        let _ = std::fs::remove_dir_all(outside);
+    }
+
+    #[test]
+    fn download_evidence_and_preview_are_bounded_and_secret_free() {
+        let preview = DownloadPreview {
+            source_id: "dl-1".into(),
+            page_id: "pg-1".into(),
+            workspace_id: "default".into(),
+            policy_revision: "sg-000025-v1".into(),
+            profile_identity: "profile-a".into(),
+            origin: "https://example.com:443".into(),
+            page_generation: 1,
+            document_generation: 1,
+            source_origin: "https://example.com:443".into(),
+            source_url_digest: "digest".into(),
+            pinned_address: "93.184.216.34".parse().expect("address"),
+            redirect_count: 0,
+            declared_filename: "notes.txt".into(),
+            declared_media_type: "text/plain".into(),
+            canonical_relative_destination: "notes.txt".into(),
+            destination_root_identity: "root-identity".into(),
+            declared_size_bytes: 5,
+            max_download_bytes: MAX_DOWNLOAD_BYTES,
+            download_policy_revision: DOWNLOAD_POLICY_REVISION.into(),
+            issued_at_ms: 1_000,
+            expires_at_ms: 1_000 + DOWNLOAD_SOURCE_TTL_MS,
+            preview_digest: "preview-digest".into(),
+        };
+        let json = preview.to_json();
+        assert_eq!(json["executed"], false);
+        assert_eq!(json["opened"], false);
+        assert_eq!(json["extracted"], false);
+        assert_eq!(json["cookies"], false);
+        assert_eq!(json["credentials"], false);
+        assert!(json.get("source_url").is_none());
+        assert!(json.get("url").is_none());
+
+        let evidence = DownloadEvidence {
+            download_id: "dn-1".into(),
+            source_id: "dl-1".into(),
+            page_id: "pg-1".into(),
+            workspace_id: "default".into(),
+            policy_revision: "sg-000025-v1".into(),
+            profile_identity: "profile-a".into(),
+            origin: "https://example.com:443".into(),
+            page_generation: 1,
+            document_generation: 1,
+            source_origin: "https://example.com:443".into(),
+            source_url_digest: "digest".into(),
+            canonical_relative_destination: "notes.txt".into(),
+            destination_root_identity: "root-identity".into(),
+            declared_filename: "notes.txt".into(),
+            declared_media_type: "text/plain".into(),
+            extension_media_type: "text/plain".into(),
+            sniffed_media_type: "text/plain".into(),
+            content_type_consistent: true,
+            declared_size_bytes: 5,
+            actual_size_bytes: 5,
+            content_sha256: "content-digest".into(),
+            download_policy_revision: DOWNLOAD_POLICY_REVISION.into(),
+            state: DOWNLOAD_SOURCE_CONSUMED.into(),
+        };
+        let json = evidence.to_json("apr-1");
+        assert_eq!(json["approval_record_id"], "apr-1");
+        assert_eq!(json["content_type_consistent"], true);
+        assert_eq!(json["executed"], false);
+        assert_eq!(json["opened"], false);
+        assert_eq!(json["extracted"], false);
+        for forbidden in [
+            "cookie",
+            "password",
+            "token",
+            "authorization",
+            "session",
+            "content",
+            "body",
+            "content_base64",
+            "source_url",
+            "url",
+        ] {
+            assert!(
+                json.get(forbidden).is_none(),
+                "download evidence must not carry {forbidden}"
+            );
+        }
+    }
+
+    #[test]
+    fn download_approval_digest_binds_destination_origin_source_size_and_content() {
+        let base = download_approval_digest(
+            "default",
+            "sg-000025-v1",
+            "profile-a",
+            "pg-1",
+            "https://example.com:443",
+            1,
+            1,
+            "dl-1",
+            "https://example.com:443",
+            "notes.txt",
+            "text/plain",
+            5,
+            "content-digest",
+            DOWNLOAD_POLICY_REVISION,
+        );
+        let preview = download_approval_digest(
+            "default",
+            "sg-000025-v1",
+            "profile-a",
+            "pg-1",
+            "https://example.com:443",
+            1,
+            1,
+            "dl-1",
+            "https://example.com:443",
+            "notes.txt",
+            "text/plain",
+            5,
+            "",
+            DOWNLOAD_POLICY_REVISION,
+        );
+        assert_ne!(base, preview);
+        for drifted in [
+            download_approval_digest(
+                "default",
+                "sg-000025-v1",
+                "profile-a",
+                "pg-1",
+                "https://example.com:443",
+                1,
+                1,
+                "dl-1",
+                "https://example.com:443",
+                "other.txt",
+                "text/plain",
+                5,
+                "content-digest",
+                DOWNLOAD_POLICY_REVISION,
+            ),
+            download_approval_digest(
+                "default",
+                "sg-000025-v1",
+                "profile-a",
+                "pg-1",
+                "https://example.com:443",
+                1,
+                1,
+                "dl-1",
+                "https://other.example:443",
+                "notes.txt",
+                "text/plain",
+                5,
+                "content-digest",
+                DOWNLOAD_POLICY_REVISION,
+            ),
+            download_approval_digest(
+                "default",
+                "sg-000025-v1",
+                "profile-a",
+                "pg-1",
+                "https://example.com:443",
+                1,
+                1,
+                "dl-2",
+                "https://example.com:443",
+                "notes.txt",
+                "text/plain",
+                5,
+                "content-digest",
+                DOWNLOAD_POLICY_REVISION,
+            ),
+            download_approval_digest(
+                "default",
+                "sg-000025-v1",
+                "profile-a",
+                "pg-1",
+                "https://example.com:443",
+                1,
+                1,
+                "dl-1",
+                "https://example.com:443",
+                "notes.txt",
+                "text/plain",
+                6,
+                "content-digest",
+                DOWNLOAD_POLICY_REVISION,
+            ),
+            download_approval_digest(
+                "default",
+                "sg-000025-v1",
+                "profile-a",
+                "pg-1",
+                "https://example.com:443",
+                1,
+                1,
+                "dl-1",
+                "https://example.com:443",
+                "notes.txt",
+                "image/png",
+                5,
+                "content-digest",
+                DOWNLOAD_POLICY_REVISION,
+            ),
+        ] {
+            assert_ne!(base, drifted);
+        }
+        assert!(
+            download_id_for("dl-1", "notes.txt", "content-digest").starts_with(DOWNLOAD_ID_PREFIX)
+        );
+        assert_ne!(
+            download_id_for("dl-1", "notes.txt", "content-digest"),
+            download_id_for("dl-1", "notes.txt", "other-digest")
+        );
     }
 }
