@@ -42,7 +42,16 @@ checksum chain over the previous record. It never stores prompt summaries or
 targets, which may carry caller data, and it never stores secret material.
  Bounded queries return the most recent redacted summaries. A tampered prefix
 invalidates the chain from the tampered record onward, and loading stops at
-the first invalid line fail-closed.
+the first invalid line fail-closed. Consumption persistence failures fail the
+operation closed so a retry requires a fresh approval.
+
+Known limitation carried explicitly: the file ledger detects tampering and
+stops at the first invalid line, but silent tail truncation of Cotra
+protected local state by a party with direct filesystem write access to that
+state is not independently detected on reload. Restart replay therefore
+relies on the per-user privacy of Cotra protected state. In-process one-shot
+enforcement, which is the primary replay boundary for every dispatch path in
+this grain, is unaffected.
 
 ## Separation
 

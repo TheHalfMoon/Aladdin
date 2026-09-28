@@ -451,7 +451,11 @@ impl ApprovalLedger {
             stored.consumed = true;
             let updated = stored.clone();
             self.tip = updated.checksum.clone();
-            let _ = self.append_consumed_marker(&updated);
+            self.append_consumed_marker(&updated).map_err(|error| {
+                ApprovalError::unavailable(format!(
+                    "persist approval consumption; retry with a fresh approval: {error}"
+                ))
+            })?;
         }
         Ok(())
     }
