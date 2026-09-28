@@ -1,11 +1,11 @@
 # Cotra Current Canonical Frontier
 
-Status: CLOSEOUT_CANDIDATE
+Status: ACTIVE_GRAIN
 Date: 2026-09-28
-Governance snapshot base: 263abbdfa68beaefd5d48e1354f32b46c11bfb38
+Governance snapshot base: e9728df8535ee64381f1c29dbdced6850d856226
 Evidence ledger: `.specgrain/canonical-evidence.json`
 
-`Governance snapshot base` records the exact canonical parent from which this closeout snapshot was authored. It deliberately does not claim the eventual merge SHA of the commit containing this file.
+`Governance snapshot base` records the exact canonical parent from which this activation snapshot was authored. It deliberately does not claim the eventual merge SHA of the commit containing this file.
 
 ## SpecGrain state semantics
 
@@ -17,7 +17,7 @@ The machine-readable evidence for every `CLOSED` grain is recorded in `.specgrai
 
 ## Closed canonical grains
 
-SG-000001 through SG-000017 are already `CLOSED` and canonical.
+SG-000001 through SG-000018 are `CLOSED` and canonical.
 
 SG-000016 implementation PR `#38` merged as `c85b79f24ce2deef46319d9c5790623fd70c3b0d` after exact-head CI `36339733920`, Review Gates `36339732607`, genuine TypeSafe Jev `15/15` hunk coverage with zero findings/blockers, Alibaba Open Code Review v1.12.9 exact-range delegation plus manual review of both excluded files, and zero unresolved review threads. Implementation post-merge CI `36339937619` completed SUCCESS.
 
@@ -33,32 +33,44 @@ The canonical SG-000017 authority adds only local `git.push.preview` and approve
 
 COTRA-P06 is exited at this frontier: branch, stage, unstage, and commit are closed under SG-000015, fetch is closed under SG-000016, and push is closed under SG-000017, with force push denied by default, destination-scoped network policy applied, and resulting refs verified.
 
-## Active grain
+SG-000018 implementation PR `#44` merged as `263abbdfa68beaefd5d48e1354f32b46c11bfb38` after exact-head CI `36363644307`, Review Gates `36363642475`, genuine TypeSafe Jev `36/36` hunk coverage with zero findings/blockers, Alibaba Open Code Review v1.12.9 exact-range delegation plus manual review of the excluded file, and zero unresolved review threads. Implementation post-merge CI `36363931388` completed SUCCESS.
 
-This closeout candidate records SG-000018 as `CLOSED` using the qualified implementation and merged-tree evidence below. That closeout classification becomes canonical only after this governance change itself merges and the resulting canonical main passes post-merge CI.
-
-SG-000018 implementation evidence:
-- implementation PR: `#44`;
-- implementation base: `9894f491f8deed47bad97ebd481724682a647ca5`;
-- qualified head: `9ecd534c008ca1fd1c28aacfd1e7e96323d7cea1`;
-- exact-head CI: `36363644307` — SUCCESS;
-- exact-head Review Gates: `36363642475` — SUCCESS;
-- implementation merge: `263abbdfa68beaefd5d48e1354f32b46c11bfb38`;
-- implementation post-merge CI: `36363931388` — SUCCESS.
-
-Genuine TypeSafe Jev reviewed the exact implementation range with `36/36` hunks, zero findings, and zero blocking findings. Alibaba Open Code Review v1.12.9 delegated the same exact range across 11 changed files: 10 reviewable files and one exclusion (`docs/security/SG-000018_APPROVAL_HISTORY_NOTE.md` by unsupported-extension classification). The excluded file was manually reviewed. There were zero unresolved blocking review threads.
-
-Manual exact-diff security review confirmed broker nonces bound to exact digest workspace and policy revision with short expiry and one-shot consumption, append-only checksum-chained redacted history without summaries targets or secrets, tamper-evident loading with fail-closed consumption persistence, explicit approve-like denial through the request surface, migrated file process Git mutation fetch and push dispatch with digests unchanged and consume-before-execute, denied and unavailable recording, agent and approval separation, and retained P06 regressions.
+SG-000018 governance closeout PR `#45` qualified on exact head `6d70c65242324a9763c08a4d2dfc3f145d51e29d` with CI `36364171183` SUCCESS, Review Gates `36364171105` SUCCESS, genuine TypeSafe Jev `7/7` hunk coverage with zero findings/blockers, Alibaba Open Code Review v1.12.9 exact-range delegation plus manual review of excluded `docs/canonical/CURRENT.md`, and zero review threads. It merged normally as canonical main `e9728df8535ee64381f1c29dbdced6850d856226`; post-closeout CI `36364352725` completed SUCCESS across Governance, Node/Ubuntu, Node/Windows, Rust/Ubuntu, and Rust/Windows.
 
 The canonical SG-000018 authority adds only broker-level approval nonces with short expiry, one-shot exact-digest binding, and an append-only redacted approval history; strong user-presence approval, trust changes, persistent reuse, remote delegation, and approval bypass remain absent.
 
-## Successor frontier
+## Active grain
 
-No successor grain is authorized by this closeout candidate.
+SG-000019 — Strong user-presence approval class with platform verification — is the sole active COTRA-P07 grain.
 
-After this SG-000018 closeout merges and its post-merge CI succeeds, re-read the canonical architecture, delivery plan, threat model, evidence ledger, open governance records, and this `CURRENT.md` to derive the next lawful COTRA-P07 grain for strong user-presence approval. Do not infer or pre-authorize the next SpecGrain identifier or exact approval design from numbering alone.
+This activation authorizes implementation and qualification of platform-mediated local user-presence verification for PRIVILEGED and selected DESTRUCTIVE operations on top of the SG-000018 replay-resistant foundation, while deliberately keeping trust changes, persistent approval reuse, and remote delegation absent.
 
-A successor strong-presence grain must explicitly define and prove local user-presence verification that the agent cannot produce through its own tool or input surface, built on the SG-000018 replay-resistant foundation without weakening one-shot, expiry, or digest binding. It must not expose browser automation, UI automation, elevation, or approval bypass.
+Authorized target design:
+- SOFT versus STRONG approval class in the broker contract with STRONG bound to the existing nonce, expiry, one-shot, digest, workspace, and policy bindings;
+- policy classification mapping PRIVILEGED operations and selected DESTRUCTIVE operations to the STRONG class while existing file, process, and Git operations retain their current class;
+- platform user-presence verification boundary with capability detection and a testable provider seam;
+- Windows Hello style verification path where feasible with fail-closed denial when strong verification is unavailable for STRONG-class operations;
+- protected-surface enforcement during strong verification with input-lease suspension carried over from the existing approval boundary;
+- approval history recording of class, presence result, and fallback denials without secret material;
+- deterministic unit and security tests for class enforcement, unavailable-verification denial, presence forgery through agent surfaces, replay and drift retention, and separation.
+
+## Active acceptance frontier
+
+SG-000019 must prove that PRIVILEGED and selected DESTRUCTIVE operations require platform-mediated presence and that the agent cannot produce a valid strong approval through its own tool or input surface.
+
+A soft button alone must never satisfy the STRONG class, and unavailable platform verification must fail closed without SOFT downgrade.
+
+## Canonical public authority boundary retained
+
+Existing SG-000015 local Git mutation remains subject to its exact approved-state controls.
+
+Existing SG-000016 destination-scoped fetch remains subject to its exact workspace policy, short-branch, preview, approval, pinning, transport-hardening, and resulting-ref controls.
+
+Existing SG-000017 destination-scoped push remains subject to its exact workspace policy, short-branch, preview, approval, pinning, credential-reference, transport-hardening, and resulting-ref controls.
+
+Existing SG-000018 replay-resistant approval remains subject to its exact nonce, expiry, one-shot, digest, workspace, and policy bindings with redacted history.
+
+Still denied or absent outside the active SG-000019 strong-presence scope:
 
 ## Canonical public authority boundary retained
 
@@ -90,8 +102,10 @@ Still denied or absent outside the active SG-000018 approval-hardening scope:
 - Windows UI Automation/input injection;
 - elevation;
 - approval bypass, persistent approval reuse, or remote approval delegation.
+- soft-button satisfaction of STRONG-class operations;
+- STRONG-to-SOFT downgrade when platform verification is unavailable.
 
-A later lawful grain must add strong user-presence approval only on top of the SG-000018 replay-resistant foundation. Raw credentials must never be accepted merely because Git can consume them.
+A later lawful grain must add workspace trust management and history UX only on top of the SG-000018 replay-resistant foundation and SG-000019 class enforcement. Raw credentials must never be accepted merely because Git can consume them.
 
 Windows public `process.spawn` remains positively restricted to the exact SG-000010-qualified `%SystemRoot%\System32\whoami.exe` target.
 
