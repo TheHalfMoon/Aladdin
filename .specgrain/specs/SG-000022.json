@@ -1,0 +1,87 @@
+{
+  "id": "SG-000022",
+  "title": "Origin-bound bounded navigation on the isolated profile",
+  "program": "COTRA-P08",
+  "state": "GRAIN",
+  "risk": "high",
+  "created": "2026-09-28",
+  "base": "e69708aca6b26f16b0351d8ad2313c2bc1d3c9bb",
+  "dependencies": ["SG-000021"],
+  "objective": "Establish bounded browser navigation on top of the SG-000021 isolated automation profile, typed provider contract, and origin binding: a typed navigation contract with a server-side page identity lifecycle, SOFT-approved origin-bound transitions, hop-by-hop redirect-chain validation, and download-trigger denial, while keeping DOM actuation, observation, downloads, uploads, personal-profile mode, debugging, scripting, credential access, and network egress absent.",
+  "scope": {
+    "include": [
+      "typed page identity bound to the isolated automation profile, workspace, current origin, and lifecycle generation",
+      "browser.page.open allocating pages in Cotra protected state with a per-workspace bound and no network activity",
+      "browser.navigation.preview as local read-only stale-protection material with origin binding, re-resolution, and post-resolution policy",
+      "browser.navigation.navigate requiring fresh SOFT approval with digest binding over page identity, expected origin and generation, target origin, pinned address, and redirect chain",
+      "stale-state fail-closed for expected origin, expected generation, expected pinned address, unknown pages, foreign profiles, and policy revision drift",
+      "redirect-chain validation requiring every hop to share the exact validated origin with scheme-downgrade, loop, and widening denial",
+      "download-trigger denial for executable, script, and archive destination paths",
+      "deterministic unit and security tests for page lifecycle, origin binding, SSRF denial, redirect denial, actuation denial, replay and drift retention, and separation",
+      "retention of all SG-000018 one-shot, expiry, digest, history, SG-000019 STRONG enforcement, SG-000020 trust and revoke, and SG-000021 profile and destination behavior with no change outside navigation policy",
+      "Windows and Ubuntu exact-head qualification"
+    ],
+    "exclude": [
+      "DOM or accessibility-tree observation of any kind",
+      "DOM or accessibility-tree actuation of any kind",
+      "screenshots and visual or coordinate control",
+      "downloads and uploads",
+      "actual page rendering or page loading by a browser engine",
+      "cross-origin redirect support",
+      "personal browser profile mode",
+      "stored credential, cookie, or password access",
+      "arbitrary DevTools, CDP commands, or browser scripting",
+      "network egress beyond local destination validation and DNS resolution",
+      "MCP browser tools",
+      "persistent approval reuse across operations",
+      "approval delegation to remote or MCP callers",
+      "elevation"
+    ]
+  },
+  "authority_delta": {
+    "filesystem": "A page registry file is created under Cotra protected local state; personal browser data, workspace files, Git state, and unrelated paths gain no new readability or writability.",
+    "process": "No new process authority. No browser is launched or attached in this grain; navigation transitions page identity and origin in the Cotra registry only.",
+    "network": "None beyond SG-000021 destination validation and DNS resolution. No fetch, socket, page-load, or tunnel authority is added.",
+    "browser": "Page lifecycle and origin-bound navigation authorization only. DOM observation, DOM actuation, downloads, uploads, personal-profile access, debugging, scripting, and actual page loading remain absent.",
+    "ui_input": "None. No input injection or UI automation is added.",
+    "secrets": "No cookie, credential, or password material enters prompts, records, history, logs, MCP responses, or evidence packets.",
+    "approval": "Each navigation requires a fresh SOFT approval bound to page identity, expected state, target origin, pinned address, redirect chain, workspace, and policy revision. No persistent reuse or remote delegation is introduced.",
+    "privileged": "None"
+  },
+  "invariants": [
+    "Every page is bound to the isolated automation profile, one workspace, its current origin, and a server-side lifecycle generation",
+    "Every navigation binds the exact target origin with DNS re-resolution and post-resolution policy before any state changes",
+    "Loopback, link-local, private, and other non-public destinations fail closed unless explicitly trusted by workspace policy",
+    "Every redirect hop shares the exact validated origin; scheme downgrade, loops, and widening fail closed",
+    "Stale, unknown, foreign-profile, and drifted page identities fail closed",
+    "Every navigation requires a fresh SOFT approval with exact digest binding and one-shot consumption",
+    "All DOM, download, upload, scripting, debugging, and egress shapes fail closed as denied in this grain",
+    "No actuation, personal-profile, debugging, credential, network-egress, reuse, delegation, or elevation authority is introduced"
+  ],
+  "acceptance": [
+    {"id": "A1", "claim": "Tests prove pages open isolated on the Cotra automation profile with workspace binding, per-workspace bounds, and no personal browser data reachability."},
+    {"id": "A2", "claim": "Tests prove navigation binds scheme, host, and port with re-resolution and denies loopback, link-local, and private targets outside explicit trust."},
+    {"id": "A3", "claim": "Tests prove redirect chains validate hop by hop with widening, loop, and scheme-downgrade denial."},
+    {"id": "A4", "claim": "Tests prove navigation requires fresh SOFT approval with digest binding and that stale origin, generation, pinned address, and double consumption fail closed."},
+    {"id": "A5", "claim": "Tests prove DOM observation, DOM actuation, downloads, uploads, scripting, debugging, and personal-profile shapes fail closed as denied capability shapes."},
+    {"id": "A6", "claim": "Tests prove the agent cannot satisfy navigation capability through MCP tools, synthetic input, UI automation, coordinate proposals, child processes, or replayed prior approvals."},
+    {"id": "A7", "claim": "Tests prove replay, expiry, digest mismatch, revision drift, and double-consumption protections remain enforced for both classes."},
+    {"id": "A8", "claim": "Tests prove all P06 approval flows and SG-000018/019/020/021 regressions still pass with digests unchanged outside navigation labeling."},
+    {"id": "A9", "claim": "Tests prove personal-profile mode, arbitrary DevTools or CDP, browser scripting, credential stores, and network egress remain unreachable."},
+    {"id": "A10", "claim": "Exact-head Windows/Ubuntu Rust, Node, Governance, genuine TypeSafe Jev, Alibaba Open Code Review, exact-diff security review, manual review of excluded security-sensitive files, and zero unresolved blocking review threads all pass."}
+  ],
+  "successor_requirements": {
+    "p08_dom": "DOM and accessibility-tree observation and actuation remain successor work and must build on page identity and origin binding without weakening approval, one-shot, expiry, or digest binding.",
+    "p08_transfers": "Scoped downloads and uploads remain successor work and must build on navigation evidence without silent auto-download behavior.",
+    "p08_exit": "COTRA-P08 exits when structured browser operations are proven with SSRF tests, redirect-widening tests, and the personal profile disabled by default, which SG-000021, this grain, and its successors must jointly satisfy."
+  },
+  "review": {
+    "diffcipline": true,
+    "jev_semantic_review": true,
+    "alibaba_open_code_review": "required exact-range qualification where integrated",
+    "security_review": true,
+    "exact_head_ci": true,
+    "native_network_qualification": false
+  },
+  "done_when": "Origin-bound bounded navigation with typed page lifecycle is merged with hop-by-hop redirect validation, download-trigger denial, SOFT-approved stale-checked transitions, agent-forgery tests, retained replay and drift enforcement, and no new observation, actuation, download, upload, personal-profile, debugging, scripting, credential, or network-egress authority."
+}
