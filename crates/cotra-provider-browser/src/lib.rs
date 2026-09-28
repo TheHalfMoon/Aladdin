@@ -16,16 +16,14 @@ const MAX_HOST_BYTES: usize = 253;
 /// SG-000021 left navigation, DOM actuation, downloads, uploads,
 /// personal-profile access, debugging, scripting, and network egress absent.
 /// SG-000022 authorizes only page lifecycle and origin-bound navigation.
-/// SG-000023 additionally authorizes read-only snapshot observation;
-/// DOM actuation, downloads, uploads, personal-profile access, debugging,
-/// scripting, and network egress remain absent and every shape listed here
-/// must fail closed.
+/// SG-000023 additionally authorizes read-only snapshot observation.
+/// SG-000024 additionally authorizes structured invoke (click) and
+/// value-entry (fill) on typed node identities; every other actuation verb
+/// and every shape listed here must fail closed.
 pub const DENIED_BROWSER_SHAPES: &[(&str, &str)] = &[
     ("browser.navigate", "navigate"),
     ("browser.snapshot", "capture"),
     ("browser.snapshot", "actuate"),
-    ("browser.dom", "click"),
-    ("browser.dom", "fill"),
     ("browser.dom", "type"),
     ("browser.dom", "press"),
     ("browser.dom", "select"),
@@ -54,10 +52,11 @@ pub const DENIED_BROWSER_SHAPES: &[(&str, &str)] = &[
     ("playwright", "command"),
 ];
 
-/// The typed operations SG-000023 authorizes: the two SG-000021 reads, the
-/// SG-000022 page lifecycle and origin-bound navigation, plus read-only
-/// snapshot observation. Everything else under a browser-like capability
-/// must fail closed.
+/// The typed operations SG-000024 authorizes: the two SG-000021 reads, the
+/// SG-000022 page lifecycle and origin-bound navigation, the SG-000023
+/// read-only snapshot observation, plus structured invoke (click) and
+/// value-entry (fill) on typed node identities. Everything else under a
+/// browser-like capability must fail closed.
 pub fn is_allowed_browser_shape(capability: &str, operation: &str) -> bool {
     matches!(
         (capability, operation),
@@ -67,6 +66,8 @@ pub fn is_allowed_browser_shape(capability: &str, operation: &str) -> bool {
             | ("browser.navigation", "preview")
             | ("browser.navigation", "navigate")
             | ("browser.snapshot", "observe")
+            | ("browser.dom", "click")
+            | ("browser.dom", "fill")
     )
 }
 
@@ -1123,6 +1124,50 @@ impl PageStore {
         Ok((next, prior_origin, prior_generation))
     }
 
+    /// Apply a validated structured actuation. The caller must already have
+    /// verified the node record, expected role and state, and fresh approval.
+    /// This function re-checks expected origin and generation against current
+    /// state, keeps the origin, and bumps the generation so every observed
+    /// node identity goes stale after mutation and the next action requires
+    /// a fresh observation.
+    pub fn apply_actuation(
+        &mut self,
+        page_id: &str,
+        expected_origin: &str,
+        expected_generation: u64,
+    ) -> Result<(PageRecord, u64), ProviderError> {
+        let current = self.pages.get(page_id).cloned().ok_or_else(|| {
+            ProviderError::new(
+                FailureCode::TargetStale,
+                "browser page handle is unknown; stale page handles fail closed",
+            )
+        })?;
+        if current.state != PageState::Active {
+            return Err(ProviderError::new(
+                FailureCode::TargetStale,
+                "browser page has no active document; actuation requires a navigated page",
+            ));
+        }
+        if current.current_origin != expected_origin {
+            return Err(ProviderError::new(
+                FailureCode::TargetStale,
+                "browser page origin changed since observation; stale page handles fail closed",
+            ));
+        }
+        if current.generation != expected_generation {
+            return Err(ProviderError::new(
+                FailureCode::TargetStale,
+                "browser page generation changed since observation; stale page handles fail closed",
+            ));
+        }
+        let prior_generation = current.generation;
+        let mut next = current;
+        next.generation = next.generation.saturating_add(1);
+        self.persist(&next);
+        self.pages.insert(page_id.to_owned(), next.clone());
+        Ok((next, prior_generation))
+    }
+
     fn persist(&self, page: &PageRecord) {
         use std::io::Write as _;
         let stored = StoredPage {
@@ -1374,7 +1419,6 @@ fn digest_bytes(hasher: &mut Sha256, value: &[u8]) {
     hasher.update((value.len() as u64).to_be_bytes());
     hasher.update(value);
 }
-
 // ---------------------------------------------------------------------------
 // SG-000023 read-only DOM and accessibility observation with typed node
 // identity. Snapshots are computed read-only from the SG-000022 page
@@ -1432,6 +1476,7 @@ pub struct SnapshotNode {
     pub name: String,
     pub value: String,
     pub state: String,
+    pub input_type: String,
     pub depth: u32,
     pub index: u64,
     pub page_id: String,
@@ -1449,6 +1494,7 @@ impl SnapshotNode {
             "name": self.name,
             "value": self.value,
             "state": self.state,
+            "input_type": self.input_type,
             "depth": self.depth,
             "index": self.index,
             "page_id": self.page_id,
@@ -1655,23 +1701,32 @@ pub fn build_snapshot(
     // fixed so max_depth filtering is observable and testable. Values carry
     // no secret material; the textbox entry uses a non-password input type
     // with an empty value to prove the redaction path stays inert for safe
-    // fields.
-    let template: &[(&str, &str, &str, &str, u32)] = &[
-        ("document", "page document", "", "none", 0),
-        ("heading", "Page snapshot", "", "none", 1),
+    // fields. The textbox entry uses a non-password input type with an empty
+    // value to prove the redaction path stays inert for safe fields.
+    let template: &[(&str, &str, &str, &str, &str, u32)] = &[
+        ("document", "page document", "", "none", "", 0),
+        ("heading", "Page snapshot", "", "none", "", 1),
         (
             "link",
             "Canonical origin",
             page.current_origin.as_str(),
             "enabled",
+            "",
             1,
         ),
-        ("button", "Snapshot control", "", "enabled", 2),
-        ("paragraph", "Bounded observation", "read-only", "none", 2),
-        ("textbox", "Search field", "", "enabled", 2),
+        ("button", "Snapshot control", "", "enabled", "", 2),
+        (
+            "paragraph",
+            "Bounded observation",
+            "read-only",
+            "none",
+            "",
+            2,
+        ),
+        ("textbox", "Search field", "", "enabled", "text", 2),
     ];
     let mut nodes = Vec::new();
-    for (offset, (role, name, value, state, depth)) in template.iter().enumerate() {
+    for (offset, (role, name, value, state, input_type, depth)) in template.iter().enumerate() {
         if *depth > max_depth {
             continue;
         }
@@ -1692,8 +1747,9 @@ pub fn build_snapshot(
             node_id,
             role: (*role).to_owned(),
             name: (*name).to_owned(),
-            value: redact_node_value(role, if *role == "textbox" { "text" } else { "" }, value),
+            value: redact_node_value(role, input_type, value),
             state: (*state).to_owned(),
+            input_type: (*input_type).to_owned(),
             depth: *depth,
             index,
             page_id: page.page_id.clone(),
@@ -1709,7 +1765,7 @@ pub fn build_snapshot(
             "browser snapshot bounds exclude the document node; increase max_nodes and max_depth",
         ));
     }
-    let truncated = nodes.len() < template.iter().filter(|entry| entry.4 <= max_depth).count();
+    let truncated = nodes.len() < template.iter().filter(|entry| entry.5 <= max_depth).count();
     let snapshot = PageSnapshot {
         snapshot_id: snapshot_id_for(
             &page.page_id,
@@ -1803,6 +1859,412 @@ pub fn validate_snapshot_node(
     Ok(())
 }
 
+// ---------------------------------------------------------------------------
+// SG-000024 structured DOM actuation on typed node identity. Invoke (click)
+// and value-entry (fill) consume SG-000023 server-allocated node identities
+// with exact page, generation, origin, document generation, role, state, and
+// policy revision binding. Every action requires a fresh SOFT approval with
+// digest binding and bumps the page generation so observed identities go
+// stale after mutation. Select, toggle, submit, keyboard input, password
+// fill, coordinates, scripting, CDP, downloads, and uploads remain absent.
+// ---------------------------------------------------------------------------
+
+/// Prefix for server-allocated actuation identities.
+pub const ACTUATION_ID_PREFIX: &str = "ac-";
+/// Schema for the node registry file stored under Cotra protected state.
+pub const NODE_REGISTRY_SCHEMA: &str = "cotra-browser-nodes-v1";
+/// File name for the node registry inside the isolated profile directory.
+pub const NODE_REGISTRY_FILE: &str = "nodes.jsonl";
+/// Bound on fill value bytes. Oversized values fail closed.
+pub const MAX_FILL_VALUE_BYTES: usize = 4096;
+/// Roles that permit the invoke (click) verb.
+pub const CLICK_ROLES: &[&str] = &["link", "button"];
+/// Roles that permit the value-entry (fill) verb.
+pub const FILL_ROLES: &[&str] = &["textbox"];
+/// Node state that permits actuation. Disabled nodes never actuate.
+pub const ENABLED_NODE_STATE: &str = "enabled";
+
+/// Returns true when an observed role permits the requested actuation verb.
+/// Only invoke on links and buttons and value-entry on text boxes are
+/// authorized; every other role and verb combination fails closed.
+pub fn role_permits_action(role: &str, action: &str) -> bool {
+    match action {
+        "click" => CLICK_ROLES.contains(&role),
+        "fill" => FILL_ROLES.contains(&role),
+        _ => false,
+    }
+}
+
+/// Returns true when a node is a password target. Password-field fill and
+/// credential submission are denied in this grain.
+pub fn is_password_target(role: &str, input_type: &str) -> bool {
+    input_type.eq_ignore_ascii_case("password") || role.eq_ignore_ascii_case("password")
+}
+
+/// Parse a requested actuation verb. Only `click` and `fill` exist; select,
+/// toggle, submit, keyboard, and coordinate verbs fail closed.
+pub fn parse_actuation_action(action: &str) -> Result<&str, ProviderError> {
+    match action {
+        "click" | "fill" => Ok(action),
+        _ => Err(ProviderError::new(
+            FailureCode::CapabilityDenied,
+            "browser actuation supports only the click and fill verbs; all other verbs are denied",
+        )),
+    }
+}
+
+/// Server-side record of an observed node, persisted at snapshot time so
+/// later actuation verifies role and state against server records rather
+/// than caller assertions. Raw browser-internal handles, cookies,
+/// credentials, and session material never enter this record.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+struct StoredNode {
+    schema: String,
+    node_id: String,
+    page_id: String,
+    workspace_id: String,
+    profile_identity: String,
+    origin: String,
+    page_generation: u64,
+    document_generation: u64,
+    index: u64,
+    role: String,
+    input_type: String,
+    state: String,
+    policy_revision: String,
+}
+
+/// File-backed node registry stored under Cotra protected local state.
+/// Actuation resolves caller-supplied node identities through this registry;
+/// identities absent here fail closed as stale handles.
+#[derive(Debug)]
+pub struct NodeStore {
+    path: PathBuf,
+    nodes: std::collections::BTreeMap<String, StoredNode>,
+}
+
+impl NodeStore {
+    pub fn load_or_create(path: PathBuf) -> Self {
+        let mut store = Self {
+            path,
+            nodes: std::collections::BTreeMap::new(),
+        };
+        if store.path.is_file() {
+            if let Ok(text) = std::fs::read_to_string(&store.path) {
+                for line in text.lines() {
+                    if line.trim().is_empty() {
+                        continue;
+                    }
+                    if let Ok(record) = serde_json::from_str::<StoredNode>(line) {
+                        if record.schema != NODE_REGISTRY_SCHEMA {
+                            break;
+                        }
+                        if record.node_id.is_empty() {
+                            break;
+                        }
+                        store.nodes.insert(record.node_id.clone(), record);
+                    }
+                }
+            }
+        } else if let Some(parent) = store.path.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        store
+    }
+
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
+
+    pub fn get(&self, node_id: &str) -> Option<&StoredNode> {
+        self.nodes.get(node_id)
+    }
+
+    /// Persist the nodes of a freshly built snapshot as server-side records.
+    /// Records are append-only; newer generations shadow older identities
+    /// through the generation checks in [`check_node_for_actuation`].
+    pub fn record_snapshot(
+        &mut self,
+        profile_identity: &str,
+        page: &PageRecord,
+        policy_revision: &str,
+        nodes: &[SnapshotNode],
+    ) {
+        use std::io::Write as _;
+        if let Some(parent) = self.path.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        let Ok(mut file) = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&self.path)
+        else {
+            return;
+        };
+        for node in nodes {
+            let stored = StoredNode {
+                schema: NODE_REGISTRY_SCHEMA.to_owned(),
+                node_id: node.node_id.clone(),
+                page_id: page.page_id.clone(),
+                workspace_id: page.workspace_id.clone(),
+                profile_identity: profile_identity.to_owned(),
+                origin: page.current_origin.clone(),
+                page_generation: page.generation,
+                document_generation: node.document_generation,
+                index: node.index,
+                role: node.role.clone(),
+                input_type: node.input_type.clone(),
+                state: node.state.clone(),
+                policy_revision: policy_revision.to_owned(),
+            };
+            self.nodes.insert(stored.node_id.clone(), stored.clone());
+            let _ = serde_json::to_writer(&mut file, &stored);
+            let _ = file.write_all(b"\n");
+        }
+        let _ = file.flush();
+    }
+}
+
+/// Canonical path for the node registry file. Tests override it with
+/// `COTRA_BROWSER_STATE_DIR`; production keeps it inside the isolated
+/// profile directory under Cotra protected local state.
+pub fn default_node_registry_path(profile_root: &Path) -> PathBuf {
+    profile_root.join(NODE_REGISTRY_FILE)
+}
+
+/// Verify a server-side node record against the current page, profile,
+/// policy revision, caller-expected role and state, and requested verb.
+/// Stale generations, replaced documents, origin drift, foreign profiles,
+/// foreign pages, forged identities, role or state mismatch, disabled
+/// nodes, password targets, and unpermitted role and verb combinations all
+/// fail closed.
+#[allow(clippy::too_many_arguments)]
+pub fn check_node_for_actuation(
+    node: &StoredNode,
+    page: &PageRecord,
+    profile_identity: &str,
+    policy_revision: &str,
+    expected_role: &str,
+    expected_state: &str,
+    expected_generation: u64,
+    expected_document_generation: u64,
+    action: &str,
+) -> Result<(), ProviderError> {
+    if node.page_id != page.page_id {
+        return Err(ProviderError::new(
+            FailureCode::TargetStale,
+            "browser node belongs to a different page; stale node handles fail closed",
+        ));
+    }
+    if page.state == PageState::Closed {
+        return Err(ProviderError::new(
+            FailureCode::TargetStale,
+            "browser page is closed; stale node handles fail closed",
+        ));
+    }
+    if node.page_generation != expected_generation || page.generation != expected_generation {
+        return Err(ProviderError::new(
+            FailureCode::TargetStale,
+            "browser node generation changed since observation; stale node handles fail closed",
+        ));
+    }
+    if node.document_generation != expected_document_generation
+        || page.generation != expected_document_generation
+    {
+        return Err(ProviderError::new(
+            FailureCode::TargetStale,
+            "browser document was replaced since observation; stale node handles fail closed",
+        ));
+    }
+    if node.origin != page.current_origin {
+        return Err(ProviderError::new(
+            FailureCode::TargetStale,
+            "browser page origin changed since observation; stale node handles fail closed",
+        ));
+    }
+    if node.policy_revision != policy_revision || page.policy_revision != policy_revision {
+        return Err(ProviderError::new(
+            FailureCode::TargetStale,
+            "browser policy revision drifted since observation; stale node handles fail closed",
+        ));
+    }
+    let expected = node_id_for(
+        profile_identity,
+        &node.page_id,
+        node.page_generation,
+        &node.origin,
+        node.document_generation,
+        node.index,
+        policy_revision,
+    );
+    if expected != node.node_id {
+        return Err(ProviderError::new(
+            FailureCode::TargetStale,
+            "browser node identity does not match the current profile, page, generation, origin, and policy revision; stale node handles fail closed",
+        ));
+    }
+    if expected_role != node.role {
+        return Err(ProviderError::new(
+            FailureCode::TargetStale,
+            "browser node role changed since observation; stale node handles fail closed",
+        ));
+    }
+    if expected_state != node.state {
+        return Err(ProviderError::new(
+            FailureCode::TargetStale,
+            "browser node state changed since observation; stale node handles fail closed",
+        ));
+    }
+    if node.state != ENABLED_NODE_STATE {
+        return Err(ProviderError::new(
+            FailureCode::CapabilityDenied,
+            "browser node is not enabled; actuation on disabled nodes is denied",
+        ));
+    }
+    if is_password_target(&node.role, &node.input_type) {
+        return Err(ProviderError::new(
+            FailureCode::CapabilityDenied,
+            "browser password-field actuation is denied; credential submission remains absent",
+        ));
+    }
+    if !role_permits_action(&node.role, action) {
+        return Err(ProviderError::new(
+            FailureCode::CapabilityDenied,
+            "browser node role does not permit the requested actuation verb",
+        ));
+    }
+    Ok(())
+}
+
+/// Compute the SOFT approval digest for a structured actuation. The digest
+/// binds workspace, policy revision, profile identity, page identity,
+/// expected origin and generation, document generation, node identity,
+/// expected role and state, requested action, and the bounded value digest.
+/// Any material drift invalidates the approval.
+#[allow(clippy::too_many_arguments)]
+pub fn actuation_approval_digest(
+    workspace_id: &str,
+    policy_revision: &str,
+    profile_identity: &str,
+    page_id: &str,
+    expected_origin: &str,
+    expected_generation: u64,
+    expected_document_generation: u64,
+    node_id: &str,
+    expected_role: &str,
+    expected_state: &str,
+    action: &str,
+    value: &str,
+) -> String {
+    let mut hasher = Sha256::new();
+    digest_bytes(&mut hasher, b"COTRA_BROWSER_ACTUATION_V1");
+    digest_bytes(&mut hasher, workspace_id.as_bytes());
+    digest_bytes(&mut hasher, policy_revision.as_bytes());
+    digest_bytes(&mut hasher, profile_identity.as_bytes());
+    digest_bytes(&mut hasher, page_id.as_bytes());
+    digest_bytes(&mut hasher, expected_origin.as_bytes());
+    digest_bytes(&mut hasher, expected_generation.to_string().as_bytes());
+    digest_bytes(
+        &mut hasher,
+        expected_document_generation.to_string().as_bytes(),
+    );
+    digest_bytes(&mut hasher, node_id.as_bytes());
+    digest_bytes(&mut hasher, expected_role.as_bytes());
+    digest_bytes(&mut hasher, expected_state.as_bytes());
+    digest_bytes(&mut hasher, action.as_bytes());
+    digest_bytes(&mut hasher, value.as_bytes());
+    let digest = hasher.finalize();
+    let mut output = String::with_capacity(digest.len() * 2);
+    use std::fmt::Write as _;
+    for byte in digest {
+        let _ = write!(&mut output, "{byte:02x}");
+    }
+    output
+}
+
+/// Compute the actuation identity for a validated action. The digest binds
+/// page identity, node identity, action, value digest, prior generation, and
+/// the new generation under the `COTRA_BROWSER_ACTUATION_ID_V1` domain.
+pub fn actuation_id_for(
+    page_id: &str,
+    node_id: &str,
+    action: &str,
+    value_digest: &str,
+    prior_generation: u64,
+    new_generation: u64,
+) -> String {
+    let mut hasher = Sha256::new();
+    digest_bytes(&mut hasher, b"COTRA_BROWSER_ACTUATION_ID_V1");
+    digest_bytes(&mut hasher, page_id.as_bytes());
+    digest_bytes(&mut hasher, node_id.as_bytes());
+    digest_bytes(&mut hasher, action.as_bytes());
+    digest_bytes(&mut hasher, value_digest.as_bytes());
+    digest_bytes(&mut hasher, prior_generation.to_string().as_bytes());
+    digest_bytes(&mut hasher, new_generation.to_string().as_bytes());
+    let digest = hasher.finalize();
+    let mut hex = String::with_capacity(32);
+    use std::fmt::Write as _;
+    for byte in digest.iter().take(16) {
+        let _ = write!(&mut hex, "{byte:02x}");
+    }
+    format!("{ACTUATION_ID_PREFIX}{hex}")
+}
+
+/// Digest a bounded fill value for approval binding and evidence. Values
+/// larger than the bound fail closed before any digest is produced.
+pub fn fill_value_digest(value: &str) -> Result<String, ProviderError> {
+    if value.len() > MAX_FILL_VALUE_BYTES {
+        return Err(ProviderError::invalid(format!(
+            "browser fill value exceeds at most {MAX_FILL_VALUE_BYTES} bytes"
+        )));
+    }
+    Ok(sha256_hex(value.as_bytes()))
+}
+
+/// Typed structured actuation evidence. Contains only identity, binding,
+/// and approval linkage material. Cookies, credentials, tokens, headers,
+/// password values, and raw browser internals never enter this packet; fill
+/// evidence carries only the value digest, never the value itself.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ActuationEvidence {
+    pub actuation_id: String,
+    pub page_id: String,
+    pub workspace_id: String,
+    pub policy_revision: String,
+    pub profile_identity: String,
+    pub node_id: String,
+    pub action: String,
+    pub role: String,
+    pub state: String,
+    pub origin: String,
+    pub prior_generation: u64,
+    pub new_generation: u64,
+    pub value_digest: String,
+}
+
+impl ActuationEvidence {
+    pub fn to_json(&self, approval_record_id: &str) -> Value {
+        json!({
+            "actuation_id": self.actuation_id,
+            "page_id": self.page_id,
+            "workspace_id": self.workspace_id,
+            "policy_revision": self.policy_revision,
+            "profile_identity": self.profile_identity,
+            "node_id": self.node_id,
+            "action": self.action,
+            "role": self.role,
+            "state": self.state,
+            "origin": self.origin,
+            "prior_generation": self.prior_generation,
+            "new_generation": self.new_generation,
+            "value_digest": self.value_digest,
+            "approval_record_id": approval_record_id,
+            "cookies": false,
+            "credentials": false,
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1836,14 +2298,16 @@ mod tests {
     }
 
     #[test]
-    fn allowed_shapes_are_exactly_profile_status_destination_page_navigation_and_snapshot_observe()
-    {
+    fn allowed_shapes_are_exactly_profile_status_destination_page_navigation_snapshot_observe_and_structured_actuation(
+    ) {
         assert!(is_allowed_browser_shape("browser.profile", "status"));
         assert!(is_allowed_browser_shape("browser.destination", "validate"));
         assert!(is_allowed_browser_shape("browser.page", "open"));
         assert!(is_allowed_browser_shape("browser.navigation", "preview"));
         assert!(is_allowed_browser_shape("browser.navigation", "navigate"));
         assert!(is_allowed_browser_shape("browser.snapshot", "observe"));
+        assert!(is_allowed_browser_shape("browser.dom", "click"));
+        assert!(is_allowed_browser_shape("browser.dom", "fill"));
         for (capability, operation) in DENIED_BROWSER_SHAPES {
             assert!(
                 !is_allowed_browser_shape(capability, operation),
@@ -1860,8 +2324,9 @@ mod tests {
     fn unknown_browser_operations_fail_closed() {
         for (capability, operation) in [
             ("browser.navigate", "navigate"),
-            ("browser.dom", "click"),
-            ("browser.dom", "fill"),
+            ("browser.dom", "type"),
+            ("browser.dom", "press"),
+            ("browser.dom", "select"),
             ("browser.dom", "snapshot"),
             ("browser.dom", "observe"),
             ("browser.accessibility", "query"),
@@ -2756,6 +3221,367 @@ mod tests {
                 "sg-000023-v1"
             )
         );
+    }
+
+    #[test]
+    fn actuation_verbs_roles_and_password_targets_are_gated() {
+        assert_eq!(parse_actuation_action("click").expect("click"), "click");
+        assert_eq!(parse_actuation_action("fill").expect("fill"), "fill");
+        for bad in [
+            "select",
+            "toggle",
+            "submit",
+            "press",
+            "type",
+            "scroll",
+            "hover",
+            "coordinate",
+            "",
+        ] {
+            assert!(
+                parse_actuation_action(bad).is_err(),
+                "{bad:?} must be denied"
+            );
+        }
+        assert!(role_permits_action("link", "click"));
+        assert!(role_permits_action("button", "click"));
+        assert!(!role_permits_action("textbox", "click"));
+        assert!(!role_permits_action("heading", "click"));
+        assert!(!role_permits_action("document", "click"));
+        assert!(role_permits_action("textbox", "fill"));
+        assert!(!role_permits_action("link", "fill"));
+        assert!(!role_permits_action("button", "fill"));
+        assert!(!role_permits_action("textbox", "select"));
+        assert!(is_password_target("textbox", "password"));
+        assert!(is_password_target("password", "text"));
+        assert!(!is_password_target("textbox", "text"));
+        assert!(!is_password_target("button", ""));
+    }
+
+    fn temp_node_registry(label: &str) -> PathBuf {
+        let suffix = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("clock")
+            .as_nanos();
+        std::env::temp_dir().join(format!(
+            "cotra-browser-nodes-{label}-{}-{suffix}.jsonl",
+            std::process::id()
+        ))
+    }
+
+    fn open_actuation_test_page(store: &mut PageStore) -> PageRecord {
+        store
+            .open_page("default", "profile-identity-test", "sg-000024-v1")
+            .expect("open actuation page")
+    }
+
+    fn navigated_actuation_page(store: &mut PageStore, page: &PageRecord) -> PageRecord {
+        store
+            .apply_navigation(&page.page_id, "", 0, "https://example.com:443")
+            .expect("navigate")
+            .0
+    }
+
+    #[test]
+    fn node_store_records_snapshot_and_gates_actuation() {
+        let page_path = temp_page_registry("actuation-nodes");
+        let node_path = temp_node_registry("actuation-nodes");
+        let mut pages = PageStore::load_or_create(page_path.clone());
+        let page = open_actuation_test_page(&mut pages);
+        let active = navigated_actuation_page(&mut pages, &page);
+        let snapshot = build_snapshot(
+            &active,
+            "profile-identity-test",
+            "sg-000024-v1",
+            50,
+            4,
+            16_384,
+        )
+        .expect("snapshot");
+        let mut nodes = NodeStore::load_or_create(node_path.clone());
+        nodes.record_snapshot(
+            "profile-identity-test",
+            &active,
+            "sg-000024-v1",
+            &snapshot.nodes,
+        );
+        let link = snapshot
+            .nodes
+            .iter()
+            .find(|node| node.role == "link")
+            .expect("link node");
+        let stored = nodes.get(&link.node_id).expect("recorded link").clone();
+        check_node_for_actuation(
+            &stored,
+            &active,
+            "profile-identity-test",
+            "sg-000024-v1",
+            "link",
+            "enabled",
+            1,
+            1,
+            "click",
+        )
+        .expect("link click validates");
+        let fill_on_link = check_node_for_actuation(
+            &stored,
+            &active,
+            "profile-identity-test",
+            "sg-000024-v1",
+            "link",
+            "enabled",
+            1,
+            1,
+            "fill",
+        )
+        .expect_err("fill on link must fail");
+        assert_eq!(fill_on_link.code, FailureCode::CapabilityDenied);
+        let wrong_role = check_node_for_actuation(
+            &stored,
+            &active,
+            "profile-identity-test",
+            "sg-000024-v1",
+            "button",
+            "enabled",
+            1,
+            1,
+            "click",
+        )
+        .expect_err("role mismatch must fail");
+        assert_eq!(wrong_role.code, FailureCode::TargetStale);
+        let wrong_state = check_node_for_actuation(
+            &stored,
+            &active,
+            "profile-identity-test",
+            "sg-000024-v1",
+            "link",
+            "disabled",
+            1,
+            1,
+            "click",
+        )
+        .expect_err("state mismatch must fail");
+        assert_eq!(wrong_state.code, FailureCode::TargetStale);
+        let wrong_profile = check_node_for_actuation(
+            &stored,
+            &active,
+            "foreign-profile",
+            "sg-000024-v1",
+            "link",
+            "enabled",
+            1,
+            1,
+            "click",
+        )
+        .expect_err("foreign profile must fail");
+        assert_eq!(wrong_profile.code, FailureCode::TargetStale);
+        let forged = nodes.get("nd-00000000000000000000000000000000").is_none();
+        assert!(forged, "unknown node identities are absent");
+        let _ = std::fs::remove_file(page_path);
+        let _ = std::fs::remove_file(node_path);
+    }
+
+    #[test]
+    fn password_field_actuation_is_denied() {
+        let page_path = temp_page_registry("actuation-password");
+        let node_path = temp_node_registry("actuation-password");
+        let mut pages = PageStore::load_or_create(page_path.clone());
+        let page = open_actuation_test_page(&mut pages);
+        let active = navigated_actuation_page(&mut pages, &page);
+        let snapshot = build_snapshot(
+            &active,
+            "profile-identity-test",
+            "sg-000024-v1",
+            50,
+            4,
+            16_384,
+        )
+        .expect("snapshot");
+        let mut nodes = NodeStore::load_or_create(node_path.clone());
+        nodes.record_snapshot(
+            "profile-identity-test",
+            &active,
+            "sg-000024-v1",
+            &snapshot.nodes,
+        );
+        let textbox = snapshot
+            .nodes
+            .iter()
+            .find(|node| node.role == "textbox")
+            .expect("textbox node");
+        let base = nodes.get(&textbox.node_id).expect("recorded").clone();
+        let password_id = node_id_for(
+            "profile-identity-test",
+            &base.page_id,
+            base.page_generation,
+            &base.origin,
+            base.document_generation,
+            100,
+            "sg-000024-v1",
+        );
+        nodes.nodes.insert(
+            password_id.clone(),
+            StoredNode {
+                schema: NODE_REGISTRY_SCHEMA.to_owned(),
+                node_id: password_id.clone(),
+                page_id: base.page_id.clone(),
+                workspace_id: base.workspace_id.clone(),
+                profile_identity: base.profile_identity.clone(),
+                origin: base.origin.clone(),
+                page_generation: base.page_generation,
+                document_generation: base.document_generation,
+                index: 100,
+                role: "textbox".to_owned(),
+                input_type: "password".to_owned(),
+                state: "enabled".to_owned(),
+                policy_revision: base.policy_revision.clone(),
+            },
+        );
+        let stored = nodes.get(&password_id).expect("password record").clone();
+        let denied = check_node_for_actuation(
+            &stored,
+            &active,
+            "profile-identity-test",
+            "sg-000024-v1",
+            "textbox",
+            "enabled",
+            1,
+            1,
+            "fill",
+        )
+        .expect_err("password fill must fail");
+        assert_eq!(denied.code, FailureCode::CapabilityDenied);
+        let _ = std::fs::remove_file(page_path);
+        let _ = std::fs::remove_file(node_path);
+    }
+
+    #[test]
+    fn actuation_bumps_generation_and_invalidates_observed_nodes() {
+        let page_path = temp_page_registry("actuation-bump");
+        let node_path = temp_node_registry("actuation-bump");
+        let mut pages = PageStore::load_or_create(page_path.clone());
+        let page = open_actuation_test_page(&mut pages);
+        let active = navigated_actuation_page(&mut pages, &page);
+        let snapshot = build_snapshot(
+            &active,
+            "profile-identity-test",
+            "sg-000024-v1",
+            50,
+            4,
+            16_384,
+        )
+        .expect("snapshot");
+        let mut nodes = NodeStore::load_or_create(node_path.clone());
+        nodes.record_snapshot(
+            "profile-identity-test",
+            &active,
+            "sg-000024-v1",
+            &snapshot.nodes,
+        );
+        let link = snapshot
+            .nodes
+            .iter()
+            .find(|node| node.role == "link")
+            .expect("link node");
+        let stored = nodes.get(&link.node_id).expect("recorded").clone();
+        let (next, prior) = pages
+            .apply_actuation(&active.page_id, "https://example.com:443", 1)
+            .expect("actuation applies");
+        assert_eq!(prior, 1);
+        assert_eq!(next.generation, 2);
+        assert_eq!(next.current_origin, "https://example.com:443");
+        let stale = check_node_for_actuation(
+            &stored,
+            &next,
+            "profile-identity-test",
+            "sg-000024-v1",
+            "link",
+            "enabled",
+            1,
+            1,
+            "click",
+        )
+        .expect_err("pre-actuation node must go stale");
+        assert_eq!(stale.code, FailureCode::TargetStale);
+        let replay = pages
+            .apply_actuation(&active.page_id, "https://example.com:443", 1)
+            .expect_err("replayed generation must fail");
+        assert_eq!(replay.code, FailureCode::TargetStale);
+        let _ = std::fs::remove_file(page_path);
+        let _ = std::fs::remove_file(node_path);
+    }
+
+    #[test]
+    fn fill_value_digest_bounds_values_and_actuation_digest_drifts() {
+        assert!(fill_value_digest("hello").is_ok());
+        assert!(fill_value_digest("").is_ok());
+        let oversized = "x".repeat(MAX_FILL_VALUE_BYTES + 1);
+        assert!(fill_value_digest(&oversized).is_err());
+        let base = actuation_approval_digest(
+            "default",
+            "sg-000024-v1",
+            "profile-a",
+            "pg-abc",
+            "https://example.com:443",
+            1,
+            1,
+            "nd-abc",
+            "link",
+            "enabled",
+            "click",
+            "",
+        );
+        let drifted_value = actuation_approval_digest(
+            "default",
+            "sg-000024-v1",
+            "profile-a",
+            "pg-abc",
+            "https://example.com:443",
+            1,
+            1,
+            "nd-abc",
+            "textbox",
+            "enabled",
+            "fill",
+            "hello",
+        );
+        assert_ne!(base, drifted_value);
+        let drifted_node = actuation_approval_digest(
+            "default",
+            "sg-000024-v1",
+            "profile-a",
+            "pg-abc",
+            "https://example.com:443",
+            1,
+            1,
+            "nd-other",
+            "link",
+            "enabled",
+            "click",
+            "",
+        );
+        assert_ne!(base, drifted_node);
+        let evidence = ActuationEvidence {
+            actuation_id: "ac-test".to_owned(),
+            page_id: "pg-test".to_owned(),
+            workspace_id: "default".to_owned(),
+            policy_revision: "sg-000024-v1".to_owned(),
+            profile_identity: "profile-a".to_owned(),
+            node_id: "nd-abc".to_owned(),
+            action: "click".to_owned(),
+            role: "link".to_owned(),
+            state: "enabled".to_owned(),
+            origin: "https://example.com:443".to_owned(),
+            prior_generation: 1,
+            new_generation: 2,
+            value_digest: String::new(),
+        };
+        let json = evidence.to_json("apr-1");
+        assert!(json["cookies"] == false);
+        assert!(json["credentials"] == false);
+        assert!(json.get("cookie").is_none());
+        assert!(json.get("password").is_none());
+        assert!(json.get("value").is_none());
     }
 
     fn marker_body(root: &Path) -> String {

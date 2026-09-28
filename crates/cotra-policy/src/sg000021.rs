@@ -330,8 +330,11 @@ mod sg000021_tests {
         for (capability, operation) in [
             ("browser.navigate", "navigate"),
             ("browser.snapshot", "capture"),
-            ("browser.dom", "click"),
-            ("browser.dom", "fill"),
+            // NOTE (SG-000024 successor): structured browser.dom/click and
+            // browser.dom/fill are lawfully authorized by the SG-000024
+            // successor grain and are therefore no longer in this denied
+            // set. The SG-000021 qualified head froze these shapes as
+            // denied; current-tree authority records the successor delta.
             ("browser.download", "download"),
             ("browser.upload", "upload"),
             ("browser.profile", "use_personal"),
