@@ -12,20 +12,29 @@ const PROFILE_MARKER_BODY: &str =
 const MAX_URL_BYTES: usize = 2048;
 const MAX_HOST_BYTES: usize = 253;
 
-/// Typed denial catalog for browser actuation shapes that SG-000021
-/// deliberately leaves unauthorized. Navigation, DOM actuation, downloads,
-/// uploads, personal-profile access, debugging, scripting, and network egress
-/// remain absent; every shape listed here must fail closed.
+/// Typed denial catalog for browser shapes that remain unauthorized.
+/// SG-000021 left navigation, DOM actuation, downloads, uploads,
+/// personal-profile access, debugging, scripting, and network egress absent.
+/// SG-000022 authorizes only page lifecycle and origin-bound navigation;
+/// DOM observation, DOM actuation, downloads, uploads, personal-profile
+/// access, debugging, scripting, and network egress remain absent and every
+/// shape listed here must fail closed.
 pub const DENIED_BROWSER_SHAPES: &[(&str, &str)] = &[
     ("browser.navigate", "navigate"),
     ("browser.snapshot", "capture"),
     ("browser.snapshot", "actuate"),
+    ("browser.snapshot", "observe"),
     ("browser.dom", "click"),
     ("browser.dom", "fill"),
     ("browser.dom", "type"),
     ("browser.dom", "press"),
     ("browser.dom", "select"),
     ("browser.dom", "write"),
+    ("browser.dom", "snapshot"),
+    ("browser.dom", "observe"),
+    ("browser.accessibility", "query"),
+    ("browser.page", "close"),
+    ("browser.navigation", "back"),
     ("browser.download", "download"),
     ("browser.upload", "upload"),
     ("browser.profile", "use_personal"),
@@ -45,17 +54,22 @@ pub const DENIED_BROWSER_SHAPES: &[(&str, &str)] = &[
     ("playwright", "command"),
 ];
 
-/// The two typed operations SG-000021 authorizes. Everything else under a
+/// The typed operations SG-000022 authorizes: the two SG-000021 reads plus
+/// page lifecycle and origin-bound navigation. Everything else under a
 /// browser-like capability must fail closed.
 pub fn is_allowed_browser_shape(capability: &str, operation: &str) -> bool {
     matches!(
         (capability, operation),
-        ("browser.profile", "status") | ("browser.destination", "validate")
+        ("browser.profile", "status")
+            | ("browser.destination", "validate")
+            | ("browser.page", "open")
+            | ("browser.navigation", "preview")
+            | ("browser.navigation", "navigate")
     )
 }
 
-/// Returns true when a request targets browser-like authority outside the two
-/// allowed SG-000021 shapes. The policy layer denies these shapes; the
+/// Returns true when a request targets browser-like authority outside the
+/// allowed SG-000022 shapes. The policy layer denies these shapes; the
 /// dispatch layer treats them as unreachable defense in depth.
 pub fn is_denied_browser_shape(capability: &str, operation: &str) -> bool {
     if is_allowed_browser_shape(capability, operation) {
@@ -800,6 +814,565 @@ pub fn reject_caller_profile_root() -> ProviderError {
     )
 }
 
+/// Compute the deterministic identity for a canonical profile root without
+/// creating any directory. Page records bind this identity so a foreign
+/// profile directory can never satisfy a page opened on the isolated profile.
+pub fn profile_identity_for_root(root: &Path) -> String {
+    profile_identity(root)
+}
+
+// ---------------------------------------------------------------------------
+// SG-000022 typed page lifecycle and origin-bound bounded navigation.
+// ---------------------------------------------------------------------------
+
+/// Schema for the page registry file stored under Cotra protected state.
+pub const PAGE_REGISTRY_SCHEMA: &str = "cotra-browser-pages-v1";
+/// File name for the page registry inside the isolated profile directory.
+pub const PAGE_REGISTRY_FILE: &str = "pages.jsonl";
+/// Bound on simultaneously allocated pages per workspace.
+pub const MAX_PAGES_PER_WORKSPACE: usize = 16;
+/// Bound on redirect hops validated for a single navigation.
+pub const MAX_REDIRECT_HOPS: usize = 8;
+/// Prefix for server-allocated page identities. Callers never choose this
+/// value; only identities present in the registry are valid.
+pub const PAGE_ID_PREFIX: &str = "pg-";
+
+/// Lifecycle state for a typed page. Pages start open with no origin and
+/// become active after the first successful navigation. Closed pages never
+/// become valid again; their handles fail closed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PageState {
+    Open,
+    Active,
+    Closed,
+}
+
+impl PageState {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            PageState::Open => "open",
+            PageState::Active => "active",
+            PageState::Closed => "closed",
+        }
+    }
+}
+
+/// Server-side page record bound to the isolated profile, one workspace, its
+/// current origin, and a lifecycle generation. The generation increments on
+/// every successful navigation so replaced pages invalidate old handles.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PageRecord {
+    pub page_id: String,
+    pub workspace_id: String,
+    pub profile_identity: String,
+    pub current_origin: String,
+    pub generation: u64,
+    pub state: PageState,
+    pub policy_revision: String,
+}
+
+impl PageRecord {
+    pub fn to_json(&self) -> Value {
+        json!({
+            "page_id": self.page_id,
+            "workspace_id": self.workspace_id,
+            "profile_identity": self.profile_identity,
+            "current_origin": self.current_origin,
+            "generation": self.generation,
+            "state": self.state.as_str(),
+            "policy_revision": self.policy_revision,
+        })
+    }
+}
+
+/// Read-only navigation preview material. Preview performs full origin
+/// binding, re-resolution, and post-resolution policy without mutating page
+/// state and without requiring approval. The caller uses the preview to
+/// build a fresh navigation request with exact expected state.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NavigationPreview {
+    pub page_id: String,
+    pub workspace_id: String,
+    pub policy_revision: String,
+    pub current_origin: String,
+    pub current_generation: u64,
+    pub target_origin: String,
+    pub pinned_address: IpAddr,
+    pub redirect_count: usize,
+    pub final_origin: String,
+}
+
+impl NavigationPreview {
+    pub fn to_json(&self) -> Value {
+        json!({
+            "page_id": self.page_id,
+            "workspace_id": self.workspace_id,
+            "policy_revision": self.policy_revision,
+            "current_origin": self.current_origin,
+            "current_generation": self.current_generation,
+            "target_origin": self.target_origin,
+            "pinned_address": self.pinned_address.to_string(),
+            "redirect_count": self.redirect_count,
+            "final_origin": self.final_origin,
+        })
+    }
+}
+
+/// Typed bounded navigation evidence. Contains only origin, identity, and
+/// approval linkage material. Cookies, credentials, tokens, headers, DOM
+/// content, and raw browser internals never enter this packet.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NavigationEvidence {
+    pub page_id: String,
+    pub workspace_id: String,
+    pub policy_revision: String,
+    pub profile_identity: String,
+    pub prior_origin: String,
+    pub prior_generation: u64,
+    pub target_origin: String,
+    pub pinned_address: IpAddr,
+    pub redirect_count: usize,
+    pub final_origin: String,
+    pub new_generation: u64,
+}
+
+impl NavigationEvidence {
+    pub fn to_json(&self, approval_record_id: &str) -> Value {
+        json!({
+            "page_id": self.page_id,
+            "workspace_id": self.workspace_id,
+            "policy_revision": self.policy_revision,
+            "profile_identity": self.profile_identity,
+            "prior_origin": self.prior_origin,
+            "prior_generation": self.prior_generation,
+            "target_origin": self.target_origin,
+            "pinned_address": self.pinned_address.to_string(),
+            "redirect_count": self.redirect_count,
+            "final_origin": self.final_origin,
+            "new_generation": self.new_generation,
+            "approval_record_id": approval_record_id,
+            "cookies": false,
+            "credentials": false,
+        })
+    }
+}
+
+/// File-backed page registry stored under Cotra protected local state. Only
+/// server-allocated identities in this registry are valid; caller-supplied
+/// strings that are absent here fail closed as stale handles.
+#[derive(Debug)]
+pub struct PageStore {
+    path: PathBuf,
+    pages: std::collections::BTreeMap<String, PageRecord>,
+}
+
+impl PageStore {
+    pub fn load_or_create(path: PathBuf) -> Self {
+        let mut store = Self {
+            path,
+            pages: std::collections::BTreeMap::new(),
+        };
+        if store.path.is_file() {
+            if let Ok(text) = std::fs::read_to_string(&store.path) {
+                for line in text.lines() {
+                    if line.trim().is_empty() {
+                        continue;
+                    }
+                    if let Ok(record) = serde_json::from_str::<StoredPage>(line) {
+                        if record.schema != PAGE_REGISTRY_SCHEMA {
+                            break;
+                        }
+                        let page = PageRecord {
+                            page_id: record.page_id,
+                            workspace_id: record.workspace_id,
+                            profile_identity: record.profile_identity,
+                            current_origin: record.current_origin,
+                            generation: record.generation,
+                            state: match record.state.as_str() {
+                                "active" => PageState::Active,
+                                "closed" => PageState::Closed,
+                                _ => PageState::Open,
+                            },
+                            policy_revision: record.policy_revision,
+                        };
+                        if page.page_id.is_empty() {
+                            break;
+                        }
+                        store.pages.insert(page.page_id.clone(), page);
+                    }
+                }
+            }
+        } else if let Some(parent) = store.path.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        store
+    }
+
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
+
+    pub fn get(&self, page_id: &str) -> Option<&PageRecord> {
+        self.pages.get(page_id)
+    }
+
+    pub fn count_for_workspace(&self, workspace_id: &str) -> usize {
+        self.pages
+            .values()
+            .filter(|page| page.workspace_id == workspace_id && page.state != PageState::Closed)
+            .count()
+    }
+
+    /// Allocate a fresh page bound to the isolated profile, one workspace,
+    /// an empty current origin, generation zero, and the current policy
+    /// revision. No network activity occurs. Caller-supplied identities are
+    /// never accepted; the identity is always server-allocated.
+    pub fn open_page(
+        &mut self,
+        workspace_id: &str,
+        profile_identity: &str,
+        policy_revision: &str,
+    ) -> Result<PageRecord, ProviderError> {
+        if workspace_id.trim().is_empty() {
+            return Err(ProviderError::invalid("browser page workspace is empty"));
+        }
+        if profile_identity.trim().is_empty() {
+            return Err(ProviderError::invalid(
+                "browser page profile identity is empty",
+            ));
+        }
+        if policy_revision.trim().is_empty() {
+            return Err(ProviderError::invalid(
+                "browser page policy revision is empty",
+            ));
+        }
+        if self.count_for_workspace(workspace_id) >= MAX_PAGES_PER_WORKSPACE {
+            return Err(ProviderError::new(
+                FailureCode::OutputLimit,
+                format!(
+                    "browser page bound exceeded for workspace; at most {MAX_PAGES_PER_WORKSPACE} open pages"
+                ),
+            ));
+        }
+        let page_id = fresh_page_id(workspace_id, profile_identity);
+        if self.pages.contains_key(&page_id) {
+            return Err(ProviderError::new(
+                FailureCode::InternalError,
+                "browser page identity collision; retry page open",
+            ));
+        }
+        let page = PageRecord {
+            page_id: page_id.clone(),
+            workspace_id: workspace_id.to_owned(),
+            profile_identity: profile_identity.to_owned(),
+            current_origin: String::new(),
+            generation: 0,
+            state: PageState::Open,
+            policy_revision: policy_revision.to_owned(),
+        };
+        self.persist(&page);
+        self.pages.insert(page_id, page.clone());
+        Ok(page)
+    }
+
+    /// Apply a validated navigation transition. The caller must already have
+    /// validated expected state, target origin, pinned address, redirect
+    /// chain, and fresh approval. This function re-checks expected state
+    /// against current state, bumps the generation, and persists.
+    pub fn apply_navigation(
+        &mut self,
+        page_id: &str,
+        expected_origin: &str,
+        expected_generation: u64,
+        final_origin: &str,
+    ) -> Result<(PageRecord, String, u64), ProviderError> {
+        let current = self.pages.get(page_id).cloned().ok_or_else(|| {
+            ProviderError::new(
+                FailureCode::TargetStale,
+                "browser page handle is unknown; stale page handles fail closed",
+            )
+        })?;
+        if current.state == PageState::Closed {
+            return Err(ProviderError::new(
+                FailureCode::TargetStale,
+                "browser page is closed; stale page handles fail closed",
+            ));
+        }
+        if current.current_origin != expected_origin {
+            return Err(ProviderError::new(
+                FailureCode::TargetStale,
+                "browser page origin changed since preview; stale page handles fail closed",
+            ));
+        }
+        if current.generation != expected_generation {
+            return Err(ProviderError::new(
+                FailureCode::TargetStale,
+                "browser page generation changed since preview; stale page handles fail closed",
+            ));
+        }
+        let prior_origin = current.current_origin.clone();
+        let prior_generation = current.generation;
+        let mut next = current;
+        next.current_origin = final_origin.to_owned();
+        next.generation = next.generation.saturating_add(1);
+        next.state = PageState::Active;
+        self.persist(&next);
+        self.pages.insert(page_id.to_owned(), next.clone());
+        Ok((next, prior_origin, prior_generation))
+    }
+
+    fn persist(&self, page: &PageRecord) {
+        use std::io::Write as _;
+        let stored = StoredPage {
+            schema: PAGE_REGISTRY_SCHEMA.to_owned(),
+            page_id: page.page_id.clone(),
+            workspace_id: page.workspace_id.clone(),
+            profile_identity: page.profile_identity.clone(),
+            current_origin: page.current_origin.clone(),
+            generation: page.generation,
+            state: page.state.as_str().to_owned(),
+            policy_revision: page.policy_revision.clone(),
+        };
+        if let Some(parent) = self.path.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        if let Ok(mut file) = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&self.path)
+        {
+            let _ = serde_json::to_writer(&mut file, &stored);
+            let _ = file.write_all(b"\n");
+            let _ = file.flush();
+        }
+    }
+}
+
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+struct StoredPage {
+    schema: String,
+    page_id: String,
+    workspace_id: String,
+    profile_identity: String,
+    current_origin: String,
+    generation: u64,
+    state: String,
+    policy_revision: String,
+}
+
+fn fresh_page_id(workspace_id: &str, profile_identity: &str) -> String {
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher as _};
+    use std::sync::atomic::{AtomicU64, Ordering};
+    use std::time::{SystemTime, UNIX_EPOCH};
+    static COUNTER: AtomicU64 = AtomicU64::new(0);
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    let count = COUNTER.fetch_add(1, Ordering::Relaxed);
+    let mut hasher = DefaultHasher::new();
+    std::process::id().hash(&mut hasher);
+    now.hash(&mut hasher);
+    count.hash(&mut hasher);
+    workspace_id.hash(&mut hasher);
+    profile_identity.hash(&mut hasher);
+    let digest = Sha256::digest(format!("{:016x}{:016x}", hasher.finish(), count).as_bytes());
+    let mut hex = String::with_capacity(32);
+    use std::fmt::Write as _;
+    for byte in digest.iter().take(16) {
+        let _ = write!(&mut hex, "{byte:02x}");
+    }
+    format!("{PAGE_ID_PREFIX}{hex}")
+}
+
+/// Canonical path for the page registry file. Tests override it with
+/// `COTRA_BROWSER_STATE_DIR`; production keeps it inside the isolated
+/// profile directory under Cotra protected local state.
+pub fn default_page_registry_path(profile_root: &Path) -> PathBuf {
+    profile_root.join(PAGE_REGISTRY_FILE)
+}
+
+/// Returns true when a navigation target path triggers download handling.
+/// Executable, script, and archive suffixes are denied so navigation cannot
+/// become a bypass around download policy. Query strings never hide the
+/// suffix because only the path component is inspected.
+pub fn is_download_trigger_url(url: &str) -> bool {
+    let Some((_, rest)) = url.split_once("://") else {
+        return false;
+    };
+    let authority_end = rest.find('/').unwrap_or(rest.len());
+    let mut path = &rest[authority_end..];
+    if let Some(end) = path.find(['?', '#']) {
+        path = &path[..end];
+    }
+    let file = path.rsplit('/').next().unwrap_or("");
+    let lower = file.to_ascii_lowercase();
+    if lower.is_empty() {
+        return false;
+    }
+    const SUFFIXES: &[&str] = &[
+        ".exe", ".msi", ".msix", ".dll", ".sys", ".ps1", ".bat", ".cmd", ".vbs", ".vbe", ".js",
+        ".jse", ".wsf", ".wsh", ".zip", ".7z", ".rar", ".tar", ".gz", ".cab", ".iso", ".img",
+    ];
+    SUFFIXES.iter().any(|suffix| lower.ends_with(suffix))
+}
+
+/// Validate a redirect chain hop by hop. Every hop must parse, must share the
+/// exact validated base origin, must re-resolve to a public address, must not
+/// repeat a previously seen URL, and must not exceed the hop bound. Scheme
+/// downgrade, loops, widening, SSRF, and malformed targets fail closed.
+pub fn validate_redirect_chain(
+    base_origin: &str,
+    hops: &[String],
+    resolver: &impl DnsResolver,
+) -> Result<(ValidatedDestination, usize, String), ProviderError> {
+    let base = parse_destination_url(base_origin).map_err(|e| {
+        ProviderError::new(
+            FailureCode::TargetStale,
+            format!("browser redirect base origin is invalid: {}", e.message),
+        )
+    })?;
+    if hops.len() > MAX_REDIRECT_HOPS {
+        return Err(ProviderError::denied(format!(
+            "browser redirect chain exceeds at most {MAX_REDIRECT_HOPS} hops"
+        )));
+    }
+    let mut seen: Vec<String> = Vec::new();
+    let mut current_origin = base.origin.clone();
+    let mut final_validated: Option<ValidatedDestination> = None;
+    for hop in hops {
+        if is_download_trigger_url(hop) {
+            return Err(ProviderError::denied(
+                "browser redirect target triggers download handling; downloads remain denied",
+            ));
+        }
+        let target = parse_destination_url(hop)?;
+        if target.origin != base.origin {
+            return Err(ProviderError::denied(format!(
+                "browser redirect target origin {} does not match validated origin {}; redirect widening is denied",
+                target.origin, base.origin
+            )));
+        }
+        if seen.iter().any(|seen_url| seen_url == hop) {
+            return Err(ProviderError::denied(
+                "browser redirect chain contains a loop; redirect loops are denied",
+            ));
+        }
+        seen.push(hop.clone());
+        let validated = validate_destination(hop, resolver)?;
+        if validated.origin != base.origin {
+            return Err(ProviderError::denied(
+                "browser redirect hop origin drifted after resolution; redirect widening is denied",
+            ));
+        }
+        current_origin = validated.origin.clone();
+        final_validated = Some(validated);
+    }
+    match final_validated {
+        Some(final_destination) => Ok((final_destination, hops.len(), current_origin)),
+        None => Err(ProviderError::invalid(
+            "browser redirect chain is empty; supply at least one hop or navigate directly",
+        )),
+    }
+}
+
+/// Build a read-only navigation preview for a known page without mutating
+/// state. Validates the target URL and optional redirect chain with full
+/// re-resolution and post-resolution policy. Download triggers fail closed.
+pub fn preview_navigation(
+    page: &PageRecord,
+    target_url: &str,
+    redirect_chain: &[String],
+    resolver: &impl DnsResolver,
+) -> Result<NavigationPreview, ProviderError> {
+    if page.state == PageState::Closed {
+        return Err(ProviderError::new(
+            FailureCode::TargetStale,
+            "browser page is closed; stale page handles fail closed",
+        ));
+    }
+    if is_download_trigger_url(target_url) {
+        return Err(ProviderError::denied(
+            "browser navigation target triggers download handling; downloads remain denied",
+        ));
+    }
+    let target = validate_destination(target_url, resolver)?;
+    let (final_origin, pinned, redirect_count) = if redirect_chain.is_empty() {
+        (target.origin.clone(), target.pinned_address, 0)
+    } else {
+        if target.origin.is_empty() {
+            return Err(ProviderError::invalid(
+                "browser navigation target origin is empty",
+            ));
+        }
+        let (final_destination, count, final_name) =
+            validate_redirect_chain(&target.origin, redirect_chain, resolver)?;
+        if final_destination.origin != target.origin {
+            return Err(ProviderError::denied(
+                "browser redirect chain widened beyond the validated target origin",
+            ));
+        }
+        (final_name, final_destination.pinned_address, count)
+    };
+    Ok(NavigationPreview {
+        page_id: page.page_id.clone(),
+        workspace_id: page.workspace_id.clone(),
+        policy_revision: page.policy_revision.clone(),
+        current_origin: page.current_origin.clone(),
+        current_generation: page.generation,
+        target_origin: target.origin,
+        pinned_address: pinned,
+        redirect_count,
+        final_origin,
+    })
+}
+
+/// Compute the SOFT approval digest for a navigation transition. The digest
+/// binds page identity, expected origin and generation, target origin, pinned
+/// address, redirect chain, workspace, profile identity, and policy revision.
+/// Any material drift invalidates the approval.
+#[allow(clippy::too_many_arguments)]
+pub fn navigation_approval_digest(
+    workspace_id: &str,
+    policy_revision: &str,
+    profile_identity: &str,
+    page_id: &str,
+    expected_origin: &str,
+    expected_generation: u64,
+    target_origin: &str,
+    pinned_address: &IpAddr,
+    redirect_chain: &[String],
+    final_origin: &str,
+) -> String {
+    let mut hasher = Sha256::new();
+    digest_bytes(&mut hasher, b"COTRA_BROWSER_NAVIGATION_V1");
+    digest_bytes(&mut hasher, workspace_id.as_bytes());
+    digest_bytes(&mut hasher, policy_revision.as_bytes());
+    digest_bytes(&mut hasher, profile_identity.as_bytes());
+    digest_bytes(&mut hasher, page_id.as_bytes());
+    digest_bytes(&mut hasher, expected_origin.as_bytes());
+    digest_bytes(&mut hasher, expected_generation.to_string().as_bytes());
+    digest_bytes(&mut hasher, target_origin.as_bytes());
+    digest_bytes(&mut hasher, pinned_address.to_string().as_bytes());
+    for hop in redirect_chain {
+        digest_bytes(&mut hasher, hop.as_bytes());
+    }
+    digest_bytes(&mut hasher, final_origin.as_bytes());
+    let digest = hasher.finalize();
+    let mut output = String::with_capacity(digest.len() * 2);
+    use std::fmt::Write as _;
+    for byte in digest {
+        let _ = write!(&mut output, "{byte:02x}");
+    }
+    output
+}
+
+fn digest_bytes(hasher: &mut Sha256, value: &[u8]) {
+    hasher.update((value.len() as u64).to_be_bytes());
+    hasher.update(value);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -833,9 +1406,12 @@ mod tests {
     }
 
     #[test]
-    fn allowed_shapes_are_exactly_profile_status_and_destination_validate() {
+    fn allowed_shapes_are_exactly_profile_status_destination_page_and_navigation() {
         assert!(is_allowed_browser_shape("browser.profile", "status"));
         assert!(is_allowed_browser_shape("browser.destination", "validate"));
+        assert!(is_allowed_browser_shape("browser.page", "open"));
+        assert!(is_allowed_browser_shape("browser.navigation", "preview"));
+        assert!(is_allowed_browser_shape("browser.navigation", "navigate"));
         for (capability, operation) in DENIED_BROWSER_SHAPES {
             assert!(
                 !is_allowed_browser_shape(capability, operation),
@@ -854,6 +1430,12 @@ mod tests {
             ("browser.navigate", "navigate"),
             ("browser.dom", "click"),
             ("browser.dom", "fill"),
+            ("browser.dom", "snapshot"),
+            ("browser.dom", "observe"),
+            ("browser.accessibility", "query"),
+            ("browser.snapshot", "observe"),
+            ("browser.page", "close"),
+            ("browser.navigation", "back"),
             ("browser.download", "download"),
             ("browser.upload", "upload"),
             ("browser.profile", "use_personal"),
@@ -1115,6 +1697,330 @@ mod tests {
         let error = ensure_isolated_profile(&root).expect_err("foreign storage must fail");
         assert_eq!(error.code, FailureCode::TargetStale);
         let _ = std::fs::remove_dir_all(root);
+    }
+
+    fn temp_page_registry(label: &str) -> PathBuf {
+        let suffix = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("clock")
+            .as_nanos();
+        std::env::temp_dir().join(format!(
+            "cotra-browser-pages-{label}-{}-{suffix}.jsonl",
+            std::process::id()
+        ))
+    }
+
+    fn open_test_page(store: &mut PageStore) -> PageRecord {
+        store
+            .open_page("default", "profile-identity-test", "sg-000022-v1")
+            .expect("open page")
+    }
+
+    #[test]
+    fn page_open_binds_workspace_profile_and_generation() {
+        let path = temp_page_registry("open");
+        let mut store = PageStore::load_or_create(path.clone());
+        let first = open_test_page(&mut store);
+        assert!(first.page_id.starts_with(PAGE_ID_PREFIX));
+        assert_eq!(first.workspace_id, "default");
+        assert_eq!(first.profile_identity, "profile-identity-test");
+        assert_eq!(first.current_origin, "");
+        assert_eq!(first.generation, 0);
+        assert_eq!(first.state, PageState::Open);
+        let second = open_test_page(&mut store);
+        assert_ne!(first.page_id, second.page_id);
+        assert_eq!(store.count_for_workspace("default"), 2);
+        assert_eq!(store.count_for_workspace("other"), 0);
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn page_open_enforces_per_workspace_bound() {
+        let path = temp_page_registry("bound");
+        let mut store = PageStore::load_or_create(path.clone());
+        for _ in 0..MAX_PAGES_PER_WORKSPACE {
+            open_test_page(&mut store);
+        }
+        let error = store
+            .open_page("default", "profile-identity-test", "sg-000022-v1")
+            .expect_err("bound must fail closed");
+        assert_eq!(error.code, FailureCode::OutputLimit);
+        assert!(store
+            .open_page("other", "profile-identity-test", "sg-000022-v1")
+            .is_ok());
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn forged_page_handles_fail_closed() {
+        let path = temp_page_registry("forged");
+        let mut store = PageStore::load_or_create(path.clone());
+        let page = open_test_page(&mut store);
+        assert!(store.get(&page.page_id).is_some());
+        assert!(store.get("pg-00000000000000000000000000000000").is_none());
+        assert!(store.get("").is_none());
+        let error = store
+            .apply_navigation("pg-forged-handle", "", 0, "https://example.com:443")
+            .expect_err("forged handle must fail");
+        assert_eq!(error.code, FailureCode::TargetStale);
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn stale_generation_and_origin_fail_closed() {
+        let path = temp_page_registry("stale");
+        let mut store = PageStore::load_or_create(path.clone());
+        let page = open_test_page(&mut store);
+        let error = store
+            .apply_navigation(
+                &page.page_id,
+                "https://example.com:443",
+                0,
+                "https://example.com:443",
+            )
+            .expect_err("wrong origin must fail");
+        assert_eq!(error.code, FailureCode::TargetStale);
+        let error = store
+            .apply_navigation(&page.page_id, "", 7, "https://example.com:443")
+            .expect_err("wrong generation must fail");
+        assert_eq!(error.code, FailureCode::TargetStale);
+        let (next, prior_origin, prior_generation) = store
+            .apply_navigation(&page.page_id, "", 0, "https://example.com:443")
+            .expect("first navigation");
+        assert_eq!(prior_origin, "");
+        assert_eq!(prior_generation, 0);
+        assert_eq!(next.generation, 1);
+        assert_eq!(next.current_origin, "https://example.com:443");
+        assert_eq!(next.state, PageState::Active);
+        let error = store
+            .apply_navigation(&page.page_id, "", 0, "https://example.com:443")
+            .expect_err("reused generation must fail");
+        assert_eq!(error.code, FailureCode::TargetStale);
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn redirect_chain_validates_hop_by_hop_with_loop_and_downgrade_denial() {
+        let resolver = public_resolver();
+        let base = "https://example.com/";
+        let validated = validate_destination(base, &resolver).expect("base");
+        let hops = vec![
+            "https://example.com/step-one".to_owned(),
+            "https://example.com/step-two".to_owned(),
+        ];
+        let (final_destination, count, final_origin) =
+            validate_redirect_chain(&validated.origin, &hops, &resolver).expect("chain");
+        assert_eq!(count, 2);
+        assert_eq!(final_origin, "https://example.com:443");
+        assert_eq!(final_destination.origin, "https://example.com:443");
+
+        let widened = vec!["https://evil.example.com/".to_owned()];
+        let error = validate_redirect_chain(&validated.origin, &widened, &resolver)
+            .expect_err("widening must fail");
+        assert_eq!(error.code, FailureCode::CapabilityDenied);
+
+        let downgrade = vec!["http://example.com/".to_owned()];
+        let error = validate_redirect_chain(&validated.origin, &downgrade, &resolver)
+            .expect_err("downgrade must fail");
+        assert_eq!(error.code, FailureCode::CapabilityDenied);
+
+        let alternate_port = vec!["https://example.com:8443/".to_owned()];
+        let error = validate_redirect_chain(&validated.origin, &alternate_port, &resolver)
+            .expect_err("alternate port must fail");
+        assert_eq!(error.code, FailureCode::CapabilityDenied);
+
+        let looped = vec![
+            "https://example.com/a".to_owned(),
+            "https://example.com/a".to_owned(),
+        ];
+        let error = validate_redirect_chain(&validated.origin, &looped, &resolver)
+            .expect_err("loop must fail");
+        assert_eq!(error.code, FailureCode::CapabilityDenied);
+
+        let userinfo = vec!["https://user@example.com/".to_owned()];
+        assert!(validate_redirect_chain(&validated.origin, &userinfo, &resolver).is_err());
+
+        let mut too_many = Vec::new();
+        for index in 0..(MAX_REDIRECT_HOPS + 1) {
+            too_many.push(format!("https://example.com/hop-{index}"));
+        }
+        let error = validate_redirect_chain(&validated.origin, &too_many, &resolver)
+            .expect_err("too many hops must fail");
+        assert_eq!(error.code, FailureCode::CapabilityDenied);
+    }
+
+    #[test]
+    fn redirect_hops_apply_ssrf_policy_per_hop() {
+        let loopback = StaticResolver {
+            addresses: vec!["127.0.0.1".parse().unwrap()],
+        };
+        let base = "https://example.com/";
+        let hops = vec!["https://example.com/private".to_owned()];
+        let error =
+            validate_redirect_chain(base, &hops, &loopback).expect_err("SSRF hop must fail closed");
+        assert_eq!(error.code, FailureCode::CapabilityDenied);
+
+        let metadata = StaticResolver {
+            addresses: vec!["169.254.169.254".parse().unwrap()],
+        };
+        let error = validate_redirect_chain(base, &hops, &metadata)
+            .expect_err("metadata hop must fail closed");
+        assert_eq!(error.code, FailureCode::CapabilityDenied);
+    }
+
+    #[test]
+    fn download_triggers_are_denied_for_executable_script_and_archive_paths() {
+        for url in [
+            "https://example.com/tool.exe",
+            "https://example.com/setup.msi",
+            "https://example.com/run.ps1",
+            "https://example.com/run.bat",
+            "https://example.com/payload.js",
+            "https://example.com/archive.zip",
+            "https://example.com/archive.7z",
+            "https://example.com/image.iso",
+            "https://example.com/TOOL.EXE?download=1",
+        ] {
+            assert!(
+                is_download_trigger_url(url),
+                "{url} must be a download trigger"
+            );
+        }
+        for url in [
+            "https://example.com/docs",
+            "https://example.com/page.html",
+            "https://example.com/api/data.json",
+            "https://example.com/",
+        ] {
+            assert!(!is_download_trigger_url(url), "{url} must not be a trigger");
+        }
+        let resolver = public_resolver();
+        let path = temp_page_registry("download");
+        let mut store = PageStore::load_or_create(path.clone());
+        let page = open_test_page(&mut store);
+        assert!(preview_navigation(&page, "https://example.com/tool.exe", &[], &resolver).is_err());
+        let chain = vec!["https://example.com/archive.zip".to_owned()];
+        assert!(preview_navigation(&page, "https://example.com/docs", &chain, &resolver).is_err());
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn navigation_preview_binds_origin_with_ssrf_denial() {
+        let resolver = public_resolver();
+        let path = temp_page_registry("preview");
+        let mut store = PageStore::load_or_create(path.clone());
+        let page = open_test_page(&mut store);
+        let preview =
+            preview_navigation(&page, "https://example.com/docs", &[], &resolver).expect("preview");
+        assert_eq!(preview.target_origin, "https://example.com:443");
+        assert_eq!(preview.final_origin, "https://example.com:443");
+        assert_eq!(preview.redirect_count, 0);
+        assert_eq!(preview.pinned_address.to_string(), "93.184.216.34");
+
+        let loopback = StaticResolver {
+            addresses: vec!["10.0.0.1".parse().unwrap()],
+        };
+        let error = preview_navigation(&page, "https://example.com/docs", &[], &loopback)
+            .expect_err("private must fail");
+        assert_eq!(error.code, FailureCode::CapabilityDenied);
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn navigation_digest_changes_for_material_drift() {
+        let pinned: IpAddr = "93.184.216.34".parse().unwrap();
+        let base = navigation_approval_digest(
+            "default",
+            "sg-000022-v1",
+            "profile-a",
+            "pg-abc",
+            "",
+            0,
+            "https://example.com:443",
+            &pinned,
+            &[],
+            "https://example.com:443",
+        );
+        let drifted_origin = navigation_approval_digest(
+            "default",
+            "sg-000022-v1",
+            "profile-a",
+            "pg-abc",
+            "https://other.example:443",
+            0,
+            "https://example.com:443",
+            &pinned,
+            &[],
+            "https://example.com:443",
+        );
+        assert_ne!(base, drifted_origin);
+        let drifted_generation = navigation_approval_digest(
+            "default",
+            "sg-000022-v1",
+            "profile-a",
+            "pg-abc",
+            "",
+            1,
+            "https://example.com:443",
+            &pinned,
+            &[],
+            "https://example.com:443",
+        );
+        assert_ne!(base, drifted_generation);
+        let drifted_pin: IpAddr = "1.1.1.1".parse().unwrap();
+        let drifted_address = navigation_approval_digest(
+            "default",
+            "sg-000022-v1",
+            "profile-a",
+            "pg-abc",
+            "",
+            0,
+            "https://example.com:443",
+            &drifted_pin,
+            &[],
+            "https://example.com:443",
+        );
+        assert_ne!(base, drifted_address);
+    }
+
+    #[test]
+    fn navigation_evidence_carries_no_secret_material() {
+        let pinned: IpAddr = "93.184.216.34".parse().unwrap();
+        let evidence = NavigationEvidence {
+            page_id: "pg-test".to_owned(),
+            workspace_id: "default".to_owned(),
+            policy_revision: "sg-000022-v1".to_owned(),
+            profile_identity: "profile-a".to_owned(),
+            prior_origin: String::new(),
+            prior_generation: 0,
+            target_origin: "https://example.com:443".to_owned(),
+            pinned_address: pinned,
+            redirect_count: 0,
+            final_origin: "https://example.com:443".to_owned(),
+            new_generation: 1,
+        };
+        let json = evidence.to_json("apr-1");
+        assert!(json["cookies"] == false);
+        assert!(json["credentials"] == false);
+        assert!(json.get("cookie").is_none());
+        assert!(json.get("authorization").is_none());
+        assert!(json.get("token").is_none());
+        assert!(json.get("password").is_none());
+        let preview = NavigationPreview {
+            page_id: "pg-test".to_owned(),
+            workspace_id: "default".to_owned(),
+            policy_revision: "sg-000022-v1".to_owned(),
+            current_origin: String::new(),
+            current_generation: 0,
+            target_origin: "https://example.com:443".to_owned(),
+            pinned_address: pinned,
+            redirect_count: 0,
+            final_origin: "https://example.com:443".to_owned(),
+        };
+        assert_eq!(
+            preview.to_json()["target_origin"],
+            "https://example.com:443"
+        );
     }
 
     fn marker_body(root: &Path) -> String {
