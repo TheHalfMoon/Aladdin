@@ -3520,17 +3520,31 @@ mod tests {
             FailureCode::TargetStale
         );
 
-        // A source that is not a recorded approved download.
-        for unrecorded in ["dl-never-downloaded", "not-a-source"] {
+        // A source that was never recorded by a completed SG-000025 download.
+        // The identity is well formed, so the failure comes from the registry
+        // miss rather than from request shape.
+        let unregistered = format!("dl-{}", "0".repeat(64));
+        let error = preview_upload_request(
+            &root,
+            &profile_root,
+            upload_preview_arguments(&page_id, &node_id, 1, &unregistered),
+            true,
+            1,
+        )
+        .expect_err("an unrecorded source must fail closed");
+        assert_eq!(error.code, FailureCode::TargetStale);
+
+        // A malformed source identity never reaches the registry at all.
+        for malformed in ["not-a-source", "", "../../id_rsa", "dl-zz"] {
             let error = preview_upload_request(
                 &root,
                 &profile_root,
-                upload_preview_arguments(&page_id, &node_id, 1, unrecorded),
+                upload_preview_arguments(&page_id, &node_id, 1, malformed),
                 true,
                 1,
             )
-            .expect_err("an unrecorded source must fail closed");
-            assert_eq!(error.code, FailureCode::TargetStale);
+            .expect_err("a malformed source identity must fail closed");
+            assert_eq!(error.code, FailureCode::InvalidRequest);
         }
         let _ = std::fs::remove_dir_all(root);
         let _ = std::fs::remove_dir_all(profile_root);
