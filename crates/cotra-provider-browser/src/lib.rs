@@ -2837,7 +2837,6 @@ pub fn default_download_registry_path(profile_root: &Path) -> PathBuf {
 /// page and document generation, source origin, source URL digest, canonical
 /// relative destination, declared media type and size, download policy
 /// revision, and issue time under `COTRA_BROWSER_DOWNLOAD_SOURCE_V1`.
-#[allow(clippy::too_many_arguments)]
 /// True when `candidate` is exactly a `COTRA_BROWSER_DOWNLOAD_SOURCE_V1`
 /// identity: the `dl-` prefix followed by 64 lowercase hex characters. A
 /// prefix-only check would let a caller-typed path fragment reach the registry
@@ -2853,6 +2852,7 @@ pub fn is_well_formed_download_source_id(candidate: &str) -> bool {
             .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn download_source_id_for(
     workspace_id: &str,
     policy_revision: &str,
