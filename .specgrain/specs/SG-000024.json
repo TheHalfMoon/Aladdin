@@ -2,10 +2,16 @@
   "id": "SG-000024",
   "title": "Structured DOM actuation on typed node identity with SOFT approval",
   "program": "COTRA-P08",
-  "state": "GRAIN",
+  "state": "CLOSED",
   "risk": "high",
   "created": "2026-09-28",
   "base": "c40b72a55084e31cfd33e8c23aeaa06c3ec7853a",
+  "qualified_head": "421139092fa4aa8c9dc545240b48cd69b4398978",
+  "implementation_base": "03d95ec0e411e2cd3d5abb78caad8425c8d8b988",
+  "implementation_merge": "0a42c9e440e451023518496cadb9afc1952b30c4",
+  "pre_merge_ci": "36441194364",
+  "pre_merge_review_gates": "36441189927",
+  "post_merge_ci": "36441495286",
   "dependencies": ["SG-000023"],
   "objective": "Establish structured browser actuation on top of the SG-000021 isolated automation profile, the SG-000022 typed page lifecycle with origin binding, and the SG-000023 read-only snapshot observation with typed node identity: SOFT-approved invoke (click) and value-entry (fill) actions bound to exact page, page generation, origin, node identity, expected role and state, document generation, policy revision, requested action, and bounded value digest, with stale-node fail-closed and no silent coordinate fallback, while keeping select, toggle, submit, keyboard input, screenshots, downloads, uploads, password-field fill, personal-profile mode, debugging, scripting, credential access, MCP browser tools, and network egress absent.",
   "scope": {
@@ -88,5 +94,19 @@
     "exact_head_ci": true,
     "native_network_qualification": false
   },
-  "done_when": "Structured invoke and value-entry actuation on typed node identity is merged with exact node binding, role and state matching, SOFT-approved digest-bound transitions, bounded non-password values, password-fill denial, stale fail-closed, agent-forgery tests, retained replay and drift enforcement, and no new select, toggle, submit, keyboard, download, upload, personal-profile, debugging, scripting, credential, coordinate, or network-egress authority."
+  "done_when": "Structured invoke and value-entry actuation on typed node identity is merged with exact node binding, role and state matching, SOFT-approved digest-bound transitions, bounded non-password values, password-fill denial, stale fail-closed, agent-forgery tests, retained replay and drift enforcement, and no new select, toggle, submit, keyboard, download, upload, personal-profile, debugging, scripting, credential, coordinate, or network-egress authority.",
+  "canonical_evidence": {
+    "implementation_pr": 63,
+    "implementation_base": "03d95ec0e411e2cd3d5abb78caad8425c8d8b988",
+    "qualified_head": "421139092fa4aa8c9dc545240b48cd69b4398978",
+    "pre_merge_ci": "36441194364",
+    "pre_merge_review_gates": "36441189927",
+    "merge_sha": "0a42c9e440e451023518496cadb9afc1952b30c4",
+    "post_merge_ci": "36441495286",
+    "jev": "PASSED: 24/24 hunks, zero findings, zero blocking findings, pin 31f89602797fb7bea007f8a480bf368bf564954e",
+    "ocr": "PASSED: Open Code Review v1.12.9 exact-range delegation, 10 files total, 9 reviewable, 1 excluded and manually reviewed",
+    "security_review": "PASS on exact qualified head; structured click and fill on server-side node records with exact page generation origin document role state and policy binding, closed role gating with disabled-node and password-target denial, fresh SOFT approval with digest binding over page node role state action and bounded value with one-shot consumption, generation-bump invalidation with replay denial, bounded fill with oversized denial and digest-only evidence, explicit denial of select toggle submit keyboard screenshot coordinate scripting CDP download upload personal credential and egress shapes with widening-field denial, no MCP browser tool, no new process or network authority, node registry under protected state only, and retained SG-000018 replay SG-000019 STRONG SG-000020 trust SG-000021 profile SG-000022 navigation and SG-000023 observation behavior with P06 regressions",
+    "unresolved_review_threads": 0,
+    "authority_boundary": "Only structured invoke and value-entry actuation on typed node identities is newly added with per-action SOFT approval in the Cotra registry with no browser launch or attachment. Select, toggle, submit, keyboard, screenshots, coordinates, downloads, uploads, password fill, personal-profile access, debugging, scripting, credential access, and network egress remain absent, and existing file, process, Git, approval, presence, trust, destination, page, navigation, and observation behavior is unchanged."
+  }
 }
