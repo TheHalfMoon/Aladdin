@@ -254,12 +254,7 @@ impl PolicyEngine {
                 reject_widening_fields(arguments)?;
             }
             ("browser.navigation", "navigate") => {
-                for name in [
-                    "page_id",
-                    "url",
-                    "expected_origin",
-                    "expected_pinned_address",
-                ] {
+                for name in ["page_id", "url", "expected_pinned_address"] {
                     let text = arguments.get(name).and_then(Value::as_str).ok_or_else(|| {
                         policy_error(
                             FailureCode::InvalidRequest,
@@ -274,6 +269,22 @@ impl PolicyEngine {
                             format!("browser.navigation/navigate {name} is empty or too large"),
                         ));
                     }
+                }
+                let expected_origin =
+                    arguments
+                        .get("expected_origin")
+                        .and_then(Value::as_str)
+                        .ok_or_else(|| {
+                            policy_error(
+                                FailureCode::InvalidRequest,
+                                "browser.navigation/navigate requires arguments.expected_origin as a string",
+                            )
+                        })?;
+                if expected_origin.len() > 2048 {
+                    return Err(policy_error(
+                        FailureCode::InvalidRequest,
+                        "browser.navigation/navigate expected_origin is too large",
+                    ));
                 }
                 if page_id_looks_forged(arguments)? {
                     return Err(policy_error(
