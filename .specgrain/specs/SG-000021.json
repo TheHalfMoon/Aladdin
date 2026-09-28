@@ -2,10 +2,16 @@
   "id": "SG-000021",
   "title": "Isolated browser profile with typed provider contract and origin binding",
   "program": "COTRA-P08",
-  "state": "GRAIN",
+  "state": "CLOSED",
   "risk": "high",
   "created": "2026-09-28",
   "base": "6dc0f9f90e9d5ea98879d15485ffac576e958f37",
+  "qualified_head": "f9912d7a4be7a822954e5dc260be5e698adf9ff8",
+  "implementation_base": "b6229d2d71f9cb1394e2124f0b7aa2be51c995bd",
+  "implementation_merge": "a4aef17a37999d7470912ad8c1a6ea72ae9561a3",
+  "pre_merge_ci": "36411407342",
+  "pre_merge_review_gates": "36411407224",
+  "post_merge_ci": "36411958976",
   "dependencies": ["SG-000020"],
   "objective": "Establish the first COTRA-P08 structured-browser foundation on top of the SG-000018 replay-resistant foundation, SG-000019 STRONG enforcement, and SG-000020 trust and revoke records: a dedicated isolated Cotra automation browser profile with a typed provider contract and strict origin binding, so destination policy, SSRF defenses, and redirect-widening denial are proven before any navigation or DOM actuation authority is introduced.",
   "scope": {
@@ -77,5 +83,19 @@
     "exact_head_ci": true,
     "native_network_qualification": false
   },
-  "done_when": "Isolated automation browser profile with typed provider contract and origin binding is merged with SSRF and redirect-widening denial, actuation denial, agent-forgery tests, retained replay and drift enforcement, and no new actuation, personal-profile, debugging, credential, or network-egress authority."
+  "done_when": "Isolated automation browser profile with typed provider contract and origin binding is merged with SSRF and redirect-widening denial, actuation denial, agent-forgery tests, retained replay and drift enforcement, and no new actuation, personal-profile, debugging, credential, or network-egress authority.",
+  "canonical_evidence": {
+    "implementation_pr": 54,
+    "implementation_base": "b6229d2d71f9cb1394e2124f0b7aa2be51c995bd",
+    "qualified_head": "f9912d7a4be7a822954e5dc260be5e698adf9ff8",
+    "pre_merge_ci": "36411407342",
+    "pre_merge_review_gates": "36411407224",
+    "merge_sha": "a4aef17a37999d7470912ad8c1a6ea72ae9561a3",
+    "post_merge_ci": "36411958976",
+    "jev": "PASSED: 10/10 hunks, zero findings, zero blocking findings, pin 31f89602797fb7bea007f8a480bf368bf564954e",
+    "ocr": "PASSED: Open Code Review v1.12.9 exact-range delegation, 10 files total, 8 reviewable, 2 excluded and manually reviewed",
+    "security_review": "PASS on exact qualified head; isolated automation profile under Cotra protected state with marker-verified fresh storage and no personal data import, personal-profile paths and caller-selected roots denied before touching disk, typed contract allows only browser.profile/status and browser.destination/validate with all actuation shapes denied and STRONG-mapped, origin binding uses normalized scheme host port identity with exact equality and rejects userinfo fragments wildcards alternate numeric forms and localhost aliases, SSRF policy denies loopback private link-local unspecified multicast and mapped IPv6 after re-resolution with deterministic public pinning, redirect widening denied through expected_origin exact binding with full revalidation, no MCP browser tool exists, no launch attach navigation DOM download upload debugging credential or egress authority, and retained SG-000018 replay SG-000019 STRONG and SG-000020 trust behavior with P06 regressions",
+    "unresolved_review_threads": 0,
+    "authority_boundary": "Only isolated browser profile status and origin-bound destination validation are newly added as local policy with no browser launch or attachment. Navigation, DOM actuation, downloads, uploads, personal-profile access, debugging, scripting, credential access, and network egress remain absent, and existing file, process, Git, approval, presence, and trust behavior is unchanged."
+  }
 }
