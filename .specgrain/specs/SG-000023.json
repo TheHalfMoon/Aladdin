@@ -2,10 +2,16 @@
   "id": "SG-000023",
   "title": "Read-only DOM and accessibility observation with typed node identity",
   "program": "COTRA-P08",
-  "state": "GRAIN",
+  "state": "CLOSED",
   "risk": "high",
   "created": "2026-09-28",
   "base": "28e0d912b88961134a41bda87b3545211f06f6e9",
+  "qualified_head": "5ae3e03ee02b199ee35cd77331b4199f9c791a0a",
+  "implementation_base": "0ab6ea79bc5e1b2aa417f6b5f94e8c61861ea7bc",
+  "implementation_merge": "6b1259a29a4f3350597fbac5d9cfe5c64f86a8c4",
+  "pre_merge_ci": "36437199187",
+  "pre_merge_review_gates": "36437195899",
+  "post_merge_ci": "36437754602",
   "dependencies": ["SG-000022"],
   "objective": "Establish read-only structured browser observation on top of the SG-000021 isolated automation profile and the SG-000022 typed page lifecycle with origin binding: a typed snapshot contract that returns bounded document metadata, DOM structure, and accessibility roles, names, states, and safe values through server-allocated typed node identities bound to profile, page, page generation, current origin, document generation, and policy revision, while keeping DOM actuation, downloads, uploads, personal-profile mode, debugging, scripting, credential access, MCP browser tools, and network egress absent.",
   "scope": {
@@ -81,5 +87,19 @@
     "exact_head_ci": true,
     "native_network_qualification": false
   },
-  "done_when": "Read-only snapshot observation with typed node identity is merged with page-bound stale-checked reads, bounded data-minimized responses, password and secret redaction, actuation denial, agent-forgery tests, retained replay and drift enforcement, and no new actuation, download, upload, personal-profile, debugging, scripting, credential, or network-egress authority."
+  "done_when": "Read-only snapshot observation with typed node identity is merged with page-bound stale-checked reads, bounded data-minimized responses, password and secret redaction, actuation denial, agent-forgery tests, retained replay and drift enforcement, and no new actuation, download, upload, personal-profile, debugging, scripting, credential, or network-egress authority.",
+  "canonical_evidence": {
+    "implementation_pr": 60,
+    "implementation_base": "0ab6ea79bc5e1b2aa417f6b5f94e8c61861ea7bc",
+    "qualified_head": "5ae3e03ee02b199ee35cd77331b4199f9c791a0a",
+    "pre_merge_ci": "36437199187",
+    "pre_merge_review_gates": "36437195899",
+    "merge_sha": "6b1259a29a4f3350597fbac5d9cfe5c64f86a8c4",
+    "post_merge_ci": "36437754602",
+    "jev": "PASSED: 16/16 hunks, zero findings, zero blocking findings, pin 31f89602797fb7bea007f8a480bf368bf564954e",
+    "ocr": "PASSED: Open Code Review v1.12.9 exact-range delegation, 8 files total, 7 reviewable, 1 excluded and manually reviewed",
+    "security_review": "PASS on exact qualified head; read-only snapshot observation bound to one known active page with expected origin and generation, server-allocated nd- node identities binding profile page generation origin document generation index and policy revision with stale foreign forged drift fail-closed, bounded max_nodes max_depth max_bytes with oversized fail-closed, password redaction with exact-field secret absence and no JavaScript evaluation, explicit denial of click fill type press select submit toggle upload download scripting CDP DevTools coordinate and egress shapes with widening-field denial, no MCP browser tool, no new filesystem writability, and retained SG-000018 replay SG-000019 STRONG SG-000020 trust SG-000021 profile destination and SG-000022 navigation behavior with P06 regressions",
+    "unresolved_review_threads": 0,
+    "authority_boundary": "Only read-only snapshot observation with typed node identity is newly added as a local read of an already-authorized active page and origin with no browser launch or attachment. DOM actuation, downloads, uploads, personal-profile access, debugging, scripting, credential access, and network egress remain absent, and existing file, process, Git, approval, presence, trust, destination, page, and navigation behavior is unchanged."
+  }
 }

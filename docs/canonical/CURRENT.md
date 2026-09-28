@@ -1,11 +1,11 @@
 # Cotra Current Canonical Frontier
 
-Status: ACTIVE_GRAIN
+Status: CLOSED_GRAIN
 Date: 2026-09-28
-Governance snapshot base: 28e0d912b88961134a41bda87b3545211f06f6e9
+Governance snapshot base: 6b1259a29a4f3350597fbac5d9cfe5c64f86a8c4
 Evidence ledger: `.specgrain/canonical-evidence.json`
 
-`Governance snapshot base` records the exact canonical parent from which this activation snapshot was authored. It deliberately does not claim the eventual merge SHA of the commit containing this file.
+`Governance snapshot base` records the exact canonical parent from which this closeout snapshot was authored. It deliberately does not claim the eventual merge SHA of the commit containing this file.
 
 ## SpecGrain state semantics
 
@@ -17,7 +17,7 @@ The machine-readable evidence for every `CLOSED` grain is recorded in `.specgrai
 
 ## Closed canonical grains
 
-SG-000001 through SG-000022 are `CLOSED` and canonical.
+SG-000001 through SG-000023 are `CLOSED` and canonical.
 
 SG-000016 implementation PR `#38` merged as `c85b79f24ce2deef46319d9c5790623fd70c3b0d` after exact-head CI `36339733920`, Review Gates `36339732607`, genuine TypeSafe Jev `15/15` hunk coverage with zero findings/blockers, Alibaba Open Code Review v1.12.9 exact-range delegation plus manual review of both excluded files, and zero unresolved review threads. Implementation post-merge CI `36339937619` completed SUCCESS.
 
@@ -115,28 +115,19 @@ SG-000021 closed canonically: activation PR `#53`, implementation PR `#54` (qual
 
 SG-000022 closed canonically: activation PR `#56`, implementation PR `#57` (qualified head `2d8ae35db855dd50092efc46a5bd663f20d5d476`, CI `36432067459`, Review Gates `36432064800`, Jev `17/17`, OCR v1.12.9 `7 reviewable + 1 excluded/manually reviewed`, merge `698eff08e736c133b93100e1983fe4be2c5909d0`, post-merge CI `36432538358`), and governance closeout recorded here, all with zero findings, zero blockers, and zero unresolved review threads. The canonical SG-000022 authority adds only typed page lifecycle and SOFT-approved origin-bound navigation with hop-by-hop redirect validation and download-trigger denial in the Cotra registry with no browser launch or attachment.
 
+## Closed SG-000023 DOM observation
+
+SG-000023 closed canonically: activation PR `#59` (activation base `28e0d912b88961134a41bda87b3545211f06f6e9`, activation head `51b64d26272c42acabda943f6ff5bc011af32020`, CI `36435248806`, Review Gates `36435249467`, Jev `3/3`, OCR v1.12.9 `1 reviewable + 1 excluded/manually reviewed`, merge `0ab6ea79bc5e1b2aa417f6b5f94e8c61861ea7bc`, post-merge CI `36435581576`), implementation PR `#60` (qualified head `5ae3e03ee02b199ee35cd77331b4199f9c791a0a`, CI `36437199187`, Review Gates `36437195899`, Jev `16/16`, OCR v1.12.9 `7 reviewable + 1 excluded/manually reviewed`, merge `6b1259a29a4f3350597fbac5d9cfe5c64f86a8c4`, post-merge CI `36437754602`), and governance closeout recorded here, all with zero findings, zero blockers, and zero unresolved review threads. The canonical SG-000023 authority adds only read-only snapshot observation with typed node identity as a local read of an already-authorized active page and origin in the Cotra registry with no browser launch or attachment.
+
 ## Successor frontier
 
-COTRA-P08 continues at this frontier. No successor grain beyond SG-000023 is authorized by this activation.
+COTRA-P08 continues at this frontier. No successor grain beyond SG-000023 is authorized by this closeout. DOM actuation, scoped downloads, and scoped uploads remain successor work.
 
 ## Active grain
 
-SG-000023 — Read-only DOM and accessibility observation with typed node identity — is the sole active COTRA-P08 grain.
+None. SG-000023 is `CLOSED` and canonical. The next lawful P08 grain must be derived from canonical P08 requirements with a narrow SpecGrain.
 
-This activation authorizes implementation and qualification of read-only structured browser observation on the SG-000021 isolated profile and the SG-000022 typed page lifecycle with origin binding: a single snapshot entry point bound to one known active page with expected origin and expected generation; server-allocated typed node identities bound to profile, page, page generation, current origin, document generation, node index, and policy revision with stale closed after navigation, generation change, origin drift, or policy drift; bounded observation with explicit max_nodes, max_depth, and max_bytes limits; data minimization with password and secret redaction and no JavaScript evaluation; and explicit denial of all actuation, download, upload, scripting, debugging, coordinate, and egress shapes, on top of the SG-000018 replay-resistant foundation, SG-000019 class enforcement, SG-000020 trust and revoke records, SG-000021 profile and destination policy, and SG-000022 page lifecycle and navigation, while deliberately keeping DOM actuation, downloads, uploads, actual page loading, personal-profile mode, debugging, scripting, credential access, MCP browser tools, and network egress absent.
-
-Authorized target design:
-- browser.snapshot observe bound to one known active page with expected origin and expected generation and current policy revision;
-- typed node identities bound to profile identity, page identity, page generation, current origin, document generation, node index, and policy revision;
-- bounded snapshot responses with max_nodes, max_depth, and max_bytes caps and fail-closed oversized requests;
-- redaction of password field values, hidden secrets, cookies, credentials, and session stores with no JavaScript evaluation;
-- explicit denial of click, fill, type, press, select, submit, toggle, upload, download, scripting, CDP, DevTools, and coordinate fallback with deterministic unit and security tests for binding, stale denial, bounds, redaction, replay and drift retention, and separation.
-
-## Active acceptance frontier
-
-SG-000023 must prove that snapshots bind one active page on the isolated automation profile, that node identities bind profile, page, generation, origin, document generation, and policy revision, that stale and foreign pages and nodes fail closed, that observation is bounded and data-minimized with password and secret redaction, that every actuation shape remains denied with no silent coordinate fallback, and that the agent cannot reach snapshot capability through its own tool or input surface.
-
-DOM actuation, downloads, uploads, actual page loading, personal-profile use, debugging, scripting, credential access, MCP browser tools, and network egress must remain absent, and STRONG enforcement, one-shot, expiry, and digest binding must not weaken.
+SG-000023 proved that snapshots bind one active page on the isolated automation profile, that node identities bind profile, page, generation, origin, document generation, and policy revision, that stale and foreign pages and nodes fail closed, that observation is bounded and data-minimized with password and secret redaction, that every actuation shape remains denied with no silent coordinate fallback, and that the agent cannot reach snapshot capability through its own tool or input surface.
 
 A P08 exit requires joint proof from SG-000021 isolation and origin binding plus its successors that structured browser operations are proven with SSRF tests, redirect-widening tests, and the personal profile disabled by default. It must not expose personal-profile access, debugging authority, broader egress, or approval bypass.
 
@@ -158,7 +149,9 @@ Existing SG-000021 browser profile and destination policy remains subject to its
 
 Existing SG-000022 bounded navigation remains subject to its exact page lifecycle, SOFT-approved origin-bound transitions, hop-by-hop redirect validation, download-trigger denial, and stale foreign drift controls with actuation denial.
 
-Still denied or absent outside the closed SG-000022 bounded-navigation scope:
+Existing SG-000023 DOM observation remains subject to its exact active-page binding, typed node identity, bounded data-minimized snapshot, password and secret redaction, and stale foreign drift controls with actuation denial.
+
+Still denied or absent outside the closed SG-000023 observation scope:
 
 ## Canonical public authority boundary retained
 
