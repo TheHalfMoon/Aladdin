@@ -575,8 +575,19 @@ mod sg000025_tests {
             ("browser.file", "open"),
             ("browser.archive", "extract"),
             ("browser.shell", "run"),
+            // NOTE (SG-000026 successor): scoped browser.upload/preview and
+            // browser.upload/submit of a recorded approved download artifact
+            // to one typed file-input node are lawfully authorized by the
+            // SG-000026 successor grain and are therefore no longer in this
+            // denied set. browser.upload/upload, generic file read, directory
+            // upload, multiple-file upload, and page byte transfer remain
+            // denied in every successor grain.
             ("browser.upload", "upload"),
-            ("browser.upload", "preview"),
+            ("browser.file", "read"),
+            ("browser.fs", "read"),
+            ("browser.directory", "upload"),
+            ("browser.upload", "directory"),
+            ("browser.upload", "multiple"),
             ("browser.unknown", "unknown"),
         ] {
             assert_eq!(

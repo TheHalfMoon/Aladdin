@@ -1248,6 +1248,7 @@ fn preview_download(
         expires_at_ms,
         state: cotra_provider_browser::DOWNLOAD_SOURCE_PENDING.to_owned(),
         download_id: String::new(),
+        content_sha256: String::new(),
     });
 
     let preview = cotra_provider_browser::DownloadPreview {
@@ -1446,7 +1447,7 @@ fn download_with_approval(
         &content_sha256,
     );
     download_store
-        .mark_consumed(source_id, &download_id)
+        .mark_consumed_with_digest(source_id, &download_id, &content_sha256)
         .map_err(|error| ProviderError::new(error.code, error.message))?;
 
     cotra_provider_browser::write_download_file(&root, &destination, &bytes)
@@ -1622,6 +1623,634 @@ fn optional_download_redirect_chain(
                 .collect()
         }
     }
+}
+
+/// Dispatch SG-000026 scoped bounded uploads. Returns `Ok(None)` for
+/// non-upload shapes so the caller falls through to the download, actuation,
+/// observation, navigation, and SG-000021 dispatches. Preview requires no
+/// approval, mutates nothing, and returns a server-allocated one-shot upload
+/// source identity. Submit requires fresh SOFT approval and records exactly one
+/// approved upload of exactly one recorded download artifact to exactly one
+/// typed file-input node. No path field is accepted, so a caller can never name
+/// the file to read, and no page byte transfer is performed.
+pub fn dispatch_upload(
+    workspace: &Workspace,
+    approval: &impl ApprovalBroker,
+    request: &RequestEnvelope,
+    trust_trusted: bool,
+    trust_revision: u64,
+    profile_root: &Path,
+) -> Result<Option<Value>, ProviderError> {
+    match (request.capability.as_str(), request.operation.as_str()) {
+        ("browser.upload", "preview") => preview_upload(
+            workspace,
+            request,
+            trust_trusted,
+            trust_revision,
+            profile_root,
+        )
+        .map(Some),
+        ("browser.upload", "submit") => submit_upload(
+            workspace,
+            approval,
+            request,
+            trust_trusted,
+            trust_revision,
+            profile_root,
+        )
+        .map(Some),
+        _ => Ok(None),
+    }
+}
+
+const UPLOAD_PREVIEW_ARGUMENTS: &[&str] = &[
+    "page_id",
+    "expected_origin",
+    "expected_generation",
+    "expected_document_generation",
+    "node_id",
+    "expected_role",
+    "expected_input_type",
+    "expected_state",
+    "expected_trust_revision",
+    "artifact_source_id",
+];
+
+const UPLOAD_SUBMIT_ARGUMENTS: &[&str] = &[
+    "page_id",
+    "expected_origin",
+    "expected_generation",
+    "expected_document_generation",
+    "source_id",
+];
+
+fn reject_upload_arguments(
+    request: &RequestEnvelope,
+    allowed: &[&str],
+) -> Result<(), ProviderError> {
+    if request.target.is_some() {
+        return Err(ProviderError::new(
+            FailureCode::InvalidRequest,
+            "browser upload shapes do not accept a target field",
+        ));
+    }
+    let arguments = request.arguments.as_object().ok_or_else(|| {
+        ProviderError::new(
+            FailureCode::InvalidRequest,
+            "browser arguments must be an object",
+        )
+    })?;
+    const WIDENING: &[&str] = &[
+        "path",
+        "paths",
+        "file",
+        "files",
+        "file_path",
+        "source_path",
+        "relative_path",
+        "absolute_path",
+        "destination",
+        "directory",
+        "directories",
+        "root",
+        "download_root",
+        "destination_root",
+        "drive",
+        "unc",
+        "content",
+        "content_base64",
+        "bytes",
+        "data",
+        "read",
+        "recursive",
+        "glob",
+        "wildcard",
+        "profile_root",
+        "argv",
+        "executable",
+        "script",
+        "javascript",
+        "command",
+        "personal",
+        "credentials",
+        "cookies",
+        "passwords",
+        "session",
+        "extensions",
+        "devtools",
+        "cdp",
+        "approval",
+        "token",
+        "nonce",
+        "digest",
+        "selector",
+        "coordinate",
+        "x",
+        "y",
+        "execute",
+        "open",
+        "extract",
+        "spawn",
+        "shell",
+        "run",
+        "submit_form",
+        "transfer",
+    ];
+    if let Some(key) = arguments
+        .keys()
+        .find(|key| WIDENING.contains(&key.as_str()))
+    {
+        return Err(ProviderError::new(
+            FailureCode::CapabilityDenied,
+            format!(
+                "browser upload request must not carry authority-widening field: {key}; no path, file, content, directory, page-transfer, or execution field is accepted, and an upload source can only be named by a recorded approved download identity"
+            ),
+        ));
+    }
+    if let Some(key) = arguments
+        .keys()
+        .find(|key| !allowed.contains(&key.as_str()))
+    {
+        return Err(ProviderError::new(
+            FailureCode::InvalidRequest,
+            format!("browser upload request does not accept argument field: {key}"),
+        ));
+    }
+    Ok(())
+}
+
+fn required_upload_string<'a>(
+    request: &'a RequestEnvelope,
+    name: &str,
+) -> Result<&'a str, ProviderError> {
+    request
+        .arguments
+        .get(name)
+        .and_then(Value::as_str)
+        .ok_or_else(|| {
+            ProviderError::new(
+                FailureCode::InvalidRequest,
+                format!("browser upload requires arguments.{name}"),
+            )
+        })
+}
+
+fn required_upload_u64(request: &RequestEnvelope, name: &str) -> Result<u64, ProviderError> {
+    request
+        .arguments
+        .get(name)
+        .and_then(Value::as_u64)
+        .ok_or_else(|| {
+            ProviderError::new(
+                FailureCode::InvalidRequest,
+                format!("browser upload requires arguments.{name} as an unsigned integer"),
+            )
+        })
+}
+
+/// Resolve the one admissible upload source from the SG-000025 download
+/// registry. A source must be a completed, digest-recorded download artifact
+/// inside the approved workspace download root, and its bytes must still match
+/// that record exactly.
+fn resolve_upload_artifact(
+    workspace_root: &Path,
+    profile_root: &Path,
+    artifact_source_id: &str,
+) -> Result<cotra_provider_browser::VerifiedUploadArtifact, ProviderError> {
+    let download_store = cotra_provider_browser::DownloadStore::load_or_create(
+        cotra_provider_browser::default_download_registry_path(profile_root),
+    );
+    let record = download_store.get(artifact_source_id).cloned().ok_or_else(|| {
+        ProviderError::new(
+            FailureCode::TargetStale,
+            "browser upload source is not a recorded approved download; unrecorded paths are denied",
+        )
+    })?;
+    if record.state != cotra_provider_browser::DOWNLOAD_SOURCE_CONSUMED
+        || record.download_id.is_empty()
+    {
+        return Err(ProviderError::new(
+            FailureCode::TargetStale,
+            "browser upload source is not a completed approved download; pending or unknown downloads are denied",
+        ));
+    }
+    if record.content_sha256.is_empty() {
+        return Err(ProviderError::new(
+            FailureCode::CapabilityDenied,
+            "browser upload source has no recorded content digest; an unverifiable artifact is denied",
+        ));
+    }
+    let root = cotra_provider_browser::resolve_download_root(workspace_root)
+        .map_err(|error| ProviderError::new(error.code, error.message))?;
+    let destination = cotra_provider_browser::resolve_download_destination(
+        &root,
+        &record.canonical_relative_destination,
+    )
+    .map_err(|error| ProviderError::new(error.code, error.message))?;
+    if !destination.exists() {
+        return Err(ProviderError::new(
+            FailureCode::TargetStale,
+            "browser upload source artifact is missing; a removed download fails closed",
+        ));
+    }
+    if destination.is_dir() {
+        return Err(ProviderError::new(
+            FailureCode::CapabilityDenied,
+            "browser upload source is a directory; directory and recursive upload are denied",
+        ));
+    }
+    let bytes = std::fs::read(&destination)
+        .map_err(|error| ProviderError::new(FailureCode::InternalError, error.to_string()))?;
+    if bytes.len() as u64 != record.declared_size_bytes
+        || cotra_provider_browser::sha256_hex(&bytes) != record.content_sha256
+    {
+        return Err(ProviderError::new(
+            FailureCode::PostconditionFailed,
+            "browser upload source no longer matches the recorded approved download",
+        ));
+    }
+    Ok(cotra_provider_browser::VerifiedUploadArtifact {
+        relative_destination: record.canonical_relative_destination.clone(),
+        download_id: record.download_id.clone(),
+        media_type: record.declared_media_type.clone(),
+        sha256: record.content_sha256.clone(),
+        size_bytes: record.declared_size_bytes,
+    })
+}
+
+fn preview_upload(
+    workspace: &Workspace,
+    request: &RequestEnvelope,
+    trust_trusted: bool,
+    trust_revision: u64,
+    profile_root: &Path,
+) -> Result<Value, ProviderError> {
+    reject_upload_arguments(request, UPLOAD_PREVIEW_ARGUMENTS)?;
+    let page_id = required_upload_string(request, "page_id")?;
+    if !page_id.starts_with(cotra_provider_browser::PAGE_ID_PREFIX) {
+        return Err(ProviderError::new(
+            FailureCode::InvalidRequest,
+            "browser upload page_id is malformed",
+        ));
+    }
+    let expected_origin = required_upload_string(request, "expected_origin")?;
+    let expected_generation = required_upload_u64(request, "expected_generation")?;
+    let expected_document_generation =
+        required_upload_u64(request, "expected_document_generation")?;
+    let node_id = required_upload_string(request, "node_id")?;
+    if !node_id.starts_with(cotra_provider_browser::SNAPSHOT_NODE_PREFIX) {
+        return Err(ProviderError::new(
+            FailureCode::InvalidRequest,
+            "browser upload node_id is malformed",
+        ));
+    }
+    let expected_role = required_upload_string(request, "expected_role")?;
+    let expected_input_type = required_upload_string(request, "expected_input_type")?;
+    let expected_state = required_upload_string(request, "expected_state")?;
+    let expected_trust_revision = required_upload_u64(request, "expected_trust_revision")?;
+    let artifact_source_id = required_upload_string(request, "artifact_source_id")?;
+    if !cotra_provider_browser::is_well_formed_download_source_id(artifact_source_id) {
+        return Err(ProviderError::new(
+            FailureCode::InvalidRequest,
+            "browser upload artifact_source_id is malformed",
+        ));
+    }
+    if expected_role != cotra_provider_browser::UPLOAD_NODE_ROLE
+        || !expected_input_type.eq_ignore_ascii_case(cotra_provider_browser::UPLOAD_INPUT_TYPE)
+        || expected_state != cotra_provider_browser::ENABLED_NODE_STATE
+    {
+        return Err(ProviderError::new(
+            FailureCode::CapabilityDenied,
+            "browser upload target must be an enabled textbox node with a file input type",
+        ));
+    }
+    if !trust_trusted {
+        return Err(ProviderError::new(
+            FailureCode::WorkspaceDenied,
+            "browser upload requires a trusted workspace; an emergency revoke fails closed",
+        ));
+    }
+    if expected_trust_revision != trust_revision {
+        return Err(ProviderError::new(
+            FailureCode::TargetStale,
+            "workspace trust revision changed since the caller observed it; trust change fails closed",
+        ));
+    }
+    let profile = cotra_provider_browser::ensure_isolated_profile(profile_root)
+        .map_err(|error| ProviderError::new(error.code, error.message))?;
+    let page_store = cotra_provider_browser::PageStore::load_or_create(
+        cotra_provider_browser::default_page_registry_path(&profile.root),
+    );
+    let page = page_store.get(page_id).cloned().ok_or_else(|| {
+        ProviderError::new(
+            FailureCode::TargetStale,
+            "browser page handle is unknown; stale page handles fail closed",
+        )
+    })?;
+    check_page_binding(workspace, &profile.identity, &page)?;
+    check_download_page_state(
+        &page,
+        &page_store,
+        page_id,
+        expected_origin,
+        expected_generation,
+        expected_document_generation,
+    )?;
+    let node_store = cotra_provider_browser::NodeStore::load_or_create(
+        cotra_provider_browser::default_node_registry_path(&profile.root),
+    );
+    let node = node_store.get(node_id).cloned().ok_or_else(|| {
+        ProviderError::new(
+            FailureCode::TargetStale,
+            "browser node handle is unknown; stale node handles fail closed",
+        )
+    })?;
+    cotra_provider_browser::check_node_for_upload(
+        &node,
+        &page,
+        expected_role,
+        expected_input_type,
+        expected_state,
+        &profile.identity,
+        POLICY_REVISION,
+        expected_generation,
+        expected_document_generation,
+    )
+    .map_err(|error| ProviderError::new(error.code, error.message))?;
+    let artifact = resolve_upload_artifact(&workspace.root, &profile.root, artifact_source_id)?;
+    let issued_at_ms = now_ms();
+    let expires_at_ms = issued_at_ms.saturating_add(cotra_provider_browser::UPLOAD_SOURCE_TTL_MS);
+    let source_id = cotra_provider_browser::upload_source_id_for(
+        &workspace.id,
+        POLICY_REVISION,
+        &profile.identity,
+        page_id,
+        expected_origin,
+        expected_generation,
+        expected_document_generation,
+        node_id,
+        expected_role,
+        expected_input_type,
+        expected_state,
+        trust_revision,
+        artifact_source_id,
+        &artifact.relative_destination,
+        &artifact.media_type,
+        &artifact.sha256,
+        artifact.size_bytes,
+        cotra_provider_browser::UPLOAD_POLICY_REVISION,
+        issued_at_ms,
+    );
+    let preview_digest = cotra_provider_browser::upload_approval_digest(
+        &workspace.id,
+        POLICY_REVISION,
+        &profile.identity,
+        page_id,
+        expected_origin,
+        expected_generation,
+        expected_document_generation,
+        node_id,
+        expected_role,
+        expected_input_type,
+        expected_state,
+        trust_revision,
+        &source_id,
+        &artifact.relative_destination,
+        &artifact.media_type,
+        &artifact.sha256,
+        artifact.size_bytes,
+    );
+
+    let mut upload_store = cotra_provider_browser::UploadStore::load_or_create(
+        cotra_provider_browser::default_upload_registry_path(&profile.root),
+    );
+    if upload_store.pending_count(&workspace.id)
+        >= cotra_provider_browser::MAX_PENDING_UPLOADS_PER_WORKSPACE
+    {
+        return Err(ProviderError::new(
+            FailureCode::CapabilityDenied,
+            format!(
+                "workspace already holds at most {} pending upload sources; upload holds are bounded",
+                cotra_provider_browser::MAX_PENDING_UPLOADS_PER_WORKSPACE
+            ),
+        ));
+    }
+    upload_store.record_pending(cotra_provider_browser::StoredUpload {
+        schema: cotra_provider_browser::UPLOAD_REGISTRY_SCHEMA.to_owned(),
+        source_id: source_id.clone(),
+        workspace_id: workspace.id.clone(),
+        policy_revision: POLICY_REVISION.to_owned(),
+        profile_identity: profile.identity.clone(),
+        page_id: page.page_id.clone(),
+        origin: page.current_origin.clone(),
+        page_generation: expected_generation,
+        document_generation: expected_document_generation,
+        node_id: node_id.to_owned(),
+        node_role: expected_role.to_owned(),
+        node_input_type: expected_input_type.to_owned(),
+        node_state: expected_state.to_owned(),
+        trust_revision,
+        artifact_source_id: artifact_source_id.to_owned(),
+        artifact_download_id: artifact.download_id.clone(),
+        artifact_relative_destination: artifact.relative_destination.clone(),
+        artifact_media_type: artifact.media_type.clone(),
+        artifact_sha256: artifact.sha256.clone(),
+        artifact_size_bytes: artifact.size_bytes,
+        upload_policy_revision: cotra_provider_browser::UPLOAD_POLICY_REVISION.to_owned(),
+        issued_at_ms,
+        expires_at_ms,
+        state: cotra_provider_browser::UPLOAD_SOURCE_PENDING.to_owned(),
+        upload_id: String::new(),
+    });
+    let preview = cotra_provider_browser::UploadPreview {
+        source_id,
+        page_id: page.page_id.clone(),
+        workspace_id: workspace.id.clone(),
+        policy_revision: POLICY_REVISION.to_owned(),
+        profile_identity: profile.identity.clone(),
+        origin: page.current_origin.clone(),
+        page_generation: expected_generation,
+        document_generation: expected_document_generation,
+        node_id: node_id.to_owned(),
+        node_role: expected_role.to_owned(),
+        node_input_type: expected_input_type.to_owned(),
+        node_state: expected_state.to_owned(),
+        trust_revision,
+        artifact_source_id: artifact_source_id.to_owned(),
+        artifact_download_id: artifact.download_id,
+        artifact_relative_destination: artifact.relative_destination,
+        artifact_media_type: artifact.media_type,
+        artifact_sha256: artifact.sha256,
+        artifact_size_bytes: artifact.size_bytes,
+        max_upload_bytes: cotra_provider_browser::MAX_UPLOAD_BYTES,
+        upload_policy_revision: cotra_provider_browser::UPLOAD_POLICY_REVISION.to_owned(),
+        issued_at_ms,
+        expires_at_ms,
+        preview_digest,
+    };
+    Ok(preview.to_json())
+}
+
+fn submit_upload(
+    workspace: &Workspace,
+    approval: &impl ApprovalBroker,
+    request: &RequestEnvelope,
+    trust_trusted: bool,
+    trust_revision: u64,
+    profile_root: &Path,
+) -> Result<Value, ProviderError> {
+    reject_upload_arguments(request, UPLOAD_SUBMIT_ARGUMENTS)?;
+    let page_id = required_upload_string(request, "page_id")?;
+    if !page_id.starts_with(cotra_provider_browser::PAGE_ID_PREFIX) {
+        return Err(ProviderError::new(
+            FailureCode::InvalidRequest,
+            "browser upload page_id is malformed",
+        ));
+    }
+    let expected_origin = required_upload_string(request, "expected_origin")?;
+    let expected_generation = required_upload_u64(request, "expected_generation")?;
+    let expected_document_generation =
+        required_upload_u64(request, "expected_document_generation")?;
+    let source_id = required_upload_string(request, "source_id")?;
+    if !cotra_provider_browser::is_well_formed_upload_source_id(source_id) {
+        return Err(ProviderError::new(
+            FailureCode::InvalidRequest,
+            "browser upload source_id is malformed",
+        ));
+    }
+    let profile = cotra_provider_browser::ensure_isolated_profile(profile_root)
+        .map_err(|error| ProviderError::new(error.code, error.message))?;
+    let page_store = cotra_provider_browser::PageStore::load_or_create(
+        cotra_provider_browser::default_page_registry_path(&profile.root),
+    );
+    let page = page_store.get(page_id).cloned().ok_or_else(|| {
+        ProviderError::new(
+            FailureCode::TargetStale,
+            "browser page handle is unknown; stale page handles fail closed",
+        )
+    })?;
+    check_page_binding(workspace, &profile.identity, &page)?;
+    check_download_page_state(
+        &page,
+        &page_store,
+        page_id,
+        expected_origin,
+        expected_generation,
+        expected_document_generation,
+    )?;
+    let node_store = cotra_provider_browser::NodeStore::load_or_create(
+        cotra_provider_browser::default_node_registry_path(&profile.root),
+    );
+    let mut upload_store = cotra_provider_browser::UploadStore::load_or_create(
+        cotra_provider_browser::default_upload_registry_path(&profile.root),
+    );
+    let record = upload_store.get(source_id).cloned().ok_or_else(|| {
+        ProviderError::new(
+            FailureCode::TargetStale,
+            "browser upload source handle is unknown; stale upload sources fail closed",
+        )
+    })?;
+    let node = node_store.get(&record.node_id).cloned().ok_or_else(|| {
+        ProviderError::new(
+            FailureCode::TargetStale,
+            "browser upload target node handle is unknown; stale node handles fail closed",
+        )
+    })?;
+    let now = now_ms();
+    let artifact = cotra_provider_browser::check_upload_source(
+        &record,
+        &page,
+        &node,
+        &profile.identity,
+        POLICY_REVISION,
+        expected_generation,
+        expected_document_generation,
+        &record.node_role,
+        &record.node_input_type,
+        &record.node_state,
+        trust_revision,
+        trust_trusted,
+        &workspace.root,
+        now,
+    )
+    .map_err(|error| ProviderError::new(error.code, error.message))?;
+    let digest = cotra_provider_browser::upload_approval_digest(
+        &workspace.id,
+        POLICY_REVISION,
+        &profile.identity,
+        page_id,
+        expected_origin,
+        expected_generation,
+        expected_document_generation,
+        &record.node_id,
+        &record.node_role,
+        &record.node_input_type,
+        &record.node_state,
+        record.trust_revision,
+        source_id,
+        &artifact.relative_destination,
+        &artifact.media_type,
+        &artifact.sha256,
+        artifact.size_bytes,
+    );
+    let prompt = ApprovalPrompt::new(
+        workspace.id.clone(),
+        POLICY_REVISION,
+        "upload approved download artifact to a typed file input",
+        record.node_id.clone(),
+        format!(
+            "page={page_id} node={} role={} input={} origin={expected_origin} artifact={} type={} bytes={}",
+            record.node_id,
+
+            record.node_role,
+            record.node_input_type,
+            artifact.relative_destination,
+            artifact.media_type,
+            artifact.size_bytes
+        ),
+        digest.clone(),
+    );
+    let token = approval
+        .request_token(&prompt)
+        .map_err(|error| ProviderError::new(error.code, error.message))?;
+    approval
+        .consume(
+            &token,
+            &ConsumeExpectation::new(digest, workspace.id.clone(), POLICY_REVISION),
+            now,
+        )
+        .map_err(|error| ProviderError::new(error.code, error.message))?;
+
+    let upload_id =
+        cotra_provider_browser::upload_id_for(source_id, &record.node_id, &artifact.sha256);
+    upload_store
+        .mark_consumed(source_id, &upload_id)
+        .map_err(|error| ProviderError::new(error.code, error.message))?;
+    let evidence = cotra_provider_browser::UploadEvidence {
+        upload_id,
+        source_id: source_id.to_owned(),
+        page_id: page.page_id.clone(),
+        workspace_id: workspace.id.clone(),
+        policy_revision: POLICY_REVISION.to_owned(),
+        profile_identity: profile.identity.clone(),
+        origin: page.current_origin.clone(),
+        page_generation: expected_generation,
+        document_generation: expected_document_generation,
+        node_id: record.node_id.clone(),
+        node_role: record.node_role.clone(),
+        node_input_type: record.node_input_type.clone(),
+        node_state: record.node_state.clone(),
+        trust_revision: record.trust_revision,
+        artifact_source_id: record.artifact_source_id.clone(),
+        artifact_download_id: artifact.download_id,
+        artifact_relative_destination: artifact.relative_destination,
+        artifact_media_type: artifact.media_type,
+        artifact_sha256: artifact.sha256,
+        artifact_size_bytes: artifact.size_bytes,
+        upload_policy_revision: cotra_provider_browser::UPLOAD_POLICY_REVISION.to_owned(),
+        state: cotra_provider_browser::UPLOAD_SOURCE_CONSUMED.to_owned(),
+    };
+    Ok(evidence.to_json(&token.record_id))
 }
 
 #[cfg(test)]
@@ -2599,6 +3228,510 @@ mod tests {
             .code,
             FailureCode::CapabilityDenied
         );
+        let _ = std::fs::remove_dir_all(root);
+        let _ = std::fs::remove_dir_all(profile_root);
+    }
+    fn upload_file_node_id(
+        root: &std::path::Path,
+        profile_root: &std::path::Path,
+    ) -> (String, String) {
+        let page_id = active_page_id(root, profile_root);
+        let snapshot = dispatch_observation(
+            &workspace(root),
+            &request(
+                "browser.snapshot",
+                "observe",
+                json!({
+                    "page_id": page_id,
+                    "expected_origin": "https://example.com:443",
+                    "expected_generation": 1,
+                }),
+            ),
+            profile_root,
+        )
+        .expect("observe")
+        .expect("handled");
+        let nodes = snapshot["nodes"].as_array().expect("nodes");
+        let node = nodes
+            .iter()
+            .find(|node| node["input_type"] == "file")
+            .expect("a typed file-input node must be observable");
+        (
+            page_id,
+            node["node_id"].as_str().expect("node id").to_owned(),
+        )
+    }
+
+    fn seed_upload_artifact(
+        root: &std::path::Path,
+        profile_root: &std::path::Path,
+        name: &str,
+        body: &str,
+    ) -> String {
+        std::fs::write(root.join(name), body).expect("artifact");
+        let bytes = body.as_bytes();
+        let digest = cotra_provider_browser::sha256_hex(bytes);
+        // A well formed COTRA_BROWSER_DOWNLOAD_SOURCE_V1 identity, so the strict
+        // shape validator accepts it exactly as it accepts a real one.
+        let source_id = format!("dl-{}", cotra_provider_browser::sha256_hex(name.as_bytes()));
+        let mut store = cotra_provider_browser::DownloadStore::load_or_create(
+            cotra_provider_browser::default_download_registry_path(profile_root),
+        );
+        store.record_pending(cotra_provider_browser::StoredDownload {
+            schema: cotra_provider_browser::DOWNLOAD_REGISTRY_SCHEMA.to_owned(),
+            source_id: source_id.clone(),
+            workspace_id: "default".into(),
+            policy_revision: POLICY_REVISION.to_owned(),
+            profile_identity: cotra_provider_browser::profile_identity_for_root(profile_root),
+            page_id: "pg-seed".into(),
+            origin: "https://example.com:443".into(),
+            page_generation: 1,
+            document_generation: 1,
+            source_origin: "https://example.com:443".into(),
+            source_url_digest: "digest".into(),
+            canonical_relative_destination: name.to_owned(),
+            declared_filename: name.to_owned(),
+            declared_media_type: "text/plain".into(),
+            declared_size_bytes: bytes.len() as u64,
+            download_policy_revision: cotra_provider_browser::DOWNLOAD_POLICY_REVISION.to_owned(),
+            issued_at_ms: 1_000,
+            expires_at_ms: 1_000 + cotra_provider_browser::DOWNLOAD_SOURCE_TTL_MS,
+            state: cotra_provider_browser::DOWNLOAD_SOURCE_CONSUMED.to_owned(),
+            download_id: "dn-seed".into(),
+            content_sha256: digest,
+        });
+        source_id
+    }
+
+    fn upload_preview_arguments(
+        page_id: &str,
+        node_id: &str,
+        trust_revision: u64,
+        artifact_source_id: &str,
+    ) -> Value {
+        json!({
+            "page_id": page_id,
+            "expected_origin": "https://example.com:443",
+            "expected_generation": 1,
+            "expected_document_generation": 1,
+            "node_id": node_id,
+            "expected_role": "textbox",
+            "expected_input_type": "file",
+            "expected_state": "enabled",
+            "expected_trust_revision": trust_revision,
+            "artifact_source_id": artifact_source_id,
+        })
+    }
+
+    fn upload_body_arguments(page_id: &str, source_id: &str) -> Value {
+        json!({
+            "page_id": page_id,
+            "expected_origin": "https://example.com:443",
+            "expected_generation": 1,
+            "expected_document_generation": 1,
+            "source_id": source_id,
+        })
+    }
+
+    fn preview_upload_request(
+        root: &std::path::Path,
+        profile_root: &std::path::Path,
+        arguments: Value,
+        trust_trusted: bool,
+        trust_revision: u64,
+    ) -> Result<Option<Value>, ProviderError> {
+        dispatch_upload(
+            &workspace(root),
+            &DenyBroker,
+            &request("browser.upload", "preview", arguments),
+            trust_trusted,
+            trust_revision,
+            profile_root,
+        )
+    }
+
+    #[test]
+    fn upload_preview_binds_a_file_input_to_a_recorded_download_artifact() {
+        let root = temp_root("dl-upload-preview");
+        let profile_root = profile_dir("dl-upload-preview");
+        let (page_id, node_id) = upload_file_node_id(&root, &profile_root);
+        let artifact = seed_upload_artifact(&root, &profile_root, "artifact.txt", "hello");
+        let preview = preview_upload_request(
+            &root,
+            &profile_root,
+            upload_preview_arguments(&page_id, &node_id, 1, &artifact),
+            true,
+            1,
+        )
+        .expect("preview")
+        .expect("handled");
+        assert!(preview["source_id"]
+            .as_str()
+            .is_some_and(|value| value.starts_with("ul-")));
+        assert_eq!(preview["node_input_type"], "file");
+        assert_eq!(preview["node_role"], "textbox");
+        assert_eq!(preview["node_state"], "enabled");
+        assert_eq!(preview["trust_revision"], 1);
+        assert_eq!(preview["artifact_source_id"], artifact);
+        assert_eq!(preview["artifact_relative_destination"], "artifact.txt");
+        assert_eq!(preview["artifact_media_type"], "text/plain");
+        assert_eq!(preview["artifact_size_bytes"], 5);
+        assert_eq!(preview["page_transfer_performed"], false);
+        assert_eq!(preview["executed"], false);
+        assert_eq!(preview["cookies"], false);
+        assert_eq!(preview["credentials"], false);
+        for forbidden in [
+            "content",
+            "bytes",
+            "data",
+            "path",
+            "source_path",
+            "file_path",
+            "absolute_path",
+        ] {
+            assert!(
+                preview.get(forbidden).is_none(),
+                "upload preview must not carry {forbidden}"
+            );
+        }
+        let _ = std::fs::remove_dir_all(root);
+        let _ = std::fs::remove_dir_all(profile_root);
+    }
+
+    #[test]
+    fn upload_requires_approval_is_one_shot_and_never_reads_any_other_file() {
+        use cotra_approval::test_support::FixedApprovalBroker;
+        use cotra_approval::ApprovalDecision;
+        let root = temp_root("dl-upload-submit");
+        let profile_root = profile_dir("dl-upload-submit");
+        let (page_id, node_id) = upload_file_node_id(&root, &profile_root);
+        let artifact = seed_upload_artifact(&root, &profile_root, "artifact.txt", "hello");
+        // A credential-shaped file that is not a recorded download artifact
+        // must be unreachable as an upload source.
+        std::fs::write(root.join("id_rsa"), "PRIVATE KEY").expect("secret");
+        let workspace = workspace(&root);
+
+        let preview = preview_upload_request(
+            &root,
+            &profile_root,
+            upload_preview_arguments(&page_id, &node_id, 1, &artifact),
+            true,
+            1,
+        )
+        .expect("preview")
+        .expect("handled");
+        let source_id = preview["source_id"].as_str().expect("source").to_owned();
+
+        let denied = dispatch_upload(
+            &workspace,
+            &DenyBroker,
+            &request(
+                "browser.upload",
+                "submit",
+                upload_body_arguments(&page_id, &source_id),
+            ),
+            true,
+            1,
+            &profile_root,
+        )
+        .expect_err("upload without approval must fail closed");
+        assert_eq!(denied.code, FailureCode::ApprovalDenied);
+
+        let evidence = dispatch_upload(
+            &workspace,
+            &FixedApprovalBroker(ApprovalDecision::Approved),
+            &request(
+                "browser.upload",
+                "submit",
+                upload_body_arguments(&page_id, &source_id),
+            ),
+            true,
+            1,
+            &profile_root,
+        )
+        .expect("submit")
+        .expect("handled");
+        assert!(evidence["upload_id"]
+            .as_str()
+            .is_some_and(|value| value.starts_with("up-")));
+        assert_eq!(evidence["artifact_source_id"], artifact);
+        assert_eq!(evidence["artifact_relative_destination"], "artifact.txt");
+        assert_eq!(evidence["artifact_size_bytes"], 5);
+        assert_eq!(evidence["node_input_type"], "file");
+        assert_eq!(evidence["state"], "consumed");
+        assert_eq!(evidence["page_transfer_performed"], false);
+        assert_eq!(evidence["executed"], false);
+        assert!(evidence.get("approval_record_id").is_some());
+
+        let replay = dispatch_upload(
+            &workspace,
+            &FixedApprovalBroker(ApprovalDecision::Approved),
+            &request(
+                "browser.upload",
+                "submit",
+                upload_body_arguments(&page_id, &source_id),
+            ),
+            true,
+            1,
+            &profile_root,
+        )
+        .expect_err("a consumed upload source must fail closed");
+        assert_eq!(replay.code, FailureCode::CapabilityDenied);
+
+        // The unrelated credential-shaped file was never read or touched.
+        assert_eq!(
+            std::fs::read(root.join("id_rsa")).expect("read"),
+            &b"PRIVATE KEY"[..]
+        );
+        let _ = std::fs::remove_dir_all(root);
+        let _ = std::fs::remove_dir_all(profile_root);
+    }
+
+    #[test]
+    fn upload_denies_untrusted_workspace_trust_drift_and_unrecorded_source() {
+        let root = temp_root("dl-upload-deny");
+        let profile_root = profile_dir("dl-upload-deny");
+        let (page_id, node_id) = upload_file_node_id(&root, &profile_root);
+        let artifact = seed_upload_artifact(&root, &profile_root, "artifact.txt", "hello");
+
+        // An untrusted workspace, exactly as an emergency revoke leaves it.
+        assert_eq!(
+            preview_upload_request(
+                &root,
+                &profile_root,
+                upload_preview_arguments(&page_id, &node_id, 1, &artifact),
+                false,
+                1
+            )
+            .expect_err("an emergency revoke must fail closed")
+            .code,
+            FailureCode::WorkspaceDenied
+        );
+
+        // A trust revision change between the caller's view and the dispatch.
+        assert_eq!(
+            preview_upload_request(
+                &root,
+                &profile_root,
+                upload_preview_arguments(&page_id, &node_id, 1, &artifact),
+                true,
+                2
+            )
+            .expect_err("a trust revision change must fail closed")
+            .code,
+            FailureCode::TargetStale
+        );
+
+        // A source that was never recorded by a completed SG-000025 download.
+        // The identity is well formed, so the failure comes from the registry
+        // miss rather than from request shape.
+        let unregistered = format!("dl-{}", "0".repeat(64));
+        let error = preview_upload_request(
+            &root,
+            &profile_root,
+            upload_preview_arguments(&page_id, &node_id, 1, &unregistered),
+            true,
+            1,
+        )
+        .expect_err("an unrecorded source must fail closed");
+        assert_eq!(error.code, FailureCode::TargetStale);
+
+        // A malformed source identity never reaches the registry at all.
+        for malformed in ["not-a-source", "", "../../id_rsa", "dl-zz"] {
+            let error = preview_upload_request(
+                &root,
+                &profile_root,
+                upload_preview_arguments(&page_id, &node_id, 1, malformed),
+                true,
+                1,
+            )
+            .expect_err("a malformed source identity must fail closed");
+            assert_eq!(
+                error.code,
+                FailureCode::InvalidRequest,
+                "malformed source {malformed:?} must be an invalid request, not {:?}",
+                error.code
+            );
+        }
+        let _ = std::fs::remove_dir_all(root);
+        let _ = std::fs::remove_dir_all(profile_root);
+    }
+
+    #[test]
+    fn upload_denies_unauthorized_targets_and_every_widening_field() {
+        let root = temp_root("dl-upload-widen");
+        let profile_root = profile_dir("dl-upload-widen");
+        let (page_id, node_id) = upload_file_node_id(&root, &profile_root);
+        let artifact = seed_upload_artifact(&root, &profile_root, "artifact.txt", "hello");
+
+        for (role, input_type, state) in [
+            ("link", "file", "enabled"),
+            ("textbox", "text", "enabled"),
+            ("textbox", "password", "enabled"),
+            ("textbox", "file", "disabled"),
+        ] {
+            let mut arguments = upload_preview_arguments(&page_id, &node_id, 1, &artifact);
+            arguments
+                .as_object_mut()
+                .expect("object")
+                .insert("expected_role".to_owned(), json!(role));
+            arguments
+                .as_object_mut()
+                .expect("object")
+                .insert("expected_input_type".to_owned(), json!(input_type));
+            arguments
+                .as_object_mut()
+                .expect("object")
+                .insert("expected_state".to_owned(), json!(state));
+            let error = preview_upload_request(&root, &profile_root, arguments, true, 1)
+                .expect_err("an unauthorized upload target must fail closed");
+            assert_eq!(error.code, FailureCode::CapabilityDenied);
+        }
+
+        for field in [
+            "path",
+            "file",
+            "files",
+            "source_path",
+            "relative_path",
+            "absolute_path",
+            "directory",
+            "content",
+            "bytes",
+            "read",
+            "recursive",
+            "submit_form",
+            "transfer",
+        ] {
+            let mut arguments = upload_preview_arguments(&page_id, &node_id, 1, &artifact);
+            arguments
+                .as_object_mut()
+                .expect("object")
+                .insert(field.to_owned(), json!("x"));
+            let error = preview_upload_request(&root, &profile_root, arguments, true, 1)
+                .expect_err("a widening field must fail closed");
+            assert_eq!(
+                error.code,
+                FailureCode::CapabilityDenied,
+                "widening field {field} must fail closed"
+            );
+        }
+        let _ = std::fs::remove_dir_all(root);
+        let _ = std::fs::remove_dir_all(profile_root);
+    }
+
+    #[test]
+    fn upload_denies_stale_page_drift_and_unknown_upload_shapes() {
+        let root = temp_root("dl-upload-stale");
+        let profile_root = profile_dir("dl-upload-stale");
+        let (page_id, node_id) = upload_file_node_id(&root, &profile_root);
+        let artifact = seed_upload_artifact(&root, &profile_root, "artifact.txt", "hello");
+        let mut stale = upload_preview_arguments(&page_id, &node_id, 1, &artifact);
+        stale
+            .as_object_mut()
+            .expect("object")
+            .insert("expected_generation".to_owned(), json!(9));
+        assert_eq!(
+            preview_upload_request(&root, &profile_root, stale, true, 1)
+                .expect_err("generation drift must fail closed")
+                .code,
+            FailureCode::TargetStale
+        );
+        let mut wrong_origin = upload_preview_arguments(&page_id, &node_id, 1, &artifact);
+        wrong_origin.as_object_mut().expect("object").insert(
+            "expected_origin".to_owned(),
+            json!("https://other.example:443"),
+        );
+        assert_eq!(
+            preview_upload_request(&root, &profile_root, wrong_origin, true, 1)
+                .expect_err("origin drift must fail closed")
+                .code,
+            FailureCode::TargetStale
+        );
+
+        let workspace = workspace(&root);
+        for (capability, operation) in [
+            ("browser.upload", "upload"),
+            ("browser.upload", "directory"),
+            ("browser.upload", "multiple"),
+            ("browser.upload", "execute"),
+            ("browser.upload", "open"),
+            ("browser.upload", "extract"),
+            ("browser.file", "read"),
+            ("browser.fs", "read"),
+            ("browser.directory", "upload"),
+        ] {
+            assert!(
+                dispatch_upload(
+                    &workspace,
+                    &DenyBroker,
+                    &request(capability, operation, json!({})),
+                    true,
+                    1,
+                    &profile_root,
+                )
+                .expect("dispatch returns")
+                .is_none(),
+                "{capability}/{operation} must be unhandled by the upload dispatch"
+            );
+        }
+        let _ = std::fs::remove_dir_all(root);
+        let _ = std::fs::remove_dir_all(profile_root);
+    }
+
+    #[test]
+    fn upload_denies_mutated_and_removed_artifacts() {
+        use cotra_approval::test_support::FixedApprovalBroker;
+        use cotra_approval::ApprovalDecision;
+        let root = temp_root("dl-upload-mutate");
+        let profile_root = profile_dir("dl-upload-mutate");
+        let (page_id, node_id) = upload_file_node_id(&root, &profile_root);
+        let artifact = seed_upload_artifact(&root, &profile_root, "artifact.txt", "hello");
+        let workspace = workspace(&root);
+        let broker = FixedApprovalBroker(ApprovalDecision::Approved);
+
+        let preview = preview_upload_request(
+            &root,
+            &profile_root,
+            upload_preview_arguments(&page_id, &node_id, 1, &artifact),
+            true,
+            1,
+        )
+        .expect("preview")
+        .expect("handled");
+        let source_id = preview["source_id"].as_str().expect("source").to_owned();
+
+        std::fs::write(root.join("artifact.txt"), "mutated").expect("mutate");
+        let mutated = dispatch_upload(
+            &workspace,
+            &broker,
+            &request(
+                "browser.upload",
+                "submit",
+                upload_body_arguments(&page_id, &source_id),
+            ),
+            true,
+            1,
+            &profile_root,
+        )
+        .expect_err("a mutated artifact must fail closed");
+        assert_eq!(mutated.code, FailureCode::PostconditionFailed);
+
+        std::fs::remove_file(root.join("artifact.txt")).expect("remove");
+        let removed = dispatch_upload(
+            &workspace,
+            &broker,
+            &request(
+                "browser.upload",
+                "submit",
+                upload_body_arguments(&page_id, &source_id),
+            ),
+            true,
+            1,
+            &profile_root,
+        )
+        .expect_err("a removed artifact must fail closed");
+        assert_eq!(removed.code, FailureCode::TargetStale);
         let _ = std::fs::remove_dir_all(root);
         let _ = std::fs::remove_dir_all(profile_root);
     }
