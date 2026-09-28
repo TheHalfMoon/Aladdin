@@ -6,13 +6,16 @@ use cotra_provider_fs::ProviderError;
 use serde_json::Value;
 use std::path::Path;
 
-/// Dispatch the SG-000021 browser shapes plus SG-000022 page lifecycle and
-/// origin-bound navigation. Profile status and destination validation remain
-/// strictly local. Page open allocates server-side identity with no network
-/// activity. Preview validates with re-resolution but mutates nothing.
-/// Navigate requires fresh SOFT approval with digest binding and hop-by-hop
-/// redirect validation. Every other browser shape returns `Ok(None)` so the
-/// caller fails closed through the STRONG gate or the legacy denial.
+/// Dispatch the SG-000021 browser shapes, the SG-000022 page lifecycle and
+/// origin-bound navigation, and the SG-000023 read-only snapshot
+/// observation. Profile status and destination validation remain strictly
+/// local. Page open allocates server-side identity with no network activity.
+/// Preview validates with re-resolution but mutates nothing. Navigate
+/// requires fresh SOFT approval with digest binding and hop-by-hop redirect
+/// validation. Snapshot observe performs a bounded read-only observation of
+/// one known active page with no approval and no network activity. Every
+/// other browser shape returns `Ok(None)` so the caller fails closed through
+/// the STRONG gate or the legacy denial.
 pub fn dispatch(
     workspace: &Workspace,
     request: &RequestEnvelope,
@@ -124,6 +127,195 @@ pub fn dispatch_navigation(
 
 pub fn system_resolver() -> cotra_provider_browser::SystemResolver {
     cotra_provider_browser::SystemResolver
+}
+
+/// Dispatch SG-000023 read-only snapshot observation. Returns `Ok(None)`
+/// for non-observation shapes so the caller falls through to the navigation
+/// and SG-000021 dispatches. Snapshot observe requires no approval: it is a
+/// bounded local read of an already-authorized active page and origin with
+/// server-allocated typed node identities.
+pub fn dispatch_observation(
+    workspace: &Workspace,
+    request: &RequestEnvelope,
+    profile_root: &Path,
+) -> Result<Option<Value>, ProviderError> {
+    match (request.capability.as_str(), request.operation.as_str()) {
+        ("browser.snapshot", "observe") => {
+            observe_snapshot(workspace, request, profile_root).map(Some)
+        }
+        _ => Ok(None),
+    }
+}
+
+fn observe_snapshot(
+    workspace: &Workspace,
+    request: &RequestEnvelope,
+    profile_root: &Path,
+) -> Result<Value, ProviderError> {
+    if request.target.is_some() {
+        return Err(ProviderError::new(
+            FailureCode::InvalidRequest,
+            "browser.snapshot/observe does not accept a target field",
+        ));
+    }
+    reject_observation_arguments(
+        request,
+        &[
+            "page_id",
+            "expected_origin",
+            "expected_generation",
+            "max_nodes",
+            "max_depth",
+            "max_bytes",
+        ],
+    )?;
+    let page_id = required_observation_string(request, "page_id")?;
+    if !page_id.starts_with(cotra_provider_browser::PAGE_ID_PREFIX) {
+        return Err(ProviderError::new(
+            FailureCode::InvalidRequest,
+            "browser.snapshot/observe page_id is malformed",
+        ));
+    }
+    let expected_origin = required_observation_string(request, "expected_origin")?;
+    let expected_generation = request
+        .arguments
+        .get("expected_generation")
+        .and_then(Value::as_u64)
+        .ok_or_else(|| {
+            ProviderError::new(
+                FailureCode::InvalidRequest,
+                "browser.snapshot/observe requires arguments.expected_generation",
+            )
+        })?;
+    let (max_nodes, max_depth, max_bytes) = optional_snapshot_bounds(request)?;
+
+    let profile = cotra_provider_browser::ensure_isolated_profile(profile_root)
+        .map_err(|error| ProviderError::new(error.code, error.message))?;
+    let registry_path = cotra_provider_browser::default_page_registry_path(&profile.root);
+    let store = cotra_provider_browser::PageStore::load_or_create(registry_path);
+    let page = store.get(page_id).cloned().ok_or_else(|| {
+        ProviderError::new(
+            FailureCode::TargetStale,
+            "browser page handle is unknown; stale page handles fail closed",
+        )
+    })?;
+    check_page_binding(workspace, &profile.identity, &page)?;
+    if page.current_origin != expected_origin {
+        return Err(ProviderError::new(
+            FailureCode::TargetStale,
+            "browser page origin changed since navigation; stale page handles fail closed",
+        ));
+    }
+    if page.generation != expected_generation {
+        return Err(ProviderError::new(
+            FailureCode::TargetStale,
+            "browser page generation changed since navigation; stale page handles fail closed",
+        ));
+    }
+    let snapshot = cotra_provider_browser::build_snapshot(
+        &page,
+        &profile.identity,
+        cotra_policy::POLICY_REVISION,
+        max_nodes,
+        u32::try_from(max_depth).map_err(|_| {
+            ProviderError::new(
+                FailureCode::InvalidRequest,
+                "browser.snapshot/observe max_depth is out of range",
+            )
+        })?,
+        max_bytes,
+    )
+    .map_err(|error| ProviderError::new(error.code, error.message))?;
+    Ok(snapshot.to_json())
+}
+
+fn reject_observation_arguments(
+    request: &RequestEnvelope,
+    allowed: &[&str],
+) -> Result<(), ProviderError> {
+    let arguments = request.arguments.as_object().ok_or_else(|| {
+        ProviderError::new(
+            FailureCode::InvalidRequest,
+            "browser arguments must be an object",
+        )
+    })?;
+    if let Some(key) = arguments
+        .keys()
+        .find(|key| !allowed.contains(&key.as_str()))
+    {
+        if matches!(
+            key.as_str(),
+            "profile_root"
+                | "root"
+                | "path"
+                | "argv"
+                | "executable"
+                | "script"
+                | "javascript"
+                | "command"
+                | "personal"
+                | "credentials"
+                | "cookies"
+                | "passwords"
+                | "session"
+                | "extensions"
+                | "devtools"
+                | "cdp"
+                | "approval"
+                | "token"
+                | "nonce"
+                | "digest"
+                | "node_id"
+                | "selector"
+        ) {
+            return Err(ProviderError::new(
+                FailureCode::CapabilityDenied,
+                format!(
+                    "browser request must not carry authority-widening field: {key}; caller-selected profiles and nodes, browser argv, scripting, credential material, and caller-supplied approval material are denied"
+                ),
+            ));
+        }
+        return Err(ProviderError::new(
+            FailureCode::InvalidRequest,
+            format!("browser snapshot request does not accept argument field: {key}"),
+        ));
+    }
+    Ok(())
+}
+
+fn required_observation_string<'a>(
+    request: &'a RequestEnvelope,
+    name: &str,
+) -> Result<&'a str, ProviderError> {
+    request
+        .arguments
+        .get(name)
+        .and_then(Value::as_str)
+        .ok_or_else(|| {
+            ProviderError::new(
+                FailureCode::InvalidRequest,
+                format!("browser.snapshot/observe requires arguments.{name}"),
+            )
+        })
+}
+
+fn optional_snapshot_bounds(request: &RequestEnvelope) -> Result<(u64, u64, usize), ProviderError> {
+    let optional_u64 = |name: &str| -> Result<Option<u64>, ProviderError> {
+        match request.arguments.get(name) {
+            None => Ok(None),
+            Some(value) => value.as_u64().map(Some).ok_or_else(|| {
+                ProviderError::new(
+                    FailureCode::InvalidRequest,
+                    format!("browser.snapshot/observe {name} must be an unsigned integer"),
+                )
+            }),
+        }
+    };
+    let max_nodes = optional_u64("max_nodes")?;
+    let max_depth = optional_u64("max_depth")?;
+    let max_bytes = optional_u64("max_bytes")?;
+    cotra_provider_browser::resolve_snapshot_bounds(max_nodes, max_depth, max_bytes)
+        .map_err(|error| ProviderError::new(error.code, error.message))
 }
 
 fn reject_browser_arguments(
