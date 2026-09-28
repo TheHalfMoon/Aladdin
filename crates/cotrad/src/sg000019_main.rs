@@ -353,6 +353,17 @@ mod tests {
             cotra_policy::approval_class_for("git.push.preview", "preview"),
             cotra_approval::ApprovalClass::Soft
         );
+        let preview_request = RequestEnvelope {
+            version: INTERNAL_PROTOCOL_VERSION,
+            request_id: "sg19-soft".into(),
+            client_session_id: "session".into(),
+            workspace_id: "default".into(),
+            capability: "git.push.preview".into(),
+            operation: "preview".into(),
+            target: Some(".".into()),
+            arguments: json!({"policy_id": "test-origin", "source_branch": "main", "dest_branch": "main", "credential_reference": "anonymous"}),
+        };
+        policy.authorize(&preview_request).expect("SOFT retained");
         let _ = fs::remove_dir_all(root);
     }
 
