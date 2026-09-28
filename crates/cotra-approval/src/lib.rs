@@ -9,7 +9,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 pub const APPROVAL_TTL_MS: u64 = 5 * 60 * 1_000;
 pub const SINGLE_OPERATION_SCOPE: &str = "single-operation";
 pub const STRONG_VERIFY_TIMEOUT_MS: u64 = 120_000;
-const LEDGER_SCHEMA: &str = "cotra-approval-ledger-v2";
+const LEDGER_SCHEMA: &str = "cotra-approval-ledger-v3";
 
 static NONCE_COUNTER: AtomicU64 = AtomicU64::new(0);
 
@@ -531,6 +531,7 @@ pub struct ApprovedToken {
     pub policy_revision: String,
     pub expires_at_ms: u64,
     pub approval_class: ApprovalClass,
+    pub epoch: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -597,6 +598,8 @@ struct StoredRecord {
     approval_class: ApprovalClass,
     presence_outcome: PresenceOutcome,
     presence_method: String,
+    epoch: u64,
+    is_revoke: bool,
     requested_at_ms: u64,
     decided_at_ms: u64,
     expires_at_ms: u64,
@@ -616,6 +619,8 @@ pub struct ApprovalRecordSummary {
     pub approval_class: ApprovalClass,
     pub presence_outcome: PresenceOutcome,
     pub presence_method: String,
+    pub epoch: u64,
+    pub is_revoke: bool,
     pub requested_at_ms: u64,
     pub decided_at_ms: u64,
     pub expires_at_ms: u64,
@@ -632,6 +637,12 @@ pub trait ApprovalBroker {
         expected: &ConsumeExpectation,
         now_ms: u64,
     ) -> Result<(), ApprovalError>;
+
+    fn emergency_revoke(&self, _prompt: &ApprovalPrompt) -> Result<u64, ApprovalError> {
+        Err(ApprovalError::unavailable(
+            "emergency revoke is unavailable through this broker",
+        ))
+    }
 
     fn request(&self, prompt: &ApprovalPrompt) -> Result<ApprovalDecision, ApprovalError> {
         let token = self.request_token(prompt)?;
@@ -726,6 +737,64 @@ impl ApprovalBroker for LocalApprovalBroker {
     fn history(&self, limit: usize) -> Vec<ApprovalRecordSummary> {
         Self::history(self, limit)
     }
+
+    fn emergency_revoke(&self, prompt: &ApprovalPrompt) -> Result<u64, ApprovalError> {
+        validate_prompt(prompt)?;
+        if prompt.approval_class != ApprovalClass::Strong {
+            return Err(ApprovalError::invalid(
+                "emergency revoke requires the STRONG class",
+            ));
+        }
+        let lease = InputLeaseGuard::suspend_for_presence();
+        if !lease.is_suspended() {
+            return Err(ApprovalError::unavailable(
+                "emergency revoke requires a suspended input lease",
+            ));
+        }
+        let ctx = PresenceContext::new(
+            prompt.nonce.clone(),
+            prompt.digest.clone(),
+            prompt.workspace_id.clone(),
+            prompt.action.clone(),
+        );
+        let method = self.presence.method();
+        let attestation = self.presence.verify(&ctx, &lease);
+        let mut ledger = self
+            .ledger
+            .lock()
+            .map_err(|_| ApprovalError::unavailable("approval ledger is unavailable"))?;
+        match attestation {
+            Ok(attestation) => {
+                if attestation.nonce != prompt.nonce || attestation.digest != prompt.digest {
+                    let _ = ledger.record_decision(
+                        prompt,
+                        RecordedDecision::Unavailable,
+                        PresenceOutcome::Unavailable,
+                        method,
+                    );
+                    return Err(ApprovalError::unavailable(
+                        "revoke presence result does not match the request; revoke fails closed",
+                    ));
+                }
+                let record = ledger.record_revoke(prompt, &attestation.method)?;
+                Ok(record.epoch)
+            }
+            Err(error) => {
+                let outcome = match error.reason {
+                    PresenceFailureReason::Denied | PresenceFailureReason::Cancelled => {
+                        PresenceOutcome::Denied
+                    }
+                    _ => PresenceOutcome::Unavailable,
+                };
+                let decision = match outcome {
+                    PresenceOutcome::Denied => RecordedDecision::Denied,
+                    _ => RecordedDecision::Unavailable,
+                };
+                let _ = ledger.record_decision(prompt, decision, outcome, method);
+                Err(error.into())
+            }
+        }
+    }
 }
 
 impl LocalApprovalBroker {
@@ -751,6 +820,7 @@ impl LocalApprovalBroker {
                     policy_revision: record.policy_revision.clone(),
                     expires_at_ms: record.expires_at_ms,
                     approval_class: ApprovalClass::Soft,
+                    epoch: record.epoch,
                 })
             }
             Ok(ApprovalDecision::Denied) => {
@@ -834,6 +904,7 @@ impl LocalApprovalBroker {
                     policy_revision: record.policy_revision.clone(),
                     expires_at_ms: record.expires_at_ms,
                     approval_class: ApprovalClass::Strong,
+                    epoch: record.epoch,
                 })
             }
             Err(error) => {
@@ -887,6 +958,7 @@ struct ApprovalLedger {
     nonces: HashSet<String>,
     consumed: HashSet<String>,
     tip: String,
+    revoke_epoch: u64,
 }
 
 impl ApprovalLedger {
@@ -897,6 +969,7 @@ impl ApprovalLedger {
             nonces: HashSet::new(),
             consumed: HashSet::new(),
             tip: String::from("GENESIS"),
+            revoke_epoch: 0,
         };
         if ledger.path.is_file() {
             if let Ok(text) = std::fs::read_to_string(&ledger.path) {
@@ -915,6 +988,9 @@ impl ApprovalLedger {
                     ledger.nonces.insert(record.nonce.clone());
                     if record.consumed {
                         ledger.consumed.insert(record.nonce.clone());
+                    }
+                    if record.epoch > ledger.revoke_epoch {
+                        ledger.revoke_epoch = record.epoch;
                     }
                     ledger.records.insert(record.id.clone(), record);
                 }
@@ -962,6 +1038,8 @@ impl ApprovalLedger {
             approval_class: prompt.approval_class,
             presence_outcome,
             presence_method: presence_method.to_owned(),
+            epoch: self.revoke_epoch,
+            is_revoke: false,
             requested_at_ms: prompt.requested_at_ms,
             decided_at_ms: decided_at,
             expires_at_ms: prompt.expires_at_ms,
@@ -977,6 +1055,62 @@ impl ApprovalLedger {
         Ok(record)
     }
 
+    fn record_revoke(
+        &mut self,
+        prompt: &ApprovalPrompt,
+        presence_method: &str,
+    ) -> Result<StoredRecord, ApprovalError> {
+        if prompt.approval_class != ApprovalClass::Strong {
+            return Err(ApprovalError::invalid(
+                "emergency revoke requires the STRONG class",
+            ));
+        }
+        if !self.nonces.insert(prompt.nonce.clone()) {
+            return Err(ApprovalError::invalid(
+                "approval nonce was already issued; retry with a fresh prompt",
+            ));
+        }
+        let new_epoch = self.revoke_epoch.saturating_add(1);
+        let decided_at = now_ms();
+        let id = format!(
+            "rev-{}-{}",
+            decided_at,
+            NONCE_COUNTER.fetch_add(1, Ordering::Relaxed)
+        );
+        let mut record = StoredRecord {
+            schema: LEDGER_SCHEMA.to_owned(),
+            id,
+            nonce: prompt.nonce.clone(),
+            digest: prompt.digest.clone(),
+            workspace_id: prompt.workspace_id.clone(),
+            policy_revision: prompt.policy_revision.clone(),
+            decision: RecordedDecision::Approved,
+            approval_class: ApprovalClass::Strong,
+            presence_outcome: PresenceOutcome::VerifiedStrong,
+            presence_method: presence_method.to_owned(),
+            epoch: new_epoch,
+            is_revoke: true,
+            requested_at_ms: prompt.requested_at_ms,
+            decided_at_ms: decided_at,
+            expires_at_ms: prompt.expires_at_ms,
+            reuse_scope: prompt.reuse_scope.clone(),
+            consumed: true,
+            prev_checksum: self.tip.clone(),
+            checksum: String::new(),
+        };
+        record.checksum = record_checksum(&record);
+        self.tip = record.checksum.clone();
+        self.revoke_epoch = new_epoch;
+        self.append_to_file(&record)?;
+        self.records.insert(record.id.clone(), record.clone());
+        Ok(record)
+    }
+
+    #[allow(dead_code)]
+    fn current_epoch(&self) -> u64 {
+        self.revoke_epoch
+    }
+
     fn consume(
         &mut self,
         token: &ApprovedToken,
@@ -989,6 +1123,21 @@ impl ApprovalLedger {
         if record.decision != RecordedDecision::Approved {
             return Err(ApprovalError::denied(
                 "approval token was not approved and cannot authorize execution",
+            ));
+        }
+        if record.is_revoke {
+            return Err(ApprovalError::denied(
+                "revoke records never authorize execution",
+            ));
+        }
+        if record.epoch != self.revoke_epoch || token.epoch != self.revoke_epoch {
+            return Err(ApprovalError::denied(
+                "approval was revoked by emergency revoke and cannot authorize execution",
+            ));
+        }
+        if record.epoch != token.epoch {
+            return Err(ApprovalError::stale(
+                "approval epoch changed after approval; approval cannot be reused",
             ));
         }
         if record.nonce != token.nonce {
@@ -1102,6 +1251,8 @@ impl ApprovalLedger {
                 approval_class: record.approval_class,
                 presence_outcome: record.presence_outcome,
                 presence_method: record.presence_method.clone(),
+                epoch: record.epoch,
+                is_revoke: record.is_revoke,
                 requested_at_ms: record.requested_at_ms,
                 decided_at_ms: record.decided_at_ms,
                 expires_at_ms: record.expires_at_ms,
@@ -1124,6 +1275,11 @@ fn record_checksum(record: &StoredRecord) -> String {
     checksum_field(&mut hasher, record.approval_class.as_str().as_bytes());
     checksum_field(&mut hasher, record.presence_outcome.as_str().as_bytes());
     checksum_field(&mut hasher, record.presence_method.as_bytes());
+    checksum_field(&mut hasher, record.epoch.to_string().as_bytes());
+    checksum_field(
+        &mut hasher,
+        (if record.is_revoke { "1" } else { "0" }).as_bytes(),
+    );
     checksum_field(&mut hasher, record.requested_at_ms.to_string().as_bytes());
     checksum_field(&mut hasher, record.decided_at_ms.to_string().as_bytes());
     checksum_field(&mut hasher, record.expires_at_ms.to_string().as_bytes());
@@ -1390,6 +1546,8 @@ pub mod test_support {
                 ApprovalClass::Strong => PresenceOutcome::VerifiedStrong,
             },
             presence_method: String::from("test"),
+            epoch: 0,
+            is_revoke: false,
             requested_at_ms: prompt.requested_at_ms,
             decided_at_ms: prompt.requested_at_ms,
             expires_at_ms: prompt.expires_at_ms,
@@ -1425,6 +1583,7 @@ pub mod test_support {
                         policy_revision: prompt.policy_revision.clone(),
                         expires_at_ms: prompt.expires_at_ms,
                         approval_class: ApprovalClass::Soft,
+                        epoch: 0,
                     })
                 }
                 ApprovalDecision::Denied => Err(ApprovalError::denied(
@@ -1523,6 +1682,7 @@ mod tests {
             policy_revision: record.policy_revision.clone(),
             expires_at_ms: record.expires_at_ms,
             approval_class: record.approval_class,
+            epoch: record.epoch,
         }
     }
 
@@ -1723,6 +1883,7 @@ mod tests {
             policy_revision: prompt.policy_revision.clone(),
             expires_at_ms: prompt.expires_at_ms,
             approval_class: ApprovalClass::Strong,
+            epoch: 0,
         };
         let expected = ConsumeExpectation::strong(prompt.digest.clone(), "default", "sg-000019-v1");
         let error = ledger
@@ -2019,5 +2180,114 @@ mod tests {
         let lease = InputLeaseGuard::suspend_for_presence();
         let error = verifier.verify(&ctx, &lease).expect_err("unavailable");
         assert_eq!(error.code, FailureCode::ApprovalUnavailable);
+    }
+
+    #[test]
+    fn emergency_revoke_requires_strong_and_invalidates_prior_tokens() {
+        let path = temp_path("revoke");
+        let broker = broker_with_presence(path.clone(), TestPresenceVerifier::verified());
+        let prompt = strong_prompt_with("digest-before-revoke", 5_000);
+        let token = broker.request_token(&prompt).expect("token");
+        assert_eq!(token.epoch, 0);
+        let revoke_prompt = ApprovalPrompt::new_strong_with_clock(
+            "default",
+            "sg-000019-v1",
+            "emergency revoke",
+            "revoke",
+            "revoke all pending approvals",
+            "digest-revoke",
+            5_500,
+        );
+        let epoch = broker.emergency_revoke(&revoke_prompt).expect("revoke");
+        assert_eq!(epoch, 1);
+        let expected = ConsumeExpectation::strong(prompt.digest.clone(), "default", "sg-000019-v1");
+        let error = broker
+            .consume(&token, &expected, 6_000)
+            .expect_err("revoked");
+        assert_eq!(error.code, FailureCode::ApprovalDenied);
+        let history = broker.history(10);
+        assert!(history.iter().any(|record| record.is_revoke));
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn emergency_revoke_with_soft_class_fails_closed() {
+        let path = temp_path("revoke-soft");
+        let broker = broker_with_presence(path.clone(), TestPresenceVerifier::verified());
+        let soft = prompt_with("digest-soft-revoke", 5_000);
+        let error = broker.emergency_revoke(&soft).expect_err("soft revoke");
+        assert_eq!(error.code, FailureCode::InvalidRequest);
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn emergency_revoke_without_presence_fails_closed() {
+        let path = temp_path("revoke-unavailable");
+        let broker = broker_with_presence(path.clone(), TestPresenceVerifier::unavailable());
+        let revoke_prompt = ApprovalPrompt::new_strong_with_clock(
+            "default",
+            "sg-000019-v1",
+            "emergency revoke",
+            "revoke",
+            "revoke all pending approvals",
+            "digest-revoke",
+            5_500,
+        );
+        let error = broker
+            .emergency_revoke(&revoke_prompt)
+            .expect_err("unavailable");
+        assert_eq!(error.code, FailureCode::ApprovalUnavailable);
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn revoked_tokens_fail_closed_after_reload() {
+        let path = temp_path("revoke-reload");
+        let broker = broker_with_presence(path.clone(), TestPresenceVerifier::verified());
+        let prompt = strong_prompt_with("digest-reload", 5_000);
+        let token = broker.request_token(&prompt).expect("token");
+        let revoke_prompt = ApprovalPrompt::new_strong_with_clock(
+            "default",
+            "sg-000019-v1",
+            "emergency revoke",
+            "revoke",
+            "revoke all pending approvals",
+            "digest-revoke",
+            5_500,
+        );
+        broker.emergency_revoke(&revoke_prompt).expect("revoke");
+        drop(broker);
+        let reloaded = ApprovalLedger::load_or_create(path.clone());
+        assert_eq!(reloaded.current_epoch(), 1);
+        let expected = ConsumeExpectation::strong(prompt.digest.clone(), "default", "sg-000019-v1");
+        let mut reloaded = reloaded;
+        let error = reloaded
+            .consume(&token, &expected, 6_000)
+            .expect_err("revoked after reload");
+        assert_eq!(error.code, FailureCode::ApprovalDenied);
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn approvals_after_revoke_use_new_epoch() {
+        let path = temp_path("revoke-new-epoch");
+        let broker = broker_with_presence(path.clone(), TestPresenceVerifier::verified());
+        let revoke_prompt = ApprovalPrompt::new_strong_with_clock(
+            "default",
+            "sg-000019-v1",
+            "emergency revoke",
+            "revoke",
+            "revoke all pending approvals",
+            "digest-revoke",
+            5_000,
+        );
+        let epoch = broker.emergency_revoke(&revoke_prompt).expect("revoke");
+        assert_eq!(epoch, 1);
+        let prompt = strong_prompt_with("digest-after", 6_000);
+        let token = broker.request_token(&prompt).expect("token");
+        assert_eq!(token.epoch, 1);
+        let expected = ConsumeExpectation::strong(prompt.digest.clone(), "default", "sg-000019-v1");
+        broker.consume(&token, &expected, 6_500).expect("consume");
+        let _ = std::fs::remove_file(path);
     }
 }
