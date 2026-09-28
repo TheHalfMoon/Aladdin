@@ -1,11 +1,11 @@
 # Cotra Current Canonical Frontier
 
-Status: ACTIVE_GRAIN
+Status: CLOSED_GRAIN
 Date: 2026-09-28
-Governance snapshot base: c40b72a55084e31cfd33e8c23aeaa06c3ec7853a
+Governance snapshot base: 0a42c9e440e451023518496cadb9afc1952b30c4
 Evidence ledger: `.specgrain/canonical-evidence.json`
 
-`Governance snapshot base` records the exact canonical parent from which this activation snapshot was authored. It deliberately does not claim the eventual merge SHA of the commit containing this file.
+`Governance snapshot base` records the exact canonical parent from which this closeout snapshot was authored. It deliberately does not claim the eventual merge SHA of the commit containing this file.
 
 ## SpecGrain state semantics
 
@@ -17,7 +17,7 @@ The machine-readable evidence for every `CLOSED` grain is recorded in `.specgrai
 
 ## Closed canonical grains
 
-SG-000001 through SG-000023 are `CLOSED` and canonical.
+SG-000001 through SG-000024 are `CLOSED` and canonical.
 
 SG-000016 implementation PR `#38` merged as `c85b79f24ce2deef46319d9c5790623fd70c3b0d` after exact-head CI `36339733920`, Review Gates `36339732607`, genuine TypeSafe Jev `15/15` hunk coverage with zero findings/blockers, Alibaba Open Code Review v1.12.9 exact-range delegation plus manual review of both excluded files, and zero unresolved review threads. Implementation post-merge CI `36339937619` completed SUCCESS.
 
@@ -119,28 +119,19 @@ SG-000022 closed canonically: activation PR `#56`, implementation PR `#57` (qual
 
 SG-000023 closed canonically: activation PR `#59` (activation base `28e0d912b88961134a41bda87b3545211f06f6e9`, activation head `51b64d26272c42acabda943f6ff5bc011af32020`, CI `36435248806`, Review Gates `36435249467`, Jev `3/3`, OCR v1.12.9 `1 reviewable + 1 excluded/manually reviewed`, merge `0ab6ea79bc5e1b2aa417f6b5f94e8c61861ea7bc`, post-merge CI `36435581576`), implementation PR `#60` (qualified head `5ae3e03ee02b199ee35cd77331b4199f9c791a0a`, CI `36437199187`, Review Gates `36437195899`, Jev `16/16`, OCR v1.12.9 `7 reviewable + 1 excluded/manually reviewed`, merge `6b1259a29a4f3350597fbac5d9cfe5c64f86a8c4`, post-merge CI `36437754602`), and governance closeout recorded here, all with zero findings, zero blockers, and zero unresolved review threads. The canonical SG-000023 authority adds only read-only snapshot observation with typed node identity as a local read of an already-authorized active page and origin in the Cotra registry with no browser launch or attachment.
 
+## Closed SG-000024 DOM actuation
+
+SG-000024 closed canonically: activation PR `#62` (activation base `c40b72a55084e31cfd33e8c23aeaa06c3ec7853a`, activation head `d1224f5a58f48ffb647f9499a41aa6491855e21c`, CI `36438889230`, Review Gates `36438888956`, Jev `3/3`, OCR v1.12.9 `1 reviewable + 1 excluded/manually reviewed`, merge `03d95ec0e411e2cd3d5abb78caad8425c8d8b988`, post-merge CI `36439181347`), implementation PR `#63` (qualified head `421139092fa4aa8c9dc545240b48cd69b4398978`, CI `36441194364`, Review Gates `36441189927`, Jev `24/24`, OCR v1.12.9 `9 reviewable + 1 excluded/manually reviewed`, merge `0a42c9e440e451023518496cadb9afc1952b30c4`, post-merge CI `36441495286`), and governance closeout recorded here, all with zero findings, zero blockers, and zero unresolved review threads. The canonical SG-000024 authority adds only structured invoke and value-entry actuation on typed node identities with per-action SOFT approval in the Cotra registry with no browser launch or attachment.
+
 ## Successor frontier
 
-COTRA-P08 continues at this frontier. No successor grain beyond SG-000024 is authorized by this activation.
+COTRA-P08 continues at this frontier. No successor grain beyond SG-000024 is authorized by this closeout. Extended actuation verbs, scoped downloads, and scoped uploads remain successor work.
 
 ## Active grain
 
-SG-000024 — Structured DOM actuation on typed node identity with SOFT approval — is the sole active COTRA-P08 grain.
+None. SG-000024 is `CLOSED` and canonical. The next lawful P08 grain must be derived from canonical P08 requirements with a narrow SpecGrain.
 
-This activation authorizes implementation and qualification of structured browser actuation consuming the SG-000023 typed node identities on the SG-000021 isolated profile and the SG-000022 typed page lifecycle with origin binding: invoke (click) and value-entry (fill) actions bound to exact page, page generation, origin, node identity, expected role and state, document generation, policy revision, requested action, and bounded value digest; fresh SOFT approval per action with exact digest binding and one-shot consumption; stale-node fail-closed after navigation, generation change, document replacement, origin drift, or policy drift; bounded non-password fill values with oversized and password-field denial; typed actuation evidence without secret material; and explicit denial of select, toggle, submit, keyboard, coordinate fallback, scripting, CDP, downloads, and uploads, on top of the SG-000018 replay-resistant foundation, SG-000019 class enforcement, SG-000020 trust and revoke records, SG-000021 profile and destination policy, SG-000022 page lifecycle and navigation, and SG-000023 observation, while deliberately keeping extended actuation verbs, downloads, uploads, actual page loading, personal-profile mode, debugging, scripting, credential access, MCP browser tools, and network egress absent.
-
-Authorized target design:
-- browser.dom click bound to one known node on one known active page with expected role and state matching;
-- browser.dom fill bound to one known text-compatible non-password node with an explicitly bounded caller value;
-- typed node consumption with exact page, generation, origin, document generation, index, and policy revision binding and stale fail-closed;
-- fresh SOFT approval per action with digest binding over page identity, expected state, node identity, expected role and state, action, and bounded value digest;
-- explicit denial of select, toggle, submit, keyboard, screenshots, coordinates, scripting, CDP, DevTools, downloads, and uploads with deterministic unit and security tests for binding, stale denial, mismatch denial, bounds, approval, replay and drift retention, and separation.
-
-## Active acceptance frontier
-
-SG-000024 must prove that invoke and fill bind one known node on one known active page, that stale and foreign pages and nodes fail closed, that role and state mismatch fails closed, that every action carries fresh SOFT approval, that fill values are bounded with password-field denial, that every non-authorized actuation shape remains denied with no silent coordinate fallback, and that the agent cannot reach actuation capability through its own tool or input surface.
-
-Select, toggle, submit, keyboard, downloads, uploads, actual page loading, personal-profile use, debugging, scripting, credential access, MCP browser tools, and network egress must remain absent, and STRONG enforcement, one-shot, expiry, and digest binding must not weaken.
+SG-000024 proved that invoke and fill bind one known node on one known active page with server-side records, that stale and foreign pages and nodes fail closed, that role and state mismatch fails closed, that every action carries fresh SOFT approval, that fill values are bounded with password-field denial, that every non-authorized actuation shape remains denied with no silent coordinate fallback, and that the agent cannot reach actuation capability through its own tool or input surface.
 
 A P08 exit requires joint proof from SG-000021 isolation and origin binding plus its successors that structured browser operations are proven with SSRF tests, redirect-widening tests, and the personal profile disabled by default. It must not expose personal-profile access, debugging authority, broader egress, or approval bypass.
 
@@ -164,7 +155,9 @@ Existing SG-000022 bounded navigation remains subject to its exact page lifecycl
 
 Existing SG-000023 DOM observation remains subject to its exact active-page binding, typed node identity, bounded data-minimized snapshot, password and secret redaction, and stale foreign drift controls with actuation denial.
 
-Still denied or absent outside the closed SG-000023 observation scope:
+Existing SG-000024 DOM actuation remains subject to its exact node binding, role and state matching, per-action SOFT approval, generation-bump invalidation, bounded non-password values, password-fill denial, and stale foreign drift controls with extended-verb denial and no coordinate fallback.
+
+Still denied or absent outside the closed SG-000024 actuation scope:
 
 ## Canonical public authority boundary retained
 
