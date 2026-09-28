@@ -8,6 +8,7 @@ members = [
   "crates/cotra-provider-fs",
   "crates/cotra-provider-git",
   "crates/cotra-provider-process",
+  "crates/cotra-provider-browser",
   "crates/cotra-tunnel",
   "crates/cotrad",
 ]

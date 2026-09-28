@@ -1,16 +1,12 @@
 [package]
-name = "cotra-policy"
+name = "cotra-provider-browser"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
 
-[lib]
-path = "src/sg000021.rs"
-
 [dependencies]
-cotra-approval = { path = "../cotra-approval" }
 cotra-contracts = { path = "../cotra-contracts" }
-cotra-provider-browser = { path = "../cotra-provider-browser" }
 serde_json.workspace = true
+sha2.workspace = true
