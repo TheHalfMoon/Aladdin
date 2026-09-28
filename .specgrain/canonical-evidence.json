@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "snapshot_base": "e40d7ad255566025617557bbd8f9fb91f1595550",
+  "snapshot_base": "da98225fe3cec510dcdc14459c11293cea0cce59",
   "state_semantics": {
     "GRAIN": "Authorized or active work packet whose acceptance is not yet canonically proven.",
     "PROVEN": "Acceptance and required qualification are proven, but canonical closeout/governance is not yet complete.",
