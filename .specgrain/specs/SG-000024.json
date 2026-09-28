@@ -1,0 +1,92 @@
+{
+  "id": "SG-000024",
+  "title": "Structured DOM actuation on typed node identity with SOFT approval",
+  "program": "COTRA-P08",
+  "state": "GRAIN",
+  "risk": "high",
+  "created": "2026-09-28",
+  "base": "c40b72a55084e31cfd33e8c23aeaa06c3ec7853a",
+  "dependencies": ["SG-000023"],
+  "objective": "Establish structured browser actuation on top of the SG-000021 isolated automation profile, the SG-000022 typed page lifecycle with origin binding, and the SG-000023 read-only snapshot observation with typed node identity: SOFT-approved invoke (click) and value-entry (fill) actions bound to exact page, page generation, origin, node identity, expected role and state, document generation, policy revision, requested action, and bounded value digest, with stale-node fail-closed and no silent coordinate fallback, while keeping select, toggle, submit, keyboard input, screenshots, downloads, uploads, password-field fill, personal-profile mode, debugging, scripting, credential access, MCP browser tools, and network egress absent.",
+  "scope": {
+    "include": [
+      "browser.dom click as the single structured invoke entry point bound to one known node on one known active page",
+      "browser.dom fill as the single structured value-entry point bound to one known text-compatible node with an explicitly bounded caller value",
+      "consumption of SG-000023 server-allocated typed node identities with exact page, page generation, origin, document generation, node index, and policy revision binding",
+      "expected role and state matching so actions target only nodes whose observed role and enabled state permit the requested verb",
+      "fresh SOFT approval per action with digest binding over workspace, policy revision, profile identity, page identity, expected origin and generation, node identity, expected role and state, document generation, requested action, and bounded value digest",
+      "stale-state fail-closed for unknown pages, unknown nodes, foreign profiles, foreign workspaces, origin drift, generation drift, document replacement, role or state mismatch, and policy revision drift",
+      "bounded fill values with explicit size caps and fail-closed oversized values",
+      "denial of password-field fill so credential submission remains absent in this grain",
+      "typed actuation evidence without cookies, credentials, tokens, or secret material",
+      "explicit denial of select, toggle, submit, keyboard input, coordinate fallback, JavaScript evaluation, CDP, DevTools, screenshots, downloads, and uploads",
+      "deterministic unit and security tests for node binding, stale denial, role and state mismatch, approval digest binding, oversized value denial, password-fill denial, actuation-shape denial beyond click and fill, replay and drift retention, and separation",
+      "retention of all SG-000018 one-shot, expiry, digest, history, SG-000019 STRONG enforcement, SG-000020 trust and revoke, SG-000021 profile and destination, SG-000022 page lifecycle and navigation, and SG-000023 observation behavior with no change outside actuation policy",
+      "Windows and Ubuntu exact-head qualification"
+    ],
+    "exclude": [
+      "select, toggle, option, checkbox-state, and radio actuation beyond invoke and fill",
+      "form submission as a standalone verb beyond the page effects of invoke and fill",
+      "keyboard input, key presses, shortcuts, and synthetic typing streams",
+      "screenshots and visual or coordinate control with no silent fallback from structured denial into coordinates",
+      "downloads and uploads",
+      "password-field fill and credential submission",
+      "actual page rendering or page loading by a browser engine beyond local registry-bound actuation records",
+      "cross-origin actuation beyond the current page origin",
+      "personal browser profile mode",
+      "stored credential, cookie, password, or session store access",
+      "arbitrary DevTools, CDP commands, browser scripting, or JavaScript evaluation",
+      "network egress beyond local destination validation and DNS resolution",
+      "MCP browser tools",
+      "persistent approval reuse across operations",
+      "approval delegation to remote or MCP callers",
+      "elevation"
+    ]
+  },
+  "authority_delta": {
+    "filesystem": "An actuation record log may be appended under Cotra protected local state alongside the existing page registry; personal browser data, workspace files, Git state, and unrelated paths gain no new readability or writability.",
+    "process": "No new process authority. No browser is launched or attached in this grain; actuation records authorized transitions in the Cotra registry only.",
+    "network": "None beyond SG-000021 destination validation and SG-000022 DNS resolution. No fetch, socket, page-load, or tunnel authority is added.",
+    "browser": "Structured invoke and value-entry only on typed node identities. Select, toggle, submit, keyboard, downloads, uploads, personal-profile access, debugging, scripting, and actual page loading remain absent.",
+    "ui_input": "None. No OS-level input injection or UI automation is added; actuation is registry-bound structured authorization only.",
+    "secrets": "No cookie, credential, password, or session material enters prompts, records, history, logs, MCP responses, snapshots, node identities, actuation evidence, or fill values beyond the caller-supplied bounded non-password text. Password-field fill is denied.",
+    "approval": "Each invoke and each fill requires a fresh SOFT approval bound to page identity, expected state, node identity, expected role and state, action, bounded value digest, workspace, and policy revision. No persistent reuse or remote delegation is introduced.",
+    "privileged": "None"
+  },
+  "invariants": [
+    "Every action binds one known node on one known active page on the isolated automation profile, one workspace, its current origin, its current generation, and the current policy revision",
+    "Every node identity is a server-allocated SG-000023 identity that recomputes against current profile, page, generation, origin, document generation, index, and policy revision",
+    "Actions target only nodes whose observed role and enabled state permit the requested verb; role or state mismatch fails closed",
+    "Fill values are bounded non-password text; oversized values and password-field targets fail closed",
+    "Every action requires a fresh SOFT approval with exact digest binding and one-shot consumption",
+    "Stale, unknown, foreign-profile, foreign-workspace, origin-drifted, generation-drifted, document-replaced, and policy-drifted pages and nodes fail closed",
+    "Structured denial never silently falls back to coordinates, screenshots, scripting, or CDP",
+    "No select, toggle, submit, keyboard, download, upload, personal-profile, debugging, credential, network-egress, reuse, delegation, or elevation authority is introduced"
+  ],
+  "acceptance": [
+    {"id": "A1", "claim": "Tests prove invoke and fill bind one known node on one known active page with workspace, profile, origin, generation, document generation, and policy revision checks."},
+    {"id": "A2", "claim": "Tests prove stale pages, prior-navigation nodes, wrong pages, wrong profiles, wrong origins, wrong generations, replaced documents, forged identities, and policy drift fail closed."},
+    {"id": "A3", "claim": "Tests prove role and state mismatch fails closed so invoke and fill reach only nodes whose observed role and enabled state permit the verb."},
+    {"id": "A4", "claim": "Tests prove each action requires fresh SOFT approval with digest binding and that stale digests and double consumption fail closed."},
+    {"id": "A5", "claim": "Tests prove fill values are bounded with oversized denial and that password-field fill is denied."},
+    {"id": "A6", "claim": "Tests prove select, toggle, submit, keyboard, screenshot, coordinate, scripting, CDP, DevTools, download, and upload shapes fail closed as denied capability shapes with no silent coordinate fallback."},
+    {"id": "A7", "claim": "Tests prove the agent cannot satisfy actuation capability through MCP tools, synthetic input, UI automation, coordinate proposals, child processes, or replayed prior approvals."},
+    {"id": "A8", "claim": "Tests prove replay, expiry, digest mismatch, revision drift, and double-consumption protections remain enforced for both classes."},
+    {"id": "A9", "claim": "Tests prove all P06 approval flows and SG-000018/019/020/021/022/023 regressions still pass with digests unchanged outside actuation labeling."},
+    {"id": "A10", "claim": "Exact-head Windows/Ubuntu Rust, Node, Governance, genuine TypeSafe Jev, Alibaba Open Code Review, exact-diff security review, manual review of excluded security-sensitive files, and zero unresolved blocking review threads all pass."}
+  ],
+  "successor_requirements": {
+    "p08_extended_actuation": "Select, toggle, submit, and keyboard actuation remain successor work and must build on the SG-000024 node and approval binding without weakening one-shot, expiry, or digest binding and without silent coordinate fallback.",
+    "p08_transfers": "Scoped downloads and uploads remain successor work and must build on navigation, observation, and actuation evidence without silent auto-download behavior.",
+    "p08_exit": "COTRA-P08 exits when structured browser operations are proven with SSRF tests, redirect-widening tests, and the personal profile disabled by default, which SG-000021, SG-000022, SG-000023, this grain, and its successors must jointly satisfy."
+  },
+  "review": {
+    "diffcipline": true,
+    "jev_semantic_review": true,
+    "alibaba_open_code_review": "required exact-range qualification where integrated",
+    "security_review": true,
+    "exact_head_ci": true,
+    "native_network_qualification": false
+  },
+  "done_when": "Structured invoke and value-entry actuation on typed node identity is merged with exact node binding, role and state matching, SOFT-approved digest-bound transitions, bounded non-password values, password-fill denial, stale fail-closed, agent-forgery tests, retained replay and drift enforcement, and no new select, toggle, submit, keyboard, download, upload, personal-profile, debugging, scripting, credential, coordinate, or network-egress authority."
+}
