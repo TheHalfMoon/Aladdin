@@ -1835,7 +1835,8 @@ fn resolve_upload_artifact(
         ));
     }
     if record.content_sha256.is_empty() {
-        return Err(ProviderError::denied(
+        return Err(ProviderError::new(
+            FailureCode::CapabilityDenied,
             "browser upload source has no recorded content digest; an unverifiable artifact is denied",
         ));
     }
@@ -1853,7 +1854,8 @@ fn resolve_upload_artifact(
         ));
     }
     if destination.is_dir() {
-        return Err(ProviderError::denied(
+        return Err(ProviderError::new(
+            FailureCode::CapabilityDenied,
             "browser upload source is a directory; directory and recursive upload are denied",
         ));
     }
