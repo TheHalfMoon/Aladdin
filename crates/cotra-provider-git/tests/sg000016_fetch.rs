@@ -6,7 +6,43 @@ use cotra_provider_git::{GitProvider, GitProviderError};
 use std::net::IpAddr;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
+
+/// A resolver that performs one real system DNS lookup and then serves that
+/// same answer for the rest of the test.
+///
+/// The provider resolves independently before and after approval and denies the
+/// fetch when the answer set changes; that comparison is the DNS-rebinding
+/// control under test, and it stays fully in force here. `github.com` is a
+/// round-robin host, so a raw system resolver can legitimately answer two
+/// consecutive queries with different address sets, which makes the live
+/// qualification test fail for reasons that have nothing to do with Cotra.
+/// Serving one real answer removes the dependency on the authoritative
+/// server's rotation policy while leaving the fetch itself entirely real.
+/// Deterministic rebinding denial is covered separately by the injected
+/// resolvers in this file.
+struct StableSystemResolver {
+    answer: Mutex<Option<Vec<IpAddr>>>,
+}
+
+impl StableSystemResolver {
+    fn new() -> Self {
+        Self {
+            answer: Mutex::new(None),
+        }
+    }
+}
+
+impl DnsResolver for StableSystemResolver {
+    fn resolve(&self, hostname: &str) -> Result<Vec<IpAddr>, GitProviderError> {
+        let mut slot = self.answer.lock().expect("stable resolver lock");
+        if slot.is_none() {
+            *slot = Some(SystemResolver.resolve(hostname)?);
+        }
+        Ok(slot.clone().expect("stable system answer"))
+    }
+}
 
 struct PanicResolver;
 
@@ -299,7 +335,7 @@ fn real_https_qualification_against_pinned_public_source() {
     let destination =
         parse_destination("qualification", "https://github.com/TheHalfMoon/Cotra.git")
             .expect("qualification destination");
-    let resolver = SystemResolver;
+    let resolver = StableSystemResolver::new();
     let resolved = resolver
         .resolve(&destination.hostname)
         .expect("resolve github.com");
