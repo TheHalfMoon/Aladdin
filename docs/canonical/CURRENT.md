@@ -1,11 +1,11 @@
 # Cotra Current Canonical Frontier
 
-Status: ACTIVE_GRAIN
+Status: CLOSEOUT_CANDIDATE
 Date: 2026-09-28
-Governance snapshot base: e9728df8535ee64381f1c29dbdced6850d856226
+Governance snapshot base: ac1e7c98040e3812a5d2e235f89d05bba773ecdd
 Evidence ledger: `.specgrain/canonical-evidence.json`
 
-`Governance snapshot base` records the exact canonical parent from which this activation snapshot was authored. It deliberately does not claim the eventual merge SHA of the commit containing this file.
+`Governance snapshot base` records the exact canonical parent from which this closeout snapshot was authored. It deliberately does not claim the eventual merge SHA of the commit containing this file.
 
 ## SpecGrain state semantics
 
@@ -17,7 +17,7 @@ The machine-readable evidence for every `CLOSED` grain is recorded in `.specgrai
 
 ## Closed canonical grains
 
-SG-000001 through SG-000018 are `CLOSED` and canonical.
+SG-000001 through SG-000018 are already `CLOSED` and canonical.
 
 SG-000016 implementation PR `#38` merged as `c85b79f24ce2deef46319d9c5790623fd70c3b0d` after exact-head CI `36339733920`, Review Gates `36339732607`, genuine TypeSafe Jev `15/15` hunk coverage with zero findings/blockers, Alibaba Open Code Review v1.12.9 exact-range delegation plus manual review of both excluded files, and zero unresolved review threads. Implementation post-merge CI `36339937619` completed SUCCESS.
 
@@ -39,26 +39,30 @@ SG-000018 governance closeout PR `#45` qualified on exact head `6d70c65242324a97
 
 The canonical SG-000018 authority adds only broker-level approval nonces with short expiry, one-shot exact-digest binding, and an append-only redacted approval history; strong user-presence approval, trust changes, persistent reuse, remote delegation, and approval bypass remain absent.
 
-## Active grain
+This closeout candidate records SG-000019 as `CLOSED` using the qualified implementation and merged-tree evidence below. That closeout classification becomes canonical only after this governance change itself merges and the resulting canonical main passes post-merge CI.
 
-SG-000019 — Strong user-presence approval class with platform verification — is the sole active COTRA-P07 grain.
+SG-000019 implementation evidence:
+- implementation PR: `#47`;
+- implementation base: `5e1720863dd9127cc2c214aba58e8b55494f8254`;
+- qualified head: `b2b5b84fc5a14cf3d056c71eccb44f6f7b2cf674`;
+- exact-head CI: `36380608151` — SUCCESS;
+- exact-head Review Gates: `36380606179` — SUCCESS;
+- implementation merge: `ac1e7c98040e3812a5d2e235f89d05bba773ecdd`;
+- implementation post-merge CI: `36380978676` — SUCCESS.
 
-This activation authorizes implementation and qualification of platform-mediated local user-presence verification for PRIVILEGED and selected DESTRUCTIVE operations on top of the SG-000018 replay-resistant foundation, while deliberately keeping trust changes, persistent approval reuse, and remote delegation absent.
+Genuine TypeSafe Jev reviewed the exact implementation range with `45/45` hunks, zero findings, and zero blocking findings. Alibaba Open Code Review v1.12.9 delegated the same exact range across 7 changed files: 6 reviewable files and one exclusion (`docs/security/SG-000019_STRONG_PRESENCE_NOTE.md` by unsupported-extension classification). The excluded file was manually reviewed. There were zero unresolved blocking review threads.
 
-Authorized target design:
-- SOFT versus STRONG approval class in the broker contract with STRONG bound to the existing nonce, expiry, one-shot, digest, workspace, and policy bindings;
-- policy classification mapping PRIVILEGED operations and selected DESTRUCTIVE operations to the STRONG class while existing file, process, and Git operations retain their current class;
-- platform user-presence verification boundary with capability detection and a testable provider seam;
-- Windows Hello style verification path where feasible with fail-closed denial when strong verification is unavailable for STRONG-class operations;
-- protected-surface enforcement during strong verification with input-lease suspension carried over from the existing approval boundary;
-- approval history recording of class, presence result, and fallback denials without secret material;
-- deterministic unit and security tests for class enforcement, unavailable-verification denial, presence forgery through agent surfaces, replay and drift retention, and separation.
+Manual exact-diff security review confirmed the STRONG class is explicit with no SOFT downgrade, platform-mediated presence through a broker-held verifier with suspended input lease, fail-closed unavailable cancelled timeout malformed replay and drift handling, one-shot expiry digest workspace and policy binding retained for both classes, class-labeled checksum-chained redacted history without secrets, approve-like denial retained, no trust-change reuse delegation browser UI network elevation or synthetic-input authority, and retained P06 regressions.
 
-## Active acceptance frontier
+The canonical SG-000019 authority adds only the STRONG approval class with platform-mediated presence verification for PRIVILEGED and selected DESTRUCTIVE operations with fail-closed unavailable handling; existing file, process, and Git operations retain the SOFT class, and trust changes, persistent reuse, remote delegation, and approval bypass remain absent.
 
-SG-000019 must prove that PRIVILEGED and selected DESTRUCTIVE operations require platform-mediated presence and that the agent cannot produce a valid strong approval through its own tool or input surface.
+## Successor frontier
 
-A soft button alone must never satisfy the STRONG class, and unavailable platform verification must fail closed without SOFT downgrade.
+No successor grain is authorized by this closeout candidate.
+
+After this SG-000019 closeout merges and its post-merge CI succeeds, re-read the canonical architecture, delivery plan, threat model, evidence ledger, open governance records, and this `CURRENT.md` to derive the next lawful COTRA-P07 grain for workspace trust management, approval history UX, and emergency revoke. Do not infer or pre-authorize the next SpecGrain identifier or exact trust design from numbering alone.
+
+A successor trust-UX grain must build on the SG-000018 replay-resistant foundation and SG-000019 class enforcement without weakening STRONG enforcement, one-shot, expiry, or digest binding. It must not expose browser automation, UI automation, elevation, or approval bypass.
 
 ## Canonical public authority boundary retained
 
