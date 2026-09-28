@@ -3361,8 +3361,12 @@ pub fn write_download_file(
 
 /// Prefix for server-allocated one-shot upload source identities.
 pub const UPLOAD_SOURCE_PREFIX: &str = "ul-";
-/// Number of lowercase hex characters in an upload source identity digest.
-pub const UPLOAD_SOURCE_DIGEST_HEX: usize = 64;
+/// Number of lowercase hex characters in an upload source identity digest. The
+/// upload source identity is the leading 128 bits of the
+/// `COTRA_BROWSER_UPLOAD_SOURCE_V1` digest, matching the other browser
+/// identities, and is well beyond any realistic collision for a one-shot
+/// per-page, per-node, per-artifact source.
+pub const UPLOAD_SOURCE_DIGEST_HEX: usize = 32;
 /// Prefix for upload identities recorded in upload evidence.
 pub const UPLOAD_ID_PREFIX: &str = "up-";
 /// Revision of the upload source and target policy itself.
