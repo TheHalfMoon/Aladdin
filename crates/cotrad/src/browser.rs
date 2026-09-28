@@ -2332,31 +2332,48 @@ mod tests {
         assert_eq!(replay.code, FailureCode::CapabilityDenied);
         assert_eq!(std::fs::read(&written).expect("read"), &b"hello"[..]);
 
-        let second = preview_download(
+        let existing = preview_download(
             &root,
             &profile_root,
             preview_arguments(&page_id, "notes.txt", "notes.txt", 5),
         )
+        .expect_err("preview must refuse a destination that already exists");
+        assert_eq!(existing.code, FailureCode::PostconditionFailed);
+        assert_eq!(
+            std::fs::read(&written).expect("read"),
+            &b"hello"[..],
+            "an approved download must never overwrite an existing file"
+        );
+
+        // A file that appears between preview and download must also fail
+        // closed: create-only is enforced at write time, not only at preview.
+        let racing = preview_download(
+            &root,
+            &profile_root,
+            preview_arguments(&page_id, "racing.txt", "racing.txt", 5),
+        )
         .expect("preview")
         .expect("handled");
-        let second_source = second["source_id"].as_str().expect("source").to_owned();
-        let overwrite = dispatch_download(
+        let racing_source = racing["source_id"].as_str().expect("source").to_owned();
+        let seeded = std::path::Path::new(&root).join("racing.txt");
+        std::fs::write(&seeded, b"taken").expect("seed");
+        let race = dispatch_download(
             &workspace,
             &FixedApprovalBroker(ApprovalDecision::Approved),
             &request(
                 "browser.download",
                 "download",
-                body_arguments(&page_id, &second_source, "b3RoZXI="),
+                body_arguments(&page_id, &racing_source, "aGVsbG8="),
             ),
             &public_resolver(),
             &profile_root,
         )
         .expect_err("an existing destination must fail closed");
-        assert_eq!(overwrite.code, FailureCode::PostconditionFailed);
+        assert_eq!(race.code, FailureCode::PostconditionFailed);
         assert_eq!(
-            std::fs::read(&written).expect("read"),
-            &b"hello"[..],
-            "an approved download must never overwrite an existing file"
+            std::fs::read(&seeded).expect("read"),
+            &b"taken"[..],
+            "an approved download must never overwrite a seeded file"
         );
         let _ = std::fs::remove_dir_all(root);
         let _ = std::fs::remove_dir_all(profile_root);
