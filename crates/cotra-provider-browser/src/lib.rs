@@ -45,7 +45,15 @@ pub const DENIED_BROWSER_SHAPES: &[(&str, &str)] = &[
     ("browser.archive", "extract"),
     ("browser.shell", "run"),
     ("browser.upload", "upload"),
-    ("browser.upload", "preview"),
+    ("browser.upload", "directory"),
+    ("browser.upload", "multiple"),
+    ("browser.upload", "execute"),
+    ("browser.upload", "open"),
+    ("browser.upload", "extract"),
+    ("browser.file", "read"),
+    ("browser.file", "list"),
+    ("browser.fs", "read"),
+    ("browser.directory", "upload"),
     ("browser.profile", "use_personal"),
     ("browser.profile", "attach"),
     ("browser.profile", "launch"),
@@ -82,6 +90,8 @@ pub fn is_allowed_browser_shape(capability: &str, operation: &str) -> bool {
             | ("browser.dom", "fill")
             | ("browser.download", "preview")
             | ("browser.download", "download")
+            | ("browser.upload", "preview")
+            | ("browser.upload", "submit")
     )
 }
 
@@ -2683,6 +2693,11 @@ pub struct StoredDownload {
     pub expires_at_ms: u64,
     pub state: String,
     pub download_id: String,
+    /// Content digest recorded when the download was consumed. Absent on
+    /// records written before SG-000026; such records are never eligible as
+    /// an upload source because their bytes cannot be re-verified.
+    #[serde(default)]
+    pub content_sha256: String,
 }
 
 /// File-backed download registry stored under Cotra protected local state.
@@ -2754,6 +2769,18 @@ impl DownloadStore {
         source_id: &str,
         download_id: &str,
     ) -> Result<(), ProviderError> {
+        self.mark_consumed_with_digest(source_id, download_id, "")
+    }
+
+    /// Mark one source identity consumed and record the verified content digest
+    /// so a later consumer can re-verify the exact bytes on disk. Unknown
+    /// identities fail closed.
+    pub fn mark_consumed_with_digest(
+        &mut self,
+        source_id: &str,
+        download_id: &str,
+        content_sha256: &str,
+    ) -> Result<(), ProviderError> {
         let mut record = self.downloads.get(source_id).cloned().ok_or_else(|| {
             ProviderError::new(
                 FailureCode::TargetStale,
@@ -2762,6 +2789,7 @@ impl DownloadStore {
         })?;
         record.state = DOWNLOAD_SOURCE_CONSUMED.to_owned();
         record.download_id = download_id.to_owned();
+        record.content_sha256 = content_sha256.to_owned();
         self.persist(&record);
         self.downloads.insert(record.source_id.clone(), record);
         Ok(())
@@ -3276,6 +3304,752 @@ pub fn write_download_file(
     }
     Ok(())
 }
+// ---------------------------------------------------------------------------
+// SG-000026 scoped bounded browser uploads. The only admissible upload source
+// is a file already recorded by the SG-000025 download registry inside the
+// approved workspace download root, re-verified against that record for
+// canonical identity, byte length, and SHA-256. Upload therefore cannot become
+// generic filesystem read: credential files, browser profile files, OS secret
+// stores, user home files, workspace-authored files, unrelated project files,
+// and directories are unreachable by construction. No browser is launched or
+// attached, no page byte transfer or form submission is performed, and no
+// uploaded or downloaded content is executed, opened, extracted, or launched.
+// ---------------------------------------------------------------------------
+
+/// Prefix for server-allocated one-shot upload source identities.
+pub const UPLOAD_SOURCE_PREFIX: &str = "ul-";
+/// Prefix for upload identities recorded in upload evidence.
+pub const UPLOAD_ID_PREFIX: &str = "up-";
+/// Revision of the upload source and target policy itself.
+pub const UPLOAD_POLICY_REVISION: &str = "sg-000026-upload-v1";
+/// Schema for the upload registry file stored under Cotra protected state.
+pub const UPLOAD_REGISTRY_SCHEMA: &str = "cotra-browser-uploads-v1";
+/// File name for the upload registry inside the isolated profile directory.
+pub const UPLOAD_REGISTRY_FILE: &str = "uploads.jsonl";
+/// Hard bound on the bytes one upload may carry.
+pub const MAX_UPLOAD_BYTES: u64 = 8 * 1024 * 1024;
+/// Bound on simultaneously pending upload sources per workspace.
+pub const MAX_PENDING_UPLOADS_PER_WORKSPACE: usize = 8;
+/// Deterministic lifetime of an upload source identity in milliseconds.
+pub const UPLOAD_SOURCE_TTL_MS: u64 = 120_000;
+/// Node role that may receive an upload.
+pub const UPLOAD_NODE_ROLE: &str = "textbox";
+/// Node input type that may receive an upload.
+pub const UPLOAD_INPUT_TYPE: &str = "file";
+/// State of an upload source identity.
+pub const UPLOAD_SOURCE_PENDING: &str = "pending";
+/// Consumed upload source state. A consumed source never authorizes a second
+/// upload.
+pub const UPLOAD_SOURCE_CONSUMED: &str = "consumed";
+
+/// Server-side record of one authorized upload source. Records are created
+/// only by [`UploadStore`]; callers hold identities, never these records. The
+/// record never carries file content or file bytes, and the only admissible
+/// source it names is a previously recorded approved download artifact.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct StoredUpload {
+    pub schema: String,
+    pub source_id: String,
+    pub workspace_id: String,
+    pub policy_revision: String,
+    pub profile_identity: String,
+    pub page_id: String,
+    pub origin: String,
+    pub page_generation: u64,
+    pub document_generation: u64,
+    pub node_id: String,
+    pub node_role: String,
+    pub node_input_type: String,
+    pub node_state: String,
+    pub trust_revision: u64,
+    pub artifact_source_id: String,
+    pub artifact_download_id: String,
+    pub artifact_relative_destination: String,
+    pub artifact_media_type: String,
+    pub artifact_sha256: String,
+    pub artifact_size_bytes: u64,
+    pub upload_policy_revision: String,
+    pub issued_at_ms: u64,
+    pub expires_at_ms: u64,
+    pub state: String,
+    pub upload_id: String,
+}
+
+/// File-backed upload registry stored under Cotra protected local state.
+/// Upload dispatch resolves caller-supplied source identities through this
+/// registry; identities absent here fail closed as stale handles.
+#[derive(Debug)]
+pub struct UploadStore {
+    path: PathBuf,
+    uploads: std::collections::BTreeMap<String, StoredUpload>,
+}
+
+impl UploadStore {
+    pub fn load_or_create(path: PathBuf) -> Self {
+        let mut store = Self {
+            path,
+            uploads: std::collections::BTreeMap::new(),
+        };
+        if store.path.is_file() {
+            if let Ok(text) = std::fs::read_to_string(&store.path) {
+                for line in text.lines() {
+                    if line.trim().is_empty() {
+                        continue;
+                    }
+                    if let Ok(record) = serde_json::from_str::<StoredUpload>(line) {
+                        if record.schema != UPLOAD_REGISTRY_SCHEMA || record.source_id.is_empty() {
+                            break;
+                        }
+                        store.uploads.insert(record.source_id.clone(), record);
+                    }
+                }
+            }
+        } else if let Some(parent) = store.path.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        store
+    }
+
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
+
+    pub fn get(&self, source_id: &str) -> Option<&StoredUpload> {
+        self.uploads.get(source_id)
+    }
+
+    /// Count unconsumed upload sources for one workspace so pending holds on
+    /// protected state stay bounded.
+    pub fn pending_count(&self, workspace_id: &str) -> usize {
+        self.uploads
+            .values()
+            .filter(|record| {
+                record.workspace_id == workspace_id && record.state == UPLOAD_SOURCE_PENDING
+            })
+            .count()
+    }
+
+    /// Persist a freshly authorized upload source as a server-side record.
+    pub fn record_pending(&mut self, record: StoredUpload) {
+        self.persist(&record);
+        self.uploads.insert(record.source_id.clone(), record);
+    }
+
+    /// Mark one upload source identity consumed so it never authorizes a
+    /// second upload. Unknown identities fail closed.
+    pub fn mark_consumed(&mut self, source_id: &str, upload_id: &str) -> Result<(), ProviderError> {
+        let mut record = self.uploads.get(source_id).cloned().ok_or_else(|| {
+            ProviderError::new(
+                FailureCode::TargetStale,
+                "browser upload source handle is unknown; stale upload sources fail closed",
+            )
+        })?;
+        record.state = UPLOAD_SOURCE_CONSUMED.to_owned();
+        record.upload_id = upload_id.to_owned();
+        self.persist(&record);
+        self.uploads.insert(record.source_id.clone(), record);
+        Ok(())
+    }
+
+    fn persist(&self, record: &StoredUpload) {
+        use std::io::Write as _;
+        if let Some(parent) = self.path.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        if let Ok(mut file) = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&self.path)
+        {
+            let _ = serde_json::to_writer(&mut file, record);
+            let _ = file.write_all(b"\n");
+            let _ = file.flush();
+        }
+    }
+}
+
+/// Canonical path for the upload registry file. Production keeps it inside the
+/// isolated profile directory under Cotra protected local state.
+pub fn default_upload_registry_path(profile_root: &Path) -> PathBuf {
+    profile_root.join(UPLOAD_REGISTRY_FILE)
+}
+
+/// A verified upload artifact: the bounded, digest-confirmed facts about the
+/// one admissible source file. It never carries file content or file bytes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VerifiedUploadArtifact {
+    pub relative_destination: String,
+    pub download_id: String,
+    pub media_type: String,
+    pub sha256: String,
+    pub size_bytes: u64,
+}
+
+/// Compute the server-allocated one-shot upload source identity under
+/// `COTRA_BROWSER_UPLOAD_SOURCE_V1`.
+#[allow(clippy::too_many_arguments)]
+pub fn upload_source_id_for(
+    workspace_id: &str,
+    policy_revision: &str,
+    profile_identity: &str,
+    page_id: &str,
+    origin: &str,
+    page_generation: u64,
+    document_generation: u64,
+    node_id: &str,
+    node_role: &str,
+    node_input_type: &str,
+    node_state: &str,
+    trust_revision: u64,
+    artifact_source_id: &str,
+    artifact_relative_destination: &str,
+    artifact_media_type: &str,
+    artifact_sha256: &str,
+    artifact_size_bytes: u64,
+    upload_policy_revision: &str,
+    issued_at_ms: u64,
+) -> String {
+    let mut hasher = Sha256::new();
+    digest_bytes(&mut hasher, b"COTRA_BROWSER_UPLOAD_SOURCE_V1");
+    digest_bytes(&mut hasher, workspace_id.as_bytes());
+    digest_bytes(&mut hasher, policy_revision.as_bytes());
+    digest_bytes(&mut hasher, profile_identity.as_bytes());
+    digest_bytes(&mut hasher, page_id.as_bytes());
+    digest_bytes(&mut hasher, origin.as_bytes());
+    digest_bytes(&mut hasher, page_generation.to_string().as_bytes());
+    digest_bytes(&mut hasher, document_generation.to_string().as_bytes());
+    digest_bytes(&mut hasher, node_id.as_bytes());
+    digest_bytes(&mut hasher, node_role.as_bytes());
+    digest_bytes(&mut hasher, node_input_type.as_bytes());
+    digest_bytes(&mut hasher, node_state.as_bytes());
+    digest_bytes(&mut hasher, trust_revision.to_string().as_bytes());
+    digest_bytes(&mut hasher, artifact_source_id.as_bytes());
+    digest_bytes(&mut hasher, artifact_relative_destination.as_bytes());
+    digest_bytes(&mut hasher, artifact_media_type.as_bytes());
+    digest_bytes(&mut hasher, artifact_sha256.as_bytes());
+    digest_bytes(&mut hasher, artifact_size_bytes.to_string().as_bytes());
+    digest_bytes(&mut hasher, upload_policy_revision.as_bytes());
+    digest_bytes(&mut hasher, issued_at_ms.to_string().as_bytes());
+    let digest = hasher.finalize();
+    let mut hex = String::with_capacity(32);
+    use std::fmt::Write as _;
+    for byte in digest.iter().take(16) {
+        let _ = write!(&mut hex, "{byte:02x}");
+    }
+    format!("{UPLOAD_SOURCE_PREFIX}{hex}")
+}
+
+/// Compute the SOFT approval digest for one upload under
+/// `COTRA_BROWSER_UPLOAD_V1`, binding the complete binding set including the
+/// actual source content digest.
+#[allow(clippy::too_many_arguments)]
+pub fn upload_approval_digest(
+    workspace_id: &str,
+    policy_revision: &str,
+    profile_identity: &str,
+    page_id: &str,
+    origin: &str,
+    page_generation: u64,
+    document_generation: u64,
+    node_id: &str,
+    node_role: &str,
+    node_input_type: &str,
+    node_state: &str,
+    trust_revision: u64,
+    source_id: &str,
+    artifact_relative_destination: &str,
+    artifact_media_type: &str,
+    artifact_sha256: &str,
+    artifact_size_bytes: u64,
+) -> String {
+    let mut hasher = Sha256::new();
+    digest_bytes(&mut hasher, b"COTRA_BROWSER_UPLOAD_V1");
+    digest_bytes(&mut hasher, workspace_id.as_bytes());
+    digest_bytes(&mut hasher, policy_revision.as_bytes());
+    digest_bytes(&mut hasher, profile_identity.as_bytes());
+    digest_bytes(&mut hasher, page_id.as_bytes());
+    digest_bytes(&mut hasher, origin.as_bytes());
+    digest_bytes(&mut hasher, page_generation.to_string().as_bytes());
+    digest_bytes(&mut hasher, document_generation.to_string().as_bytes());
+    digest_bytes(&mut hasher, node_id.as_bytes());
+    digest_bytes(&mut hasher, node_role.as_bytes());
+    digest_bytes(&mut hasher, node_input_type.as_bytes());
+    digest_bytes(&mut hasher, node_state.as_bytes());
+    digest_bytes(&mut hasher, trust_revision.to_string().as_bytes());
+    digest_bytes(&mut hasher, source_id.as_bytes());
+    digest_bytes(&mut hasher, artifact_relative_destination.as_bytes());
+    digest_bytes(&mut hasher, artifact_media_type.as_bytes());
+    digest_bytes(&mut hasher, artifact_sha256.as_bytes());
+    digest_bytes(&mut hasher, artifact_size_bytes.to_string().as_bytes());
+    let digest = hasher.finalize();
+    let mut output = String::with_capacity(digest.len() * 2);
+    use std::fmt::Write as _;
+    for byte in digest {
+        let _ = write!(&mut output, "{byte:02x}");
+    }
+    output
+}
+
+/// Compute the upload identity recorded in evidence under
+/// `COTRA_BROWSER_UPLOAD_ID_V1`.
+pub fn upload_id_for(source_id: &str, node_id: &str, artifact_sha256: &str) -> String {
+    let mut hasher = Sha256::new();
+    digest_bytes(&mut hasher, b"COTRA_BROWSER_UPLOAD_ID_V1");
+    digest_bytes(&mut hasher, source_id.as_bytes());
+    digest_bytes(&mut hasher, node_id.as_bytes());
+    digest_bytes(&mut hasher, artifact_sha256.as_bytes());
+    let digest = hasher.finalize();
+    let mut hex = String::with_capacity(32);
+    use std::fmt::Write as _;
+    for byte in digest.iter().take(16) {
+        let _ = write!(&mut hex, "{byte:02x}");
+    }
+    format!("{UPLOAD_ID_PREFIX}{hex}")
+}
+
+/// Verify a server-side node record for an upload target. Only an enabled
+/// node whose observed role is `textbox` and whose observed input type is
+/// `file` may receive an upload. Stale generations, replaced documents, origin
+/// drift, foreign pages, forged identities, policy drift, wrong role, wrong
+/// input type, disabled state, and password targets all fail closed.
+#[allow(clippy::too_many_arguments)]
+pub fn check_node_for_upload(
+    node: &StoredNode,
+    page: &PageRecord,
+    expected_role: &str,
+    expected_input_type: &str,
+    expected_state: &str,
+    profile_identity: &str,
+    policy_revision: &str,
+    expected_generation: u64,
+    expected_document_generation: u64,
+) -> Result<(), ProviderError> {
+    if node.page_id != page.page_id {
+        return Err(ProviderError::new(
+            FailureCode::TargetStale,
+            "browser upload node belongs to a different page; stale node handles fail closed",
+        ));
+    }
+    if node.page_generation != expected_generation || page.generation != expected_generation {
+        return Err(ProviderError::new(
+            FailureCode::TargetStale,
+            "browser upload node generation changed since observation; stale node handles fail closed",
+        ));
+    }
+    if node.document_generation != expected_document_generation
+        || page.generation != expected_document_generation
+    {
+        return Err(ProviderError::new(
+            FailureCode::TargetStale,
+            "browser document was replaced since observation; stale node handles fail closed",
+        ));
+    }
+    if node.origin != page.current_origin {
+        return Err(ProviderError::new(
+            FailureCode::TargetStale,
+            "browser upload node origin changed since observation; stale node handles fail closed",
+        ));
+    }
+    if node.policy_revision != policy_revision {
+        return Err(ProviderError::new(
+            FailureCode::TargetStale,
+            "browser upload node policy revision drifted; stale node handles fail closed",
+        ));
+    }
+    let expected = node_id_for(
+        profile_identity,
+        &node.page_id,
+        node.page_generation,
+        &node.origin,
+        node.document_generation,
+        node.index,
+        policy_revision,
+    );
+    if expected != node.node_id {
+        return Err(ProviderError::new(
+            FailureCode::TargetStale,
+            "browser upload node identity does not match the current profile, page, generation, origin, and policy revision; stale node handles fail closed",
+        ));
+    }
+    if node.role != UPLOAD_NODE_ROLE || expected_role != node.role {
+        return Err(ProviderError::denied(
+            "browser upload target must be an observed textbox node; every other role is denied",
+        ));
+    }
+    if !node.input_type.eq_ignore_ascii_case(UPLOAD_INPUT_TYPE)
+        || expected_input_type != node.input_type
+    {
+        return Err(ProviderError::denied(
+            "browser upload target must be an observed file input; every other input type is denied",
+        ));
+    }
+    if node.state != ENABLED_NODE_STATE {
+        return Err(ProviderError::denied(
+            "browser upload target is not enabled; uploads to disabled nodes are denied",
+        ));
+    }
+    if expected_state != node.state {
+        return Err(ProviderError::new(
+            FailureCode::TargetStale,
+            "browser upload node state changed since observation; stale node handles fail closed",
+        ));
+    }
+    if is_password_target(&node.role, &node.input_type) {
+        return Err(ProviderError::denied(
+            "browser upload to a password target is denied; credential submission remains absent",
+        ));
+    }
+    Ok(())
+}
+
+/// Verify the one admissible upload source on disk. The source is resolved
+/// from the SG-000025 download registry record, confined to the approved
+/// download root by canonical filesystem identity, required to be a regular
+/// file rather than a directory, and re-verified for byte length and SHA-256 so
+/// a replaced or mutated artifact fails closed. File content is never returned.
+pub fn verify_upload_artifact(
+    workspace_root: &Path,
+    record: &StoredUpload,
+    now_ms: u64,
+) -> Result<VerifiedUploadArtifact, ProviderError> {
+    if record.state == UPLOAD_SOURCE_CONSUMED {
+        return Err(ProviderError::denied(
+            "browser upload source was already consumed; uploads are one-shot and replay is denied",
+        ));
+    }
+    if record.state != UPLOAD_SOURCE_PENDING {
+        return Err(ProviderError::new(
+            FailureCode::TargetStale,
+            "browser upload source is not in a pending state; stale upload sources fail closed",
+        ));
+    }
+    if now_ms > record.expires_at_ms {
+        return Err(ProviderError::new(
+            FailureCode::TargetStale,
+            "browser upload source expired before use; stale upload sources fail closed",
+        ));
+    }
+    if !is_allowed_download_media_type(&record.artifact_media_type) {
+        return Err(ProviderError::denied(
+            "browser upload source media type is not an authorized inert download class",
+        ));
+    }
+    if record.artifact_size_bytes == 0 || record.artifact_size_bytes > MAX_UPLOAD_BYTES {
+        return Err(ProviderError::new(
+            FailureCode::OutputLimit,
+            format!("browser upload source exceeds the maximum of {MAX_UPLOAD_BYTES} bytes"),
+        ));
+    }
+    let root = resolve_download_root(workspace_root)?;
+    let destination = resolve_download_destination(&root, &record.artifact_relative_destination)?;
+    if !destination.exists() {
+        return Err(ProviderError::new(
+            FailureCode::TargetStale,
+            "browser upload source artifact is missing; a removed download fails closed",
+        ));
+    }
+    if destination.is_dir() {
+        return Err(ProviderError::denied(
+            "browser upload source is a directory; directory and recursive upload are denied",
+        ));
+    }
+    let real = real_path(&destination)?;
+    if !path_is_within(&root, &real) {
+        return Err(ProviderError::new(
+            FailureCode::PathEscape,
+            "browser upload source resolves outside the approved download root; a reparse-point redirect is denied",
+        ));
+    }
+    let bytes = std::fs::read(&destination)
+        .map_err(|error| ProviderError::io("read upload source", error))?;
+    if bytes.len() as u64 != record.artifact_size_bytes {
+        return Err(ProviderError::new(
+            FailureCode::PostconditionFailed,
+            "browser upload source size no longer matches the recorded approved download",
+        ));
+    }
+    if sha256_hex(&bytes) != record.artifact_sha256 {
+        return Err(ProviderError::new(
+            FailureCode::PostconditionFailed,
+            "browser upload source digest no longer matches the recorded approved download",
+        ));
+    }
+    Ok(VerifiedUploadArtifact {
+        relative_destination: record.artifact_relative_destination.clone(),
+        download_id: record.artifact_download_id.clone(),
+        media_type: record.artifact_media_type.clone(),
+        sha256: record.artifact_sha256.clone(),
+        size_bytes: record.artifact_size_bytes,
+    })
+}
+
+/// Verify a server-side upload source record against the current page, node,
+/// trust state, policy revisions, and time, and then verify the one admissible
+/// source artifact on disk. Every material drift fails closed.
+#[allow(clippy::too_many_arguments)]
+pub fn check_upload_source(
+    record: &StoredUpload,
+    page: &PageRecord,
+    node: &StoredNode,
+    profile_identity: &str,
+    policy_revision: &str,
+    expected_generation: u64,
+    expected_document_generation: u64,
+    expected_role: &str,
+    expected_input_type: &str,
+    expected_state: &str,
+    trust_revision: u64,
+    trust_trusted: bool,
+    workspace_root: &Path,
+    now_ms: u64,
+) -> Result<VerifiedUploadArtifact, ProviderError> {
+    if !trust_trusted {
+        return Err(ProviderError::new(
+            FailureCode::WorkspaceDenied,
+            "browser upload requires a trusted workspace; an emergency revoke fails closed",
+        ));
+    }
+    if record.trust_revision != trust_revision {
+        return Err(ProviderError::new(
+            FailureCode::TargetStale,
+            "workspace trust revision changed since preview; emergency revoke and trust change fail closed",
+        ));
+    }
+    if record.page_id != page.page_id {
+        return Err(ProviderError::new(
+            FailureCode::TargetStale,
+            "browser upload source belongs to a different page; stale upload sources fail closed",
+        ));
+    }
+    if page.state == PageState::Closed {
+        return Err(ProviderError::new(
+            FailureCode::TargetStale,
+            "browser page is closed; stale upload sources fail closed",
+        ));
+    }
+    if record.workspace_id != page.workspace_id {
+        return Err(ProviderError::new(
+            FailureCode::WorkspaceDenied,
+            "browser upload source belongs to a different workspace; foreign upload sources fail closed",
+        ));
+    }
+    if record.profile_identity != profile_identity {
+        return Err(ProviderError::denied(
+            "browser upload source belongs to a different isolated profile; foreign upload sources fail closed",
+        ));
+    }
+    if record.origin != page.current_origin {
+        return Err(ProviderError::new(
+            FailureCode::TargetStale,
+            "browser page origin changed since preview; stale upload sources fail closed",
+        ));
+    }
+    if record.page_generation != expected_generation || page.generation != expected_generation {
+        return Err(ProviderError::new(
+            FailureCode::TargetStale,
+            "browser page generation changed since preview; stale upload sources fail closed",
+        ));
+    }
+    if record.document_generation != expected_document_generation
+        || page.generation != expected_document_generation
+    {
+        return Err(ProviderError::new(
+            FailureCode::TargetStale,
+            "browser document was replaced since preview; stale upload sources fail closed",
+        ));
+    }
+    if record.policy_revision != policy_revision || page.policy_revision != policy_revision {
+        return Err(ProviderError::new(
+            FailureCode::TargetStale,
+            "browser policy revision drifted since preview; stale upload sources fail closed",
+        ));
+    }
+    if record.upload_policy_revision != UPLOAD_POLICY_REVISION {
+        return Err(ProviderError::new(
+            FailureCode::TargetStale,
+            "browser upload policy revision drifted since preview; stale upload sources fail closed",
+        ));
+    }
+    if record.node_id != node.node_id {
+        return Err(ProviderError::new(
+            FailureCode::TargetStale,
+            "browser upload target node was replaced since preview; stale upload sources fail closed",
+        ));
+    }
+    let expected_source = upload_source_id_for(
+        &record.workspace_id,
+        &record.policy_revision,
+        &record.profile_identity,
+        &record.page_id,
+        &record.origin,
+        record.page_generation,
+        record.document_generation,
+        &record.node_id,
+        &record.node_role,
+        &record.node_input_type,
+        &record.node_state,
+        record.trust_revision,
+        &record.artifact_source_id,
+        &record.artifact_relative_destination,
+        &record.artifact_media_type,
+        &record.artifact_sha256,
+        record.artifact_size_bytes,
+        &record.upload_policy_revision,
+        record.issued_at_ms,
+    );
+    if expected_source != record.source_id {
+        return Err(ProviderError::new(
+            FailureCode::TargetStale,
+            "browser upload source identity does not match the current binding set; forged upload sources fail closed",
+        ));
+    }
+    check_node_for_upload(
+        node,
+        page,
+        expected_role,
+        expected_input_type,
+        expected_state,
+        profile_identity,
+        policy_revision,
+        expected_generation,
+        expected_document_generation,
+    )?;
+    verify_upload_artifact(workspace_root, record, now_ms)
+}
+
+/// Typed bounded upload preview material. Preview performs full page, node,
+/// trust, policy, and artifact evaluation without mutating anything and without
+/// requiring approval. It never carries file content or file bytes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UploadPreview {
+    pub source_id: String,
+    pub page_id: String,
+    pub workspace_id: String,
+    pub policy_revision: String,
+    pub profile_identity: String,
+    pub origin: String,
+    pub page_generation: u64,
+    pub document_generation: u64,
+    pub node_id: String,
+    pub node_role: String,
+    pub node_input_type: String,
+    pub node_state: String,
+    pub trust_revision: u64,
+    pub artifact_source_id: String,
+    pub artifact_download_id: String,
+    pub artifact_relative_destination: String,
+    pub artifact_media_type: String,
+    pub artifact_sha256: String,
+    pub artifact_size_bytes: u64,
+    pub max_upload_bytes: u64,
+    pub upload_policy_revision: String,
+    pub issued_at_ms: u64,
+    pub expires_at_ms: u64,
+    pub preview_digest: String,
+}
+
+impl UploadPreview {
+    pub fn to_json(&self) -> Value {
+        json!({
+            "source_id": self.source_id,
+            "page_id": self.page_id,
+            "workspace_id": self.workspace_id,
+            "policy_revision": self.policy_revision,
+            "profile_identity": self.profile_identity,
+            "origin": self.origin,
+            "page_generation": self.page_generation,
+            "document_generation": self.document_generation,
+            "node_id": self.node_id,
+            "node_role": self.node_role,
+            "node_input_type": self.node_input_type,
+            "node_state": self.node_state,
+            "trust_revision": self.trust_revision,
+            "artifact_source_id": self.artifact_source_id,
+            "artifact_download_id": self.artifact_download_id,
+            "artifact_relative_destination": self.artifact_relative_destination,
+            "artifact_media_type": self.artifact_media_type,
+            "artifact_sha256": self.artifact_sha256,
+            "artifact_size_bytes": self.artifact_size_bytes,
+            "max_upload_bytes": self.max_upload_bytes,
+            "upload_policy_revision": self.upload_policy_revision,
+            "issued_at_ms": self.issued_at_ms,
+            "expires_at_ms": self.expires_at_ms,
+            "preview_digest": self.preview_digest,
+            "page_transfer_performed": false,
+            "executed": false,
+            "opened": false,
+            "extracted": false,
+            "cookies": false,
+            "credentials": false,
+        })
+    }
+}
+
+/// Typed bounded upload evidence. It records the approved upload binding and
+/// the verified artifact identity only. It never carries file content or file
+/// bytes, and it never claims that a page byte transfer occurred.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UploadEvidence {
+    pub upload_id: String,
+    pub source_id: String,
+    pub page_id: String,
+    pub workspace_id: String,
+    pub policy_revision: String,
+    pub profile_identity: String,
+    pub origin: String,
+    pub page_generation: u64,
+    pub document_generation: u64,
+    pub node_id: String,
+    pub node_role: String,
+    pub node_input_type: String,
+    pub node_state: String,
+    pub trust_revision: u64,
+    pub artifact_source_id: String,
+    pub artifact_download_id: String,
+    pub artifact_relative_destination: String,
+    pub artifact_media_type: String,
+    pub artifact_sha256: String,
+    pub artifact_size_bytes: u64,
+    pub upload_policy_revision: String,
+    pub state: String,
+}
+
+impl UploadEvidence {
+    pub fn to_json(&self, approval_record_id: &str) -> Value {
+        json!({
+            "upload_id": self.upload_id,
+            "source_id": self.source_id,
+            "page_id": self.page_id,
+            "workspace_id": self.workspace_id,
+            "policy_revision": self.policy_revision,
+            "profile_identity": self.profile_identity,
+            "origin": self.origin,
+            "page_generation": self.page_generation,
+            "document_generation": self.document_generation,
+            "node_id": self.node_id,
+            "node_role": self.node_role,
+            "node_input_type": self.node_input_type,
+            "node_state": self.node_state,
+            "trust_revision": self.trust_revision,
+            "artifact_source_id": self.artifact_source_id,
+            "artifact_download_id": self.artifact_download_id,
+            "artifact_relative_destination": self.artifact_relative_destination,
+            "artifact_media_type": self.artifact_media_type,
+            "artifact_sha256": self.artifact_sha256,
+            "artifact_size_bytes": self.artifact_size_bytes,
+            "upload_policy_revision": self.upload_policy_revision,
+            "state": self.state,
+            "approval_record_id": approval_record_id,
+            "page_transfer_performed": false,
+            "executed": false,
+            "opened": false,
+            "extracted": false,
+            "cookies": false,
+            "credentials": false,
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -3309,7 +4083,7 @@ mod tests {
     }
 
     #[test]
-    fn allowed_shapes_are_exactly_profile_status_destination_page_navigation_snapshot_observe_structured_actuation_and_scoped_download(
+    fn allowed_shapes_are_exactly_profile_status_destination_page_navigation_snapshot_observe_structured_actuation_and_scoped_transfers(
     ) {
         assert!(is_allowed_browser_shape("browser.profile", "status"));
         assert!(is_allowed_browser_shape("browser.destination", "validate"));
@@ -3321,6 +4095,8 @@ mod tests {
         assert!(is_allowed_browser_shape("browser.dom", "fill"));
         assert!(is_allowed_browser_shape("browser.download", "preview"));
         assert!(is_allowed_browser_shape("browser.download", "download"));
+        assert!(is_allowed_browser_shape("browser.upload", "preview"));
+        assert!(is_allowed_browser_shape("browser.upload", "submit"));
         for (capability, operation) in DENIED_BROWSER_SHAPES {
             assert!(
                 !is_allowed_browser_shape(capability, operation),
@@ -3347,17 +4123,24 @@ mod tests {
             ("browser.snapshot", "actuate"),
             ("browser.page", "close"),
             ("browser.navigation", "back"),
-            // NOTE (SG-000025 successor): browser.download/download and
-            // browser.download/preview are lawfully authorized by the
-            // SG-000025 successor grain and are no longer denied shapes.
-            // Downloaded-file execution, opening, extraction, and upload
-            // remain denied in every successor grain.
+            // NOTE (SG-000025 and SG-000026 successors): browser.download/
+            // preview, browser.download/download, browser.upload/preview, and
+            // browser.upload/submit are lawfully authorized by successor
+            // grains and are no longer denied shapes. Downloaded-file
+            // execution, opening, extraction, generic file read, directory
+            // upload, and multiple-file upload remain denied in every successor
+            // grain.
             ("browser.download", "execute"),
             ("browser.download", "open"),
             ("browser.download", "extract"),
             ("browser.file", "execute"),
             ("browser.archive", "extract"),
             ("browser.shell", "run"),
+            ("browser.file", "read"),
+            ("browser.fs", "read"),
+            ("browser.directory", "upload"),
+            ("browser.upload", "directory"),
+            ("browser.upload", "multiple"),
             ("browser.upload", "upload"),
             ("browser.profile", "use_personal"),
             ("browser.debug", "attach"),
@@ -4668,6 +5451,7 @@ mod tests {
             expires_at_ms: 1_000 + index + DOWNLOAD_SOURCE_TTL_MS,
             state: DOWNLOAD_SOURCE_PENDING.into(),
             download_id: String::new(),
+            content_sha256: String::new(),
         }
     }
 
