@@ -1,0 +1,89 @@
+{
+  "id": "SG-000025",
+  "title": "Scoped bounded browser downloads with workspace-root destination policy",
+  "program": "COTRA-P08",
+  "state": "GRAIN",
+  "risk": "high",
+  "created": "2026-09-28",
+  "base": "da637f5e4c823cb486ab30a521f003d9baf8bd55",
+  "dependencies": ["SG-000021", "SG-000022", "SG-000023", "SG-000024"],
+  "objective": "Establish scoped browser downloads on top of the SG-000021 isolated automation profile, the SG-000022 typed page lifecycle with origin binding, the SG-000023 typed node observation, and the SG-000024 structured actuation: a bounded download capability bound to exact page identity, page generation, document generation, origin, policy revision, server-allocated one-shot download source identity, declared download identity, destination policy, and the approved workspace download root, with canonical relative destinations, path-escape and reparse-point denial, extension and content-type allowlisting, declared and actual size agreement, deterministic source expiry, and fresh SOFT approval, while keeping downloaded content unexecuted, unopened, and unextracted, and while keeping scoped uploads, archive extraction, personal-profile mode, debugging, scripting, credential access, MCP browser tools, and network egress beyond destination validation and DNS resolution absent.",
+  "scope": {
+    "include": [
+      "browser.download preview as a local read-only stale-protection and destination-policy evaluation bound to one known active page, its exact origin and generation, a same-origin validated source URL, a declared download identity, and one canonical relative destination under the approved workspace download root",
+      "browser.download download as the single bounded download entry point that creates exactly one new file at exactly one canonical relative destination under the approved workspace download root",
+      "server-allocated one-shot download source identities binding workspace, policy revision, profile identity, page identity, origin, page generation, document generation, source origin, source URL digest, declared filename, declared media type, extension media type, canonical relative destination, declared size, download policy revision, issue time, and expiry",
+      "destination policy restricted to the approved workspace root derived from policy, never from caller-selected roots, with canonical filesystem identity checks that defeat reparse-point escape",
+      "canonical relative destination validation that denies absolute paths, drive prefixes, UNC paths, device paths, NT namespace paths, alternate data streams, mixed separator tricks, parent traversal, empty or duplicate separators, trailing dots and spaces, reserved device names, illegal characters, and over-length components",
+      "extension allowlist plus content-sniff allowlist with explicit denial of executables, scripts, installers, command files, archives, shortcuts, macro-capable documents, and unknown or unexpected media types",
+      "declared and actual size agreement with a hard maximum download size and deterministic fail-closed behavior on declared or actual oversize and on declared and actual disagreement",
+      "fresh SOFT approval per download with digest binding over workspace, policy revision, profile identity, page identity, origin, page generation, document generation, source identity, source origin, canonical relative destination, declared identity, declared size, and actual content digest",
+      "one-shot source consumption and deterministic source expiry so reused, stale, and expired source identities fail closed before approval and again before mutation",
+      "same-origin download source binding with SSRF address policy and hop-by-hop redirect validation so redirect widening to an unapproved origin fails closed",
+      "explicit denial of downloaded-file execution, opening, shell launch, and archive extraction so a download can never become process execution, file opening, or extraction authority",
+      "typed bounded download evidence and origin metadata without cookies, credentials, tokens, session material, personal browser state, or raw secret-bearing source URLs",
+      "deterministic unit and security tests for destination escape, reparse-point escape, alternate data streams, reserved names, device and UNC paths, redirect widening, unauthorized origin, SSRF, stale page and generation, wrong profile, policy drift, missing, stale, reused, and expired approval, dangerous extension, unexpected media type, executable and script payloads, oversized payloads, size disagreement, and caller-requested automatic execution",
+      "retention of all SG-000018 one-shot, expiry, digest, history, SG-000019 STRONG enforcement, SG-000020 trust and revoke, SG-000021 profile and destination, SG-000022 page lifecycle and navigation, SG-000023 observation, and SG-000024 actuation behavior with no change outside download policy",
+      "Windows and Ubuntu exact-head qualification"
+    ],
+
+    "exclude": [
+      "scoped uploads of any kind",
+      "archive extraction and decompression",
+      "execution, opening, or shell launch of downloaded content",
+      "automatic or silent download behavior on navigation or actuation",
+      "overwriting, deleting, renaming, or truncating existing workspace files",
+      "caller-selected destination roots, absolute destinations, and destinations outside the approved workspace root",
+      "personal browser profile mode",
+      "stored credential, cookie, or password access",
+      "arbitrary DevTools, CDP commands, or browser scripting",
+      "screenshots and visual or coordinate control",
+      "keyboard input beyond the closed SG-000024 fill verb",
+      "actual page rendering or page loading by a browser engine",
+      "network egress beyond local destination validation and DNS resolution",
+      "MCP browser tools",
+      "persistent approval reuse across operations",
+      "approval delegation to remote or MCP callers",
+      "elevation"
+    ]
+  },
+  "authority_delta": {
+    "filesystem": "A bounded create-only file write is newly added: exactly one new file may be created inside the approved workspace root at one validated canonical relative destination. Existing files are never overwritten, deleted, renamed, or truncated, parent directories are never created, and reparse points, alternate data streams, device paths, UNC paths, and NT namespace paths are denied. The destination root is derived from policy and is never caller-selected.",
+    "process": "No new process authority. No browser is launched or attached in this grain, and no downloaded content is executed, opened, extracted, or launched. Downloaded-file execution remains a separate unauthorized capability.",
+    "network": "None beyond SG-000021 destination validation and DNS resolution. The source URL is validated and pinned exactly like an SG-000022 navigation destination; no transfer is performed by Cotra and no generic network authority is added.",
+    "browser": "browser.download preview and browser.download download are newly authorized SOFT shapes bound to the isolated automation profile and one known active page. No page rendering, no page loading, no download interception, and no browser download-manager integration are added.",
+    "ui_input": "None. No UI automation, coordinate, keyboard, or pointer authority is added.",
+    "secrets": "Download evidence and the download registry never carry cookies, Authorization headers, passwords, tokens, session secrets, or personal browser state, and raw secret-bearing source URLs are never persisted: only the source origin and a source URL digest are recorded.",
+    "approval": "Download maps to the SOFT approval class and requires a fresh, digest-bound, one-shot approval. STRONG enforcement, replay resistance, one-shot consumption, expiry, and history behavior are unchanged.",
+    "privilege": "None. No elevation is added."
+  },
+  "acceptance": [
+    {"id": "A1", "claim": "Preview and download bind one known active page on the isolated automation profile with exact page identity, page generation, document generation, origin, and policy revision; unknown, closed, foreign-workspace, foreign-profile, origin-drifted, generation-drifted, and policy-drifted pages fail closed."},
+    {"id": "A2", "claim": "Download source identities are server-allocated and bind workspace, policy revision, profile identity, page identity, origin, generation, document generation, source origin, source URL digest, declared identity, canonical relative destination, declared size, download policy revision, issue time, and expiry; forged, unknown, consumed, and expired source identities fail closed."},
+    {"id": "A3", "claim": "The destination root is always the approved workspace root derived from policy; caller-selected roots, absolute destinations, drive prefixes, UNC paths, device paths, NT namespace paths, alternate data streams, mixed separators, parent traversal, reserved device names, trailing dots and spaces, and reparse-point escapes fail closed."},
+    {"id": "A4", "claim": "Only create-only writes are possible: an existing destination fails closed, parent directories are never created, and no existing workspace file is overwritten, renamed, deleted, or truncated."},
+
+    {"id": "A5", "claim": "Extensions and content are allowlisted; executables, scripts, installers, command files, archives, shortcuts, macro-capable documents, and unknown or unexpected media types fail closed, and filename, declared type, and content sniff must agree."},
+    {"id": "A6", "claim": "Declared size and actual size must agree and must not exceed the maximum download size; oversize payloads and size disagreement fail closed."},
+    {"id": "A7", "claim": "Download sources are bound to the page origin with SSRF address policy and hop-by-hop redirect validation, so unauthorized origins and redirect widening fail closed."},
+    {"id": "A8", "claim": "Each download requires fresh SOFT approval with digest binding over the full binding set including the actual content digest; missing, stale, reused, drifted, and double-consumed approvals fail closed."},
+    {"id": "A9", "claim": "Downloaded content is never executed, opened, extracted, or launched, and no negotiation, opening, execution, or extraction shape is reachable."},
+    {"id": "A10", "claim": "Evidence and the download registry are bounded and data-minimized; they carry origin metadata, identity, bounds, and digests, and never carry cookies, credentials, tokens, session material, personal browser state, or raw secret-bearing URLs."},
+    {"id": "A11", "claim": "Tests prove all P06 approval flows and SG-000018/019/020/021/022/023/024 regressions still pass with digests unchanged outside download labeling."},
+    {"id": "A12", "claim": "Tests prove personal-profile mode, arbitrary DevTools or CDP, browser scripting, credential stores, UI automation, coordinate input, screenshots, archive extraction, scoped uploads, and network egress beyond destination validation and DNS resolution remain unreachable."},
+    {"id": "A13", "claim": "Exact-head Windows/Ubuntu Rust, Node, Governance, genuine TypeSafe Jev, Alibaba Open Code Review, exact-diff security review, manual review of excluded security-sensitive files, and zero unresolved blocking review threads all pass."}
+  ],
+  "successor_requirements": {
+    "p08_uploads": "Scoped uploads remain successor work and must build on the SG-000023 typed node identity and the SG-000024 approval binding without weakening one-shot, expiry, or digest binding, and must not become arbitrary filesystem-read authority.",
+    "p08_exit": "COTRA-P08 exits when structured browser operations are proven with SSRF tests, redirect-widening tests, and the personal profile disabled by default, which SG-000021, SG-000022, SG-000023, SG-000024, this grain, and its successors must jointly satisfy."
+  },
+  "review": {
+    "diffcipline": true,
+    "jev_semantic_review": true,
+    "alibaba_open_code_review": "required exact-range qualification where integrated",
+    "security_review": true,
+    "exact_head_ci": true,
+    "native_network_qualification": false
+  },
+  "done_when": "Scoped bounded downloads are merged with an approved workspace download root, canonical relative destination validation, reparse-point and alternate-data-stream denial, create-only writes, type and size allowlisting, same-origin and redirect-widening denial, one-shot and expiring source identities, fresh SOFT digest-bound approval, bounded origin evidence, explicit denial of execution, opening, and extraction, agent-forgery tests, retained replay and drift enforcement, and no new upload, personal-profile, debugging, scripting, credential, coordinate, screenshot, or network-egress authority."
+}
