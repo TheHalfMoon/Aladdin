@@ -2000,9 +2000,12 @@ mod tests {
             new_generation: 1,
         };
         let json = evidence.to_json("apr-1");
-        let text = json.to_string().to_ascii_lowercase();
-        assert!(!text.contains("cookie"));
         assert!(json["cookies"] == false);
+        assert!(json["credentials"] == false);
+        assert!(json.get("cookie").is_none());
+        assert!(json.get("authorization").is_none());
+        assert!(json.get("token").is_none());
+        assert!(json.get("password").is_none());
         let preview = NavigationPreview {
             page_id: "pg-test".to_owned(),
             workspace_id: "default".to_owned(),
