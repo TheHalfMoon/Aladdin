@@ -1332,6 +1332,7 @@ pub fn preview_navigation(
 /// binds page identity, expected origin and generation, target origin, pinned
 /// address, redirect chain, workspace, profile identity, and policy revision.
 /// Any material drift invalidates the approval.
+#[allow(clippy::too_many_arguments)]
 pub fn navigation_approval_digest(
     workspace_id: &str,
     policy_revision: &str,
@@ -1759,12 +1760,7 @@ mod tests {
         assert!(store.get("pg-00000000000000000000000000000000").is_none());
         assert!(store.get("").is_none());
         let error = store
-            .apply_navigation(
-                &"pg-forged-handle".to_owned(),
-                "",
-                0,
-                "https://example.com:443",
-            )
+            .apply_navigation("pg-forged-handle", "", 0, "https://example.com:443")
             .expect_err("forged handle must fail");
         assert_eq!(error.code, FailureCode::TargetStale);
         let _ = std::fs::remove_file(path);
