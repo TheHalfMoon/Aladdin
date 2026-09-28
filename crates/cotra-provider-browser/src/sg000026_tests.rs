@@ -15,10 +15,12 @@ fn temp_root(label: &str) -> PathBuf {
         .duration_since(UNIX_EPOCH)
         .expect("clock")
         .as_nanos();
-    std::env::temp_dir().join(format!(
+    let root = std::env::temp_dir().join(format!(
         "cotra-upload-{label}-{}-{suffix}",
         std::process::id()
-    ))
+    ));
+    std::fs::create_dir_all(&root).expect("temporary upload root");
+    root
 }
 
 fn temp_upload_registry(label: &str) -> PathBuf {
