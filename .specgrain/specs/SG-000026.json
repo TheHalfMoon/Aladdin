@@ -1,0 +1,87 @@
+{
+  "id": "SG-000026",
+  "title": "Scoped bounded browser uploads of approved download artifacts to typed file-input nodes",
+  "program": "COTRA-P08",
+  "state": "GRAIN",
+  "risk": "high",
+  "created": "2026-09-28",
+  "base": "c37579332f2755f8480c337e88cacef765677b6c",
+  "dependencies": ["SG-000021", "SG-000022", "SG-000023", "SG-000024", "SG-000025"],
+  "objective": "Establish scoped bounded browser uploads on top of the SG-000021 isolated automation profile, the SG-000022 typed page lifecycle with origin binding, the SG-000023 typed node observation, the SG-000024 structured actuation, and the SG-000025 approved download root: an upload capability that may read exactly one file, and only a file Cotra itself downloaded and recorded under the approved workspace download root, and may stage it only to one known enabled file-input node on one known active page, bound to exact page identity, page generation, document generation, origin, node identity, expected role, expected input type, expected node state, workspace trust revision, source artifact identity, content digest, size, media type, policy revision, approval, and expected state, with stale and replaced node denial, workspace trust revoke invalidation, one-shot source consumption, deterministic expiry, and secret confinement, while keeping the capability strictly weaker than generic filesystem read, keeping page transfer, archive extraction, downloaded-file execution, personal-profile mode, debugging, scripting, credential access, MCP browser tools, and network egress beyond destination validation and DNS resolution absent.",
+  "scope": {
+    "include": [
+      "browser.upload preview as a local read-only evaluation that binds one known active page, its exact origin, page generation, and document generation, one known enabled file-input node with expected role, input type, and state, and one server-recorded approved download artifact, with no approval, no mutation, and no page interaction",
+      "browser.upload submit as the single bounded upload entry point that requires fresh SOFT approval and records exactly one approved upload of exactly one recorded download artifact to exactly one typed file-input node",
+      "an upload source class restricted to files recorded by the SG-000025 download registry inside the approved workspace download root, so no caller-controlled path, no workspace file, no user home file, no credential store, no browser profile file, no OS secret store, and no unrelated project file can ever be an upload source",
+      "canonical filesystem identity re-verification of the source file against the approved download root with separator-boundary comparison so a symlink or junction cannot redirect the read",
+      "content digest, byte length, and media type re-verification of the source file at upload time so a replaced or mutated artifact fails closed",
+      "directory upload denial, oversized artifact denial, and empty artifact denial",
+      "typed file-input node gating on an enabled textbox-role node with a file input type, with wrong role, wrong input type, disabled state, replaced input, stale node, wrong page, wrong origin, wrong generation, and wrong workspace all failing closed",
+      "server-allocated one-shot upload source identities with deterministic expiry, bound to workspace, policy revision, profile identity, page identity, origin, page generation, document generation, node identity, expected role, input type and state, workspace trust revision, source artifact identity, canonical relative source, content digest, size, media type, and issue time",
+      "fresh SOFT approval per upload with digest binding over the complete binding set and the actual source content digest, with one-shot consumption spent before the upload is recorded",
+      "workspace trust binding so that an emergency revoke, a trust change, or a trust-revision change between preview and submit fails closed",
+      "typed bounded upload evidence without file content, cookies, credentials, tokens, session material, personal browser state, or personal-profile data",
+      "deterministic unit and security tests for arbitrary path, parent traversal, symlink and junction escape, sensitive and secret files, wrong workspace, stale node, wrong input node, wrong role, disabled node, wrong origin, stale page, wrong generation, replaced file input, missing approval, reused approval, policy and trust drift, emergency revoke, directory upload, oversized artifact, mutated artifact, and personal-profile denial",
+      "retention of all SG-000018 through SG-000025 behavior with no change outside upload policy",
+      "Windows and Ubuntu exact-head qualification"
+    ],
+    "exclude": [
+      "any upload source that is not a recorded approved download artifact",
+      "caller-controlled absolute, relative, or wildcard upload paths",
+      "directory upload and recursive upload",
+      "uploads of workspace-authored, user-supplied, or user-home files",
+      "page byte transfer and actual form submission to a rendered page",
+      "archive extraction and decompression",
+      "execution, opening, or shell launch of uploaded or downloaded content",
+      "multiple-file upload and directory-level upload",
+      "personal browser profile mode and personal-profile data",
+      "stored credential, cookie, or password access",
+      "arbitrary DevTools, CDP commands, or browser scripting",
+      "screenshots and visual or coordinate control",
+      "network egress beyond local destination validation and DNS resolution",
+      "MCP browser tools",
+      "persistent approval reuse across operations",
+      "approval delegation to remote or MCP callers",
+      "elevation"
+    ]
+  },
+  "authority_delta": {
+    "filesystem": "A bounded file-read authority is newly added and is deliberately weaker than generic filesystem read: exactly one recorded approved download artifact inside the approved workspace download root may be read, and only to verify its canonical identity, byte length, and SHA-256 digest against the SG-000025 download registry. No caller-controlled path, no workspace-authored file, no user home file, no credential store, no browser profile file, no OS secret store, no unrelated project file, and no directory is readable. No new write, rename, or delete authority is added, and the artifact is never mutated.",
+    "process": "No new process authority. No browser is launched or attached in this grain, and no page byte transfer or form submission is performed, so an upload can never become process execution or file opening.",
+    "network": "None beyond SG-000021 destination validation and DNS resolution. An upload performs no network transfer, and no generic network authority is added.",
+    "browser": "browser.upload preview and browser.upload submit are newly authorized SOFT shapes bound to the isolated automation profile, one known active page, and one known enabled typed file-input node. No page rendering, no page loading, and no form submission are added.",
+    "ui_input": "None. No UI automation, coordinate, keyboard, or pointer authority is added.",
+    "secrets": "Upload evidence never carries file content, file bytes, cookies, Authorization headers, passwords, tokens, session secrets, or personal browser state. Because the only admissible source is a Cotra-recorded inert download artifact inside the approved download root, credential files, browser profile files, and OS secret stores are unreachable by construction, not merely by policy.",
+    "approval": "Upload maps to the SOFT approval class and requires a fresh, digest-bound, one-shot approval. STRONG enforcement, replay resistance, one-shot consumption, expiry, and history behavior are unchanged.",
+    "privilege": "None. No elevation is added."
+  },
+  "acceptance": [
+    {"id": "A1", "claim": "Preview and submit bind one known active page on the isolated automation profile with exact page identity, page generation, document generation, origin, workspace, and policy revision; unknown, closed, foreign-workspace, foreign-profile, origin-drifted, generation-drifted, document-replaced, and policy-drifted pages fail closed."},
+    {"id": "A2", "claim": "The only admissible upload source is a file recorded in the SG-000025 download registry under the approved workspace download root; unknown, unrecorded, unconsumed, and never-downloaded paths fail closed, and no caller-controlled path of any form is accepted."},
+    {"id": "A3", "claim": "The source file is resolved with canonical filesystem identity and separator-boundary containment, so parent traversal, absolute paths, UNC paths, device paths, NT namespace paths, alternate data streams, and symlink or junction redirection all fail closed."},
+    {"id": "A4", "claim": "Directory upload, empty artifact, oversized artifact, and an artifact whose on-disk byte length or SHA-256 no longer matches the recorded download fail closed."},
+    {"id": "A5", "claim": "The upload target must be one known enabled node whose observed role is textbox and whose observed input type is file; wrong role, wrong input type, disabled state, replaced file input, stale node, wrong page, wrong origin, and wrong generation all fail closed."},
+    {"id": "A6", "claim": "Upload source identities are server-allocated and bind workspace, policy revision, profile identity, page identity, origin, generations, node identity, expected role, input type and state, workspace trust revision, source artifact identity, canonical relative source, content digest, size, media type, and issue time; forged, unknown, consumed, and expired identities fail closed."},
+    {"id": "A7", "claim": "Each upload requires fresh SOFT approval with digest binding over the complete binding set including the actual source content digest; missing, stale, reused, drifted, and double-consumed approvals fail closed."},
+    {"id": "A8", "claim": "An emergency revoke, a trust change, or any workspace trust-revision change between preview and submit fails closed, so an upload can never complete against a revoked workspace."},
+    {"id": "A9", "claim": "Tests prove no upload can read a credential file, browser profile file, OS secret store, user home file, workspace-authored file, unrelated project file, or personal-profile data, because the source class is restricted to recorded inert download artifacts."},
+    {"id": "A10", "claim": "Evidence is bounded and data-minimized and never carries file content, file bytes, cookies, credentials, tokens, session material, or personal browser state, and it never claims a page byte transfer occurred."},
+    {"id": "A11", "claim": "Tests prove all P06 approval flows and SG-000018 through SG-000025 regressions still pass with digests unchanged outside upload labeling."},
+    {"id": "A12", "claim": "Tests prove personal-profile mode, arbitrary DevTools or CDP, browser scripting, credential stores, UI automation, coordinate input, screenshots, archive extraction, downloaded-file execution, and network egress beyond destination validation and DNS resolution remain unreachable."},
+    {"id": "A13", "claim": "Exact-head Windows/Ubuntu Rust, Node, Governance, genuine TypeSafe Jev, Alibaba Open Code Review, exact-diff security review, manual review of excluded security-sensitive files, and zero unresolved blocking review threads all pass."}
+  ],
+  "successor_requirements": {
+    "p08_exit": "COTRA-P08 exits when structured browser operations are proven with SSRF tests, redirect-widening tests, and the personal profile disabled by default, which SG-000021 through SG-000026 must jointly satisfy.",
+    "p08_page_engine": "Actual page rendering, page loading, and real form submission to a rendered page remain successor work and must build on this authority model without weakening one-shot, expiry, digest, trust, or source confinement.",
+    "p08_upload_sources": "A configured workspace upload-source allowlist for workspace-authored files, if ever authorized, remains successor work and must never accept a caller-controlled path, a user home path, a credential path, a browser profile path, or an OS secret path."
+  },
+  "review": {
+    "diffcipline": true,
+    "jev_semantic_review": true,
+    "alibaba_open_code_review": "required exact-range qualification where integrated",
+    "security_review": true,
+    "exact_head_ci": true,
+    "native_network_qualification": false
+  },
+  "done_when": "Scoped bounded uploads of recorded approved download artifacts to typed file-input nodes are merged with restricted source class, canonical identity containment, digest and size re-verification, file-input node gating, one-shot expiring source identities, workspace trust binding, fresh SOFT digest-bound approval, bounded secret-free evidence, explicit denial of page transfer, directory upload, and execution, agent-forgery tests, retained replay and drift enforcement, and no new generic filesystem read, personal-profile, debugging, scripting, credential, coordinate, screenshot, or network-egress authority."
+}
