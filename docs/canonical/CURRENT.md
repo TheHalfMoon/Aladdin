@@ -1,11 +1,11 @@
 # Cotra Current Canonical Frontier
 
-Status: ACTIVE_GRAIN
+Status: CLOSED_GRAIN
 Date: 2026-09-28
-Governance snapshot base: da637f5e4c823cb486ab30a521f003d9baf8bd55
+Governance snapshot base: f2a19535295158a40c7cf05a002b1b6201c6aabf
 Evidence ledger: `.specgrain/canonical-evidence.json`
 
-`Governance snapshot base` records the exact canonical parent from which this activation snapshot was authored. It deliberately does not claim the eventual merge SHA of the commit containing this file.
+`Governance snapshot base` records the exact canonical parent from which this closeout snapshot was authored. It deliberately does not claim the eventual merge SHA of the commit containing this file.
 
 ## SpecGrain state semantics
 
@@ -17,7 +17,7 @@ The machine-readable evidence for every `CLOSED` grain is recorded in `.specgrai
 
 ## Closed canonical grains
 
-SG-000001 through SG-000024 are `CLOSED` and canonical.
+SG-000001 through SG-000025 are `CLOSED` and canonical.
 
 SG-000016 implementation PR `#38` merged as `c85b79f24ce2deef46319d9c5790623fd70c3b0d` after exact-head CI `36339733920`, Review Gates `36339732607`, genuine TypeSafe Jev `15/15` hunk coverage with zero findings/blockers, Alibaba Open Code Review v1.12.9 exact-range delegation plus manual review of both excluded files, and zero unresolved review threads. Implementation post-merge CI `36339937619` completed SUCCESS.
 
@@ -123,28 +123,19 @@ SG-000023 closed canonically: activation PR `#59` (activation base `28e0d912b889
 
 SG-000024 closed canonically: activation PR `#62` (activation base `c40b72a55084e31cfd33e8c23aeaa06c3ec7853a`, activation head `d1224f5a58f48ffb647f9499a41aa6491855e21c`, CI `36438889230`, Review Gates `36438888956`, Jev `3/3`, OCR v1.12.9 `1 reviewable + 1 excluded/manually reviewed`, merge `03d95ec0e411e2cd3d5abb78caad8425c8d8b988`, post-merge CI `36439181347`), implementation PR `#63` (qualified head `421139092fa4aa8c9dc545240b48cd69b4398978`, CI `36441194364`, Review Gates `36441189927`, Jev `24/24`, OCR v1.12.9 `9 reviewable + 1 excluded/manually reviewed`, merge `0a42c9e440e451023518496cadb9afc1952b30c4`, post-merge CI `36441495286`), and governance closeout recorded here, all with zero findings, zero blockers, and zero unresolved review threads. The canonical SG-000024 authority adds only structured invoke and value-entry actuation on typed node identities with per-action SOFT approval in the Cotra registry with no browser launch or attachment.
 
+## Closed SG-000025 scoped downloads
+
+SG-000025 closed canonically: activation PR `#65` (activation base `da637f5e4c823cb486ab30a521f003d9baf8bd55`, activation head `19be90f34d35a494958d5e75c2bfd6dae941e1cd`, CI `36457618398`, Review Gates `36457618307`, Jev `5/5`, OCR v1.12.9 `1 reviewable + 1 excluded/manually reviewed`, merge `d0520b5bdda52da24827d6e3a4f26b9e4d6e8061`, post-merge CI `36463042632`), implementation PR `#66` (qualified head `52912c3cad6ac6d407cb9862f4fad6402fcc78fc`, CI `36466971400`, Review Gates `36466968515`, Jev `20/20` with zero findings and zero blocking findings, OCR v1.12.9 `10 reviewable + 1 excluded/manually reviewed`, merge `f2a19535295158a40c7cf05a002b1b6201c6aabf`, post-merge CI `36467256256`), and governance closeout recorded here, all with zero unresolved review threads. The canonical SG-000025 authority adds only scoped bounded `browser.download/preview` and `browser.download/download` into the approved workspace download root, with no browser launch, no attachment, and no Cotra network transfer.
+
+SG-000025 proved that the destination root is always the approved workspace root derived from policy configuration and is never caller-selected; that canonical relative destinations deny absolute, drive, UNC, device, NT namespace, alternate data stream, parent and current traversal, empty and duplicate separators, trailing dot and space, reserved device name, illegal character, control character, and length escapes; that containment uses canonical filesystem identity with a separator-boundary comparison so a Windows directory junction and a Unix symlink cannot extend the approved root; that writes are create-only with no directory creation, no overwrite, no rename, no delete, and no truncate, plus post-write real-path, byte length, and SHA-256 re-verification with revert on mismatch; that an extension allowlist plus independent content sniffing denies PE, ELF, Mach-O, OLE compound, shell-script, ZIP, and PDF classes and requires filename, declared type, and content agreement; that declared and actual size must agree within 8 MiB behind strict bounded base64 decoding applied before any filesystem access; that download source identities are server-allocated, one-shot, and expiring after 120 seconds; that every download carries fresh SOFT approval with digest binding over the complete binding set including the actual content digest; that unauthorized origins and redirect widening fail closed; that downloaded content is never executed, opened, extracted, or launched; that evidence and the download registry are bounded and secret-free, recording only the source origin and a source URL digest rather than the raw URL; and that the agent cannot reach download capability through its own tool or input surface.
+
 ## Successor frontier
 
-COTRA-P08 continues at this frontier. No successor grain beyond SG-000025 is authorized by this activation. Scoped uploads remain successor work.
+COTRA-P08 continues at this frontier. No successor grain beyond SG-000025 is authorized by this closeout. Scoped uploads remain successor work.
 
 ## Active grain
 
-SG-000025 — Scoped bounded browser downloads with workspace-root destination policy — is the sole active COTRA-P08 grain.
-
-This activation authorizes implementation and qualification of a scoped bounded download capability on top of the SG-000021 isolated automation profile, the SG-000022 typed page lifecycle with origin binding, the SG-000023 read-only typed node observation, and the SG-000024 structured actuation: preview and download shapes bound to exact page identity, page generation, document generation, origin, and policy revision; server-allocated one-shot download source identities; a destination policy that is always the approved workspace root derived from policy; canonical relative destination validation with path-escape, reparse-point, alternate-data-stream, reserved-name, device-path, UNC, and NT namespace denial; extension and content-type allowlisting with executable, script, installer, archive, shortcut, and macro-capable denial; declared and actual size agreement; same-origin source binding with SSRF address policy and hop-by-hop redirect validation; fresh SOFT approval with digest binding over the full binding set including the actual content digest; deterministic source expiry and one-shot consumption; bounded origin-metadata evidence without secret material; and explicit denial of downloaded-file execution, opening, and extraction, on top of the SG-000018 replay-resistant foundation, SG-000019 class enforcement, SG-000020 trust and revoke records, SG-000021 profile and destination policy, SG-000022 page lifecycle and navigation, SG-000023 observation, and SG-000024 actuation, while deliberately keeping scoped uploads, archive extraction, actual page loading, personal-profile mode, debugging, scripting, credential access, MCP browser tools, and network egress beyond destination validation and DNS resolution absent.
-
-Authorized target design:
-- browser.download preview bound to one known active page with expected origin and generation, a same-origin validated and pinned source URL, a declared download identity, and one canonical relative destination under the approved workspace download root, with no approval, no write, and no page mutation;
-- browser.download download as the single bounded download entry point, requiring fresh SOFT approval and creating exactly one new file at exactly one canonical relative destination;
-- server-allocated one-shot download source identities binding workspace, policy revision, profile identity, page identity, origin, generation, document generation, source origin, source URL digest, declared identity, canonical relative destination, declared size, download policy revision, issue time, and expiry;
-- create-only writes: an existing destination fails closed, parent directories are never created, and no existing workspace file is overwritten, renamed, deleted, or truncated;
-- explicit denial of downloaded-file execution, opening, shell launch, and archive extraction with deterministic unit and security tests for destination escape, reparse-point escape, alternate data streams, reserved names, device and UNC paths, redirect widening, unauthorized origin, SSRF, stale page and generation, wrong profile, policy drift, missing, stale, reused, and expired approval, dangerous extension, unexpected media type, executable and script payloads, oversized payloads, size disagreement, and caller-requested automatic execution.
-
-## Active acceptance frontier
-
-SG-000025 must prove that preview and download bind one known active page with exact origin, generation, document generation, and policy revision, that source identities are server-allocated, one-shot, and expiring, that the destination root is always the approved workspace root, that canonical relative destinations defeat absolute, UNC, device, NT namespace, alternate data stream, traversal, reserved-name, and reparse-point escape, that only create-only writes are possible, that extension and content type are allowlisted with filename, declared type, and content sniff agreement, that declared and actual sizes must agree and stay within bound, that unauthorized origins and redirect widening fail closed, that every download carries fresh SOFT approval bound to the actual content digest, that reused, stale, and expired approvals fail closed, that downloaded content is never executed, opened, or extracted, that evidence is bounded and secret-free, and that the agent cannot reach download capability through its own tool or input surface.
-
-Scoped uploads, archive extraction, downloaded-file execution, actual page loading, personal-profile use, debugging, scripting, credential access, MCP browser tools, and network egress beyond destination validation and DNS resolution must remain absent, and STRONG enforcement, one-shot, expiry, and digest binding must not weaken.
+None. SG-000025 is `CLOSED` and canonical. The next lawful P08 grain must be derived from canonical P08 requirements with a narrow SpecGrain.
 
 A P08 exit requires joint proof from SG-000021 isolation and origin binding plus its successors that structured browser operations are proven with SSRF tests, redirect-widening tests, and the personal profile disabled by default. It must not expose personal-profile access, debugging authority, broader egress, or approval bypass.
 
@@ -170,7 +161,7 @@ Existing SG-000023 DOM observation remains subject to its exact active-page bind
 
 Retained SG-000024 DOM actuation remains subject to its exact node binding, role and state matching, per-action SOFT approval, generation-bump invalidation, bounded non-password values, password-fill denial, and stale foreign drift controls with extended-verb denial and no coordinate fallback.
 
-The active SG-000025 grain authorizes only preview and download of one bounded payload into one canonical relative destination under the approved workspace root with fresh SOFT approval, create-only writes, type and size allowlisting, same-origin and redirect-widening denial, one-shot expiring source identities, and bounded secret-free origin evidence.
+Retained SG-000025 scoped bounded downloads remain subject to their exact active-page binding, approved workspace download root, canonical relative destination, create-only write, type and size allowlist, same-origin and redirect-widening denial, one-shot expiring source identity, fresh SOFT digest-bound approval, bounded secret-free evidence, and downloaded-file non-execution controls.
 
 Still denied or absent outside the closed COTRA-P07 scope and the P08 browser scopes so far:
 - public `powershell.run`;

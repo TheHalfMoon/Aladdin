@@ -2,10 +2,16 @@
   "id": "SG-000025",
   "title": "Scoped bounded browser downloads with workspace-root destination policy",
   "program": "COTRA-P08",
-  "state": "GRAIN",
+  "state": "CLOSED",
   "risk": "high",
   "created": "2026-09-28",
   "base": "da637f5e4c823cb486ab30a521f003d9baf8bd55",
+  "qualified_head": "52912c3cad6ac6d407cb9862f4fad6402fcc78fc",
+  "implementation_base": "d0520b5bdda52da24827d6e3a4f26b9e4d6e8061",
+  "implementation_merge": "f2a19535295158a40c7cf05a002b1b6201c6aabf",
+  "pre_merge_ci": "36466971400",
+  "pre_merge_review_gates": "36466968515",
+  "post_merge_ci": "36467256256",
   "dependencies": ["SG-000021", "SG-000022", "SG-000023", "SG-000024"],
   "objective": "Establish scoped browser downloads on top of the SG-000021 isolated automation profile, the SG-000022 typed page lifecycle with origin binding, the SG-000023 typed node observation, and the SG-000024 structured actuation: a bounded download capability bound to exact page identity, page generation, document generation, origin, policy revision, server-allocated one-shot download source identity, declared download identity, destination policy, and the approved workspace download root, with canonical relative destinations, path-escape and reparse-point denial, extension and content-type allowlisting, declared and actual size agreement, deterministic source expiry, and fresh SOFT approval, while keeping downloaded content unexecuted, unopened, and unextracted, and while keeping scoped uploads, archive extraction, personal-profile mode, debugging, scripting, credential access, MCP browser tools, and network egress beyond destination validation and DNS resolution absent.",
   "scope": {
@@ -85,5 +91,19 @@
     "exact_head_ci": true,
     "native_network_qualification": false
   },
-  "done_when": "Scoped bounded downloads are merged with an approved workspace download root, canonical relative destination validation, reparse-point and alternate-data-stream denial, create-only writes, type and size allowlisting, same-origin and redirect-widening denial, one-shot and expiring source identities, fresh SOFT digest-bound approval, bounded origin evidence, explicit denial of execution, opening, and extraction, agent-forgery tests, retained replay and drift enforcement, and no new upload, personal-profile, debugging, scripting, credential, coordinate, screenshot, or network-egress authority."
+  "done_when": "Scoped bounded downloads are merged with an approved workspace download root, canonical relative destination validation, reparse-point and alternate-data-stream denial, create-only writes, type and size allowlisting, same-origin and redirect-widening denial, one-shot and expiring source identities, fresh SOFT digest-bound approval, bounded origin evidence, explicit denial of execution, opening, and extraction, agent-forgery tests, retained replay and drift enforcement, and no new upload, personal-profile, debugging, scripting, credential, coordinate, screenshot, or network-egress authority.",
+  "canonical_evidence": {
+    "implementation_pr": 66,
+    "implementation_base": "d0520b5bdda52da24827d6e3a4f26b9e4d6e8061",
+    "qualified_head": "52912c3cad6ac6d407cb9862f4fad6402fcc78fc",
+    "pre_merge_ci": "36466971400",
+    "pre_merge_review_gates": "36466968515",
+    "merge_sha": "f2a19535295158a40c7cf05a002b1b6201c6aabf",
+    "post_merge_ci": "36467256256",
+    "jev": "PASSED: 20/20 hunks, zero findings, zero blocking findings, pin 31f89602797fb7bea007f8a480bf368bf564954e, TypeSafe SDK 0.6.0",
+    "ocr": "PASSED: Open Code Review v1.12.9 exact-range delegation, 11 files total, 10 reviewable, 1 excluded and manually reviewed",
+    "security_review": "PASS on exact qualified head; download authority bound to the isolated automation profile with exact page identity, page generation, document generation, origin, workspace, and policy revision; server-allocated one-shot download source identity with 120-second deterministic expiry bound over the full binding set and recomputed against the server record; destination root always the approved workspace root from policy configuration with no caller-selected root; canonical relative destination denial of absolute, drive, UNC, device, NT namespace, alternate data stream, parent and current traversal, empty and duplicate separators, trailing dot and space, reserved device name, illegal character, control character, and length escapes; canonical filesystem identity containment with separator-boundary comparison proven against a Windows directory junction and a Unix symlink; create-only writes with no directory creation, no overwrite, no rename, no delete, and no truncate, plus post-write real-path, byte length, and SHA-256 re-verification with revert on mismatch; extension allowlist plus independent content sniffing denying PE, ELF, Mach-O, OLE compound, shell-script, ZIP, and PDF classes and requiring filename, declared type, and content agreement; declared and actual size agreement with an 8 MiB maximum and strict bounded base64 decoding before any filesystem access; bounded pending sources per workspace; same-origin source binding with SSRF address policy and hop-by-hop redirect validation denying unauthorized origins and redirect widening; fresh SOFT approval with digest binding over the complete binding set including the actual content digest and one-shot consumption spent before the write; explicit denial of browser.download execute, open, extract, launch, browser.file execute and open, browser.archive extract, browser.shell run, and every upload shape; bounded secret-free evidence carrying source origin, source URL digest, destination root identity, canonical relative destination, declared, extension, and sniffed types, type consistency, sizes, content digest, and explicit executed, opened, extracted, cookies, and credentials false; disclosed test-only cmd mklink junction creation under cfg(test) with no capability, request field, or caller input reaching it; no MCP browser tool; and retained SG-000018 replay, SG-000019 STRONG, SG-000020 trust, SG-000021 profile and destination, SG-000022 navigation, SG-000023 observation, and SG-000024 actuation behavior with P06 regressions",
+    "unresolved_review_threads": 0,
+    "authority_boundary": "Only scoped bounded browser.download/preview and browser.download/download into the approved workspace download root are newly added in the Cotra registry with no browser launch, no attachment, and no network transfer. Downloads are create-only, allowlisted, size-bounded, origin-bound, one-shot, and SOFT-approved, and downloaded content is never executed, opened, extracted, or launched. Scoped uploads, archive extraction, personal-profile access, debugging, scripting, credential access, screenshots, coordinates, UI automation, MCP browser tools, and network egress beyond destination validation and DNS resolution remain absent, and existing file, process, Git, approval, presence, trust, destination, page, navigation, observation, and actuation behavior is unchanged."
+  }
 }
