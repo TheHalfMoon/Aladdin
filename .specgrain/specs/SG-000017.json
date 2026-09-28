@@ -2,10 +2,16 @@
   "id": "SG-000017",
   "title": "Bounded Git push with protected credential references",
   "program": "COTRA-P06",
-  "state": "GRAIN",
+  "state": "CLOSED",
   "risk": "high",
   "created": "2026-09-27",
   "base": "d9708b1f2537befaf09db57e94099949b2a4115c",
+  "qualified_head": "4b769372b2b27fb1d3cc3ee3f3e0ee2c6cb5edee",
+  "implementation_base": "6cbf1055f7432dba1a6dd682e4f1e364ec1aff2a",
+  "implementation_merge": "c61d7699d5621bf476da1bac484fc9041ea2648d",
+  "pre_merge_ci": "36345155505",
+  "pre_merge_review_gates": "36345155633",
+  "post_merge_ci": "36345286560",
   "dependencies": ["SG-000015", "SG-000016"],
   "objective": "Introduce the second destination-scoped Git network capability: an approved git.push operation that pushes one explicit local source ref to one explicit remote destination ref on one workspace-bound canonical HTTPS destination after fresh local approval, with expected remote-ref protection, non-fast-forward rejection, hard force-push denial, destination revalidation, resulting remote-ref verification, and a protected credential-reference architecture that never exposes raw secrets. git.fetch.preview and approved git.fetch remain unchanged; generic network, shell, push-bypass, and ambient-credential authority must not be introduced.",
   "scope": {
@@ -106,5 +112,19 @@
     "exact_head_ci": true,
     "native_network_qualification": true
   },
-  "done_when": "Bounded approved git.push is merged and post-merge verified with explicit workspace destination policy, short source and destination branch validation, public-address classification and request pinning, redirect/proxy/credential suppression outside the protected credential-reference path, exact approval/state binding, non-fast-forward rejection with hard force-push denial, resulting remote-ref evidence, real no-cost HTTPS qualification or explicit unproven record, and no ambient credential or generic network authority."
+  "done_when": "Bounded approved git.push is merged and post-merge verified with explicit workspace destination policy, short source and destination branch validation, public-address classification and request pinning, redirect/proxy/credential suppression outside the protected credential-reference path, exact approval/state binding, non-fast-forward rejection with hard force-push denial, resulting remote-ref evidence, real no-cost HTTPS qualification or explicit unproven record, and no ambient credential or generic network authority.",
+  "canonical_evidence": {
+    "implementation_pr": 41,
+    "implementation_base": "6cbf1055f7432dba1a6dd682e4f1e364ec1aff2a",
+    "qualified_head": "4b769372b2b27fb1d3cc3ee3f3e0ee2c6cb5edee",
+    "pre_merge_ci": "36345155505",
+    "pre_merge_review_gates": "36345155633",
+    "merge_sha": "c61d7699d5621bf476da1bac484fc9041ea2648d",
+    "post_merge_ci": "36345286560",
+    "jev": "PASSED: 14/14 hunks, zero findings, zero blocking findings",
+    "ocr": "PASSED: Open Code Review v1.12.9 exact-range delegation, 12 files total, 10 reviewable, 2 excluded and manually reviewed",
+    "security_review": "PASS on exact qualified head; workspace-bound push destination policy with stable policy ids and destination-bound credential references, canonical HTTPS with port 443 and no userinfo or alternate transports, short source and destination branch validation rejecting full refs refspec separators force markers and wildcards, local-only preview with no DNS network approval secret access or mutation, public-address classification with pinned request address and post-approval drift denial, fresh approval bound to workspace repository policy destination pinned address refs HEAD prior and credential reference without secret material, post-approval destination state and credential-binding revalidation, remote-state comparison before push bytes, HTTPS-only transport with redirects disabled TLS verification enabled proxy cookie header credential-helper askpass suppression repository URL-rewrite rejection and hook neutralization, non-fast-forward rejection with hard force-push deletion tag mirror and arbitrary-refspec denial, secret redaction in evidence errors argv config and child environments with isolated askpass cleanup, resulting-ref verification with remote-tracking update and unchanged checkout proof, and retained SG-000015 and SG-000016 regressions",
+    "unresolved_review_threads": 0,
+    "authority_boundary": "Only git.push.preview as local read-only stale-protection material and approved git.push of one validated refs/heads source to one validated refs/heads destination on one workspace-bound canonical HTTPS destination into the verified remote ref with Cotra-owned tracking are newly authorized after fresh local approval. Force push, branch deletion, wildcard negative tag and arbitrary refspecs, caller-supplied URLs, raw credential arguments, ambient credential-manager authority, redirect following, proxy inheritance, generic network fetch, raw shell and PowerShell, browser and UI automation, elevation, and approval bypass or reuse remain absent."
+  }
 }
