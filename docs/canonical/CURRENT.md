@@ -1,11 +1,11 @@
 # Cotra Current Canonical Frontier
 
-Status: CLOSED_GRAIN
+Status: ACTIVE_GRAIN
 Date: 2026-09-28
-Governance snapshot base: 6b1259a29a4f3350597fbac5d9cfe5c64f86a8c4
+Governance snapshot base: c40b72a55084e31cfd33e8c23aeaa06c3ec7853a
 Evidence ledger: `.specgrain/canonical-evidence.json`
 
-`Governance snapshot base` records the exact canonical parent from which this closeout snapshot was authored. It deliberately does not claim the eventual merge SHA of the commit containing this file.
+`Governance snapshot base` records the exact canonical parent from which this activation snapshot was authored. It deliberately does not claim the eventual merge SHA of the commit containing this file.
 
 ## SpecGrain state semantics
 
@@ -121,13 +121,26 @@ SG-000023 closed canonically: activation PR `#59` (activation base `28e0d912b889
 
 ## Successor frontier
 
-COTRA-P08 continues at this frontier. No successor grain beyond SG-000023 is authorized by this closeout. DOM actuation, scoped downloads, and scoped uploads remain successor work.
+COTRA-P08 continues at this frontier. No successor grain beyond SG-000024 is authorized by this activation.
 
 ## Active grain
 
-None. SG-000023 is `CLOSED` and canonical. The next lawful P08 grain must be derived from canonical P08 requirements with a narrow SpecGrain.
+SG-000024 — Structured DOM actuation on typed node identity with SOFT approval — is the sole active COTRA-P08 grain.
 
-SG-000023 proved that snapshots bind one active page on the isolated automation profile, that node identities bind profile, page, generation, origin, document generation, and policy revision, that stale and foreign pages and nodes fail closed, that observation is bounded and data-minimized with password and secret redaction, that every actuation shape remains denied with no silent coordinate fallback, and that the agent cannot reach snapshot capability through its own tool or input surface.
+This activation authorizes implementation and qualification of structured browser actuation consuming the SG-000023 typed node identities on the SG-000021 isolated profile and the SG-000022 typed page lifecycle with origin binding: invoke (click) and value-entry (fill) actions bound to exact page, page generation, origin, node identity, expected role and state, document generation, policy revision, requested action, and bounded value digest; fresh SOFT approval per action with exact digest binding and one-shot consumption; stale-node fail-closed after navigation, generation change, document replacement, origin drift, or policy drift; bounded non-password fill values with oversized and password-field denial; typed actuation evidence without secret material; and explicit denial of select, toggle, submit, keyboard, coordinate fallback, scripting, CDP, downloads, and uploads, on top of the SG-000018 replay-resistant foundation, SG-000019 class enforcement, SG-000020 trust and revoke records, SG-000021 profile and destination policy, SG-000022 page lifecycle and navigation, and SG-000023 observation, while deliberately keeping extended actuation verbs, downloads, uploads, actual page loading, personal-profile mode, debugging, scripting, credential access, MCP browser tools, and network egress absent.
+
+Authorized target design:
+- browser.dom click bound to one known node on one known active page with expected role and state matching;
+- browser.dom fill bound to one known text-compatible non-password node with an explicitly bounded caller value;
+- typed node consumption with exact page, generation, origin, document generation, index, and policy revision binding and stale fail-closed;
+- fresh SOFT approval per action with digest binding over page identity, expected state, node identity, expected role and state, action, and bounded value digest;
+- explicit denial of select, toggle, submit, keyboard, screenshots, coordinates, scripting, CDP, DevTools, downloads, and uploads with deterministic unit and security tests for binding, stale denial, mismatch denial, bounds, approval, replay and drift retention, and separation.
+
+## Active acceptance frontier
+
+SG-000024 must prove that invoke and fill bind one known node on one known active page, that stale and foreign pages and nodes fail closed, that role and state mismatch fails closed, that every action carries fresh SOFT approval, that fill values are bounded with password-field denial, that every non-authorized actuation shape remains denied with no silent coordinate fallback, and that the agent cannot reach actuation capability through its own tool or input surface.
+
+Select, toggle, submit, keyboard, downloads, uploads, actual page loading, personal-profile use, debugging, scripting, credential access, MCP browser tools, and network egress must remain absent, and STRONG enforcement, one-shot, expiry, and digest binding must not weaken.
 
 A P08 exit requires joint proof from SG-000021 isolation and origin binding plus its successors that structured browser operations are proven with SSRF tests, redirect-widening tests, and the personal profile disabled by default. It must not expose personal-profile access, debugging authority, broader egress, or approval bypass.
 
