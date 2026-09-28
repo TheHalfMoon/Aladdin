@@ -3271,7 +3271,9 @@ mod tests {
         std::fs::write(root.join(name), body).expect("artifact");
         let bytes = body.as_bytes();
         let digest = cotra_provider_browser::sha256_hex(bytes);
-        let source_id = format!("dl-seed-{name}");
+        // A well formed COTRA_BROWSER_DOWNLOAD_SOURCE_V1 identity, so the strict
+        // shape validator accepts it exactly as it accepts a real one.
+        let source_id = format!("dl-{}", cotra_provider_browser::sha256_hex(name.as_bytes()));
         let mut store = cotra_provider_browser::DownloadStore::load_or_create(
             cotra_provider_browser::default_download_registry_path(profile_root),
         );
