@@ -21,7 +21,6 @@ fn temp_root(label: &str) -> PathBuf {
     ))
 }
 
-use super::*;
 fn temp_upload_registry(label: &str) -> PathBuf {
     let suffix = SystemTime::now()
         .duration_since(UNIX_EPOCH)
