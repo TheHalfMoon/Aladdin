@@ -2,10 +2,16 @@
   "id": "SG-000022",
   "title": "Origin-bound bounded navigation on the isolated profile",
   "program": "COTRA-P08",
-  "state": "GRAIN",
+  "state": "CLOSED",
   "risk": "high",
   "created": "2026-09-28",
   "base": "e69708aca6b26f16b0351d8ad2313c2bc1d3c9bb",
+  "qualified_head": "2d8ae35db855dd50092efc46a5bd663f20d5d476",
+  "implementation_base": "e0328d888f72c502d5b3b916d458aaaa8c92669b",
+  "implementation_merge": "698eff08e736c133b93100e1983fe4be2c5909d0",
+  "pre_merge_ci": "36432067459",
+  "pre_merge_review_gates": "36432064800",
+  "post_merge_ci": "36432538358",
   "dependencies": ["SG-000021"],
   "objective": "Establish bounded browser navigation on top of the SG-000021 isolated automation profile, typed provider contract, and origin binding: a typed navigation contract with a server-side page identity lifecycle, SOFT-approved origin-bound transitions, hop-by-hop redirect-chain validation, and download-trigger denial, while keeping DOM actuation, observation, downloads, uploads, personal-profile mode, debugging, scripting, credential access, and network egress absent.",
   "scope": {
@@ -83,5 +89,19 @@
     "exact_head_ci": true,
     "native_network_qualification": false
   },
-  "done_when": "Origin-bound bounded navigation with typed page lifecycle is merged with hop-by-hop redirect validation, download-trigger denial, SOFT-approved stale-checked transitions, agent-forgery tests, retained replay and drift enforcement, and no new observation, actuation, download, upload, personal-profile, debugging, scripting, credential, or network-egress authority."
+  "done_when": "Origin-bound bounded navigation with typed page lifecycle is merged with hop-by-hop redirect validation, download-trigger denial, SOFT-approved stale-checked transitions, agent-forgery tests, retained replay and drift enforcement, and no new observation, actuation, download, upload, personal-profile, debugging, scripting, credential, or network-egress authority.",
+  "canonical_evidence": {
+    "implementation_pr": 57,
+    "implementation_base": "e0328d888f72c502d5b3b916d458aaaa8c92669b",
+    "qualified_head": "2d8ae35db855dd50092efc46a5bd663f20d5d476",
+    "pre_merge_ci": "36432067459",
+    "pre_merge_review_gates": "36432064800",
+    "merge_sha": "698eff08e736c133b93100e1983fe4be2c5909d0",
+    "post_merge_ci": "36432538358",
+    "jev": "PASSED: 17/17 hunks, zero findings, zero blocking findings, pin 31f89602797fb7bea007f8a480bf368bf564954e",
+    "ocr": "PASSED: Open Code Review v1.12.9 exact-range delegation, 8 files total, 7 reviewable, 1 excluded and manually reviewed",
+    "security_review": "PASS on exact qualified head; typed page lifecycle with server-allocated identity bound to isolated profile workspace origin generation, SOFT-approved navigation with digest binding over page expected target pinned redirect chain, hop-by-hop redirect validation with widening loop downgrade denial, SSRF re-resolution with post-resolution policy and deterministic pinning, download-trigger denial for executable script archive paths, stale unknown foreign drift fail-closed, typed evidence without secrets, explicit denial of DOM observation actuation downloads uploads scripting debugging personal profile and egress, no MCP browser tool, and retained SG-000018 replay SG-000019 STRONG SG-000020 trust and SG-000021 profile destination behavior with P06 regressions",
+    "unresolved_review_threads": 0,
+    "authority_boundary": "Only typed page lifecycle and SOFT-approved origin-bound navigation with hop-by-hop redirect validation and download-trigger denial are newly added in the Cotra registry with no browser launch or attachment. DOM observation, DOM actuation, downloads, uploads, personal-profile access, debugging, scripting, credential access, and network egress remain absent, and existing file, process, Git, approval, presence, trust, and destination behavior is unchanged."
+  }
 }
