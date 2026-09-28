@@ -1,0 +1,154 @@
+name: Winds PR262 Jev Exact Head 6b341ff
+
+on:
+  push:
+    branches:
+      - review/winds-pr262-jev-6b341ff
+
+permissions:
+  contents: read
+
+env:
+  WINDS_BASE_SHA: d07892d58a726a945e098b72a9d092338b2c31ac
+  WINDS_HEAD_SHA: 6b341ff46b1272e76fc118eeab30d7aa464d0ab7
+  WINDS_HEAD_BRANCH: impl/spec-012-t168-tui-topology
+  COTRA_TRUSTED_SHA: 6cbf1055f7432dba1a6dd682e4f1e364ec1aff2a
+  JEV_REVIEW_SHA: 31f89602797fb7bea007f8a480bf368bf564954e
+  ADAPTER_BLOB: c4a144f4b6ee064986c291c637b6390e58ed3601
+  OCR_URL: https://github.com/alibaba/open-code-review/releases/download/v1.12.9/opencodereview-linux-amd64
+  OCR_SHA256: 9105c7081b8362a1cb0167f1ddfd1437e147a0e3c9a5af89c03c8859a5b0f0e8
+
+jobs:
+  ocr-review:
+    name: Winds PR262 OCR Exact Range
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Fetch exact Winds range as data
+        shell: bash
+        run: |
+          set -euo pipefail
+          git init /tmp/winds-target
+          git -C /tmp/winds-target remote add origin https://github.com/TheHalfMoon/Winds.git
+          git -C /tmp/winds-target fetch --no-tags origin "$WINDS_BASE_SHA" "$WINDS_HEAD_SHA"
+          git -C /tmp/winds-target cat-file -e "$WINDS_BASE_SHA^{commit}"
+          git -C /tmp/winds-target cat-file -e "$WINDS_HEAD_SHA^{commit}"
+          test "$(git -C /tmp/winds-target merge-base "$WINDS_BASE_SHA" "$WINDS_HEAD_SHA")" = "$WINDS_BASE_SHA"
+          git -C /tmp/winds-target diff --check "$WINDS_BASE_SHA" "$WINDS_HEAD_SHA"
+      - name: Install checksum-pinned Alibaba Open Code Review
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --location --silent --show-error "$OCR_URL" --output /tmp/opencodereview
+          echo "$OCR_SHA256  /tmp/opencodereview" | sha256sum --check --status
+          chmod 700 /tmp/opencodereview
+          mkdir -m 700 /tmp/ocr-output
+          /tmp/opencodereview --version
+      - name: Run exact-range delegation and rules
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd /tmp/winds-target
+          /tmp/opencodereview delegate preview --format json --from "$WINDS_BASE_SHA" --to "$WINDS_HEAD_SHA" | tee /tmp/ocr-output/preview.json
+          python3 - <<'PY'
+          import json, os, subprocess
+          out='/tmp/ocr-output'
+          preview=json.load(open(out+'/preview.json', encoding='utf-8'))
+          assert preview.get('from') == os.environ['WINDS_BASE_SHA'], 'OCR preview range mismatch'
+          assert preview.get('to') == os.environ['WINDS_HEAD_SHA'], 'OCR preview range mismatch'
+          files=[]
+          for entry in preview.get('reviewable_files', []):
+              path=entry.get('path') if isinstance(entry, dict) else entry
+              if isinstance(path, str) and path:
+                  files.append(path)
+          rules={'groups': []}
+          if files:
+              cp=subprocess.run(['/tmp/opencodereview','delegate','rule','--format','json','--',*files],check=True,text=True,stdout=subprocess.PIPE)
+              rules=json.loads(cp.stdout)
+          evidence={'tool':'@alibaba-group/open-code-review@1.12.9','base_sha':os.environ['WINDS_BASE_SHA'],'head_sha':os.environ['WINDS_HEAD_SHA'],'reviewable_count':preview.get('reviewable_count'),'excluded_count':preview.get('excluded_count'),'reviewable_files':files,'rule_groups':len(rules.get('groups',[]))}
+          json.dump(rules,open(out+'/rules.json','w',encoding='utf-8'),indent=2,sort_keys=True)
+          json.dump(evidence,open(out+'/evidence.json','w',encoding='utf-8'),indent=2,sort_keys=True)
+          print(json.dumps(evidence, sort_keys=True))
+          PY
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: winds-pr262-ocr-6b341ff
+          path: /tmp/ocr-output
+          if-no-files-found: warn
+          retention-days: 14
+
+  jev-review:
+    name: Winds PR262 Jev Semantic Review
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "24"
+
+      - name: Require existing TypeSafe credential
+        env:
+          TYPESAFE_API_KEY: ${{ secrets.TYPESAFE_API_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${TYPESAFE_API_KEY:-}"
+
+      - name: Fetch exact Winds candidate as Git data only
+        shell: bash
+        run: |
+          set -euo pipefail
+          WINDS_DIR="$RUNNER_TEMP/winds-pr262"
+          git init "$WINDS_DIR"
+          git -C "$WINDS_DIR" remote add origin https://github.com/TheHalfMoon/Winds.git
+          git -C "$WINDS_DIR" fetch --no-tags origin refs/heads/main:refs/remotes/origin/main
+          git -C "$WINDS_DIR" fetch --no-tags origin "refs/heads/$WINDS_HEAD_BRANCH:refs/remotes/origin/pr262"
+          test "$(git -C "$WINDS_DIR" rev-parse refs/remotes/origin/main)" = "$WINDS_BASE_SHA"
+          test "$(git -C "$WINDS_DIR" rev-parse refs/remotes/origin/pr262)" = "$WINDS_HEAD_SHA"
+          test "$(git -C "$WINDS_DIR" merge-base "$WINDS_BASE_SHA" "$WINDS_HEAD_SHA")" = "$WINDS_BASE_SHA"
+          git -C "$WINDS_DIR" diff --check "$WINDS_BASE_SHA" "$WINDS_HEAD_SHA"
+          test "$(git -C "$WINDS_DIR" diff --name-only "$WINDS_BASE_SHA" "$WINDS_HEAD_SHA" | wc -l)" = "4"
+
+      - name: Install pinned Jev Review
+        shell: bash
+        run: |
+          set -euo pipefail
+          JEV_DIR="$RUNNER_TEMP/jev-review"
+          git clone https://github.com/devagrawal09/jev-review.git "$JEV_DIR"
+          git -C "$JEV_DIR" checkout --detach "$JEV_REVIEW_SHA"
+          npm --prefix "$JEV_DIR" ci
+
+      - name: Materialize trusted Cotra exact-diff adapter
+        shell: bash
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor "$COTRA_TRUSTED_SHA" HEAD
+          ADAPTER="$RUNNER_TEMP/jev-exact-diff.mjs"
+          git show "$COTRA_TRUSTED_SHA:.github/scripts/jev-exact-diff.mjs" > "$ADAPTER"
+          test "$(git hash-object "$ADAPTER")" = "$ADAPTER_BLOB"
+          node --check "$ADAPTER"
+
+      - name: Run genuine Jev exact-diff review on Winds PR262
+        env:
+          TYPESAFE_API_KEY: ${{ secrets.TYPESAFE_API_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          WINDS_DIR="$RUNNER_TEMP/winds-pr262"
+          JEV_DIR="$RUNNER_TEMP/jev-review"
+          ADAPTER="$RUNNER_TEMP/jev-exact-diff.mjs"
+          node "$ADAPTER" "$WINDS_BASE_SHA" "$WINDS_HEAD_SHA" "$WINDS_DIR" "$JEV_DIR" | tee jev-review.json
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: winds-pr262-jev-review-6b341ff
+          path: jev-review.json
+          if-no-files-found: warn
+          retention-days: 14
