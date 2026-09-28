@@ -72,6 +72,14 @@ therefore cannot extend the approved root: the destination fails closed with
 re-checked, and a file that does not resolve inside the root is deleted and the
 download fails closed.
 
+Process-spawn disclosure: the only process this grain spawns anywhere in the
+repository is inside the Windows test that builds a directory junction with
+`cmd /c mklink /J` so the reparse-point escape can be proven. That call exists
+only under `#[cfg(test)]`; its arguments are two test-generated temporary
+paths and no capability, request field, or caller input reaches it. It grants no
+production authority, and no shell, PowerShell, or process-spawning capability is
+reachable from any Cotra capability, MCP tool, or browser shape.
+
 Downloads are create-only. The file is opened with create-new semantics, an
 existing destination fails closed with `PostconditionFailed`, parent directories
 are never created, and no existing workspace file is ever overwritten, renamed,
