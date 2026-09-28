@@ -2,10 +2,16 @@
   "id": "SG-000020",
   "title": "Workspace trust management with history UX and emergency revoke",
   "program": "COTRA-P07",
-  "state": "GRAIN",
+  "state": "CLOSED",
   "risk": "high",
   "created": "2026-09-28",
   "base": "35f1f84d45118abd50e5a4b4606294e45311fd78",
+  "qualified_head": "ea609b013d9233f696fb9b5877f59c5a7600d0ec",
+  "implementation_base": "d3a71554a02e009e903a47c75f1b4e4f0086b8d5",
+  "implementation_merge": "e40d7ad255566025617557bbd8f9fb91f1595550",
+  "pre_merge_ci": "36383880270",
+  "pre_merge_review_gates": "36383878962",
+  "post_merge_ci": "36384092522",
   "dependencies": ["SG-000019"],
   "objective": "Add workspace trust management, class-labeled approval history UX, and emergency revoke on top of the SG-000018 replay-resistant foundation and SG-000019 STRONG enforcement, so trust changes are explicit, auditable, and STRONG-gated with fail-closed revocation, without weakening one-shot, expiry, digest binding, or STRONG presence.",
   "scope": {
@@ -68,5 +74,19 @@
     "exact_head_ci": true,
     "native_network_qualification": false
   },
-  "done_when": "Workspace trust management with STRONG-gated changes, class-labeled history UX, and emergency revoke is merged with fail-closed invalidation, agent-forgery tests, retained replay and drift enforcement, and no new platform authority beyond trust records."
+  "done_when": "Workspace trust management with STRONG-gated changes, class-labeled history UX, and emergency revoke is merged with fail-closed invalidation, agent-forgery tests, retained replay and drift enforcement, and no new platform authority beyond trust records.",
+  "canonical_evidence": {
+    "implementation_pr": 50,
+    "implementation_base": "d3a71554a02e009e903a47c75f1b4e4f0086b8d5",
+    "qualified_head": "ea609b013d9233f696fb9b5877f59c5a7600d0ec",
+    "pre_merge_ci": "36383880270",
+    "pre_merge_review_gates": "36383878962",
+    "merge_sha": "e40d7ad255566025617557bbd8f9fb91f1595550",
+    "post_merge_ci": "36384092522",
+    "jev": "PASSED: 27/27 hunks, zero findings, zero blocking findings",
+    "ocr": "PASSED: Open Code Review v1.12.9 exact-range delegation, 7 files total, 6 reviewable, 1 excluded and manually reviewed",
+    "security_review": "PASS on exact qualified head; trust grant revoke and emergency revoke require STRONG with platform-mediated presence and suspended input lease, no caller-supplied trust boolean, digest binds workspace policy capability transition current trust state and revision with stale-state fail-closed, epoch invalidation fails closed for pre-revoke tokens while post-revoke tokens remain usable, checksum-chained redacted trust and approval history with bounded limits and tamper-evident loading, corrupt or unknown trust fails closed as untrusted, denied and unavailable decisions recorded without authorizing execution, no MCP trust-approve tool, no trust-change bypass reuse delegation browser UI network clipboard installer elevation or synthetic-input authority, and retained SG-000018 replay and SG-000019 STRONG enforcement with P06 regressions",
+    "unresolved_review_threads": 0,
+    "authority_boundary": "Only workspace trust management with STRONG-gated changes, class-labeled history UX, and emergency revoke with fail-closed epoch invalidation is newly added through dedicated PRIVILEGED APIs. Existing file process and Git operations retain their class, and trust-change bypass, persistent reuse, remote delegation, new network browser UI automation clipboard installer and elevation authority, synthetic-input generation, and approval bypass remain absent."
+  }
 }
