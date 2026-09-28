@@ -2149,6 +2149,12 @@ mod tests {
             .expect("open page")
     }
 
+    fn open_observation_test_page(store: &mut PageStore) -> PageRecord {
+        store
+            .open_page("default", "profile-identity-test", "sg-000023-v1")
+            .expect("open observation page")
+    }
+
     #[test]
     fn page_open_binds_workspace_profile_and_generation() {
         let path = temp_page_registry("open");
@@ -2460,7 +2466,7 @@ mod tests {
     fn snapshot_observe_binds_active_page_with_typed_node_identity() {
         let path = temp_page_registry("snapshot-bind");
         let mut store = PageStore::load_or_create(path.clone());
-        let page = open_test_page(&mut store);
+        let page = open_observation_test_page(&mut store);
         let open_error = build_snapshot(
             &page,
             "profile-identity-test",
@@ -2513,7 +2519,7 @@ mod tests {
     fn stale_wrong_profile_origin_generation_and_policy_nodes_fail_closed() {
         let path = temp_page_registry("snapshot-stale");
         let mut store = PageStore::load_or_create(path.clone());
-        let page = open_test_page(&mut store);
+        let page = open_observation_test_page(&mut store);
         let (active, _, _) = store
             .apply_navigation(&page.page_id, "", 0, "https://example.com:443")
             .expect("navigate");
@@ -2595,7 +2601,7 @@ mod tests {
 
         let path = temp_page_registry("snapshot-bounds");
         let mut store = PageStore::load_or_create(path.clone());
-        let page = open_test_page(&mut store);
+        let page = open_observation_test_page(&mut store);
         let (active, _, _) = store
             .apply_navigation(&page.page_id, "", 0, "https://example.com:443")
             .expect("navigate");
@@ -2644,7 +2650,7 @@ mod tests {
 
         let path = temp_page_registry("snapshot-redact");
         let mut store = PageStore::load_or_create(path.clone());
-        let page = open_test_page(&mut store);
+        let page = open_observation_test_page(&mut store);
         let (active, _, _) = store
             .apply_navigation(&page.page_id, "", 0, "https://example.com:443")
             .expect("navigate");
@@ -2657,19 +2663,26 @@ mod tests {
             16_384,
         )
         .expect("snapshot");
-        let serialized = snapshot.to_json().to_string().to_ascii_lowercase();
-        assert!(
-            !serialized.contains("cookie"),
-            "snapshot must not carry cookies"
-        );
-        assert!(
-            !serialized.contains("password="),
-            "snapshot must not carry passwords"
-        );
-        assert!(
-            !serialized.contains("sessiontoken"),
-            "snapshot must not carry sessions"
-        );
+        // Absence is asserted on exact JSON fields, never by substring: the
+        // packet legitimately carries `"cookies": false` and
+        // `"credentials": false` absence markers, so a substring check for
+        // "cookie" would trap on its own marker.
+        let json = snapshot.to_json();
+        assert!(json["cookies"] == false);
+        assert!(json["credentials"] == false);
+        assert!(json.get("cookie").is_none());
+        assert!(json.get("password").is_none());
+        assert!(json.get("token").is_none());
+        assert!(json.get("session").is_none());
+        assert!(json.get("authorization").is_none());
+        let nodes = json["nodes"].as_array().expect("nodes");
+        for node in nodes {
+            assert_ne!(node["role"], "password");
+            assert_ne!(node["value"], "hunter2");
+            assert!(node.get("cookie").is_none());
+            assert!(node.get("password").is_none());
+            assert!(node.get("secret").is_none());
+        }
         let _ = std::fs::remove_file(path);
     }
 
