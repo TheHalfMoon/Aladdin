@@ -15,15 +15,15 @@ const MAX_HOST_BYTES: usize = 253;
 /// Typed denial catalog for browser shapes that remain unauthorized.
 /// SG-000021 left navigation, DOM actuation, downloads, uploads,
 /// personal-profile access, debugging, scripting, and network egress absent.
-/// SG-000022 authorizes only page lifecycle and origin-bound navigation;
-/// DOM observation, DOM actuation, downloads, uploads, personal-profile
-/// access, debugging, scripting, and network egress remain absent and every
-/// shape listed here must fail closed.
+/// SG-000022 authorizes only page lifecycle and origin-bound navigation.
+/// SG-000023 additionally authorizes read-only snapshot observation;
+/// DOM actuation, downloads, uploads, personal-profile access, debugging,
+/// scripting, and network egress remain absent and every shape listed here
+/// must fail closed.
 pub const DENIED_BROWSER_SHAPES: &[(&str, &str)] = &[
     ("browser.navigate", "navigate"),
     ("browser.snapshot", "capture"),
     ("browser.snapshot", "actuate"),
-    ("browser.snapshot", "observe"),
     ("browser.dom", "click"),
     ("browser.dom", "fill"),
     ("browser.dom", "type"),
@@ -54,9 +54,10 @@ pub const DENIED_BROWSER_SHAPES: &[(&str, &str)] = &[
     ("playwright", "command"),
 ];
 
-/// The typed operations SG-000022 authorizes: the two SG-000021 reads plus
-/// page lifecycle and origin-bound navigation. Everything else under a
-/// browser-like capability must fail closed.
+/// The typed operations SG-000023 authorizes: the two SG-000021 reads, the
+/// SG-000022 page lifecycle and origin-bound navigation, plus read-only
+/// snapshot observation. Everything else under a browser-like capability
+/// must fail closed.
 pub fn is_allowed_browser_shape(capability: &str, operation: &str) -> bool {
     matches!(
         (capability, operation),
@@ -65,6 +66,7 @@ pub fn is_allowed_browser_shape(capability: &str, operation: &str) -> bool {
             | ("browser.page", "open")
             | ("browser.navigation", "preview")
             | ("browser.navigation", "navigate")
+            | ("browser.snapshot", "observe")
     )
 }
 
@@ -1373,6 +1375,434 @@ fn digest_bytes(hasher: &mut Sha256, value: &[u8]) {
     hasher.update(value);
 }
 
+// ---------------------------------------------------------------------------
+// SG-000023 read-only DOM and accessibility observation with typed node
+// identity. Snapshots are computed read-only from the SG-000022 page
+// registry: no browser is launched or attached, no page is loaded, and no
+// network activity occurs. Observation is allowed only on active pages with
+// a non-empty current origin. Node identities are server-allocated and bind
+// profile identity, page identity, page generation, current origin, document
+// generation, node index, and policy revision so later structured actuation
+// cannot accidentally target a stale or replaced element.
+// ---------------------------------------------------------------------------
+
+/// Prefix for server-allocated typed node identities. Callers never choose
+/// this value; only identities that recompute against the current page,
+/// profile, origin, generation, and policy revision are valid.
+pub const SNAPSHOT_NODE_PREFIX: &str = "nd-";
+/// Prefix for server-allocated snapshot identities.
+pub const SNAPSHOT_ID_PREFIX: &str = "ss-";
+/// Hard bound on nodes returned by a single snapshot.
+pub const MAX_SNAPSHOT_NODES: u64 = 200;
+/// Hard bound on snapshot tree depth.
+pub const MAX_SNAPSHOT_DEPTH: u64 = 8;
+/// Hard bound on serialized snapshot bytes.
+pub const MAX_SNAPSHOT_BYTES: usize = 65_536;
+/// Default node bound when the caller supplies no explicit limit.
+pub const DEFAULT_SNAPSHOT_NODES: u64 = 50;
+/// Default depth bound when the caller supplies no explicit limit.
+pub const DEFAULT_SNAPSHOT_DEPTH: u64 = 4;
+/// Default byte bound when the caller supplies no explicit limit.
+pub const DEFAULT_SNAPSHOT_BYTES: usize = 16_384;
+/// Minimum accepted explicit byte bound. Smaller values cannot carry even a
+/// single document node and fail closed as invalid requests.
+pub const MIN_SNAPSHOT_BYTES: u64 = 256;
+
+/// Roles the synthetic registry-bound snapshot may emit. The set is
+/// intentionally small and structural: document metadata, headings, links,
+/// buttons, and paragraphs. Password, credential, cookie, and session
+/// material never appears under any role.
+pub const SNAPSHOT_ROLES: &[&str] = &[
+    "document",
+    "heading",
+    "link",
+    "button",
+    "paragraph",
+    "textbox",
+];
+
+/// A typed observed node. The identity is server-allocated; the remaining
+/// fields are bounded structural metadata. Values are redacted where
+/// sensitive and raw browser-internal handles, cookies, credentials, tokens,
+/// headers, and DOM content never enter this packet.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SnapshotNode {
+    pub node_id: String,
+    pub role: String,
+    pub name: String,
+    pub value: String,
+    pub state: String,
+    pub depth: u32,
+    pub index: u64,
+    pub page_id: String,
+    pub page_generation: u64,
+    pub document_generation: u64,
+    pub origin: String,
+    pub policy_revision: String,
+}
+
+impl SnapshotNode {
+    pub fn to_json(&self) -> Value {
+        json!({
+            "node_id": self.node_id,
+            "role": self.role,
+            "name": self.name,
+            "value": self.value,
+            "state": self.state,
+            "depth": self.depth,
+            "index": self.index,
+            "page_id": self.page_id,
+            "page_generation": self.page_generation,
+            "document_generation": self.document_generation,
+            "origin": self.origin,
+            "policy_revision": self.policy_revision,
+        })
+    }
+}
+
+/// A typed read-only snapshot bound to one active page. Contains only
+/// origin, identity, structural, and approval-free read material. Cookies,
+/// credentials, tokens, headers, password values, and raw browser internals
+/// never enter this packet.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PageSnapshot {
+    pub snapshot_id: String,
+    pub page_id: String,
+    pub workspace_id: String,
+    pub policy_revision: String,
+    pub profile_identity: String,
+    pub origin: String,
+    pub page_generation: u64,
+    pub document_generation: u64,
+    pub node_count: usize,
+    pub truncated: bool,
+    pub nodes: Vec<SnapshotNode>,
+}
+
+impl PageSnapshot {
+    pub fn to_json(&self) -> Value {
+        json!({
+            "snapshot_id": self.snapshot_id,
+            "page_id": self.page_id,
+            "workspace_id": self.workspace_id,
+            "policy_revision": self.policy_revision,
+            "profile_identity": self.profile_identity,
+            "origin": self.current_origin(),
+            "page_generation": self.page_generation,
+            "document_generation": self.document_generation,
+            "node_count": self.node_count,
+            "truncated": self.truncated,
+            "nodes": self.nodes.iter().map(SnapshotNode::to_json).collect::<Vec<_>>(),
+            "cookies": false,
+            "credentials": false,
+        })
+    }
+
+    fn current_origin(&self) -> &str {
+        &self.origin
+    }
+
+    pub fn serialized_bytes(&self) -> usize {
+        self.to_json().to_string().len()
+    }
+}
+
+/// Compute the server-allocated typed identity for a node. The digest binds
+/// profile identity, page identity, page generation, current origin,
+/// document generation, node index, and policy revision under the
+/// `COTRA_BROWSER_NODE_V1` domain. Any drift in these bindings produces a
+/// different identity, so old identities fail closed after navigation,
+/// reload, document replacement, origin drift, or policy drift.
+pub fn node_id_for(
+    profile_identity: &str,
+    page_id: &str,
+    page_generation: u64,
+    origin: &str,
+    document_generation: u64,
+    node_index: u64,
+    policy_revision: &str,
+) -> String {
+    let mut hasher = Sha256::new();
+    digest_bytes(&mut hasher, b"COTRA_BROWSER_NODE_V1");
+    digest_bytes(&mut hasher, profile_identity.as_bytes());
+    digest_bytes(&mut hasher, page_id.as_bytes());
+    digest_bytes(&mut hasher, page_generation.to_string().as_bytes());
+    digest_bytes(&mut hasher, origin.as_bytes());
+    digest_bytes(&mut hasher, document_generation.to_string().as_bytes());
+    digest_bytes(&mut hasher, node_index.to_string().as_bytes());
+    digest_bytes(&mut hasher, policy_revision.as_bytes());
+    let digest = hasher.finalize();
+    let mut hex = String::with_capacity(32);
+    use std::fmt::Write as _;
+    for byte in digest.iter().take(16) {
+        let _ = write!(&mut hex, "{byte:02x}");
+    }
+    format!("{SNAPSHOT_NODE_PREFIX}{hex}")
+}
+
+/// Compute the server-allocated identity for a snapshot. The digest binds
+/// page identity, page generation, document generation, origin, profile
+/// identity, and policy revision under the `COTRA_BROWSER_SNAPSHOT_V1`
+/// domain.
+pub fn snapshot_id_for(
+    page_id: &str,
+    page_generation: u64,
+    document_generation: u64,
+    origin: &str,
+    profile_identity: &str,
+    policy_revision: &str,
+) -> String {
+    let mut hasher = Sha256::new();
+    digest_bytes(&mut hasher, b"COTRA_BROWSER_SNAPSHOT_V1");
+    digest_bytes(&mut hasher, page_id.as_bytes());
+    digest_bytes(&mut hasher, page_generation.to_string().as_bytes());
+    digest_bytes(&mut hasher, document_generation.to_string().as_bytes());
+    digest_bytes(&mut hasher, origin.as_bytes());
+    digest_bytes(&mut hasher, profile_identity.as_bytes());
+    digest_bytes(&mut hasher, policy_revision.as_bytes());
+    let digest = hasher.finalize();
+    let mut hex = String::with_capacity(32);
+    use std::fmt::Write as _;
+    for byte in digest.iter().take(16) {
+        let _ = write!(&mut hex, "{byte:02x}");
+    }
+    format!("{SNAPSHOT_ID_PREFIX}{hex}")
+}
+
+/// Redact a node value where the field is sensitive. Password inputs always
+/// redact to `[redacted]` regardless of the stored value; all other values
+/// pass through unchanged and are bounded by the snapshot byte cap. Cookie,
+/// credential, and session stores are unreachable: they never reach this
+/// function because no snapshot node carries them.
+pub fn redact_node_value(role: &str, input_type: &str, value: &str) -> String {
+    if input_type.eq_ignore_ascii_case("password") || role.eq_ignore_ascii_case("password") {
+        return "[redacted]".to_owned();
+    }
+    value.to_owned()
+}
+
+/// Resolve caller-supplied snapshot bounds to effective limits. Missing
+/// values fall back to the defaults; out-of-range values fail closed so
+/// observation cannot become unrestricted page scraping.
+pub fn resolve_snapshot_bounds(
+    max_nodes: Option<u64>,
+    max_depth: Option<u64>,
+    max_bytes: Option<u64>,
+) -> Result<(u64, u64, usize), ProviderError> {
+    let nodes = max_nodes.unwrap_or(DEFAULT_SNAPSHOT_NODES);
+    let depth = max_depth.unwrap_or(DEFAULT_SNAPSHOT_DEPTH);
+    let bytes = max_bytes.unwrap_or(DEFAULT_SNAPSHOT_BYTES as u64);
+    if !(1..=MAX_SNAPSHOT_NODES).contains(&nodes) {
+        return Err(ProviderError::invalid(format!(
+            "browser snapshot max_nodes must be between 1 and {MAX_SNAPSHOT_NODES}"
+        )));
+    }
+    if !(1..=MAX_SNAPSHOT_DEPTH).contains(&depth) {
+        return Err(ProviderError::invalid(format!(
+            "browser snapshot max_depth must be between 1 and {MAX_SNAPSHOT_DEPTH}"
+        )));
+    }
+    if !(MIN_SNAPSHOT_BYTES..=(MAX_SNAPSHOT_BYTES as u64)).contains(&bytes) {
+        return Err(ProviderError::invalid(format!(
+            "browser snapshot max_bytes must be between {MIN_SNAPSHOT_BYTES} and {MAX_SNAPSHOT_BYTES}"
+        )));
+    }
+    Ok((nodes, depth, bytes as usize))
+}
+
+/// Build a read-only snapshot for a known page. The page must be active with
+/// a non-empty current origin; open pages with no document fail closed.
+/// The returned nodes are deterministic structural metadata bound to the
+/// page generation and document generation, never live browser content, and
+/// carry no secret material.
+pub fn build_snapshot(
+    page: &PageRecord,
+    profile_identity: &str,
+    policy_revision: &str,
+    max_nodes: u64,
+    max_depth: u32,
+    max_bytes: usize,
+) -> Result<PageSnapshot, ProviderError> {
+    if page.state != PageState::Active {
+        return Err(ProviderError::new(
+            FailureCode::TargetStale,
+            "browser page has no active document; snapshot requires a navigated page",
+        ));
+    }
+    if page.current_origin.is_empty() {
+        return Err(ProviderError::new(
+            FailureCode::TargetStale,
+            "browser page origin is empty; snapshot requires a navigated page",
+        ));
+    }
+    if !(1..=MAX_SNAPSHOT_NODES).contains(&max_nodes) {
+        return Err(ProviderError::invalid(format!(
+            "browser snapshot max_nodes must be between 1 and {MAX_SNAPSHOT_NODES}"
+        )));
+    }
+    if !(1..=MAX_SNAPSHOT_DEPTH).contains(&u64::from(max_depth)) {
+        return Err(ProviderError::invalid(format!(
+            "browser snapshot max_depth must be between 1 and {MAX_SNAPSHOT_DEPTH}"
+        )));
+    }
+    if !(MIN_SNAPSHOT_BYTES as usize..=MAX_SNAPSHOT_BYTES).contains(&max_bytes) {
+        return Err(ProviderError::invalid(format!(
+            "browser snapshot max_bytes must be between {MIN_SNAPSHOT_BYTES} and {MAX_SNAPSHOT_BYTES}"
+        )));
+    }
+    let document_generation = page.generation;
+    // Deterministic structural template bound to the page origin. Depths are
+    // fixed so max_depth filtering is observable and testable. Values carry
+    // no secret material; the textbox entry uses a non-password input type
+    // with an empty value to prove the redaction path stays inert for safe
+    // fields.
+    let template: &[(&str, &str, &str, &str, u32)] = &[
+        ("document", "page document", "", "none", 0),
+        ("heading", "Page snapshot", "", "none", 1),
+        (
+            "link",
+            "Canonical origin",
+            page.current_origin.as_str(),
+            "enabled",
+            1,
+        ),
+        ("button", "Snapshot control", "", "enabled", 2),
+        ("paragraph", "Bounded observation", "read-only", "none", 2),
+        ("textbox", "Search field", "", "enabled", 2),
+    ];
+    let mut nodes = Vec::new();
+    for (offset, (role, name, value, state, depth)) in template.iter().enumerate() {
+        if *depth > max_depth {
+            continue;
+        }
+        if nodes.len() as u64 >= max_nodes {
+            break;
+        }
+        let index = offset as u64;
+        let node_id = node_id_for(
+            profile_identity,
+            &page.page_id,
+            page.generation,
+            &page.current_origin,
+            document_generation,
+            index,
+            policy_revision,
+        );
+        nodes.push(SnapshotNode {
+            node_id,
+            role: (*role).to_owned(),
+            name: (*name).to_owned(),
+            value: redact_node_value(role, if *role == "textbox" { "text" } else { "" }, value),
+            state: (*state).to_owned(),
+            depth: *depth,
+            index,
+            page_id: page.page_id.clone(),
+            page_generation: page.generation,
+            document_generation,
+            origin: page.current_origin.clone(),
+            policy_revision: policy_revision.to_owned(),
+        });
+    }
+    if nodes.is_empty() {
+        return Err(ProviderError::new(
+            FailureCode::OutputLimit,
+            "browser snapshot bounds exclude the document node; increase max_nodes and max_depth",
+        ));
+    }
+    let truncated = nodes.len() < template.iter().filter(|entry| entry.4 <= max_depth).count();
+    let snapshot = PageSnapshot {
+        snapshot_id: snapshot_id_for(
+            &page.page_id,
+            page.generation,
+            document_generation,
+            &page.current_origin,
+            profile_identity,
+            policy_revision,
+        ),
+        page_id: page.page_id.clone(),
+        workspace_id: page.workspace_id.clone(),
+        policy_revision: policy_revision.to_owned(),
+        profile_identity: profile_identity.to_owned(),
+        origin: page.current_origin.clone(),
+        page_generation: page.generation,
+        document_generation,
+        node_count: nodes.len(),
+        truncated,
+        nodes,
+    };
+    if snapshot.serialized_bytes() > max_bytes {
+        return Err(ProviderError::new(
+            FailureCode::OutputLimit,
+            "browser snapshot exceeds max_bytes; tighten max_nodes or raise max_bytes within bounds",
+        ));
+    }
+    Ok(snapshot)
+}
+
+/// Validate a previously issued node against the current page, profile, and
+/// policy revision. Stale page generations, replaced documents, origin
+/// drift, foreign profiles, foreign pages, and policy drift all fail closed
+/// so later structured actuation cannot target a stale or replaced element.
+pub fn validate_snapshot_node(
+    node: &SnapshotNode,
+    page: &PageRecord,
+    profile_identity: &str,
+    policy_revision: &str,
+) -> Result<(), ProviderError> {
+    if node.page_id != page.page_id {
+        return Err(ProviderError::new(
+            FailureCode::TargetStale,
+            "browser node belongs to a different page; stale node handles fail closed",
+        ));
+    }
+    if page.state == PageState::Closed {
+        return Err(ProviderError::new(
+            FailureCode::TargetStale,
+            "browser page is closed; stale node handles fail closed",
+        ));
+    }
+    if node.page_generation != page.generation {
+        return Err(ProviderError::new(
+            FailureCode::TargetStale,
+            "browser node generation changed since observation; stale node handles fail closed",
+        ));
+    }
+    if node.document_generation != page.generation {
+        return Err(ProviderError::new(
+            FailureCode::TargetStale,
+            "browser document was replaced since observation; stale node handles fail closed",
+        ));
+    }
+    if node.origin != page.current_origin {
+        return Err(ProviderError::new(
+            FailureCode::TargetStale,
+            "browser page origin changed since observation; stale node handles fail closed",
+        ));
+    }
+    if node.policy_revision != policy_revision || page.policy_revision != policy_revision {
+        return Err(ProviderError::new(
+            FailureCode::TargetStale,
+            "browser policy revision drifted since observation; stale node handles fail closed",
+        ));
+    }
+    let expected = node_id_for(
+        profile_identity,
+        &node.page_id,
+        node.page_generation,
+        &node.origin,
+        node.document_generation,
+        node.index,
+        policy_revision,
+    );
+    if expected != node.node_id {
+        return Err(ProviderError::new(
+            FailureCode::TargetStale,
+            "browser node identity does not match the current profile, page, generation, origin, and policy revision; stale node handles fail closed",
+        ));
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1406,12 +1836,14 @@ mod tests {
     }
 
     #[test]
-    fn allowed_shapes_are_exactly_profile_status_destination_page_and_navigation() {
+    fn allowed_shapes_are_exactly_profile_status_destination_page_navigation_and_snapshot_observe()
+    {
         assert!(is_allowed_browser_shape("browser.profile", "status"));
         assert!(is_allowed_browser_shape("browser.destination", "validate"));
         assert!(is_allowed_browser_shape("browser.page", "open"));
         assert!(is_allowed_browser_shape("browser.navigation", "preview"));
         assert!(is_allowed_browser_shape("browser.navigation", "navigate"));
+        assert!(is_allowed_browser_shape("browser.snapshot", "observe"));
         for (capability, operation) in DENIED_BROWSER_SHAPES {
             assert!(
                 !is_allowed_browser_shape(capability, operation),
@@ -1433,7 +1865,8 @@ mod tests {
             ("browser.dom", "snapshot"),
             ("browser.dom", "observe"),
             ("browser.accessibility", "query"),
-            ("browser.snapshot", "observe"),
+            ("browser.snapshot", "capture"),
+            ("browser.snapshot", "actuate"),
             ("browser.page", "close"),
             ("browser.navigation", "back"),
             ("browser.download", "download"),
@@ -2020,6 +2453,295 @@ mod tests {
         assert_eq!(
             preview.to_json()["target_origin"],
             "https://example.com:443"
+        );
+    }
+
+    #[test]
+    fn snapshot_observe_binds_active_page_with_typed_node_identity() {
+        let path = temp_page_registry("snapshot-bind");
+        let mut store = PageStore::load_or_create(path.clone());
+        let page = open_test_page(&mut store);
+        let open_error = build_snapshot(
+            &page,
+            "profile-identity-test",
+            "sg-000023-v1",
+            50,
+            4,
+            16_384,
+        )
+        .expect_err("open pages have no document and must fail closed");
+        assert_eq!(open_error.code, FailureCode::TargetStale);
+
+        let (active, _, _) = store
+            .apply_navigation(&page.page_id, "", 0, "https://example.com:443")
+            .expect("navigate");
+        let snapshot = build_snapshot(
+            &active,
+            "profile-identity-test",
+            "sg-000023-v1",
+            50,
+            4,
+            16_384,
+        )
+        .expect("active page snapshots");
+        assert!(snapshot.snapshot_id.starts_with(SNAPSHOT_ID_PREFIX));
+        assert_eq!(snapshot.page_id, active.page_id);
+        assert_eq!(snapshot.origin, "https://example.com:443");
+        assert_eq!(snapshot.page_generation, 1);
+        assert_eq!(snapshot.document_generation, 1);
+        assert!(!snapshot.nodes.is_empty());
+        assert_eq!(snapshot.node_count, snapshot.nodes.len());
+        for node in &snapshot.nodes {
+            assert!(node.node_id.starts_with(SNAPSHOT_NODE_PREFIX));
+            assert!(SNAPSHOT_ROLES.contains(&node.role.as_str()));
+            assert_eq!(node.page_id, active.page_id);
+            assert_eq!(node.page_generation, 1);
+            assert_eq!(node.document_generation, 1);
+            assert_eq!(node.origin, "https://example.com:443");
+            validate_snapshot_node(node, &active, "profile-identity-test", "sg-000023-v1")
+                .expect("fresh node validates");
+        }
+        let json = snapshot.to_json();
+        assert!(json["cookies"] == false);
+        assert!(json["credentials"] == false);
+        assert!(json.get("password").is_none());
+        assert!(json.get("token").is_none());
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn stale_wrong_profile_origin_generation_and_policy_nodes_fail_closed() {
+        let path = temp_page_registry("snapshot-stale");
+        let mut store = PageStore::load_or_create(path.clone());
+        let page = open_test_page(&mut store);
+        let (active, _, _) = store
+            .apply_navigation(&page.page_id, "", 0, "https://example.com:443")
+            .expect("navigate");
+        let snapshot = build_snapshot(
+            &active,
+            "profile-identity-test",
+            "sg-000023-v1",
+            50,
+            4,
+            16_384,
+        )
+        .expect("snapshot");
+        let node = &snapshot.nodes[0];
+
+        let wrong_profile =
+            validate_snapshot_node(node, &active, "foreign-profile", "sg-000023-v1")
+                .expect_err("foreign profile must fail");
+        assert_eq!(wrong_profile.code, FailureCode::TargetStale);
+
+        let wrong_policy =
+            validate_snapshot_node(node, &active, "profile-identity-test", "sg-000024-v1")
+                .expect_err("policy drift must fail");
+        assert_eq!(wrong_policy.code, FailureCode::TargetStale);
+
+        let mut drifted_origin = active.clone();
+        drifted_origin.current_origin = "https://other.example:443".to_owned();
+        let drifted = validate_snapshot_node(
+            node,
+            &drifted_origin,
+            "profile-identity-test",
+            "sg-000023-v1",
+        )
+        .expect_err("origin drift must fail");
+        assert_eq!(drifted.code, FailureCode::TargetStale);
+
+        let mut drifted_generation = active.clone();
+        drifted_generation.generation = active.generation + 1;
+        let stale = validate_snapshot_node(
+            node,
+            &drifted_generation,
+            "profile-identity-test",
+            "sg-000023-v1",
+        )
+        .expect_err("generation drift must fail");
+        assert_eq!(stale.code, FailureCode::TargetStale);
+
+        let mut foreign_node = node.clone();
+        foreign_node.page_id = "pg-forged-handle".to_owned();
+        let foreign = validate_snapshot_node(
+            &foreign_node,
+            &active,
+            "profile-identity-test",
+            "sg-000023-v1",
+        )
+        .expect_err("foreign page node must fail");
+        assert_eq!(foreign.code, FailureCode::TargetStale);
+
+        let mut tampered = node.clone();
+        tampered.node_id = "nd-00000000000000000000000000000000".to_owned();
+        let forged =
+            validate_snapshot_node(&tampered, &active, "profile-identity-test", "sg-000023-v1")
+                .expect_err("forged node identity must fail");
+        assert_eq!(forged.code, FailureCode::TargetStale);
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn snapshot_bounds_are_enforced_and_oversized_requests_fail_closed() {
+        assert!(resolve_snapshot_bounds(None, None, None).is_ok());
+        for bad in [Some(0), Some(MAX_SNAPSHOT_NODES + 1)] {
+            assert!(resolve_snapshot_bounds(bad, None, None).is_err());
+        }
+        for bad in [Some(0), Some(MAX_SNAPSHOT_DEPTH + 1)] {
+            assert!(resolve_snapshot_bounds(None, bad, None).is_err());
+        }
+        for bad in [Some(0), Some(65_537)] {
+            assert!(resolve_snapshot_bounds(None, None, bad).is_err());
+        }
+
+        let path = temp_page_registry("snapshot-bounds");
+        let mut store = PageStore::load_or_create(path.clone());
+        let page = open_test_page(&mut store);
+        let (active, _, _) = store
+            .apply_navigation(&page.page_id, "", 0, "https://example.com:443")
+            .expect("navigate");
+        let tiny = build_snapshot(
+            &active,
+            "profile-identity-test",
+            "sg-000023-v1",
+            2,
+            4,
+            16_384,
+        )
+        .expect("bounded snapshot");
+        assert_eq!(tiny.node_count, 2);
+        assert!(tiny.truncated);
+
+        let shallow = build_snapshot(
+            &active,
+            "profile-identity-test",
+            "sg-000023-v1",
+            50,
+            1,
+            16_384,
+        )
+        .expect("shallow snapshot");
+        assert!(shallow.nodes.iter().all(|node| node.depth <= 1));
+
+        let small_bytes =
+            build_snapshot(&active, "profile-identity-test", "sg-000023-v1", 50, 4, 256)
+                .expect_err("tiny byte bound must fail closed");
+        assert_eq!(small_bytes.code, FailureCode::OutputLimit);
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn snapshot_redaction_denies_password_and_secret_leakage() {
+        assert_eq!(
+            redact_node_value("textbox", "password", "hunter2"),
+            "[redacted]"
+        );
+        assert_eq!(
+            redact_node_value("password", "text", "hunter2"),
+            "[redacted]"
+        );
+        assert_eq!(redact_node_value("textbox", "text", "hello"), "hello");
+        assert_eq!(redact_node_value("button", "", ""), "");
+
+        let path = temp_page_registry("snapshot-redact");
+        let mut store = PageStore::load_or_create(path.clone());
+        let page = open_test_page(&mut store);
+        let (active, _, _) = store
+            .apply_navigation(&page.page_id, "", 0, "https://example.com:443")
+            .expect("navigate");
+        let snapshot = build_snapshot(
+            &active,
+            "profile-identity-test",
+            "sg-000023-v1",
+            50,
+            4,
+            16_384,
+        )
+        .expect("snapshot");
+        let serialized = snapshot.to_json().to_string().to_ascii_lowercase();
+        assert!(
+            !serialized.contains("cookie"),
+            "snapshot must not carry cookies"
+        );
+        assert!(
+            !serialized.contains("password="),
+            "snapshot must not carry passwords"
+        );
+        assert!(
+            !serialized.contains("sessiontoken"),
+            "snapshot must not carry sessions"
+        );
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn snapshot_node_identity_is_deterministic_and_drifts_with_binding() {
+        let first = node_id_for(
+            "profile-a",
+            "pg-x",
+            1,
+            "https://example.com:443",
+            1,
+            0,
+            "sg-000023-v1",
+        );
+        let replay = node_id_for(
+            "profile-a",
+            "pg-x",
+            1,
+            "https://example.com:443",
+            1,
+            0,
+            "sg-000023-v1",
+        );
+        assert_eq!(first, replay);
+        assert!(first.starts_with(SNAPSHOT_NODE_PREFIX));
+        assert_ne!(
+            first,
+            node_id_for(
+                "profile-b",
+                "pg-x",
+                1,
+                "https://example.com:443",
+                1,
+                0,
+                "sg-000023-v1"
+            )
+        );
+        assert_ne!(
+            first,
+            node_id_for(
+                "profile-a",
+                "pg-x",
+                2,
+                "https://example.com:443",
+                2,
+                0,
+                "sg-000023-v1"
+            )
+        );
+        assert_ne!(
+            first,
+            node_id_for(
+                "profile-a",
+                "pg-x",
+                1,
+                "https://other.example:443",
+                1,
+                0,
+                "sg-000023-v1"
+            )
+        );
+        assert_ne!(
+            first,
+            node_id_for(
+                "profile-a",
+                "pg-x",
+                1,
+                "https://example.com:443",
+                1,
+                1,
+                "sg-000023-v1"
+            )
         );
     }
 
