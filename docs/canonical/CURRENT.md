@@ -1,11 +1,11 @@
 # Cotra Current Canonical Frontier
 
-Status: CLOSEOUT_CANDIDATE
+Status: ACTIVE_GRAIN
 Date: 2026-09-28
-Governance snapshot base: a4aef17a37999d7470912ad8c1a6ea72ae9561a3
+Governance snapshot base: e69708aca6b26f16b0351d8ad2313c2bc1d3c9bb
 Evidence ledger: `.specgrain/canonical-evidence.json`
 
-`Governance snapshot base` records the exact canonical parent from which this closeout snapshot was authored. It deliberately does not claim the eventual merge SHA of the commit containing this file.
+`Governance snapshot base` records the exact canonical parent from which this activation snapshot was authored. It deliberately does not claim the eventual merge SHA of the commit containing this file.
 
 ## SpecGrain state semantics
 
@@ -17,7 +17,7 @@ The machine-readable evidence for every `CLOSED` grain is recorded in `.specgrai
 
 ## Closed canonical grains
 
-SG-000001 through SG-000020 are already `CLOSED` and canonical.
+SG-000001 through SG-000021 are `CLOSED` and canonical.
 
 SG-000016 implementation PR `#38` merged as `c85b79f24ce2deef46319d9c5790623fd70c3b0d` after exact-head CI `36339733920`, Review Gates `36339732607`, genuine TypeSafe Jev `15/15` hunk coverage with zero findings/blockers, Alibaba Open Code Review v1.12.9 exact-range delegation plus manual review of both excluded files, and zero unresolved review threads. Implementation post-merge CI `36339937619` completed SUCCESS.
 
@@ -107,40 +107,33 @@ Authority separation — COMPLETE:
 
 All P07 closeouts (SG-000018 PR `#45`, SG-000019 PR `#48`, SG-000020 PR `#51`) merged normally with zero unresolved blocking review threads and successful post-merge CI.
 
-## Closeout candidate
+## Closed SG-000021 browser foundation
 
-This closeout candidate records SG-000021 as `CLOSED` using the qualified activation, implementation, and merged-tree evidence below. That closeout classification becomes canonical only after this governance change itself merges and the resulting canonical main passes post-merge CI.
-
-SG-000021 activation evidence:
-- activation PR: `#53`;
-- activation base: `6dc0f9f90e9d5ea98879d15485ffac576e958f37`;
-- activation head: `6535f98411a44bf5846066897c35f9ddc9219770`;
-- exact-head CI: `36406648270` — SUCCESS;
-- activation merge: `b6229d2d71f9cb1394e2124f0b7aa2be51c995bd`;
-- activation post-merge CI: `36408403636` — SUCCESS.
-
-Genuine TypeSafe Jev reviewed the exact activation range with `3/3` hunks, zero findings, and zero blocking findings, pinned at `31f89602797fb7bea007f8a480bf368bf564954e`. Alibaba Open Code Review v1.12.9 delegated the same exact range across 2 changed files: 1 reviewable file (`.specgrain/specs/SG-000021.json`) and one exclusion (`docs/canonical/CURRENT.md` by unsupported-extension classification). The excluded file was manually reviewed. There were zero unresolved blocking review threads.
-
-SG-000021 implementation evidence:
-- implementation PR: `#54`;
-- implementation base: `b6229d2d71f9cb1394e2124f0b7aa2be51c995bd`;
-- qualified head: `f9912d7a4be7a822954e5dc260be5e698adf9ff8`;
-- exact-head CI: `36411407342` — SUCCESS;
-- exact-head Review Gates: `36411407224` — SUCCESS;
-- implementation merge: `a4aef17a37999d7470912ad8c1a6ea72ae9561a3`;
-- implementation post-merge CI: `36411958976` — SUCCESS.
-
-Genuine TypeSafe Jev reviewed the exact implementation range with `10/10` hunks, zero findings, and zero blocking findings, pinned at `31f89602797fb7bea007f8a480bf368bf564954e`. Alibaba Open Code Review v1.12.9 delegated the same exact range across 10 changed files: 8 reviewable files and two exclusions (`apps/cotra-mcp/src/browser.test.ts` by default-path classification and `docs/security/SG-000021_BROWSER_PROFILE_NOTE.md` by unsupported-extension classification). Both excluded files were manually reviewed. There were zero unresolved blocking review threads.
-
-Manual exact-diff security review confirmed the automation profile is created isolated under Cotra protected state with marker-verified fresh storage and no personal data import, personal-profile paths and caller-selected roots are denied before touching disk, only `browser.profile/status` and `browser.destination/validate` are authorized with every actuation shape denied and STRONG-mapped, origin binding uses normalized scheme/host/port identity with exact equality and rejects userinfo fragments wildcards alternate numeric forms and localhost aliases, SSRF policy denies loopback private link-local unspecified multicast and mapped IPv6 after re-resolution with deterministic public pinning, redirect widening is denied through expected-origin exact binding with full revalidation, no MCP browser tool exists, no launch attach navigation DOM download upload debugging credential or egress authority is introduced, and SG-000018 replay resistance plus SG-000019 STRONG enforcement plus SG-000020 trust behavior with P06 regressions remain intact.
-
-The canonical SG-000021 authority adds only isolated browser profile status and origin-bound destination validation as local policy with no browser launch or attachment; navigation, DOM actuation, downloads, uploads, personal-profile access, debugging, scripting, credential access, and network egress remain absent, and existing file, process, Git, approval, presence, and trust behavior is unchanged.
+SG-000021 closed canonically: activation PR `#53`, implementation PR `#54` (qualified head `f9912d7a4be7a822954e5dc260be5e698adf9ff8`, CI `36411407342`, Review Gates `36411407224`, Jev `10/10`, OCR v1.12.9 `8 reviewable + 2 excluded/manually reviewed`, merge `a4aef17a37999d7470912ad8c1a6ea72ae9561a3`, post-merge CI `36411958976`), and governance closeout PR `#55` (qualified head `875b814b9f5307ff39254f65aaec8c4039752d43`, CI `36412559028`, Jev `8/8`, OCR `2 reviewable + 1 excluded/manually reviewed`, merge `e69708aca6b26f16b0351d8ad2313c2bc1d3c9bb`, post-merge CI `36413057165`), all with zero findings, zero blockers, and zero unresolved review threads. The canonical SG-000021 authority adds only isolated browser profile status and origin-bound destination validation as local policy with no browser launch or attachment.
 
 ## Successor frontier
 
-No successor grain is authorized by this closeout candidate.
+COTRA-P08 continues at this frontier. No successor grain beyond SG-000022 is authorized by this activation.
 
-After this SG-000021 closeout merges and its post-merge CI succeeds, re-read the canonical architecture, delivery plan, threat model, evidence ledger, open governance records, and this `CURRENT.md` to rebuild the full COTRA-P08 gap matrix and derive the next lawful unit. Do not infer or pre-authorize the next SpecGrain identifier or exact design from numbering alone.
+## Active grain
+
+SG-000022 — Origin-bound bounded navigation on the isolated profile — is the sole active COTRA-P08 grain.
+
+This activation authorizes implementation and qualification of typed browser navigation on the SG-000021 isolated profile and origin binding: server-side page identity bound to profile, workspace, current origin, and lifecycle generation; local navigation preview as stale-protection material; SOFT-approved navigation transitions with digest binding over page identity, expected state, target origin, pinned address, and redirect chain; hop-by-hop redirect-chain validation with widening, loop, and scheme-downgrade denial; and download-trigger denial, on top of the SG-000018 replay-resistant foundation, SG-000019 class enforcement, SG-000020 trust and revoke records, and SG-000021 profile and destination policy, while deliberately keeping DOM observation, DOM actuation, downloads, uploads, actual page loading, personal-profile mode, debugging, scripting, credential access, MCP browser tools, and network egress absent.
+
+Authorized target design:
+- typed page identity bound to isolated profile, workspace, current origin, and server-side lifecycle generation with per-workspace bounds;
+- local navigation preview with origin binding, re-resolution, and post-resolution policy;
+- SOFT-approved navigation with digest binding over page identity, expected origin and generation, target origin, pinned address, and redirect chain with stale-state fail-closed;
+- redirect-chain validation requiring every hop to share the exact validated origin;
+- download-trigger denial for executable, script, and archive destination paths;
+- explicit denial of all observation, actuation, download, upload, scripting, and debugging shapes with deterministic unit and security tests for lifecycle, binding, denial, replay and drift retention, and separation.
+
+## Active acceptance frontier
+
+SG-000022 must prove that pages live isolated on the Cotra automation profile, that navigation binds exact origin with re-resolution, that redirect chains validate hop by hop, that stale and foreign page identities fail closed, that every navigation carries fresh SOFT approval, and that the agent cannot reach navigation capability through its own tool or input surface.
+
+DOM observation, DOM actuation, downloads, uploads, actual page loading, personal-profile use, debugging, scripting, credential access, MCP browser tools, and network egress must remain absent, and STRONG enforcement, one-shot, expiry, and digest binding must not weaken.
 
 A P08 exit requires joint proof from SG-000021 isolation and origin binding plus its successors that structured browser operations are proven with SSRF tests, redirect-widening tests, and the personal profile disabled by default. It must not expose personal-profile access, debugging authority, broader egress, or approval bypass.
 
