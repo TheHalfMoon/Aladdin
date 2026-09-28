@@ -1,4 +1,4 @@
-use cotra_approval::{ApprovalBroker, ApprovalDecision, ApprovalPrompt};
+use cotra_approval::{now_ms, ApprovalBroker, ApprovalPrompt, ConsumeExpectation};
 use cotra_contracts::{FailureCode, RequestEnvelope};
 use cotra_policy::{Workspace, POLICY_REVISION};
 use cotra_provider_fs::ProviderError;
@@ -38,14 +38,16 @@ pub fn dispatch(
     let approved_state = operation.state(&provider, repository)?;
     require_expected_head(&approved_state, expected_head)?;
 
-    let prompt = ApprovalPrompt {
-        workspace_id: workspace.id.clone(),
-        action: operation.action().to_owned(),
-        target: repository.to_owned(),
-        summary: operation.summary(&approved_state),
-        digest: approval_digest(workspace, request, &approved_state, &operation),
-    };
-    require_approval(approval, &prompt)?;
+    let digest = approval_digest(workspace, request, &approved_state, &operation);
+    let prompt = ApprovalPrompt::new(
+        workspace.id.clone(),
+        POLICY_REVISION,
+        operation.action(),
+        repository.to_owned(),
+        operation.summary(&approved_state),
+        digest.clone(),
+    );
+    let token = require_approval(approval, &prompt)?;
 
     let current_state = operation.state(&provider, repository)?;
     if current_state != approved_state {
@@ -55,6 +57,13 @@ pub fn dispatch(
         ));
     }
     require_expected_head(&current_state, expected_head)?;
+    approval
+        .consume(
+            &token,
+            &ConsumeExpectation::new(digest, workspace.id.clone(), POLICY_REVISION),
+            now_ms(),
+        )
+        .map_err(|error| ProviderError::new(error.code, error.message))?;
 
     let result = operation.apply(&provider, repository, &approved_state)?;
     Ok(Some(result))
@@ -203,13 +212,9 @@ fn require_expected_head(state: &GitMutationState, expected: &str) -> Result<(),
 fn require_approval(
     approval: &impl ApprovalBroker,
     prompt: &ApprovalPrompt,
-) -> Result<(), ProviderError> {
-    match approval.request(prompt) {
-        Ok(ApprovalDecision::Approved) => Ok(()),
-        Ok(ApprovalDecision::Denied) => Err(ProviderError::new(
-            FailureCode::ApprovalDenied,
-            "local user denied Git mutation",
-        )),
+) -> Result<cotra_approval::ApprovedToken, ProviderError> {
+    match approval.request_token(prompt) {
+        Ok(token) => Ok(token),
         Err(error) => Err(ProviderError::new(error.code, error.message)),
     }
 }
@@ -272,6 +277,7 @@ fn hex_lower(bytes: &[u8]) -> String {
 mod tests {
     use super::*;
     use cotra_approval::test_support::FixedApprovalBroker;
+    use cotra_approval::ApprovalDecision;
     use cotra_contracts::INTERNAL_PROTOCOL_VERSION;
     use serde_json::json;
     use std::fs;
@@ -351,11 +357,26 @@ mod tests {
     fn denied_approval_preserves_git_state() {
         struct Deny;
         impl ApprovalBroker for Deny {
-            fn request(
+            fn request_token(
                 &self,
                 _prompt: &ApprovalPrompt,
-            ) -> Result<ApprovalDecision, cotra_approval::ApprovalError> {
-                Ok(ApprovalDecision::Denied)
+            ) -> Result<cotra_approval::ApprovedToken, cotra_approval::ApprovalError> {
+                Err(cotra_approval::ApprovalError {
+                    code: FailureCode::ApprovalDenied,
+                    message: "local user denied Git mutation".into(),
+                })
+            }
+
+            fn consume(
+                &self,
+                _token: &cotra_approval::ApprovedToken,
+                _expected: &ConsumeExpectation,
+                _now_ms: u64,
+            ) -> Result<(), cotra_approval::ApprovalError> {
+                Err(cotra_approval::ApprovalError {
+                    code: FailureCode::ApprovalDenied,
+                    message: "no approval was granted".into(),
+                })
             }
         }
 

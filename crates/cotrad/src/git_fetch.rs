@@ -1,4 +1,4 @@
-use cotra_approval::{ApprovalBroker, ApprovalDecision, ApprovalPrompt};
+use cotra_approval::{now_ms, ApprovalBroker, ApprovalPrompt, ConsumeExpectation};
 use cotra_contracts::{FailureCode, RequestEnvelope};
 use cotra_policy::{FetchDestination, Workspace, POLICY_REVISION};
 use cotra_provider_fs::ProviderError;
@@ -79,27 +79,36 @@ pub fn dispatch(
                 .resolve(&provider_destination.hostname)
                 .map_err(map_git_error)?;
             let pinned = select_pinned_address(&resolved).map_err(map_git_error)?;
-            let prompt = ApprovalPrompt {
-                workspace_id: workspace.id.clone(),
-                action: "fetch one approved Git branch over pinned HTTPS".to_owned(),
-                target: repository.clone(),
-                summary: fetch_summary(
+            let digest = fetch_digest(
+                workspace,
+                request,
+                &destination,
+                &provider_destination,
+                &pinned,
+                &preview,
+            );
+            let prompt = ApprovalPrompt::new(
+                workspace.id.clone(),
+                POLICY_REVISION,
+                "fetch one approved Git branch over pinned HTTPS",
+                repository.clone(),
+                fetch_summary(
                     &destination,
                     &provider_destination,
                     &pinned,
                     &branch,
                     &preview,
                 ),
-                digest: fetch_digest(
-                    workspace,
-                    request,
-                    &destination,
-                    &provider_destination,
-                    &pinned,
-                    &preview,
-                ),
-            };
-            require_approval(approval, &prompt)?;
+                digest.clone(),
+            );
+            let token = require_approval(approval, &prompt)?;
+            approval
+                .consume(
+                    &token,
+                    &ConsumeExpectation::new(digest, workspace.id.clone(), POLICY_REVISION),
+                    now_ms(),
+                )
+                .map_err(|error| ProviderError::new(error.code, error.message))?;
             let fetch_args = cotra_provider_git::fetch::ApprovedFetch {
                 relative: &repository,
                 destination: &provider_destination,
@@ -208,13 +217,9 @@ fn fetch_digest(
 fn require_approval(
     approval: &impl ApprovalBroker,
     prompt: &ApprovalPrompt,
-) -> Result<(), ProviderError> {
-    match approval.request(prompt) {
-        Ok(ApprovalDecision::Approved) => Ok(()),
-        Ok(ApprovalDecision::Denied) => Err(ProviderError::new(
-            FailureCode::ApprovalDenied,
-            "local user denied Git fetch",
-        )),
+) -> Result<cotra_approval::ApprovedToken, ProviderError> {
+    match approval.request_token(prompt) {
+        Ok(token) => Ok(token),
         Err(error) => Err(ProviderError::new(error.code, error.message)),
     }
 }
@@ -263,6 +268,7 @@ fn hex_lower(bytes: &[u8]) -> String {
 mod tests {
     use super::*;
     use cotra_approval::test_support::FixedApprovalBroker;
+    use cotra_approval::ApprovalDecision;
     use cotra_contracts::INTERNAL_PROTOCOL_VERSION;
     use serde_json::json;
     use std::collections::BTreeMap;
@@ -298,11 +304,26 @@ mod tests {
     struct DenyAll;
 
     impl ApprovalBroker for DenyAll {
-        fn request(
+        fn request_token(
             &self,
             _prompt: &ApprovalPrompt,
-        ) -> Result<ApprovalDecision, cotra_approval::ApprovalError> {
-            Ok(ApprovalDecision::Denied)
+        ) -> Result<cotra_approval::ApprovedToken, cotra_approval::ApprovalError> {
+            Err(cotra_approval::ApprovalError {
+                code: FailureCode::ApprovalDenied,
+                message: "local user denied Git fetch".into(),
+            })
+        }
+
+        fn consume(
+            &self,
+            _token: &cotra_approval::ApprovedToken,
+            _expected: &ConsumeExpectation,
+            _now_ms: u64,
+        ) -> Result<(), cotra_approval::ApprovalError> {
+            Err(cotra_approval::ApprovalError {
+                code: FailureCode::ApprovalDenied,
+                message: "no approval was granted".into(),
+            })
         }
     }
 

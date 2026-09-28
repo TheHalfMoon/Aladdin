@@ -1,4 +1,6 @@
-use cotra_approval::{ApprovalBroker, ApprovalDecision, ApprovalPrompt, LocalApprovalBroker};
+use cotra_approval::{
+    now_ms, ApprovalBroker, ApprovalPrompt, ConsumeExpectation, LocalApprovalBroker,
+};
 use cotra_audit::{default_audit_path, AuditLogger};
 use cotra_contracts::{FailureCode, RequestEnvelope, ResponseEnvelope, INTERNAL_PROTOCOL_VERSION};
 use cotra_policy::{PolicyEngine, Workspace, POLICY_REVISION};
@@ -32,7 +34,7 @@ fn run() -> Result<(), String> {
     let policy = load_policy()?;
     let audit = AuditLogger::new(default_audit_path())
         .map_err(|error| format!("initialize audit log: {error}"))?;
-    let approval = LocalApprovalBroker;
+    let approval = LocalApprovalBroker::new();
 
     eprintln!(
         "cotrad ready: protocol={} audit={} mode=SG-000010_BOUNDED_PROCESS_SPAWN",
@@ -275,22 +277,31 @@ fn write_file(
         }
     }
 
-    let prompt = ApprovalPrompt {
-        workspace_id: workspace.id.clone(),
-        action: if preview.exists {
-            "overwrite UTF-8 file".into()
+    let digest = preview.approval_digest(&workspace.id, POLICY_REVISION);
+    let prompt = ApprovalPrompt::new(
+        workspace.id.clone(),
+        POLICY_REVISION,
+        if preview.exists {
+            "overwrite UTF-8 file"
         } else {
-            "create UTF-8 file".into()
+            "create UTF-8 file"
         },
-        target: relative.to_owned(),
-        summary: format!(
+        relative.to_owned(),
+        format!(
             "{} bytes; new SHA-256 {}",
             preview.bytes, preview.new_sha256
         ),
-        digest: preview.approval_digest(&workspace.id, POLICY_REVISION),
-    };
+        digest.clone(),
+    );
 
-    require_approval(approval, &prompt, "file write")?;
+    let token = require_approval(approval, &prompt, "file write")?;
+    approval
+        .consume(
+            &token,
+            &ConsumeExpectation::new(digest, workspace.id.clone(), POLICY_REVISION),
+            now_ms(),
+        )
+        .map_err(|error| ProviderError::new(error.code, error.message))?;
     provider.write_text(relative, content, expected, create_if_missing)
 }
 
@@ -364,11 +375,13 @@ fn process_spawn(
     )
     .map_err(|error| ProviderError::new(FailureCode::InvalidRequest, error.message))?;
 
-    let prompt = ApprovalPrompt {
-        workspace_id: workspace.id.clone(),
-        action: "execute argv process".into(),
-        target: plan.executable.display().to_string(),
-        summary: format!(
+    let digest = process_approval_digest(workspace, &plan);
+    let prompt = ApprovalPrompt::new(
+        workspace.id.clone(),
+        POLICY_REVISION,
+        "execute argv process",
+        plan.executable.display().to_string(),
+        format!(
             "argv={:?} cwd={} timeout={}ms stdout_limit={} stderr_limit={} stdin=null network=NONE",
             plan.argv,
             plan.cwd.display(),
@@ -376,9 +389,16 @@ fn process_spawn(
             plan.limits.stdout_bytes,
             plan.limits.stderr_bytes
         ),
-        digest: process_approval_digest(workspace, &plan),
-    };
-    require_approval(approval, &prompt, "process execution")?;
+        digest.clone(),
+    );
+    let token = require_approval(approval, &prompt, "process execution")?;
+    approval
+        .consume(
+            &token,
+            &ConsumeExpectation::new(digest, workspace.id.clone(), POLICY_REVISION),
+            now_ms(),
+        )
+        .map_err(|error| ProviderError::new(error.code, error.message))?;
 
     let profile = process_profile_name(&request.request_id);
     let result = execute_contained(plan, &profile).map_err(map_process_failure)?;
@@ -475,14 +495,10 @@ fn map_process_failure(error: PrivateExecutionFailure) -> ProviderError {
 fn require_approval(
     approval: &impl ApprovalBroker,
     prompt: &ApprovalPrompt,
-    action: &str,
-) -> Result<(), ProviderError> {
-    match approval.request(prompt) {
-        Ok(ApprovalDecision::Approved) => Ok(()),
-        Ok(ApprovalDecision::Denied) => Err(ProviderError::new(
-            FailureCode::ApprovalDenied,
-            format!("local user denied {action}"),
-        )),
+    _action: &str,
+) -> Result<cotra_approval::ApprovedToken, ProviderError> {
+    match approval.request_token(prompt) {
+        Ok(token) => Ok(token),
         Err(error) => Err(ProviderError::new(error.code, error.message)),
     }
 }
@@ -553,6 +569,8 @@ mod tests {
     use super::*;
     #[cfg(windows)]
     use cotra_approval::test_support::FixedApprovalBroker;
+    #[cfg(windows)]
+    use cotra_approval::ApprovalDecision;
     use cotra_approval::{ApprovalError, ApprovalPrompt};
     use serde_json::json;
     use std::fs;
@@ -561,15 +579,48 @@ mod tests {
     struct DenyBroker;
 
     impl ApprovalBroker for DenyBroker {
-        fn request(&self, _prompt: &ApprovalPrompt) -> Result<ApprovalDecision, ApprovalError> {
-            Ok(ApprovalDecision::Denied)
+        fn request_token(
+            &self,
+            _prompt: &ApprovalPrompt,
+        ) -> Result<cotra_approval::ApprovedToken, ApprovalError> {
+            Err(ApprovalError {
+                code: FailureCode::ApprovalDenied,
+                message: "local user denied the operation in test".into(),
+            })
+        }
+
+        fn consume(
+            &self,
+            _token: &cotra_approval::ApprovedToken,
+            _expected: &ConsumeExpectation,
+            _now_ms: u64,
+        ) -> Result<(), ApprovalError> {
+            Err(ApprovalError {
+                code: FailureCode::ApprovalDenied,
+                message: "no approval was granted".into(),
+            })
         }
     }
 
     struct UnavailableBroker;
 
     impl ApprovalBroker for UnavailableBroker {
-        fn request(&self, _prompt: &ApprovalPrompt) -> Result<ApprovalDecision, ApprovalError> {
+        fn request_token(
+            &self,
+            _prompt: &ApprovalPrompt,
+        ) -> Result<cotra_approval::ApprovedToken, ApprovalError> {
+            Err(ApprovalError {
+                code: FailureCode::ApprovalUnavailable,
+                message: "approval unavailable in test".into(),
+            })
+        }
+
+        fn consume(
+            &self,
+            _token: &cotra_approval::ApprovedToken,
+            _expected: &ConsumeExpectation,
+            _now_ms: u64,
+        ) -> Result<(), ApprovalError> {
             Err(ApprovalError {
                 code: FailureCode::ApprovalUnavailable,
                 message: "approval unavailable in test".into(),
