@@ -226,6 +226,16 @@ fn observe_snapshot(
         max_bytes,
     )
     .map_err(|error| ProviderError::new(error.code, error.message))?;
+    // Persist server-side node records so later structured actuation
+    // verifies role and state against server records, never caller claims.
+    let node_path = cotra_provider_browser::default_node_registry_path(&profile.root);
+    let mut node_store = cotra_provider_browser::NodeStore::load_or_create(node_path);
+    node_store.record_snapshot(
+        &profile.identity,
+        &page,
+        cotra_policy::POLICY_REVISION,
+        &snapshot.nodes,
+    );
     Ok(snapshot.to_json())
 }
 
@@ -649,6 +659,312 @@ fn navigate_with_approval(
         new_generation: next.generation,
     };
     Ok(evidence.to_json(&token.record_id))
+}
+
+/// Dispatch SG-000024 structured actuation. Returns `Ok(None)` for
+/// non-actuation shapes so the caller falls through to the observation,
+/// navigation, and SG-000021 dispatches. Invoke (click) and value-entry
+/// (fill) each require a fresh SOFT approval with digest binding over page,
+/// node, role, state, action, and bounded value material. Structured denial
+/// never silently falls back to coordinates, scripting, or CDP.
+pub fn dispatch_actuation(
+    workspace: &Workspace,
+    approval: &impl ApprovalBroker,
+    request: &RequestEnvelope,
+    profile_root: &Path,
+) -> Result<Option<Value>, ProviderError> {
+    match (request.capability.as_str(), request.operation.as_str()) {
+        ("browser.dom", "click") => {
+            actuate_with_approval(workspace, approval, request, profile_root, "click").map(Some)
+        }
+        ("browser.dom", "fill") => {
+            actuate_with_approval(workspace, approval, request, profile_root, "fill").map(Some)
+        }
+        _ => Ok(None),
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn actuate_with_approval(
+    workspace: &Workspace,
+    approval: &impl ApprovalBroker,
+    request: &RequestEnvelope,
+    profile_root: &Path,
+    action: &str,
+) -> Result<Value, ProviderError> {
+    cotra_provider_browser::parse_actuation_action(action)
+        .map_err(|error| ProviderError::new(error.code, error.message))?;
+    if request.target.is_some() {
+        return Err(ProviderError::new(
+            FailureCode::InvalidRequest,
+            "browser actuation shapes do not accept a target field",
+        ));
+    }
+    let mut allowed = vec![
+        "page_id",
+        "expected_origin",
+        "expected_generation",
+        "expected_document_generation",
+        "node_id",
+        "expected_role",
+        "expected_state",
+    ];
+    if action == "fill" {
+        allowed.push("value");
+    }
+    reject_actuation_arguments(request, &allowed)?;
+    let page_id = required_actuation_string(request, "page_id")?;
+    if !page_id.starts_with(cotra_provider_browser::PAGE_ID_PREFIX) {
+        return Err(ProviderError::new(
+            FailureCode::InvalidRequest,
+            "browser actuation page_id is malformed",
+        ));
+    }
+    let expected_origin = required_actuation_string(request, "expected_origin")?;
+    let expected_generation = request
+        .arguments
+        .get("expected_generation")
+        .and_then(Value::as_u64)
+        .ok_or_else(|| {
+            ProviderError::new(
+                FailureCode::InvalidRequest,
+                "browser actuation requires arguments.expected_generation",
+            )
+        })?;
+    let expected_document_generation = request
+        .arguments
+        .get("expected_document_generation")
+        .and_then(Value::as_u64)
+        .ok_or_else(|| {
+            ProviderError::new(
+                FailureCode::InvalidRequest,
+                "browser actuation requires arguments.expected_document_generation",
+            )
+        })?;
+    let node_id = required_actuation_string(request, "node_id")?;
+    if !node_id.starts_with(cotra_provider_browser::SNAPSHOT_NODE_PREFIX) {
+        return Err(ProviderError::new(
+            FailureCode::InvalidRequest,
+            "browser actuation node_id is malformed",
+        ));
+    }
+    let expected_role = required_actuation_string(request, "expected_role")?;
+    let expected_state = required_actuation_string(request, "expected_state")?;
+    if expected_state != cotra_provider_browser::ENABLED_NODE_STATE {
+        return Err(ProviderError::new(
+            FailureCode::CapabilityDenied,
+            "browser actuation targets only enabled nodes; disabled nodes are denied",
+        ));
+    }
+    let value = match action {
+        "fill" => required_actuation_string(request, "value")?,
+        _ => "",
+    };
+    if value.len() > cotra_provider_browser::MAX_FILL_VALUE_BYTES {
+        return Err(ProviderError::new(
+            FailureCode::InvalidRequest,
+            format!(
+                "browser fill value exceeds at most {} bytes",
+                cotra_provider_browser::MAX_FILL_VALUE_BYTES
+            ),
+        ));
+    }
+
+    let profile = cotra_provider_browser::ensure_isolated_profile(profile_root)
+        .map_err(|error| ProviderError::new(error.code, error.message))?;
+    let registry_path = cotra_provider_browser::default_page_registry_path(&profile.root);
+    let mut page_store = cotra_provider_browser::PageStore::load_or_create(registry_path);
+    let page = page_store.get(page_id).cloned().ok_or_else(|| {
+        ProviderError::new(
+            FailureCode::TargetStale,
+            "browser page handle is unknown; stale page handles fail closed",
+        )
+    })?;
+    check_page_binding(workspace, &profile.identity, &page)?;
+    if page.current_origin != expected_origin {
+        return Err(ProviderError::new(
+            FailureCode::TargetStale,
+            "browser page origin changed since observation; stale page handles fail closed",
+        ));
+    }
+    if page.generation != expected_generation {
+        return Err(ProviderError::new(
+            FailureCode::TargetStale,
+            "browser page generation changed since observation; stale page handles fail closed",
+        ));
+    }
+    if page.generation != expected_document_generation {
+        return Err(ProviderError::new(
+            FailureCode::TargetStale,
+            "browser document was replaced since observation; stale page handles fail closed",
+        ));
+    }
+
+    let node_path = cotra_provider_browser::default_node_registry_path(&profile.root);
+    let node_store = cotra_provider_browser::NodeStore::load_or_create(node_path);
+    let node = node_store.get(node_id).cloned().ok_or_else(|| {
+        ProviderError::new(
+            FailureCode::TargetStale,
+            "browser node handle is unknown; stale node handles fail closed",
+        )
+    })?;
+    cotra_provider_browser::check_node_for_actuation(
+        &node,
+        &page,
+        &profile.identity,
+        POLICY_REVISION,
+        expected_role,
+        expected_state,
+        expected_generation,
+        expected_document_generation,
+        action,
+    )
+    .map_err(|error| ProviderError::new(error.code, error.message))?;
+
+    let value_digest = if action == "fill" {
+        cotra_provider_browser::fill_value_digest(value)
+            .map_err(|error| ProviderError::new(error.code, error.message))?
+    } else {
+        String::new()
+    };
+    let digest = cotra_provider_browser::actuation_approval_digest(
+        &workspace.id,
+        POLICY_REVISION,
+        &profile.identity,
+        page_id,
+        expected_origin,
+        expected_generation,
+        expected_document_generation,
+        node_id,
+        expected_role,
+        expected_state,
+        action,
+        value,
+    );
+    let prompt = ApprovalPrompt::new(
+        workspace.id.clone(),
+        POLICY_REVISION,
+        if action == "click" {
+            "invoke isolated browser node"
+        } else {
+            "enter value into isolated browser node"
+        },
+        node_id.to_owned(),
+        format!(
+            "page={page_id} node={node_id} role={expected_role} action={action} origin={expected_origin} generation={expected_generation}"
+        ),
+        digest.clone(),
+    );
+    let token = approval
+        .request_token(&prompt)
+        .map_err(|error| ProviderError::new(error.code, error.message))?;
+    approval
+        .consume(
+            &token,
+            &ConsumeExpectation::new(digest, workspace.id.clone(), POLICY_REVISION),
+            now_ms(),
+        )
+        .map_err(|error| ProviderError::new(error.code, error.message))?;
+
+    let (next, prior_generation) = page_store
+        .apply_actuation(page_id, expected_origin, expected_generation)
+        .map_err(|error| ProviderError::new(error.code, error.message))?;
+    let actuation_id = cotra_provider_browser::actuation_id_for(
+        page_id,
+        node_id,
+        action,
+        &value_digest,
+        prior_generation,
+        next.generation,
+    );
+    let evidence = cotra_provider_browser::ActuationEvidence {
+        actuation_id,
+        page_id: next.page_id.clone(),
+        workspace_id: next.workspace_id.clone(),
+        policy_revision: POLICY_REVISION.to_owned(),
+        profile_identity: next.profile_identity.clone(),
+        node_id: node_id.to_owned(),
+        action: action.to_owned(),
+        role: expected_role.to_owned(),
+        state: expected_state.to_owned(),
+        origin: next.current_origin.clone(),
+        prior_generation,
+        new_generation: next.generation,
+        value_digest,
+    };
+    Ok(evidence.to_json(&token.record_id))
+}
+
+fn reject_actuation_arguments(
+    request: &RequestEnvelope,
+    allowed: &[&str],
+) -> Result<(), ProviderError> {
+    let arguments = request.arguments.as_object().ok_or_else(|| {
+        ProviderError::new(
+            FailureCode::InvalidRequest,
+            "browser arguments must be an object",
+        )
+    })?;
+    if let Some(key) = arguments
+        .keys()
+        .find(|key| !allowed.contains(&key.as_str()))
+    {
+        if matches!(
+            key.as_str(),
+            "profile_root"
+                | "root"
+                | "path"
+                | "argv"
+                | "executable"
+                | "script"
+                | "javascript"
+                | "command"
+                | "personal"
+                | "credentials"
+                | "cookies"
+                | "passwords"
+                | "session"
+                | "extensions"
+                | "devtools"
+                | "cdp"
+                | "approval"
+                | "token"
+                | "nonce"
+                | "digest"
+                | "selector"
+                | "coordinate"
+                | "x"
+                | "y"
+        ) {
+            return Err(ProviderError::new(
+                FailureCode::CapabilityDenied,
+                format!(
+                    "browser request must not carry authority-widening field: {key}; caller-selected profiles, coordinates, selectors, browser argv, scripting, credential material, and caller-supplied approval material are denied"
+                ),
+            ));
+        }
+        return Err(ProviderError::new(
+            FailureCode::InvalidRequest,
+            format!("browser actuation request does not accept argument field: {key}"),
+        ));
+    }
+    Ok(())
+}
+
+fn required_actuation_string<'a>(
+    request: &'a RequestEnvelope,
+    name: &str,
+) -> Result<&'a str, ProviderError> {
+    request
+        .arguments
+        .get(name)
+        .and_then(Value::as_str)
+        .ok_or_else(|| {
+            ProviderError::new(
+                FailureCode::InvalidRequest,
+                format!("browser actuation requires arguments.{name}"),
+            )
+        })
 }
 
 #[cfg(test)]

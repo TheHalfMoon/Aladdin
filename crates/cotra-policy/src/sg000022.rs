@@ -616,13 +616,12 @@ mod sg000022_tests {
         for (capability, operation) in [
             ("browser.navigate", "navigate"),
             ("browser.snapshot", "capture"),
-            // NOTE (SG-000023 successor): read-only browser.snapshot/observe
-            // is lawfully authorized by the SG-000023 successor grain and is
-            // therefore no longer in this denied set. The SG-000022 qualified
-            // head froze this shape as denied; current-tree authority records
-            // the successor delta. See sg000023.rs and SG-000023.
-            ("browser.dom", "click"),
-            ("browser.dom", "fill"),
+            // NOTE (SG-000023/SG-000024 successors): read-only
+            // browser.snapshot/observe and structured browser.dom/click and
+            // browser.dom/fill are lawfully authorized by successor grains
+            // and are therefore no longer in this denied set. The SG-000022
+            // qualified head froze these shapes as denied; current-tree
+            // authority records the successor deltas.
             ("browser.dom", "snapshot"),
             ("browser.dom", "observe"),
             ("browser.accessibility", "query"),
