@@ -1,6 +1,6 @@
 # Cotra Current Canonical Frontier
 
-Status: ACTIVE_GRAIN
+Status: CLOSED_CANONICAL
 Date: 2026-09-28
 Governance snapshot base: c37579332f2755f8480c337e88cacef765677b6c
 Evidence ledger: `.specgrain/canonical-evidence.json`
@@ -17,7 +17,7 @@ The machine-readable evidence for every `CLOSED` grain is recorded in `.specgrai
 
 ## Closed canonical grains
 
-SG-000001 through SG-000025 are `CLOSED` and canonical.
+SG-000001 through SG-000026 are `CLOSED` and canonical.
 
 SG-000016 implementation PR `#38` merged as `c85b79f24ce2deef46319d9c5790623fd70c3b0d` after exact-head CI `36339733920`, Review Gates `36339732607`, genuine TypeSafe Jev `15/15` hunk coverage with zero findings/blockers, Alibaba Open Code Review v1.12.9 exact-range delegation plus manual review of both excluded files, and zero unresolved review threads. Implementation post-merge CI `36339937619` completed SUCCESS.
 
@@ -129,33 +129,21 @@ SG-000025 closed canonically: activation PR `#65` (activation base `da637f5e4c82
 
 SG-000025 proved that the destination root is always the approved workspace root derived from policy configuration and is never caller-selected; that canonical relative destinations deny absolute, drive, UNC, device, NT namespace, alternate data stream, parent and current traversal, empty and duplicate separators, trailing dot and space, reserved device name, illegal character, control character, and length escapes; that containment uses canonical filesystem identity with a separator-boundary comparison so a Windows directory junction and a Unix symlink cannot extend the approved root; that writes are create-only with no directory creation, no overwrite, no rename, no delete, and no truncate, plus post-write real-path, byte length, and SHA-256 re-verification with revert on mismatch; that an extension allowlist plus independent content sniffing denies PE, ELF, Mach-O, OLE compound, shell-script, ZIP, and PDF classes and requires filename, declared type, and content agreement; that declared and actual size must agree within 8 MiB behind strict bounded base64 decoding applied before any filesystem access; that download source identities are server-allocated, one-shot, and expiring after 120 seconds; that every download carries fresh SOFT approval with digest binding over the complete binding set including the actual content digest; that unauthorized origins and redirect widening fail closed; that downloaded content is never executed, opened, extracted, or launched; that evidence and the download registry are bounded and secret-free, recording only the source origin and a source URL digest rather than the raw URL; and that the agent cannot reach download capability through its own tool or input surface.
 
+## Closed SG-000026 scoped uploads
+
+SG-000026 closed canonically: activation PR `#68` (activation base `c37579332f2755f8480c337e88cacef765677b6c`, activation head `f6d7635b9410f8c5f55605eca600d8652d0ba21a`, CI `36469132408`, merge `86e4f2a9f58ed37b7753badd7d5dc42faaa1b5c6`), implementation PR `#69` (qualified head `5e9e09efafbddbbcc6e2050a3d432f77164a747f`, CI `36478991825`, Review Gates `36478988310`, Jev `26/26` with zero findings and zero blocking findings, OCR v1.12.9 `8 reviewable + 1 excluded/manually reviewed`, merge `d35049bb39292b78e515a3b32c0ec88c30e2c877`, post-merge CI `36479358381`), and governance closeout recorded here, all with zero unresolved review threads. The canonical SG-000026 authority adds only scoped bounded `browser.upload/preview` and `browser.upload/submit` of one already recorded approved download artifact to one enabled typed file-input node, with no browser launch, no attachment, no page byte transfer, and no form submission.
+
+SG-000026 proved that no upload shape accepts a path, file, content, directory, recursive, glob, or page-transfer field of any kind, so a caller can never name the file to read and the capability is strictly weaker than generic filesystem read; that the only admissible source is a file already recorded by the SG-000025 download registry inside the approved workspace download root, carrying a recorded content digest, so credential files, browser profile files, OS secret stores, user home files, workspace-authored files, and unrelated project files are unreachable by construction rather than by policy; that source identity shape is strictly validated as a `dl-` prefix with 64 lowercase hex characters and an upload source identity as a `ul-` prefix with 32, in both the policy and the dispatch layer, so a caller-typed fragment can never reach a registry lookup; that containment uses canonical filesystem identity of both the source parent and the source file with a separator-boundary comparison, so a Windows directory junction and a Unix symlink cannot redirect the read; that the source must be a regular file with a nonzero size within the hard maximum, and that byte length plus SHA-256 are re-verified against the recorded download, so a removed, replaced, or mutated artifact fails closed; that the target must be one known enabled `textbox`-role node with a `file` input type whose typed node identity is recomputed against the current profile, page, generation, origin, index, and policy revision, with wrong role, wrong input type, disabled state, replaced input, stale node, wrong page, wrong origin, wrong generation, and wrong workspace all failing closed; that filling a file input is denied, so the newly observable file input cannot be reached by typing a path and SG-000024 value entry does not widen; that workspace trust revision is bound into both the upload source identity and the approval digest, so an emergency revoke, a trust change, and a trust-revision change between preview and submit all fail closed; that upload source identities are server-allocated, one-shot, and deterministically expiring with bounded pending holds; that every upload carries fresh SOFT approval with digest binding over the complete binding set including the actual source content digest, spent before the upload is recorded; and that evidence is fixed-shape and secret-free, reporting `page_transfer_performed`, `executed`, `opened`, `extracted`, `cookies`, and `credentials` as `false` and carrying no file content, bytes, path, cookie, token, or session material.
+
 ## Successor frontier
 
-COTRA-P08 continues at this frontier. No successor grain beyond SG-000026 is authorized by this activation.
+COTRA-P08 continues at this frontier. No successor grain beyond SG-000026 is authorized by this closeout. The P08 exit matrix must be rebuilt against SG-000001 through SG-000026 and any remaining gap addressed by a newly authorized grain before P08 can exit.
 
 ## Active grain
 
-SG-000026 — Scoped bounded browser uploads of approved download artifacts to typed file-input nodes — is the sole active COTRA-P08 grain.
+No COTRA-P08 grain is active. SG-000026 was the sole active grain and is now `CLOSED` and canonical.
 
-This activation authorizes implementation and qualification of a scoped bounded upload capability on top of the SG-000021 isolated automation profile, the SG-000022 typed page lifecycle with origin binding, the SG-000023 typed node observation, the SG-000024 structured actuation, and the SG-000025 approved download root: preview and submit shapes bound to exact page identity, page generation, document generation, origin, workspace, and policy revision; one known enabled typed file-input node with expected role, input type, and state; and one source artifact that must already be recorded by the SG-000025 download registry inside the approved workspace download root, so that upload can never become arbitrary filesystem read and credential files, browser profile files, OS secret stores, user home files, workspace-authored files, and unrelated project files are unreachable by construction rather than merely by policy; canonical filesystem identity re-verification of the source with separator-boundary containment so a symlink or junction cannot redirect the read; content digest, byte length, and media type re-verification so a replaced or mutated artifact fails closed; directory, empty, and oversized artifact denial; server-allocated one-shot expiring upload source identities; workspace trust binding so an emergency revoke or trust-revision change between preview and submit fails closed; fresh SOFT approval with digest binding over the complete binding set; and bounded secret-free evidence that never carries file content and never claims a page byte transfer occurred, while deliberately keeping page transfer, form submission, archive extraction, downloaded-file execution, personal-profile mode, debugging, scripting, credential access, MCP browser tools, and network egress beyond destination validation and DNS resolution absent.
-
-Authorized target design:
-- browser.upload preview bound to one known active page with expected origin, page generation, and document generation, one known enabled textbox-role node with a file input type, and one server-recorded approved download artifact, with no approval, no mutation, and no page interaction;
-- browser.upload submit as the single bounded upload entry point, requiring fresh SOFT approval and recording exactly one approved upload of exactly one recorded download artifact to exactly one typed file-input node;
-- an upload source class restricted to files recorded by the SG-000025 download registry inside the approved workspace download root, with no caller-controlled path of any kind accepted;
-- canonical identity containment, digest, byte length, and media type re-verification, plus directory, empty, and oversized artifact denial;
-- workspace trust binding so emergency revoke and trust-revision change invalidate an upload;
-- explicit denial of page transfer, directory upload, multiple-file upload, archive extraction, and execution, with deterministic unit and security tests for arbitrary path, parent traversal, symlink and junction escape, sensitive and secret files, wrong workspace, stale node, wrong input node, wrong role, disabled node, wrong origin, stale page, wrong generation, replaced file input, missing approval, reused approval, policy and trust drift, emergency revoke, directory upload, oversized artifact, mutated artifact, and personal-profile denial.
-
-## Active acceptance frontier
-
-SG-000026 must prove that preview and submit bind one known active page with exact origin, generations, workspace, and policy revision, that the only admissible source is a recorded approved download artifact inside the approved download root, that source resolution uses canonical filesystem identity and separator-boundary containment, that digest, byte length, and media type are re-verified, that directory, empty, and oversized artifacts fail closed, that the target must be one known enabled textbox-role file-input node, that upload source identities are server-allocated, one-shot, and expiring, that every upload carries fresh SOFT approval bound to the actual source content digest, that an emergency revoke or trust-revision change invalidates an upload, that credential, browser profile, secret store, home, workspace-authored, and personal-profile data are unreachable, and that the agent cannot reach upload capability through its own tool or input surface.
-
-Page byte transfer, form submission, archive extraction, downloaded-file execution, actual page loading, personal-profile use, debugging, scripting, credential access, MCP browser tools, and network egress beyond destination validation and DNS resolution must remain absent, and STRONG enforcement, one-shot, expiry, and digest binding must not weaken.
-
-A P08 exit requires joint proof from SG-000021 isolation and origin binding plus its successors that structured browser operations are proven with SSRF tests, redirect-widening tests, and the personal profile disabled by default. It must not expose personal-profile access, debugging authority, broader egress, or approval bypass.
-
-A P08 exit requires joint proof from SG-000021 isolation and origin binding plus its successors that structured browser operations are proven with SSRF tests, redirect-widening tests, and the personal profile disabled by default. It must not expose personal-profile access, debugging authority, broader egress, or approval bypass.
+The successor frontier is the COTRA-P08 exit itself: joint proof from SG-000021 isolation and origin binding plus SG-000022 through SG-000026 that structured browser operations are proven with SSRF tests, redirect-widening tests, and the personal profile disabled by default, without exposing personal-profile access, debugging authority, broader egress, or approval bypass. Actual page rendering, page loading, and real form submission to a rendered page remain successor work, and a configured workspace upload-source allowlist for workspace-authored files, if ever authorized, must never accept a caller-controlled path, a user home path, a credential path, a browser profile path, or an OS secret path.
 
 ## Canonical public authority boundary retained
 
@@ -180,6 +168,8 @@ Existing SG-000023 DOM observation remains subject to its exact active-page bind
 Retained SG-000024 DOM actuation remains subject to its exact node binding, role and state matching, per-action SOFT approval, generation-bump invalidation, bounded non-password values, password-fill denial, and stale foreign drift controls with extended-verb denial and no coordinate fallback.
 
 Retained SG-000025 scoped bounded downloads remain subject to their exact active-page binding, approved workspace download root, canonical relative destination, create-only write, type and size allowlist, same-origin and redirect-widening denial, one-shot expiring source identity, fresh SOFT digest-bound approval, bounded secret-free evidence, and downloaded-file non-execution controls.
+
+Retained SG-000026 scoped bounded uploads remain subject to their exact active-page binding, exact origin and generations, workspace and policy revision, one recorded approved download artifact as the only admissible source, canonical filesystem identity containment with separator-boundary comparison, byte length and SHA-256 re-verification, one known enabled typed file-input target, one-shot expiring upload source identity, workspace trust binding, fresh SOFT digest-bound approval, bounded secret-free evidence reporting no page transfer, and file-input fill, directory upload, multiple-file upload, archive extraction, execution, and page byte transfer denial.
 
 Still denied or absent outside the closed COTRA-P07 scope and the P08 browser scopes so far:
 - public `powershell.run`;
@@ -206,7 +196,9 @@ Still denied or absent outside the closed COTRA-P07 scope and the P08 browser sc
 - soft-button satisfaction of STRONG-class operations;
 - STRONG-to-SOFT downgrade when platform verification is unavailable.
 - trust-change bypass, revoke bypass, or history tampering.
-- scoped uploads of any kind;
+- caller-selected upload sources, any upload path field, and uploads of files not recorded by the SG-000025 download registry;
+- directory upload, multiple-file upload, and filling a file input;
+- page byte transfer and form submission;
 - archive extraction and decompression;
 - execution, opening, or shell launch of downloaded content;
 - automatic or silent download behavior on navigation or actuation;

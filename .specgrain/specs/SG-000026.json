@@ -2,10 +2,16 @@
   "id": "SG-000026",
   "title": "Scoped bounded browser uploads of approved download artifacts to typed file-input nodes",
   "program": "COTRA-P08",
-  "state": "GRAIN",
+  "state": "CLOSED",
   "risk": "high",
   "created": "2026-09-28",
   "base": "c37579332f2755f8480c337e88cacef765677b6c",
+  "qualified_head": "5e9e09efafbddbbcc6e2050a3d432f77164a747f",
+  "implementation_base": "86e4f2a9f58ed37b7753badd7d5dc42faaa1b5c6",
+  "implementation_merge": "d35049bb39292b78e515a3b32c0ec88c30e2c877",
+  "pre_merge_ci": "36478991825",
+  "pre_merge_review_gates": "36478988310",
+  "post_merge_ci": "36479358381",
   "dependencies": ["SG-000021", "SG-000022", "SG-000023", "SG-000024", "SG-000025"],
   "objective": "Establish scoped bounded browser uploads on top of the SG-000021 isolated automation profile, the SG-000022 typed page lifecycle with origin binding, the SG-000023 typed node observation, the SG-000024 structured actuation, and the SG-000025 approved download root: an upload capability that may read exactly one file, and only a file Cotra itself downloaded and recorded under the approved workspace download root, and may stage it only to one known enabled file-input node on one known active page, bound to exact page identity, page generation, document generation, origin, node identity, expected role, expected input type, expected node state, workspace trust revision, source artifact identity, content digest, size, media type, policy revision, approval, and expected state, with stale and replaced node denial, workspace trust revoke invalidation, one-shot source consumption, deterministic expiry, and secret confinement, while keeping the capability strictly weaker than generic filesystem read, keeping page transfer, archive extraction, downloaded-file execution, personal-profile mode, debugging, scripting, credential access, MCP browser tools, and network egress beyond destination validation and DNS resolution absent.",
   "scope": {
@@ -82,6 +88,20 @@
     "security_review": true,
     "exact_head_ci": true,
     "native_network_qualification": false
+  },
+  "canonical_evidence": {
+    "implementation_pr": 69,
+    "implementation_base": "86e4f2a9f58ed37b7753badd7d5dc42faaa1b5c6",
+    "qualified_head": "5e9e09efafbddbbcc6e2050a3d432f77164a747f",
+    "pre_merge_ci": "36478991825",
+    "pre_merge_review_gates": "36478988310",
+    "merge_sha": "d35049bb39292b78e515a3b32c0ec88c30e2c877",
+    "post_merge_ci": "36479358381",
+    "jev": "PASSED: 26/26 hunks, zero findings, zero blocking findings, pin 31f89602797fb7bea007f8a480bf368bf564954e, TypeSafe SDK 0.6.0",
+    "ocr": "PASSED: Open Code Review v1.12.9 exact-range delegation, 9 files total, 8 reviewable, 1 excluded and manually reviewed",
+    "security_review": "PASS on exact qualified head; upload authority bound to the isolated automation profile with exact page identity, page generation, document generation, origin, workspace, policy revision, typed node identity, expected role, input type, and node state; the upload source class is restricted to files already recorded by the SG-000025 download registry inside the approved workspace download root, so no caller-controlled path exists in any request shape and every path, file, content, directory, recursive, glob, and page-transfer field is an explicit CapabilityDenied widening denial; source identity shape is strictly validated as a dl- prefix with 64 lowercase hex characters and an upload source identity as a ul- prefix with 32, in both the policy and the dispatch layer, so a caller-typed fragment can never reach a registry lookup; canonical filesystem identity containment of both the source parent and the source file against the approved download root with separator-boundary comparison, proven against a Windows directory junction and a Unix symlink; required regular-file type, nonzero size, hard maximum upload size, and byte length plus SHA-256 re-verification against the recorded download so a removed, replaced, or mutated artifact fails closed; directory and recursive upload denial; workspace trust revision bound into both the upload source identity and the approval digest so an emergency revoke, a trust change, and any trust-revision change between preview and submit fail closed; one-shot server-allocated upload source identities with deterministic 120-second expiry and bounded pending holds per workspace; fresh SOFT approval with digest binding over the complete binding set including the actual source content digest and one-shot consumption spent before the upload is recorded; fixed-shape secret-free evidence reporting page_transfer_performed, executed, opened, extracted, cookies, and credentials as false and carrying no file content, bytes, path, cookie, token, or session material; explicit denial of browser.upload upload, directory, multiple, execute, open, extract, browser.file read, browser.fs read, browser.directory upload, and filling a file input so no path can be typed into a file input; the only process spawn in the repository remains the cfg(test) junction builder used to prove the reparse-point denial; and a manual exact-diff security review of the trust, target, confinement, approval, and evidence paths that found no issue",
+    "unresolved_review_threads": 0,
+    "authority_boundary": "Only scoped bounded browser.upload/preview and browser.upload/submit of one already recorded approved download artifact to one enabled typed file-input node are newly added in the Cotra registry with no browser launch, no attachment, no page byte transfer, and no form submission. The upload source class is strictly weaker than generic filesystem read: no caller-selected path exists, no workspace-authored, user home, browser profile, credential store, OS secret store, or unrelated project file is admissible, and the source is only ever read and re-verified, never written, renamed, deleted, or truncated. Directory upload, multiple-file upload, archive extraction, downloaded-file execution, file opening, personal-profile access, debugging, scripting, credential access, screenshots, coordinates, UI automation, MCP browser tools, and network egress beyond destination validation and DNS resolution remain absent, and existing file, process, Git, approval, presence, trust, destination, page, navigation, observation, actuation, and download behavior is unchanged."
   },
   "done_when": "Scoped bounded uploads of recorded approved download artifacts to typed file-input nodes are merged with restricted source class, canonical identity containment, digest and size re-verification, file-input node gating, one-shot expiring source identities, workspace trust binding, fresh SOFT digest-bound approval, bounded secret-free evidence, explicit denial of page transfer, directory upload, and execution, agent-forgery tests, retained replay and drift enforcement, and no new generic filesystem read, personal-profile, debugging, scripting, credential, coordinate, screenshot, or network-egress authority."
 }
