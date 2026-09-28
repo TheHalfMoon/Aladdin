@@ -1106,6 +1106,7 @@ impl ApprovalLedger {
         Ok(record)
     }
 
+    #[allow(dead_code)]
     fn current_epoch(&self) -> u64 {
         self.revoke_epoch
     }
