@@ -14,3 +14,6 @@ cotra-contracts = { path = "../cotra-contracts" }
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.52", features = ["Foundation", "Security_Credentials_UI"] }
