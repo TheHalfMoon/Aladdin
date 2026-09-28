@@ -102,12 +102,14 @@ secrets, or personal browser state, and it contains no path field of any kind.
 
 `browser.upload/upload`, `browser.upload/directory`,
 `browser.upload/multiple`, `browser.upload/execute`, `browser.upload/open`,
-`browser.upload/extract`, `browser.file/read`, `browser.file/list`,
-`browser.fs/read`, and `browser.directory/upload` are denied capability shapes.
-Filling a file input is denied. Uploading a directory or multiple files is
-denied. Archive extraction, downloaded-file execution, file opening, form
-submission, and page byte transfer are absent. Package installation and
-credential stores remain unreachable.
+`browser.upload/extract`, `browser.file/read`, `browser.fs/read`, and
+`browser.directory/upload` are denied capability shapes. No file listing,
+directory enumeration, or generic filesystem traversal shape is authorized
+either, so `browser.file/list` and every other such shape is denied as an
+unauthorized capability. Filling a file input is denied. Uploading a directory
+or multiple files is denied. Archive extraction, downloaded-file execution, file
+opening, form submission, and page byte transfer are absent. Package
+installation and credential stores remain unreachable.
 
 ## Approval and trust retention
 
