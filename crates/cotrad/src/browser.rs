@@ -3238,7 +3238,16 @@ mod tests {
         let page_id = active_page_id(root, profile_root);
         let snapshot = dispatch_observation(
             &workspace(root),
-            &request("browser.snapshot", "observe", json!({})),
+            &request(
+                "browser.snapshot",
+                "observe",
+                json!({
+                    "page_id": page_id,
+                    "expected_origin": "https://example.com:443",
+                    "expected_generation": 1,
+                    "expected_document_generation": 1,
+                }),
+            ),
             profile_root,
         )
         .expect("observe")
