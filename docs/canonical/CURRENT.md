@@ -1,11 +1,11 @@
 # Cotra Current Canonical Frontier
 
-Status: PROGRAM_EXIT_CANDIDATE
+Status: ACTIVE_GRAIN
 Date: 2026-09-28
-Governance snapshot base: da98225fe3cec510dcdc14459c11293cea0cce59
+Governance snapshot base: 6dc0f9f90e9d5ea98879d15485ffac576e958f37
 Evidence ledger: `.specgrain/canonical-evidence.json`
 
-`Governance snapshot base` records the exact canonical parent from which this program-exit snapshot was authored. It deliberately does not claim the eventual merge SHA of the commit containing this file.
+`Governance snapshot base` records the exact canonical parent from which this activation snapshot was authored. It deliberately does not claim the eventual merge SHA of the commit containing this file.
 
 ## SpecGrain state semantics
 
@@ -109,11 +109,27 @@ All P07 closeouts (SG-000018 PR `#45`, SG-000019 PR `#48`, SG-000020 PR `#51`) m
 
 ## Successor frontier
 
-No successor grain is authorized by this program-exit candidate.
+COTRA-P07 is exited at this frontier. No successor grain beyond SG-000021 is authorized by this activation.
 
-COTRA-P07 is exited at this frontier, so the next lawful unit must be derived from the canonical COTRA-P08 structured-browser plan. After this P07 exit merges and its post-merge CI succeeds, re-read the canonical architecture, delivery plan, threat model, evidence ledger, open governance records, and this `CURRENT.md` to derive the first lawful COTRA-P08 grain. Do not infer or pre-authorize the next SpecGrain identifier or exact browser design from numbering alone.
+## Active grain
 
-A first P08 grain must build on the SG-000018 replay-resistant foundation, SG-000019 class enforcement, and SG-000020 trust and revoke records without weakening STRONG enforcement, one-shot, expiry, or digest binding. It must keep the personal browser profile disabled by default and expose no generic browser-debugging authority.
+SG-000021 — Isolated browser profile with typed provider contract and origin binding — is the sole active COTRA-P08 grain.
+
+This activation authorizes implementation and qualification of a dedicated isolated Cotra automation browser profile with a typed provider contract, strict origin binding, SSRF defenses, and redirect-widening denial, on top of the SG-000018 replay-resistant foundation, SG-000019 class enforcement, and SG-000020 trust and revoke records, while deliberately keeping browser navigation, DOM actuation, downloads, uploads, personal-profile mode, debugging, credential access, and network egress absent.
+
+Authorized target design:
+- dedicated isolated automation profile with fresh storage and no personal browser data;
+- typed browser provider contract for profile status and origin-bound destination validation;
+- origin binding with scheme, host, and port validation, DNS re-resolution, and post-resolution policy;
+- SSRF defenses with fail-closed loopback, link-local, and private handling;
+- redirect-widening denial without silent authority expansion;
+- explicit denial of all actuation shapes with deterministic unit and security tests for isolation, binding, denial, replay and drift retention, and separation.
+
+## Active acceptance frontier
+
+SG-000021 must prove that the automation profile is isolated, that destinations bind exact origin with re-resolution, that SSRF and redirect widening fail closed, and that the agent cannot reach browser capability through its own tool or input surface.
+
+Navigation, DOM actuation, personal-profile use, debugging, credential access, and network egress must remain absent, and STRONG enforcement, one-shot, expiry, and digest binding must not weaken.
 
 ## Canonical public authority boundary retained
 

@@ -1,0 +1,81 @@
+{
+  "id": "SG-000021",
+  "title": "Isolated browser profile with typed provider contract and origin binding",
+  "program": "COTRA-P08",
+  "state": "GRAIN",
+  "risk": "high",
+  "created": "2026-09-28",
+  "base": "6dc0f9f90e9d5ea98879d15485ffac576e958f37",
+  "dependencies": ["SG-000020"],
+  "objective": "Establish the first COTRA-P08 structured-browser foundation on top of the SG-000018 replay-resistant foundation, SG-000019 STRONG enforcement, and SG-000020 trust and revoke records: a dedicated isolated Cotra automation browser profile with a typed provider contract and strict origin binding, so destination policy, SSRF defenses, and redirect-widening denial are proven before any navigation or DOM actuation authority is introduced.",
+  "scope": {
+    "include": [
+      "dedicated isolated Cotra automation browser profile with fresh storage and no personal cookies, credentials, passwords, or sessions by default",
+      "typed browser provider contract with capability and operation shapes for profile status and origin-bound destination validation",
+      "origin binding with scheme, host, and port validation, DNS re-resolution, and destination policy applied after resolution",
+      "SSRF defenses denying loopback, link-local, and private ranges unless an explicitly trusted workspace destination allows them",
+      "redirect-widening denial so a validated destination cannot silently widen to a broader authority",
+      "explicit denial of all browser actuation shapes including navigation, snapshot actuation, DOM writes, downloads, and uploads",
+      "deterministic unit and security tests for profile isolation, origin binding, SSRF denial, redirect denial, actuation denial, replay and drift retention, and separation",
+      "retention of all SG-000018 one-shot, expiry, digest, history, SG-000019 STRONG enforcement, and SG-000020 trust and revoke behavior with no change outside browser destination policy",
+      "Windows and Ubuntu exact-head qualification"
+    ],
+    "exclude": [
+      "browser launch, attachment, or navigation",
+      "DOM or accessibility-tree actuation of any kind",
+      "screenshots and visual or coordinate control",
+      "downloads and uploads",
+      "personal browser profile mode",
+      "stored credential, cookie, or password access",
+      "arbitrary DevTools, CDP commands, or browser scripting",
+      "network egress beyond local destination validation",
+      "persistent approval reuse across operations",
+      "approval delegation to remote or MCP callers",
+      "elevation"
+    ]
+  },
+  "authority_delta": {
+    "filesystem": "An isolated automation profile directory is created under Cotra protected local state; personal browser data, workspace files, Git state, and unrelated paths gain no new readability or writability.",
+    "process": "No new process authority. No browser is launched or attached in this grain; the provider contract is local policy only.",
+    "network": "None. Destination validation is strictly local with no egress; no fetch, socket, or tunnel authority is added.",
+    "browser": "Profile isolation and destination policy only. Navigation, snapshot actuation, DOM writes, downloads, uploads, personal-profile access, and debugging authority remain absent.",
+    "ui_input": "None. No input injection or UI automation is added.",
+    "secrets": "No cookie, credential, or password material enters prompts, records, history, logs, MCP responses, or evidence packets.",
+    "approval": "Future browser actuation shapes are explicitly denied and require fresh approval design in a successor grain. No persistent reuse or remote delegation is introduced.",
+    "privileged": "None"
+  },
+  "invariants": [
+    "The automation profile is isolated and carries no personal browser data, credentials, or sessions",
+    "Every browser destination binds exact scheme, host, and port with DNS re-resolution and post-resolution policy",
+    "Loopback, link-local, and private destinations fail closed unless explicitly trusted by workspace policy",
+    "A validated destination never silently widens through redirects",
+    "All browser actuation shapes fail closed as denied in this grain",
+    "The agent cannot reach browser capability through MCP tools, synthetic input, UI automation, coordinates, or child processes",
+    "STRONG enforcement, one-shot, expiry, digest, workspace, and policy bindings are not weakened",
+    "No actuation, personal-profile, debugging, credential, network-egress, reuse, delegation, or elevation authority is introduced"
+  ],
+  "acceptance": [
+    {"id": "A1", "claim": "Tests prove the automation profile is created isolated with fresh storage and that personal browser data, cookies, credentials, and sessions are unreachable."},
+    {"id": "A2", "claim": "Tests prove destination validation binds scheme, host, and port with re-resolution and denies loopback, link-local, and private targets outside explicit trust."},
+    {"id": "A3", "claim": "Tests prove redirect widening beyond the validated destination fails closed."},
+    {"id": "A4", "claim": "Tests prove navigation, snapshot actuation, DOM writes, downloads, and uploads fail closed as denied capability shapes."},
+    {"id": "A5", "claim": "Tests prove the agent cannot satisfy browser capability through MCP tools, synthetic input, UI automation, coordinate proposals, child processes, or replayed prior approvals."},
+    {"id": "A6", "claim": "Tests prove replay, expiry, digest mismatch, revision drift, and double-consumption protections remain enforced for both classes."},
+    {"id": "A7", "claim": "Tests prove all P06 approval flows and SG-000018/019/020 regressions still pass with digests unchanged outside browser labeling."},
+    {"id": "A8", "claim": "Tests prove personal-profile mode, arbitrary DevTools or CDP, browser scripting, credential stores, and network egress remain unreachable."},
+    {"id": "A9", "claim": "Exact-head Windows/Ubuntu Rust, Node, Governance, genuine TypeSafe Jev, Alibaba Open Code Review, exact-diff security review, manual review of excluded security-sensitive files, and zero unresolved blocking review threads all pass."}
+  ],
+  "successor_requirements": {
+    "p08_navigation": "Navigation, DOM and accessibility-tree operations, and scoped downloads and uploads remain successor work and must build on the isolated profile and origin binding without weakening STRONG enforcement, one-shot, expiry, or digest binding.",
+    "p08_exit": "COTRA-P08 exits when structured browser operations are proven with SSRF tests, redirect-widening tests, and the personal profile disabled by default, which this grain plus its successors must jointly satisfy."
+  },
+  "review": {
+    "diffcipline": true,
+    "jev_semantic_review": true,
+    "alibaba_open_code_review": "required exact-range qualification where integrated",
+    "security_review": true,
+    "exact_head_ci": true,
+    "native_network_qualification": false
+  },
+  "done_when": "Isolated automation browser profile with typed provider contract and origin binding is merged with SSRF and redirect-widening denial, actuation denial, agent-forgery tests, retained replay and drift enforcement, and no new actuation, personal-profile, debugging, credential, or network-egress authority."
+}
