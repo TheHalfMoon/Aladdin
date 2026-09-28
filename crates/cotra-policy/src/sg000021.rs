@@ -335,7 +335,14 @@ mod sg000021_tests {
             // successor grain and are therefore no longer in this denied
             // set. The SG-000021 qualified head froze these shapes as
             // denied; current-tree authority records the successor delta.
-            ("browser.download", "download"),
+            // NOTE (SG-000025 successor): scoped bounded
+            // browser.download/preview and browser.download/download into the
+            // approved workspace download root are lawfully authorized by the
+            // SG-000025 successor grain and are therefore no longer in this
+            // denied set. The frozen qualified head recorded this shape as
+            // denied; current-tree authority records the successor delta.
+            // Downloaded-file execution, opening, and extraction remain denied
+            // in every successor grain.
             ("browser.upload", "upload"),
             ("browser.profile", "use_personal"),
             ("browser.profile", "launch"),
