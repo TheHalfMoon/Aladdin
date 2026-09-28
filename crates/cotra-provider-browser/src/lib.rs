@@ -2645,117 +2645,8 @@ pub fn decode_download_body(encoded: &str) -> Result<Vec<u8>, ProviderError> {
         return Err(ProviderError::invalid(
             "browser download body base64 shape does not match its declared length",
         ));
-        fn real_path(path: &Path) -> Result<PathBuf, ProviderError> {
-            std::fs::canonicalize(path)
-                .map_err(|error| ProviderError::io("resolve canonical download path", error))
-        }
-
-        fn path_key(path: &Path) -> String {
-            let text = path.to_string_lossy().replace('/', "\\");
-            let trimmed = text.trim_end_matches('\\');
-            if cfg!(windows) {
-                trimmed.to_lowercase()
-            } else {
-                trimmed.to_owned()
-            }
-        }
-
-        /// Canonical containment test. Both sides are canonicalized through real
-        /// filesystem identity first, so reparse points, junctions, and symlinks are
-        /// already resolved when the comparison runs. Naive string prefix comparison
-        /// is never trusted on its own: the separator boundary is part of the key.
-        pub fn path_is_within(root: &Path, candidate: &Path) -> bool {
-            let root_key = path_key(root);
-            let candidate_key = path_key(candidate);
-            candidate_key == root_key || candidate_key.starts_with(&(root_key + "\\"))
-        }
-
-        /// Resolve the approved download root from the policy-provided workspace root.
-        /// The root is always the workspace root; the caller can never widen it.
-        pub fn resolve_download_root(workspace_root: &Path) -> Result<PathBuf, ProviderError> {
-            let root = real_path(workspace_root)?;
-            if !root.is_dir() {
-                return Err(ProviderError::invalid(
-                    "approved workspace download root is not a directory",
-                ));
-            }
-            Ok(root)
-        }
-
-        /// Resolve one canonical relative destination under the approved root and
-        /// fail closed unless the resolved existing parent directory is genuinely
-        /// inside that root. Directories are never created by a download.
-        pub fn resolve_download_destination(
-            root: &Path,
-            canonical_relative: &str,
-        ) -> Result<PathBuf, ProviderError> {
-            let destination =
-                root.join(canonical_relative.replace('/', std::path::MAIN_SEPARATOR_STR));
-            let parent = destination.parent().ok_or_else(|| {
-                ProviderError::invalid("browser download destination has no parent directory")
-            })?;
-            if !parent.is_dir() {
-                return Err(ProviderError::denied(
-            "browser download destination parent directory does not exist; downloads never create directories",
-        ));
-            }
-            let parent_real = real_path(parent)?;
-            if !path_is_within(root, &parent_real) {
-                return Err(ProviderError::new(
-            FailureCode::PathEscape,
-            "browser download destination escapes the approved workspace root through a reparse point; destinations outside the approved root are denied",
-        ));
-            }
-            Ok(destination)
-        }
-
-        /// Create exactly one new file at the resolved destination and write the
-        /// bounded payload. Existing files are never overwritten. After the write the
-        /// file's real path, byte length, and SHA-256 digest are all re-verified, and
-        /// a mismatching write is reverted.
-        pub fn write_download_file(
-            root: &Path,
-            destination: &Path,
-            bytes: &[u8],
-        ) -> Result<(), ProviderError> {
-            use std::io::Write as _;
-            let mut file = std::fs::OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(destination)
-        .map_err(|error| match error.kind() {
-            std::io::ErrorKind::AlreadyExists => ProviderError::new(
-                FailureCode::PostconditionFailed,
-                "browser download destination already exists; downloads never overwrite existing files",
-            ),
-            _ => ProviderError::io("create browser download destination", error),
-        })?;
-            file.write_all(bytes)
-                .map_err(|error| ProviderError::io("write browser download destination", error))?;
-            file.flush()
-                .map_err(|error| ProviderError::io("flush browser download destination", error))?;
-            drop(file);
-
-            let file_real = real_path(destination)?;
-            if !path_is_within(root, &file_real) {
-                let _ = std::fs::remove_file(destination);
-                return Err(ProviderError::new(
-            FailureCode::PathEscape,
-            "written download file resolves outside the approved workspace root; the write was reverted and the download is denied",
-        ));
-            }
-            let written = std::fs::read(destination)
-                .map_err(|error| ProviderError::io("read back browser download", error))?;
-            if written.len() != bytes.len() || sha256_hex(&written) != sha256_hex(bytes) {
-                let _ = std::fs::remove_file(destination);
-                return Err(ProviderError::new(
-            FailureCode::PostconditionFailed,
-            "written download does not match the approved payload; the download failed closed",
-        ));
-            }
-            Ok(())
-        }
     }
+
     Ok(out)
 }
 
@@ -3041,9 +2932,9 @@ pub fn check_download_source(
 ) -> Result<(), ProviderError> {
     if record.page_id != page.page_id {
         return Err(ProviderError::new(
-            FailureCode::TargetStale,
-            "browser download source belongs to a different page; stale download sources fail closed",
-        ));
+        FailureCode::TargetStale,
+        "browser download source belongs to a different page; stale download sources fail closed",
+    ));
     }
     if page.state == PageState::Closed {
         return Err(ProviderError::new(
@@ -3053,14 +2944,14 @@ pub fn check_download_source(
     }
     if record.workspace_id != page.workspace_id {
         return Err(ProviderError::new(
-            FailureCode::WorkspaceDenied,
-            "browser download source belongs to a different workspace; foreign download sources fail closed",
-        ));
+        FailureCode::WorkspaceDenied,
+        "browser download source belongs to a different workspace; foreign download sources fail closed",
+    ));
     }
     if record.profile_identity != profile_identity {
         return Err(ProviderError::denied(
-            "browser download source belongs to a different isolated profile; foreign download sources fail closed",
-        ));
+        "browser download source belongs to a different isolated profile; foreign download sources fail closed",
+    ));
     }
     if record.page_generation != expected_generation || page.generation != expected_generation {
         return Err(ProviderError::new(
@@ -3090,9 +2981,9 @@ pub fn check_download_source(
     }
     if record.download_policy_revision != DOWNLOAD_POLICY_REVISION {
         return Err(ProviderError::new(
-            FailureCode::TargetStale,
-            "browser download policy revision drifted since preview; stale download sources fail closed",
-        ));
+        FailureCode::TargetStale,
+        "browser download policy revision drifted since preview; stale download sources fail closed",
+    ));
     }
     let expected = download_source_id_for(
         &record.workspace_id,
@@ -3112,19 +3003,19 @@ pub fn check_download_source(
     );
     if expected != record.source_id {
         return Err(ProviderError::new(
-            FailureCode::TargetStale,
-            "browser download source identity does not match the current profile, page, generation, origin, destination, and policy revision; stale download sources fail closed",
-        ));
+        FailureCode::TargetStale,
+        "browser download source identity does not match the current profile, page, generation, origin, destination, and policy revision; stale download sources fail closed",
+    ));
     }
     if record.source_origin != page.current_origin {
         return Err(ProviderError::denied(
-            "browser download source origin is not the authorized current page origin; unauthorized download origins are denied",
-        ));
+        "browser download source origin is not the authorized current page origin; unauthorized download origins are denied",
+    ));
     }
     if record.state == DOWNLOAD_SOURCE_CONSUMED {
         return Err(ProviderError::denied(
-            "browser download source was already consumed; downloads are one-shot and replay is denied",
-        ));
+        "browser download source was already consumed; downloads are one-shot and replay is denied",
+    ));
     }
     if record.state != DOWNLOAD_SOURCE_PENDING {
         return Err(ProviderError::new(
@@ -3274,6 +3165,117 @@ impl DownloadEvidence {
     }
 }
 
+fn real_path(path: &Path) -> Result<PathBuf, ProviderError> {
+    std::fs::canonicalize(path)
+        .map_err(|error| ProviderError::io("resolve canonical download path", error))
+}
+
+fn path_key(path: &Path) -> String {
+    let text = path.to_string_lossy().replace('/', "\\");
+    let trimmed = text.trim_end_matches('\\');
+    if cfg!(windows) {
+        trimmed.to_lowercase()
+    } else {
+        trimmed.to_owned()
+    }
+}
+
+/// Canonical containment test. Both sides are canonicalized through real
+/// filesystem identity first, so reparse points, junctions, and symlinks are
+/// already resolved when the comparison runs. Naive string prefix comparison
+/// is never trusted on its own: the separator boundary is part of the key.
+pub fn path_is_within(root: &Path, candidate: &Path) -> bool {
+    let root_key = path_key(root);
+    let candidate_key = path_key(candidate);
+    candidate_key == root_key || candidate_key.starts_with(&(root_key + "\\"))
+}
+
+/// Resolve the approved download root from the policy-provided workspace root.
+/// The root is always the workspace root; the caller can never widen it.
+pub fn resolve_download_root(workspace_root: &Path) -> Result<PathBuf, ProviderError> {
+    let root = real_path(workspace_root)?;
+    if !root.is_dir() {
+        return Err(ProviderError::invalid(
+            "approved workspace download root is not a directory",
+        ));
+    }
+    Ok(root)
+}
+
+/// Resolve one canonical relative destination under the approved root and
+/// fail closed unless the resolved existing parent directory is genuinely
+/// inside that root. Directories are never created by a download.
+pub fn resolve_download_destination(
+    root: &Path,
+    canonical_relative: &str,
+) -> Result<PathBuf, ProviderError> {
+    let destination = root.join(canonical_relative.replace('/', std::path::MAIN_SEPARATOR_STR));
+    let parent = destination.parent().ok_or_else(|| {
+        ProviderError::invalid("browser download destination has no parent directory")
+    })?;
+    if !parent.is_dir() {
+        return Err(ProviderError::denied(
+        "browser download destination parent directory does not exist; downloads never create directories",
+    ));
+    }
+    let parent_real = real_path(parent)?;
+    if !path_is_within(root, &parent_real) {
+        return Err(ProviderError::new(
+        FailureCode::PathEscape,
+        "browser download destination escapes the approved workspace root through a reparse point; destinations outside the approved root are denied",
+    ));
+    }
+    Ok(destination)
+}
+
+/// Create exactly one new file at the resolved destination and write the
+/// bounded payload. Existing files are never overwritten. After the write the
+/// file's real path, byte length, and SHA-256 digest are all re-verified, and
+/// a mismatching write is reverted.
+pub fn write_download_file(
+    root: &Path,
+    destination: &Path,
+    bytes: &[u8],
+) -> Result<(), ProviderError> {
+    use std::io::Write as _;
+    let mut file = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(destination)
+        .map_err(|error| {
+            match error.kind() {
+        std::io::ErrorKind::AlreadyExists => ProviderError::new(
+            FailureCode::PostconditionFailed,
+            "browser download destination already exists; downloads never overwrite existing files",
+        ),
+        _ => ProviderError::io("create browser download destination", error),
+    }
+        })?;
+    file.write_all(bytes)
+        .map_err(|error| ProviderError::io("write browser download destination", error))?;
+    file.flush()
+        .map_err(|error| ProviderError::io("flush browser download destination", error))?;
+    drop(file);
+
+    let file_real = real_path(destination)?;
+    if !path_is_within(root, &file_real) {
+        let _ = std::fs::remove_file(destination);
+        return Err(ProviderError::new(
+        FailureCode::PathEscape,
+        "written download file resolves outside the approved workspace root; the write was reverted and the download is denied",
+    ));
+    }
+    let written = std::fs::read(destination)
+        .map_err(|error| ProviderError::io("read back browser download", error))?;
+    if written.len() != bytes.len() || sha256_hex(&written) != sha256_hex(bytes) {
+        let _ = std::fs::remove_file(destination);
+        return Err(ProviderError::new(
+            FailureCode::PostconditionFailed,
+            "written download does not match the approved payload; the download failed closed",
+        ));
+    }
+    Ok(())
+}
 #[cfg(test)]
 mod tests {
     use super::*;
