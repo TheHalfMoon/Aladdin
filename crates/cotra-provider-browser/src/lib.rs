@@ -5269,7 +5269,6 @@ mod tests {
         assert_eq!(json["extracted"], false);
         for forbidden in [
             "cookie",
-            "cookies",
             "password",
             "token",
             "authorization",
