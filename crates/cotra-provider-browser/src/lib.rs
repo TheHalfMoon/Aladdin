@@ -2318,6 +2318,8 @@ impl ActuationEvidence {
 
 /// Prefix for server-allocated one-shot download source identities.
 pub const DOWNLOAD_SOURCE_PREFIX: &str = "dl-";
+/// Number of lowercase hex characters in a download source identity digest.
+pub const DOWNLOAD_SOURCE_DIGEST_HEX: usize = 64;
 /// Prefix for download identities recorded in download evidence.
 pub const DOWNLOAD_ID_PREFIX: &str = "dn-";
 /// Revision of the download destination and content-type policy itself.
@@ -2836,6 +2838,21 @@ pub fn default_download_registry_path(profile_root: &Path) -> PathBuf {
 /// relative destination, declared media type and size, download policy
 /// revision, and issue time under `COTRA_BROWSER_DOWNLOAD_SOURCE_V1`.
 #[allow(clippy::too_many_arguments)]
+/// True when `candidate` is exactly a `COTRA_BROWSER_DOWNLOAD_SOURCE_V1`
+/// identity: the `dl-` prefix followed by 64 lowercase hex characters. A
+/// prefix-only check would let a caller-typed path fragment reach the registry
+/// lookup, so callers that accept a download source identity must use this
+/// instead.
+pub fn is_well_formed_download_source_id(candidate: &str) -> bool {
+    let Some(digest) = candidate.strip_prefix(DOWNLOAD_SOURCE_PREFIX) else {
+        return false;
+    };
+    digest.len() == DOWNLOAD_SOURCE_DIGEST_HEX
+        && digest
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+}
+
 pub fn download_source_id_for(
     workspace_id: &str,
     policy_revision: &str,

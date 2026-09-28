@@ -315,7 +315,7 @@ fn validate_upload_preview_arguments(
     }
     required_shape_u64(shape, arguments, "expected_trust_revision")?;
     let artifact = required_shape_string(shape, arguments, "artifact_source_id")?;
-    if !artifact.starts_with(cotra_provider_browser::DOWNLOAD_SOURCE_PREFIX) {
+    if !cotra_provider_browser::is_well_formed_download_source_id(&artifact) {
         return Err(policy_error(
             FailureCode::InvalidRequest,
             format!("{shape} artifact_source_id is malformed"),
