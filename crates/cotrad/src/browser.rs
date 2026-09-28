@@ -3544,7 +3544,12 @@ mod tests {
                 1,
             )
             .expect_err("a malformed source identity must fail closed");
-            assert_eq!(error.code, FailureCode::InvalidRequest);
+            assert_eq!(
+                error.code,
+                FailureCode::InvalidRequest,
+                "malformed source {malformed:?} must be an invalid request, not {:?}",
+                error.code
+            );
         }
         let _ = std::fs::remove_dir_all(root);
         let _ = std::fs::remove_dir_all(profile_root);
