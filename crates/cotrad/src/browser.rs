@@ -875,16 +875,17 @@ mod tests {
                 "navigate",
                 json!({
                     "page_id": page_id,
-                    "url": "https://evil.example.com/",
+                    "url": "https://example.com/",
                     "expected_origin": "",
                     "expected_generation": 0,
                     "expected_pinned_address": "93.184.216.34",
+                    "redirect_chain": ["https://evil.example.com/"],
                 }),
             ),
             &public_resolver(),
             &profile_root,
         )
-        .expect_err("widening must fail");
+        .expect_err("redirect widening must fail");
         assert_eq!(widened.code, FailureCode::CapabilityDenied);
 
         let download = dispatch_navigation(

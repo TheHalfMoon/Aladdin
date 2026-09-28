@@ -921,7 +921,6 @@ mod tests {
             )
         };
         for (url, code) in [
-            ("https://evil.example.com/", FailureCode::CapabilityDenied),
             (
                 "https://example.com/tool.exe",
                 FailureCode::CapabilityDenied,
@@ -945,6 +944,29 @@ mod tests {
             .expect_err("navigation must fail closed");
             assert_eq!(error.code, code, "{url}");
         }
+        let widened = browser_request(
+            "browser.navigation",
+            "navigate",
+            json!({
+                "page_id": page_id,
+                "url": "https://example.com/",
+                "expected_origin": "",
+                "expected_generation": 0,
+                "expected_pinned_address": "93.184.216.34",
+                "redirect_chain": ["https://evil.example.com/"],
+            }),
+        );
+        let error = dispatch(
+            &policy,
+            &workspace,
+            &FixedApprovalBroker(ApprovalDecision::Approved),
+            &mut trust_store,
+            &widened,
+            &public_browser_resolver(),
+            &browser_root,
+        )
+        .expect_err("redirect widening must fail closed");
+        assert_eq!(error.code, FailureCode::CapabilityDenied);
         let loopback = StaticBrowserResolver {
             addresses: vec!["127.0.0.1".parse().unwrap()],
         };
