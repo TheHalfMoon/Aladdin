@@ -9,7 +9,7 @@ autobins = false
 
 [[bin]]
 name = "cotrad"
-path = "src/sg000026_main.rs"
+path = "src/sg000027_main.rs"
 
 [dependencies]
 cotra-approval = { path = "../cotra-approval" }
@@ -20,6 +20,7 @@ cotra-provider-browser = { path = "../cotra-provider-browser" }
 cotra-provider-fs = { path = "../cotra-provider-fs" }
 cotra-provider-git = { path = "../cotra-provider-git" }
 cotra-provider-process = { path = "../cotra-provider-process" }
+cotra-provider-uia = { path = "../cotra-provider-uia" }
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
