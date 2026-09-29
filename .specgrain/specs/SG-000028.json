@@ -2,11 +2,13 @@
   "id": "SG-000028",
   "title": "Structured Windows UI Automation InvokePattern actuation with approval binding and stale-target revalidation",
   "program": "COTRA-P09",
-  "state": "GRAIN",
+  "state": "CLOSED",
   "risk": "high",
   "created": "2026-09-29",
   "base": "592c96fdeb21669e038cc4d65572294103b4992f",
-  "dependencies": ["SG-000027"],
+  "dependencies": [
+    "SG-000027"
+  ],
   "objective": "Establish the first narrow COTRA-P09 structured actuation grain on top of the SG-000027 read-only observation registry, the SG-000018 replay-resistant foundation, SG-000019 class enforcement, SG-000020 trust and revoke records, and the closed COTRA-P08 registry: a single approved InvokePattern actuation shape bound to server-derived process identity, typed window identity, typed element identity, expected tree generation, expected control type, expected Invoke pattern support, expected enabled state, workspace scope, and policy revision, with fresh SOFT approval digest binding, immediate pre-actuation stale-target revalidation, protected Cotra approval-surface exclusion, and explicit denial of every other actuation, coordinate, synthetic-input, screenshot, clipboard, network, and elevation shape.",
   "scope": {
     "include": [
@@ -69,19 +71,58 @@
     "STRONG enforcement, one-shot, expiry, digest, workspace, and policy bindings are not weakened"
   ],
   "acceptance": [
-    {"id": "A1", "claim": "Tests prove invoke binds server-derived process identity with PID, executable digest, creation generation, session, workspace, and policy revision, and that fake process identity, PID reuse, stale processes, restarted processes, and wrong executable identity fail closed before approval."},
-    {"id": "A2", "claim": "Tests prove invoke binds exact window identity with owning process, handle, process generation, window generation, session, desktop, workspace, and policy revision, and that stale HWNDs, reused handles, wrong process and window pairings, foreign windows, wrong sessions, and wrong desktops fail closed without retargeting."},
-    {"id": "A3", "claim": "Tests prove invoke binds exact element identity with owning window, runtime identity, tree generation, control type, supported patterns, workspace, and policy revision, and that disappeared, replaced, role-changed, generation-changed, wrong runtime identity, and policy-drifted elements fail closed."},
-    {"id": "A4", "claim": "Tests prove only Button, Hyperlink, MenuItem, and SplitButton elements with Invoke pattern support and enabled state actuate, and that other control types, unsupported patterns, disabled elements, password and secret elements, and protected Cotra surfaces are denied."},
-    {"id": "A5", "claim": "Tests prove every invoke requires fresh SOFT approval with exact digest binding over workspace, policy revision, process, window, element, generations, control type, and action material, and that missing, stale, reused, and digest-mismatched approvals fail closed with no caller-supplied approval boolean accepted."},
-    {"id": "A6", "claim": "Tests prove immediate pre-actuation revalidation denies process drift, window drift, element drift, state drift, protected-surface drift, workspace drift, and policy-revision drift without silent retargeting and without coordinate, keyboard, mouse, SendInput, click, value, select, toggle, scroll, focus, screenshot, clipboard, network, or elevation fallback."},
-    {"id": "A7", "claim": "Tests prove caller-supplied PID, HWND, runtime id, selector, xpath, coordinate, approval material, secret fields, and widening fields are rejected as malformed or denied, and that value, select, toggle, scroll, focus, keyboard, mouse, SendInput, coordinate, screenshot, clipboard, network, spawn, inject, terminate, and elevation shapes remain denied."},
-    {"id": "A8", "claim": "Tests prove the agent cannot satisfy invoke through MCP tools, synthetic input, coordinate proposals, screenshots, child processes, approval forgery, trust forgery, or replayed prior approvals."},
-    {"id": "A9", "claim": "Tests prove replay, expiry, digest mismatch, revision drift, trust-revision drift, and double-consumption protections remain enforced for both approval classes."},
-    {"id": "A10", "claim": "Tests prove all SG-000027 observation regressions, P06 approval flows, SG-000018 through SG-000020 regressions, and the closed P08 registry behavior still pass with digests unchanged outside UIA invoke labeling."},
-    {"id": "A11", "claim": "Tests prove personal-profile-style widening, arbitrary DevTools or CDP, browser scripting, credential stores, clipboard access, screenshots, coordinates, visual proposals, and network egress remain unreachable through UIA invoke."},
-    {"id": "A12", "claim": "Windows-specific qualification proves structured invoke binding against real Windows process identity where required without fabricating interactive desktop evidence, and headless invoke limits are recorded honestly with unavailable-path fail-closed."},
-    {"id": "A13", "claim": "Exact-head Windows and Ubuntu Rust, Node, Governance, genuine TypeSafe Jev, Alibaba Open Code Review, exact-diff security review, manual review of excluded security-sensitive files, and zero unresolved blocking review threads all pass."}
+    {
+      "id": "A1",
+      "claim": "Tests prove invoke binds server-derived process identity with PID, executable digest, creation generation, session, workspace, and policy revision, and that fake process identity, PID reuse, stale processes, restarted processes, and wrong executable identity fail closed before approval."
+    },
+    {
+      "id": "A2",
+      "claim": "Tests prove invoke binds exact window identity with owning process, handle, process generation, window generation, session, desktop, workspace, and policy revision, and that stale HWNDs, reused handles, wrong process and window pairings, foreign windows, wrong sessions, and wrong desktops fail closed without retargeting."
+    },
+    {
+      "id": "A3",
+      "claim": "Tests prove invoke binds exact element identity with owning window, runtime identity, tree generation, control type, supported patterns, workspace, and policy revision, and that disappeared, replaced, role-changed, generation-changed, wrong runtime identity, and policy-drifted elements fail closed."
+    },
+    {
+      "id": "A4",
+      "claim": "Tests prove only Button, Hyperlink, MenuItem, and SplitButton elements with Invoke pattern support and enabled state actuate, and that other control types, unsupported patterns, disabled elements, password and secret elements, and protected Cotra surfaces are denied."
+    },
+    {
+      "id": "A5",
+      "claim": "Tests prove every invoke requires fresh SOFT approval with exact digest binding over workspace, policy revision, process, window, element, generations, control type, and action material, and that missing, stale, reused, and digest-mismatched approvals fail closed with no caller-supplied approval boolean accepted."
+    },
+    {
+      "id": "A6",
+      "claim": "Tests prove immediate pre-actuation revalidation denies process drift, window drift, element drift, state drift, protected-surface drift, workspace drift, and policy-revision drift without silent retargeting and without coordinate, keyboard, mouse, SendInput, click, value, select, toggle, scroll, focus, screenshot, clipboard, network, or elevation fallback."
+    },
+    {
+      "id": "A7",
+      "claim": "Tests prove caller-supplied PID, HWND, runtime id, selector, xpath, coordinate, approval material, secret fields, and widening fields are rejected as malformed or denied, and that value, select, toggle, scroll, focus, keyboard, mouse, SendInput, coordinate, screenshot, clipboard, network, spawn, inject, terminate, and elevation shapes remain denied."
+    },
+    {
+      "id": "A8",
+      "claim": "Tests prove the agent cannot satisfy invoke through MCP tools, synthetic input, coordinate proposals, screenshots, child processes, approval forgery, trust forgery, or replayed prior approvals."
+    },
+    {
+      "id": "A9",
+      "claim": "Tests prove replay, expiry, digest mismatch, revision drift, trust-revision drift, and double-consumption protections remain enforced for both approval classes."
+    },
+    {
+      "id": "A10",
+      "claim": "Tests prove all SG-000027 observation regressions, P06 approval flows, SG-000018 through SG-000020 regressions, and the closed P08 registry behavior still pass with digests unchanged outside UIA invoke labeling."
+    },
+    {
+      "id": "A11",
+      "claim": "Tests prove personal-profile-style widening, arbitrary DevTools or CDP, browser scripting, credential stores, clipboard access, screenshots, coordinates, visual proposals, and network egress remain unreachable through UIA invoke."
+    },
+    {
+      "id": "A12",
+      "claim": "Windows-specific qualification proves structured invoke binding against real Windows process identity where required without fabricating interactive desktop evidence, and headless invoke limits are recorded honestly with unavailable-path fail-closed."
+    },
+    {
+      "id": "A13",
+      "claim": "Exact-head Windows and Ubuntu Rust, Node, Governance, genuine TypeSafe Jev, Alibaba Open Code Review, exact-diff security review, manual review of excluded security-sensitive files, and zero unresolved blocking review threads all pass."
+    }
   ],
   "successor_requirements": {
     "p09_actuation": "Value, select, toggle, and scroll patterns with their own approval binding and stale-target revalidation remain successor work and must build on this invoke identity without weakening STRONG enforcement, one-shot, expiry, or digest binding.",
@@ -96,5 +137,25 @@
     "exact_head_ci": true,
     "native_network_qualification": false
   },
-  "done_when": "Structured Windows UI Automation InvokePattern actuation on exact typed eligible elements is specified with server-derived process binding, typed window and element binding, Invoke eligibility, fresh SOFT digest-bound approval, immediate stale-target revalidation, protected-surface exclusion, no fallback authority, and no new coordinate, synthetic-input, screenshot, clipboard, network, or elevation authority."
+  "done_when": "Structured Windows UI Automation InvokePattern actuation on exact typed eligible elements is specified with server-derived process binding, typed window and element binding, Invoke eligibility, fresh SOFT digest-bound approval, immediate stale-target revalidation, protected-surface exclusion, no fallback authority, and no new coordinate, synthetic-input, screenshot, clipboard, network, or elevation authority.",
+  "qualified_head": "50bd49a48610fbbd51ee3d47df6c262ae852ee19",
+  "implementation_base": "b33da3eb953ab3350e83da28f7459ff6a5fa7fa2",
+  "implementation_merge": "8a8688cc5416b064569233e49d6df7bd8763a883",
+  "pre_merge_ci": "36582708688",
+  "pre_merge_review_gates": "36582708941",
+  "post_merge_ci": "36583168629",
+  "canonical_evidence": {
+    "implementation_pr": 76,
+    "implementation_base": "b33da3eb953ab3350e83da28f7459ff6a5fa7fa2",
+    "qualified_head": "50bd49a48610fbbd51ee3d47df6c262ae852ee19",
+    "pre_merge_ci": "36582708688",
+    "pre_merge_review_gates": "36582708941",
+    "merge_sha": "8a8688cc5416b064569233e49d6df7bd8763a883",
+    "post_merge_ci": "36583168629",
+    "jev": "PASSED: 18/18 hunks, zero findings, zero blocking findings, pin 31f89602797fb7bea007f8a480bf368bf564954e, TypeSafe SDK 0.6.0",
+    "ocr": "PASSED: Open Code Review v1.12.9 exact-range delegation, 8 files total, 7 reviewable, 1 excluded and manually reviewed",
+    "security_review": "PASS on exact qualified head; invoke binds server-derived process identity, typed window identity, and typed element identity with expected tree generation, expected control type, Invoke pattern support, and enabled state; no UIA shape accepts caller-supplied PID, HWND, runtime id, selector, coordinate, approval material, secret, value, or fallback fields; every invoke carries fresh SOFT approval with exact digest binding and one-shot consumption; stale, replaced, reused, foreign, role-changed, pattern-changed, disabled, protected-surface, and policy-drifted targets fail closed without silent retargeting and without coordinate, mouse, keyboard, SendInput, screenshot, clipboard, network, or elevation fallback; successful invoke advances the window tree generation so stale identities cannot be replayed; the native adapter proves real process identity against Windows APIs on Windows and reports live invoke as unavailable instead of fabricating actuation; no MCP UIA tool exists; and retained SG-000027 observation, SG-000018 replay, SG-000019 class, SG-000020 trust, and closed P08 registry behavior is unchanged",
+    "unresolved_review_threads": 0,
+    "authority_boundary": "Only structured uia.element/invoke on exact typed Button, Hyperlink, MenuItem, and SplitButton elements with Invoke pattern support and enabled state is newly added against the process-lifetime typed identity registry with fresh SOFT digest-bound approval and immediate stale-target revalidation. Value, select, toggle, scroll, focus, click fallback, keyboard, mouse, SendInput, coordinates, screenshots, clipboard, network fetch, process spawn, injection, termination, elevation, and approval bypass remain absent, and existing file, process, Git, approval, presence, trust, browser, and UIA observation behavior is unchanged."
+  }
 }
