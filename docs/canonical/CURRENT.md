@@ -1,11 +1,11 @@
 # Cotra Current Canonical Frontier
 
-Status: PROGRAM_EXIT_CANDIDATE
+Status: ACTIVE_GRAIN
 Date: 2026-09-29
-Governance snapshot base: 75181787aec4282c3783e0d1e95b05c18e192f26
+Governance snapshot base: f9c708075df1c6b33841ba3a6fa452147f60e24c
 Evidence ledger: `.specgrain/canonical-evidence.json`
 
-`Governance snapshot base` records the exact canonical parent from which this program-exit snapshot was authored. It deliberately does not claim the eventual merge SHA of the commit containing this file.
+`Governance snapshot base` records the exact canonical parent from which this activation snapshot was authored. It deliberately does not claim the eventual merge SHA of the commit containing this file.
 
 ## SpecGrain state semantics
 
@@ -170,17 +170,29 @@ All P08 closeouts (SG-000021 PR `#55`, SG-000022 PR `#58`, SG-000023 PR `#61`, S
 
 ## Successor frontier
 
-COTRA-P08 is exited at this frontier, so the next lawful unit must be derived from the canonical COTRA-P09 Windows UI Automation plan. No successor grain beyond the P08 exit is authorized by this program-exit candidate.
-
-After this P08 exit merges and its post-merge CI succeeds, re-read the canonical architecture, delivery plan, threat model, evidence ledger, open governance records, and this `CURRENT.md` to derive the first lawful COTRA-P09 grain. Do not infer or pre-authorize the next SpecGrain identifier or exact UI Automation design from numbering alone.
-
-A first P09 grain must build on the SG-000018 replay-resistant foundation, SG-000019 class enforcement, SG-000020 trust and revoke records, and the closed P08 structured-browser registry without weakening STRONG enforcement, one-shot, expiry, or digest binding. It must keep Cotra-owned approval surfaces excluded from automation and expose no generic input injection, coordinate fallback, or elevation authority.
+COTRA-P09 continues at this frontier. No successor grain beyond SG-000027 is authorized by this activation.
 
 ## Active grain
 
-No COTRA-P08 grain is active. COTRA-P08 is exited at this frontier.
+SG-000027 - Read-only Windows UI Automation observation with typed process, window, and element identity - is the sole active COTRA-P09 grain.
 
-No COTRA-P09 grain is active. The successor frontier is the first lawful COTRA-P09 grain itself.
+This activation authorizes implementation and qualification of a read-only UI Automation observation capability on top of the SG-000018 replay-resistant foundation, SG-000019 STRONG enforcement, SG-000020 trust and revoke records, and the closed COTRA-P08 structured-browser registry: server-derived process identity binding PID, executable identity, process creation generation, app identity, session context, workspace scope, and policy revision; typed window identity binding process identity, window handle, process and window generations, title and class metadata where relevant, session and desktop identity, workspace scope, and policy revision; typed element identity binding process, window, tree snapshot generation, UIA runtime identity, expected control type, supported patterns, workspace scope, and policy revision; bounded read-only tree observation exposing only control type, automation id, name, enabled state, selected and toggled state, supported patterns, hierarchy, bounded value metadata, and bounding metadata where safe; bounded observation limits with password and secret redaction; protected Cotra approval-surface exclusion; stale-identity fail-closed behavior with no silent retargeting; and explicit denial of invoke, click, value setting, text entry, select, toggle, scroll, focus, keyboard input, mouse input, SendInput, coordinate requests, screenshots, clipboard access, generic network authority, and elevation, while deliberately keeping UI actuation, coordinate fallback, synthetic input, visual automation, installer behavior, and privileged desktop access absent.
+
+Authorized target design:
+- uia.process observation bound to server-derived process identity with PID reuse and stale-process denial, with no process launch, injection, or termination;
+- uia.window observation bound to one typed window with exact process pairing, handle, generations, session, desktop, workspace, and policy revision;
+- uia.tree observation bound to one typed window and one tree snapshot generation with bounded depth, node count, response size, and string length;
+- uia.element observation bound to one typed element with exact process, window, tree generation, runtime identity, control type, workspace, and policy revision;
+- protected Cotra approval-surface exclusion with no observation or control path reaching presence or approval material;
+- explicit denial of invoke, click, value, select, toggle, scroll, focus, keyboard, mouse, SendInput, coordinates, screenshots, clipboard, network egress, and elevation, with deterministic unit and security tests for fake process identity, PID reuse, stale process, wrong executable identity, stale HWND, reused handle, wrong process and window pairing, wrong session, stale element, replaced element, wrong tree generation, secret and password reads, protected surfaces, attempted actuation, coordinate requests, elevation requests, and arbitrary process commands.
+
+## Active acceptance frontier
+
+SG-000027 must prove that process observation binds server-derived identity and rejects caller-provided claims, that window observation binds exact process, handle, generations, session, desktop, workspace, and policy revision, that element observation binds exact process, window, tree generation, runtime identity, control type, workspace, and policy revision, that stale, replaced, reused, foreign, wrong-session, wrong-desktop, and policy-drifted targets fail closed without silent retargeting, that tree observation is bounded and data-minimized with password and secret redaction, that protected Cotra approval surfaces are excluded, that every actuation, coordinate, synthetic-input, screenshot, clipboard, network-egress, and elevation shape fails closed, that the agent cannot reach UIA capability through its own tool or input surface, and that Windows-specific qualification proves read-only observation without fabricating interactive desktop evidence.
+
+UI actuation, coordinate fallback, synthetic input, screenshots, visual proposals, clipboard access, generic network authority, persistent approval reuse, remote delegation, and elevation must remain absent, and STRONG enforcement, one-shot, expiry, and digest binding must not weaken.
+
+A P09 exit requires joint proof from SG-000027 observation plus its successors that Cotra windows are protected, structured action is preferred, and expected process and window identity is enforced. It must not expose generic input injection, coordinate fallback, or elevation authority.
 
 ## Canonical public authority boundary retained
 
