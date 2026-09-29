@@ -2,7 +2,7 @@
   "id": "SG-000032",
   "title": "Structured Windows UI Automation ScrollPattern actuation with approval binding and stale-target revalidation",
   "program": "COTRA-P09",
-  "state": "GRAIN",
+  "state": "CLOSED",
   "risk": "high",
   "created": "2026-09-29",
   "base": "0b56d8b95f69f5797fb8edf7871ec84b9013321c",
@@ -147,5 +147,25 @@
     "exact_head_ci": true,
     "native_network_qualification": false
   },
-  "done_when": "Structured Windows UI Automation ScrollPattern actuation on exact typed eligible container elements is specified with server-derived process binding, typed window and element binding, Scroll eligibility, bounded direction and amount, expected scroll-position binding, fresh SOFT digest-bound approval, immediate stale-target revalidation, protected-surface exclusion, no fallback authority, and no new coordinate, synthetic-input, screenshot, clipboard, network, or elevation authority."
+  "done_when": "Structured Windows UI Automation ScrollPattern actuation on exact typed eligible container elements is specified with server-derived process binding, typed window and element binding, Scroll eligibility, bounded direction and amount, expected scroll-position binding, fresh SOFT digest-bound approval, immediate stale-target revalidation, protected-surface exclusion, no fallback authority, and no new coordinate, synthetic-input, screenshot, clipboard, network, or elevation authority.",
+  "qualified_head": "29dbd1a0168496e6844a5bf52d98330c10dd8c73",
+  "implementation_base": "f9ac13d2e07357e84761d05a837e0fbc46f82f2e",
+  "implementation_merge": "162866cfa29ca5660e25875250c8ff223ca1f855",
+  "pre_merge_ci": "36607306923",
+  "pre_merge_review_gates": "36607307027",
+  "post_merge_ci": "36608016906",
+  "canonical_evidence": {
+    "implementation_pr": 88,
+    "implementation_base": "f9ac13d2e07357e84761d05a837e0fbc46f82f2e",
+    "qualified_head": "29dbd1a0168496e6844a5bf52d98330c10dd8c73",
+    "pre_merge_ci": "36607306923",
+    "pre_merge_review_gates": "36607307027",
+    "merge_sha": "162866cfa29ca5660e25875250c8ff223ca1f855",
+    "post_merge_ci": "36608016906",
+    "jev": "PASSED: 39/39 hunks, zero findings, zero blocking findings, pin 31f89602797fb7bea007f8a480bf368bf564954e, TypeSafe SDK 0.6.0",
+    "ocr": "PASSED: Open Code Review v1.12.9 exact-range delegation, 13 files total, 12 reviewable, 1 excluded and manually reviewed",
+    "security_review": "PASS on exact qualified head; scroll binds server-derived process identity, typed window identity, and typed element identity with expected tree generation, expected control type, Scroll pattern support, enabled state, expected scroll position, bounded direction, and bounded amount; no shape accepts caller-supplied PID, HWND, runtime id, selector, coordinate, repeat count, approval material, secret, or fallback fields; every scroll carries fresh SOFT approval with exact digest binding including expected scroll position, requested direction, and requested amount and one-shot consumption; stale, replaced, reused, foreign, role-changed, pattern-changed, disabled, protected-surface, password, expected-position-drifted, out-of-range, and policy-drifted targets fail closed without silent retargeting and without wheel, touch, keyboard paging, mouse, SendInput, coordinate, screenshot, clipboard, network, or elevation fallback; successful scroll advances the window tree generation and evidence carries only identities, scroll position, direction, and amount; the native adapter proves real process identity on Windows and reports live scroll as unavailable instead of fabricating actuation; no MCP UIA tool exists; and retained observation, invoke, value, select, toggle, replay, class, trust, and P08 behavior is unchanged",
+    "unresolved_review_threads": 0,
+    "authority_boundary": "Only structured uia.element/scroll on exact typed ScrollBar, Pane, List, and Tree elements with Scroll pattern support and enabled state is newly added with fresh SOFT digest-bound approval including expected scroll position, requested direction, and requested amount and immediate stale-target revalidation. Invoke remains closed under SG-000028, value remains closed under SG-000029, select remains closed under SG-000030, and toggle remains closed under SG-000031. Focus, keyboard, mouse, SendInput, coordinates, screenshots, clipboard, network fetch, process spawn, injection, termination, elevation, and approval bypass remain absent, and existing file, process, Git, approval, presence, trust, browser, observation, invoke, value, select, and toggle behavior is unchanged."
+  }
 }

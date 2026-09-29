@@ -397,6 +397,17 @@
       "review_basis": "Exact-head genuine TypeSafe Jev 20/20 hunks with zero findings/blocking findings, Alibaba Open Code Review v1.12.9 exact-range delegation over 9 files with 8 reviewable and 1 excluded file manually reviewed, exact-diff manual security review, Windows/Ubuntu Rust Node Governance qualification with real Windows process identity proof, successful post-merge CI, and zero unresolved review threads.",
       "unresolved_review_threads": 0,
       "authority_boundary": "Only structured uia.element/toggle on exact typed CheckBox and RadioButton elements with Toggle pattern support and enabled state is newly added with fresh SOFT digest-bound approval including expected and requested toggle and immediate stale-target revalidation. Invoke remains closed under SG-000028, value remains closed under SG-000029, and select remains closed under SG-000030. Scroll, focus, keyboard, mouse, SendInput, coordinates, screenshots, clipboard, network fetch, process spawn, injection, termination, elevation, and approval bypass remain absent, and existing file, process, Git, approval, presence, trust, browser, observation, invoke, value, and select behavior is unchanged."
+    },
+    "SG-000032": {
+      "implementation_pr": 88,
+      "implementation_base": "f9ac13d2e07357e84761d05a837e0fbc46f82f2e",
+      "qualified_head": "29dbd1a0168496e6844a5bf52d98330c10dd8c73",
+      "pre_merge_ci": "36607306923",
+      "merge_sha": "162866cfa29ca5660e25875250c8ff223ca1f855",
+      "post_merge_ci": "36608016906",
+      "review_basis": "Exact-head genuine TypeSafe Jev 39/39 hunks with zero findings/blocking findings, Alibaba Open Code Review v1.12.9 exact-range delegation over 13 files with 12 reviewable and 1 excluded file manually reviewed, exact-diff manual security review, Windows/Ubuntu Rust Node Governance qualification with real Windows process identity proof, successful post-merge CI, and zero unresolved review threads.",
+      "unresolved_review_threads": 0,
+      "authority_boundary": "Only structured uia.element/scroll on exact typed ScrollBar, Pane, List, and Tree elements with Scroll pattern support and enabled state is newly added with fresh SOFT digest-bound approval including expected scroll position, requested direction, and requested amount and immediate stale-target revalidation. Invoke remains closed under SG-000028, value remains closed under SG-000029, select remains closed under SG-000030, and toggle remains closed under SG-000031. Focus, keyboard, mouse, SendInput, coordinates, screenshots, clipboard, network fetch, process spawn, injection, termination, elevation, and approval bypass remain absent, and existing file, process, Git, approval, presence, trust, browser, observation, invoke, value, select, and toggle behavior is unchanged."
     }
   }
 }
