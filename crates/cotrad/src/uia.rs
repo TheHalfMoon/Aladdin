@@ -1,19 +1,22 @@
-//! SG-000027 read-only Windows UI Automation observation dispatch.
+//! SG-000028 structured Windows UI Automation InvokePattern dispatch.
 //!
-//! This module dispatches exactly the five authorized UIA observation
-//! shapes against a process-lifetime typed identity registry backed by the
-//! native adapter. Observation is read-only: no shape here requests
-//! approval, mutates the computer, launches processes, injects input, or
-//! touches the network. Every other UIA-like shape returns `Ok(None)` so
-//! the caller fails closed through the STRONG gate or the legacy denial.
+//! This module dispatches the five retained SG-000027 observation shapes
+//! plus the single SG-000028 actuation shape `uia.element/invoke` against a
+//! process-lifetime typed identity registry backed by the native adapter.
+//! Observation remains read-only with no approval. Invoke requires fresh
+//! per-action SOFT approval with exact digest binding and immediate
+//! pre-actuation stale-target revalidation. Every other UIA-like shape
+//! returns `Ok(None)` so the caller fails closed through the STRONG gate or
+//! the legacy denial.
 //!
 //! Identities are process-lifetime: a cotrad restart drops the registry,
 //! so pre-restart identities fail closed as unknown rather than retargeting.
 
+use cotra_approval::{ApprovalBroker, ApprovalPrompt, ConsumeExpectation};
 use cotra_contracts::{FailureCode, RequestEnvelope};
 use cotra_policy::{Workspace, POLICY_REVISION};
 use cotra_provider_fs::ProviderError;
-use cotra_provider_uia::{NativeAdapter, UiaRegistry};
+use cotra_provider_uia::{invoke_approval_digest, NativeAdapter, UiaRegistry};
 use serde_json::Value;
 use std::sync::{Mutex, OnceLock};
 
@@ -23,21 +26,22 @@ fn registry() -> &'static Mutex<UiaRegistry> {
 }
 
 fn locked_registry() -> Result<std::sync::MutexGuard<'static, UiaRegistry>, ProviderError> {
-    registry().lock().map_err(|_| {
-        ProviderError::new(
-            FailureCode::InternalError,
-            "uia observation registry is unavailable",
-        )
-    })
+    registry()
+        .lock()
+        .map_err(|_| ProviderError::new(FailureCode::InternalError, "uia registry is unavailable"))
 }
 
-/// Dispatch the SG-000027 UIA observation shapes. Returns `Ok(None)` for
-/// non-UIA shapes so the caller falls through to the browser, trust, Git,
-/// and legacy dispatchers.
+/// Dispatch the SG-000028 UIA shapes. Returns `Ok(None)` for non-UIA shapes
+/// so the caller falls through to the browser, trust, Git, and legacy
+/// dispatchers.
 pub fn dispatch_uia(
     workspace: &Workspace,
+    approval: &impl ApprovalBroker,
     request: &RequestEnvelope,
 ) -> Result<Option<Value>, ProviderError> {
+    if cotra_provider_uia::is_invoke_shape(&request.capability, &request.operation) {
+        return invoke_with_approval(workspace, approval, request).map(Some);
+    }
     if !cotra_provider_uia::is_allowed_uia_shape(&request.capability, &request.operation) {
         return Ok(None);
     }
@@ -107,6 +111,101 @@ pub fn dispatch_uia(
     }
 }
 
+fn invoke_with_approval(
+    workspace: &Workspace,
+    approval: &impl ApprovalBroker,
+    request: &RequestEnvelope,
+) -> Result<Value, ProviderError> {
+    if request.target.is_some() {
+        return Err(ProviderError::new(
+            FailureCode::InvalidRequest,
+            "uia invoke shapes do not accept a target field",
+        ));
+    }
+    reject_uia_arguments(
+        request,
+        &[
+            "element_id",
+            "expected_tree_generation",
+            "expected_control_type",
+        ],
+    )?;
+    let element_id = required_string(request, "element_id")?;
+    if !cotra_provider_uia::is_well_formed_element_id(&element_id) {
+        return Err(ProviderError::new(
+            FailureCode::InvalidRequest,
+            "uia invoke element_id is malformed",
+        ));
+    }
+    let expected_tree_generation = required_u64(request, "expected_tree_generation")?;
+    let expected_control_type = required_string(request, "expected_control_type")?;
+    if expected_control_type.is_empty() || expected_control_type.len() > 256 {
+        return Err(ProviderError::new(
+            FailureCode::InvalidRequest,
+            "uia invoke expected_control_type is empty or too large",
+        ));
+    }
+    if !cotra_provider_uia::is_invoke_eligible_control_type(&expected_control_type) {
+        return Err(ProviderError::new(
+            FailureCode::CapabilityDenied,
+            "uia invoke actuates only Button, Hyperlink, MenuItem, and SplitButton elements",
+        ));
+    }
+    let binding = {
+        let guard = locked_registry()?;
+        guard
+            .invoke_binding(
+                &element_id,
+                expected_tree_generation,
+                &expected_control_type,
+                &workspace.id,
+                POLICY_REVISION,
+            )
+            .map_err(|error| ProviderError::new(error.code, error.message))?
+    };
+    let digest = invoke_approval_digest(&workspace.id, POLICY_REVISION, &binding);
+    let prompt = ApprovalPrompt::new(
+        workspace.id.clone(),
+        POLICY_REVISION,
+        "invoke UIA element",
+        element_id.clone(),
+        format!(
+            "process={} window={} element={} control={} tree={} action=invoke",
+            binding.process_id,
+            binding.window_id,
+            binding.element_id,
+            binding.control_type,
+            binding.tree_generation,
+        ),
+        digest.clone(),
+    );
+    let token = approval
+        .request_token(&prompt)
+        .map_err(|error| ProviderError::new(error.code, error.message))?;
+    approval
+        .consume(
+            &token,
+            &ConsumeExpectation::new(digest, workspace.id.clone(), POLICY_REVISION),
+            cotra_approval::now_ms(),
+        )
+        .map_err(|error| ProviderError::new(error.code, error.message))?;
+    let adapter = NativeAdapter::new();
+    let mut guard = locked_registry()?;
+    let evidence = guard
+        .invoke_element(
+            &adapter,
+            &element_id,
+            expected_tree_generation,
+            &expected_control_type,
+            &workspace.id,
+            POLICY_REVISION,
+        )
+        .map_err(|error| ProviderError::new(error.code, error.message))?;
+    let mut stamped = evidence;
+    stamped["approval_record"] = Value::String(token.record_id);
+    Ok(stamped)
+}
+
 fn required_string(request: &RequestEnvelope, name: &str) -> Result<String, ProviderError> {
     request
         .arguments
@@ -116,7 +215,7 @@ fn required_string(request: &RequestEnvelope, name: &str) -> Result<String, Prov
         .ok_or_else(|| {
             ProviderError::new(
                 FailureCode::InvalidRequest,
-                format!("uia observation requires arguments.{name} as a string"),
+                format!("uia shape requires arguments.{name} as a string"),
             )
         })
 }
@@ -129,7 +228,7 @@ fn required_u64(request: &RequestEnvelope, name: &str) -> Result<u64, ProviderEr
         .ok_or_else(|| {
             ProviderError::new(
                 FailureCode::InvalidRequest,
-                format!("uia observation requires arguments.{name} as an unsigned integer"),
+                format!("uia shape requires arguments.{name} as an unsigned integer"),
             )
         })
 }
@@ -140,7 +239,7 @@ fn optional_u64(request: &RequestEnvelope, name: &str) -> Result<Option<u64>, Pr
         Some(value) => value.as_u64().map(Some).ok_or_else(|| {
             ProviderError::new(
                 FailureCode::InvalidRequest,
-                format!("uia observation requires arguments.{name} as an unsigned integer"),
+                format!("uia shape requires arguments.{name} as an unsigned integer"),
             )
         }),
     }
