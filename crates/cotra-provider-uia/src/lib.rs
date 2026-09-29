@@ -44,6 +44,7 @@ use std::collections::HashMap;
 
 pub const UIA_SCHEMA: &str = "cotra-uia-observation-v1";
 pub const INVOKE_SCHEMA: &str = "cotra-uia-invoke-v1";
+pub const VALUE_SCHEMA: &str = "cotra-uia-value-v1";
 pub const PROCESS_ID_PREFIX: &str = "uia-proc-";
 pub const WINDOW_ID_PREFIX: &str = "uia-win-";
 pub const ELEMENT_ID_PREFIX: &str = "uia-el-";
@@ -97,12 +98,15 @@ pub fn is_allowed_uia_shape(capability: &str, operation: &str) -> bool {
 /// by the SG-000028 successor grain and is therefore no longer in this
 /// denied set for current-tree authority. The frozen SG-000027 qualified
 /// head recorded this shape as denied; current-tree authority records the
-/// successor delta. Value, select, toggle, scroll, focus, keyboard, mouse,
-/// coordinates, screenshots, clipboard, network, and elevation remain denied
-/// in every successor grain.
+/// successor delta.
+///
+/// NOTE (SG-000029 successor): `uia.element/set_value` is lawfully
+/// authorized by the SG-000029 successor grain and is therefore no longer
+/// in this denied set for current-tree authority. Select, toggle, scroll,
+/// focus, keyboard, mouse, coordinates, screenshots, clipboard, network,
+/// and elevation remain denied in every successor grain.
 pub const DENIED_UIA_SHAPES: &[(&str, &str)] = &[
     ("uia.element", "click"),
-    ("uia.element", "set_value"),
     ("uia.element", "select"),
     ("uia.element", "toggle"),
     ("uia.element", "scroll"),
@@ -142,6 +146,37 @@ pub const INVOKE_PATTERN_NAME: &str = "Invoke";
 
 pub fn is_invoke_eligible_control_type(control_type: &str) -> bool {
     INVOKE_ELIGIBLE_CONTROL_TYPES.contains(&control_type)
+}
+
+/// The single SG-000029 value actuation shape. Invoke remains authorized
+/// through `is_invoke_shape`; value is authorized separately so frozen
+/// policy meanings are preserved while current-tree authority records the
+/// successor delta.
+pub fn is_value_shape(capability: &str, operation: &str) -> bool {
+    matches!((capability, operation), ("uia.element", "set_value"))
+}
+
+/// Control types eligible for ValuePattern actuation. All other control
+/// types must fail closed as denied, including invoke-capable, selection
+/// capable, toggle capable, scroll capable, password, and secret controls.
+pub const VALUE_ELIGIBLE_CONTROL_TYPES: &[&str] = &["Edit", "Document", "ComboBox"];
+
+/// The required UIA pattern name for value targets.
+pub const VALUE_PATTERN_NAME: &str = "Value";
+
+/// Maximum value length in characters for structured set_value. Oversized
+/// values fail closed without silent truncation.
+pub const MAX_VALUE_CHARS: usize = 1024;
+
+pub fn is_value_eligible_control_type(control_type: &str) -> bool {
+    VALUE_ELIGIBLE_CONTROL_TYPES.contains(&control_type)
+}
+
+/// SHA-256 hex digest of one requested value, used in approval digests and
+/// evidence so raw value bytes never enter approval prompts beyond the
+/// bounded request itself and never enter evidence at all.
+pub fn value_content_digest(value: &str) -> String {
+    digest_hex(&format!("cotra-uia-value-v1|{value}"), 64)
 }
 
 pub fn is_denied_uia_shape(capability: &str, operation: &str) -> bool {
@@ -283,6 +318,24 @@ pub trait UiaAdapter {
         Err(UiaError::new(
             FailureCode::ProviderUnavailable,
             "structured UIA invoke requires an interactive session broker and is unavailable in this context",
+        ))
+    }
+    /// Perform one structured ValuePattern write against the live element
+    /// identified by window handle and UIA runtime identity. The registry
+    /// revalidates every binding before calling this method, so adapters
+    /// must not retarget, fall back to keyboard, clipboard, or coordinates,
+    /// or synthesize generic input. The default implementation fails closed
+    /// as unavailable, which the native adapter uses until an interactive
+    /// session broker exists.
+    fn set_value_element(
+        &self,
+        _hwnd: u64,
+        _runtime_id: &str,
+        _value: &str,
+    ) -> Result<(), UiaError> {
+        Err(UiaError::new(
+            FailureCode::ProviderUnavailable,
+            "structured UIA set_value requires an interactive session broker and is unavailable in this context",
         ))
     }
 }
@@ -1162,6 +1215,243 @@ impl UiaRegistry {
         enforce_response_bytes(&result)
     }
 
+    /// Resolve the current value binding for approval digest computation.
+    /// This performs the same fail-closed revalidation as `set_value_element`
+    /// but performs no adapter mutation, so dispatch can bind approval
+    /// before actuation and then revalidate again immediately before the
+    /// adapter call.
+    pub fn value_binding(
+        &self,
+        element_id: &str,
+        expected_tree_generation: u64,
+        expected_control_type: &str,
+        value: &str,
+        workspace_id: &str,
+        policy_revision: &str,
+    ) -> Result<ValueBinding, UiaError> {
+        let resolved = self.require_value_target(
+            element_id,
+            expected_tree_generation,
+            expected_control_type,
+            value,
+            workspace_id,
+            policy_revision,
+        )?;
+        Ok(resolved)
+    }
+
+    /// Perform one structured ValuePattern write against the injected
+    /// adapter after immediate pre-actuation revalidation. Any drift fails
+    /// closed without silent retargeting and without fallback to keyboard,
+    /// clipboard, mouse, SendInput, coordinates, screenshots, or elevation.
+    /// On success the owning window tree generation is advanced and its
+    /// elements are removed so stale identities cannot be replayed. Evidence
+    /// carries only the value digest, never raw value bytes.
+    #[allow(clippy::too_many_arguments)]
+    pub fn set_value_element(
+        &mut self,
+        adapter: &impl UiaAdapter,
+        element_id: &str,
+        expected_tree_generation: u64,
+        expected_control_type: &str,
+        value: &str,
+        workspace_id: &str,
+        policy_revision: &str,
+    ) -> Result<Value, UiaError> {
+        let binding = self.require_value_target(
+            element_id,
+            expected_tree_generation,
+            expected_control_type,
+            value,
+            workspace_id,
+            policy_revision,
+        )?;
+        adapter
+            .set_value_element(binding.hwnd, &binding.runtime_id, value)
+            .map_err(|error| {
+                UiaError::new(
+                    error.code,
+                    format!("uia set_value actuation failed: {}", error.message),
+                )
+            })?;
+        let prior_tree_generation = binding.tree_generation;
+        self.tree_counter += 1;
+        let new_tree_generation = self.tree_counter;
+        if let Some(stored) = self.windows.get_mut(&binding.window_id) {
+            stored.tree_generation = new_tree_generation;
+        }
+        self.remove_window_elements(&binding.window_id);
+        let result = json!({
+            "schema": VALUE_SCHEMA,
+            "action": "set_value",
+            "element_id": binding.element_id,
+            "window_id": binding.window_id,
+            "process_id": binding.process_id,
+            "process_generation": binding.process_generation,
+            "window_generation": binding.window_generation,
+            "prior_tree_generation": prior_tree_generation,
+            "new_tree_generation": new_tree_generation,
+            "control_type": binding.control_type,
+            "pattern": VALUE_PATTERN_NAME,
+            "value_digest": binding.value_digest,
+            "workspace_id": workspace_id,
+            "policy_revision": policy_revision,
+        });
+        enforce_response_bytes(&result)
+    }
+
+    fn require_value_target(
+        &self,
+        element_id: &str,
+        expected_tree_generation: u64,
+        expected_control_type: &str,
+        value: &str,
+        workspace_id: &str,
+        policy_revision: &str,
+    ) -> Result<ValueBinding, UiaError> {
+        if !is_well_formed_element_id(element_id) {
+            return Err(UiaError::new(
+                FailureCode::InvalidRequest,
+                "uia element identity is malformed",
+            ));
+        }
+        if expected_control_type.is_empty() || expected_control_type.len() > MAX_STRING_CHARS {
+            return Err(UiaError::new(
+                FailureCode::InvalidRequest,
+                "uia set_value expected_control_type is empty or too large",
+            ));
+        }
+        if !is_value_eligible_control_type(expected_control_type) {
+            return Err(UiaError::new(
+                FailureCode::CapabilityDenied,
+                "uia set_value actuates only Edit, Document, and ComboBox elements",
+            ));
+        }
+        if value.chars().count() > MAX_VALUE_CHARS {
+            return Err(UiaError::new(
+                FailureCode::InvalidRequest,
+                "uia set_value value exceeds the bounded length",
+            ));
+        }
+        if value.contains('\0') {
+            return Err(UiaError::new(
+                FailureCode::InvalidRequest,
+                "uia set_value value contains a NUL byte",
+            ));
+        }
+        let record = self.elements.get(element_id).ok_or_else(|| {
+            UiaError::new(
+                FailureCode::TargetStale,
+                "uia element identity is unknown; it may have disappeared or never existed",
+            )
+        })?;
+        if record.control_type != expected_control_type {
+            return Err(UiaError::new(
+                FailureCode::TargetStale,
+                "uia element control type changed since observation; stale targets fail closed",
+            ));
+        }
+        if !is_value_eligible_control_type(&record.control_type) {
+            return Err(UiaError::new(
+                FailureCode::CapabilityDenied,
+                "uia set_value target control type is not eligible for ValuePattern actuation",
+            ));
+        }
+        if !record
+            .patterns
+            .iter()
+            .any(|pattern| pattern == VALUE_PATTERN_NAME)
+        {
+            return Err(UiaError::new(
+                FailureCode::CapabilityDenied,
+                "uia set_value target does not support the Value pattern; no keyboard or clipboard fallback is permitted",
+            ));
+        }
+        if !record.enabled {
+            return Err(UiaError::new(
+                FailureCode::CapabilityDenied,
+                "uia set_value targets only enabled elements; disabled elements are denied",
+            ));
+        }
+        if record.value_is_password
+            || record.redacted
+            || is_password_field(&record.control_type, &record.automation_id, &record.name)
+        {
+            return Err(UiaError::new(
+                FailureCode::CapabilityDenied,
+                "uia set_value of a password or secret bearing element is denied",
+            ));
+        }
+        let window = self.windows.get(&record.window_id).ok_or_else(|| {
+            UiaError::new(
+                FailureCode::TargetStale,
+                "uia element identity lost its owning window",
+            )
+        })?;
+        if window.workspace_id != workspace_id {
+            return Err(UiaError::new(
+                FailureCode::TargetStale,
+                "uia element identity belongs to another workspace",
+            ));
+        }
+        if window.policy_revision != policy_revision {
+            return Err(UiaError::new(
+                FailureCode::TargetStale,
+                "uia element identity was issued under another policy revision",
+            ));
+        }
+        if record.tree_generation != expected_tree_generation
+            || record.tree_generation != window.tree_generation
+        {
+            return Err(UiaError::new(
+                FailureCode::TargetStale,
+                "uia element identity is stale; the UI tree regenerated and the target must be re-observed",
+            ));
+        }
+        if is_protected_window(&window.title, &window.class) {
+            return Err(UiaError::new(
+                FailureCode::CapabilityDenied,
+                "uia set_value of a protected Cotra surface is denied",
+            ));
+        }
+        let process = self.processes.get(&window.process_id).ok_or_else(|| {
+            UiaError::new(
+                FailureCode::TargetStale,
+                "uia set_value target lost its owning process",
+            )
+        })?;
+        if process.superseded {
+            return Err(UiaError::new(
+                FailureCode::TargetStale,
+                "uia set_value target process was superseded by a restart and fails closed",
+            ));
+        }
+        if process.workspace_id != workspace_id {
+            return Err(UiaError::new(
+                FailureCode::TargetStale,
+                "uia set_value target process belongs to another workspace",
+            ));
+        }
+        if process.policy_revision != policy_revision {
+            return Err(UiaError::new(
+                FailureCode::TargetStale,
+                "uia set_value target process was issued under another policy revision",
+            ));
+        }
+        Ok(ValueBinding {
+            process_id: process.process_id.clone(),
+            process_generation: process.process_generation,
+            window_id: window.window_id.clone(),
+            window_generation: window.window_generation,
+            element_id: record.element_id.clone(),
+            tree_generation: record.tree_generation,
+            control_type: record.control_type.clone(),
+            value_digest: value_content_digest(value),
+            hwnd: window.hwnd,
+            runtime_id: record.runtime_id.clone(),
+        })
+    }
+
     fn require_invoke_target(
         &self,
         element_id: &str,
@@ -1338,6 +1628,46 @@ pub fn invoke_approval_digest(
     digest_hex(&material, 64)
 }
 
+/// Server-resolved value binding used for approval digest computation and
+/// evidence. Callers never supply these values directly; they are resolved
+/// from the typed element identity immediately before actuation.
+#[derive(Debug, Clone)]
+pub struct ValueBinding {
+    pub process_id: String,
+    pub process_generation: u64,
+    pub window_id: String,
+    pub window_generation: u64,
+    pub element_id: String,
+    pub tree_generation: u64,
+    pub control_type: String,
+    pub value_digest: String,
+    pub hwnd: u64,
+    pub runtime_id: String,
+}
+
+/// Compute the exact approval digest for one structured set_value. The
+/// digest binds the value digest rather than raw value bytes where
+/// practical, and dispatch revalidates the same binding set immediately
+/// before the adapter call so any material drift invalidates the approval.
+pub fn value_approval_digest(
+    workspace_id: &str,
+    policy_revision: &str,
+    binding: &ValueBinding,
+) -> String {
+    let material = format!(
+        "cotra-uia-value-v1|{workspace_id}|{policy_revision}|{}|{}|{}|{}|{}|{}|{}|{}|set_value",
+        binding.process_id,
+        binding.process_generation,
+        binding.window_id,
+        binding.window_generation,
+        binding.element_id,
+        binding.tree_generation,
+        binding.control_type,
+        binding.value_digest,
+    );
+    digest_hex(&material, 64)
+}
+
 fn render_element(record: &ElementRecord) -> Value {
     json!({
         "schema": UIA_SCHEMA,
@@ -1395,3 +1725,5 @@ pub fn is_password_field(control_type: &str, automation_id: &str, name: &str) ->
 mod sg000027_tests;
 #[cfg(test)]
 mod sg000028_tests;
+#[cfg(test)]
+mod sg000029_tests;
