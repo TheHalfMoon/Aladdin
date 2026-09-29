@@ -1,17 +1,16 @@
 [package]
-name = "cotra-policy"
+name = "cotra-provider-uia"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
 
-[lib]
-path = "src/sg000027.rs"
-
 [dependencies]
-cotra-approval = { path = "../cotra-approval" }
 cotra-contracts = { path = "../cotra-contracts" }
-cotra-provider-browser = { path = "../cotra-provider-browser" }
-cotra-provider-uia = { path = "../cotra-provider-uia" }
+serde.workspace = true
 serde_json.workspace = true
+sha2.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.58", features = ["Win32_Foundation", "Win32_System_RemoteDesktop", "Win32_System_Threading"] }
