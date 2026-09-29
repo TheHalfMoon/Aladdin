@@ -1,11 +1,11 @@
 # Cotra Current Canonical Frontier
 
-Status: CLOSED_CANONICAL
+Status: ACTIVE_GRAIN
 Date: 2026-09-29
-Governance snapshot base: e3cebef8b44bd9f7721fe29e3ede044fcb437fb1
+Governance snapshot base: 17cd5826cf03056fd789309eae18ca58f89db64f
 Evidence ledger: `.specgrain/canonical-evidence.json`
 
-`Governance snapshot base` records the exact canonical parent from which this closeout snapshot was authored. It deliberately does not claim the eventual merge SHA of the commit containing this file.
+`Governance snapshot base` records the exact canonical parent from which this activation snapshot was authored. It deliberately does not claim the eventual merge SHA of the commit containing this file.
 
 ## SpecGrain state semantics
 
@@ -194,13 +194,28 @@ SG-000030 proved that no select shape accepts caller-supplied PID, window handle
 
 ## Successor frontier
 
-COTRA-P09 continues at this frontier. No successor grain beyond SG-000030 is authorized by this closeout. The P09 gap matrix must be rebuilt against SG-000001 through SG-000030 and any remaining Toggle and Scroll gap addressed by a newly authorized grain before P09 can exit.
+COTRA-P09 continues at this frontier. No successor grain beyond SG-000031 is authorized by this activation.
 
 ## Active grain
 
-No COTRA-P09 grain is active. SG-000030 was the sole active grain and is now `CLOSED` and canonical.
+SG-000031 - Structured Windows UI Automation TogglePattern actuation with approval binding and stale-target revalidation - is the sole active COTRA-P09 grain.
 
-The successor frontier is the P09 gap matrix itself: joint proof from SG-000027 observation plus SG-000028 invoke plus SG-000029 value plus SG-000030 select plus successors covering structured Toggle and Scroll patterns with approval binding and stale-target revalidation that Cotra windows are protected, structured action is preferred, and expected process and window identity is enforced, without exposing generic input injection, coordinate fallback, or elevation authority. A missing or denied UIA element must never silently grant coordinate authority.
+This activation authorizes implementation and qualification of a single narrow structured toggle actuation shape on top of the SG-000027 observation registry, the SG-000028 invoke registry, the SG-000029 value registry, the SG-000030 select registry, the SG-000018 replay-resistant foundation, SG-000019 class enforcement, SG-000020 trust and revoke records, and the closed COTRA-P08 registry: uia.element/toggle bound to one server-allocated typed element with arguments element_id, expected_tree_generation, expected_control_type, expected_toggled, and toggled only; server-derived process identity with PID reuse and restart denial; typed window identity with destroyed, replaced, and reused-handle denial; typed element identity with disappeared, replaced, role-changed, and generation-changed denial; Toggle eligibility limited to CheckBox and RadioButton with required Toggle pattern support and required enabled state; expected current toggle plus requested target toggle with state-drift denial and no blind inversion; fresh per-action SOFT approval with one-shot exact-digest binding over workspace, policy revision, process, window, element, generations, control type, expected toggle, requested toggle, and action material; immediate pre-actuation revalidation with no silent retargeting; protected Cotra approval-surface exclusion; and explicit denial of Invoke substitution, click fallback, Space fallback, Enter fallback, keyboard fallback, mouse fallback, SendInput fallback, select, value, scroll, focus, coordinates, screenshots, clipboard, network, and elevation, while deliberately keeping ScrollPattern as successor work.
+
+Authorized target design:
+- uia.element/toggle bound to one typed element with exact process pairing, window pairing, tree generation, runtime identity, control type, Toggle pattern, enabled state, expected toggle, requested toggle, workspace, and policy revision;
+- fresh SOFT approval with digest binding including expected and requested toggle and one-shot consumption;
+- immediate pre-actuation stale-target revalidation with TargetStale denial on any drift;
+- protected Cotra approval-surface exclusion with no toggle path reaching presence or approval material;
+- password, secret, disabled, ineligible, and state-drifted targets denied with no click, Space, Enter, keyboard, or mouse fallback, and deterministic unit and security tests for happy-path toggle, already-in-target-state idempotent path, stale process, restarted process, PID reuse, stale and reused HWND, wrong process and window pairing, stale element, wrong runtime identity, wrong tree generation, changed control type, unsupported pattern, disabled element, protected surface, password element, expected-state drift, missing and stale and reused and digest-mismatched approval, policy drift, caller-supplied identities, selector and coordinate requests, fallback requests, and elevation requests.
+
+## Active acceptance frontier
+
+SG-000031 must prove that toggle binds server-derived process, typed window, and typed element identity and rejects caller-provided claims, that only CheckBox and RadioButton elements with Toggle support and enabled state actuate with expected and requested toggle binding and no blind inversion, that every toggle carries fresh SOFT digest-bound approval including toggle states with one-shot consumption, that immediate pre-actuation revalidation fails closed on any drift without silent retargeting and without fallback to Invoke, click, Space, Enter, keyboard, mouse, SendInput, coordinates, screenshots, clipboard, network, or elevation, that protected Cotra surfaces and password targets are excluded, that the agent cannot reach toggle through its own tool or input surface, and that Windows-specific qualification proves structured binding without fabricating interactive desktop evidence.
+
+Invoke substitution, click, Space, Enter, keyboard, mouse, SendInput, coordinate fallback, screenshots, visual proposals, clipboard access, generic network authority, persistent approval reuse, remote delegation, and elevation must remain absent, and STRONG enforcement, one-shot, expiry, and digest binding must not weaken.
+
+A P09 exit requires joint proof from SG-000027 observation plus SG-000028 invoke plus SG-000029 value plus SG-000030 select plus SG-000031 toggle plus scroll successor that Cotra windows are protected, structured action is preferred, and expected process and window identity is enforced. It must not expose generic input injection, coordinate fallback, or elevation authority.
 
 ## Canonical public authority boundary retained
 

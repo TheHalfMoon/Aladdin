@@ -1,0 +1,147 @@
+{
+  "id": "SG-000031",
+  "title": "Structured Windows UI Automation TogglePattern actuation with approval binding and stale-target revalidation",
+  "program": "COTRA-P09",
+  "state": "GRAIN",
+  "risk": "high",
+  "created": "2026-09-29",
+  "base": "17cd5826cf03056fd789309eae18ca58f89db64f",
+  "dependencies": [
+    "SG-000030"
+  ],
+  "objective": "Establish the fourth narrow COTRA-P09 structured actuation grain on top of the SG-000027 observation registry, the SG-000028 invoke registry, the SG-000029 value registry, the SG-000030 select registry, the SG-000018 replay-resistant foundation, SG-000019 class enforcement, SG-000020 trust and revoke records, and the closed COTRA-P08 registry: a single approved TogglePattern actuation shape bound to server-derived process identity, typed window identity, typed element identity, expected tree generation, expected control type, expected Toggle pattern support, expected enabled state, expected current toggle state, requested target toggle state, workspace scope, and policy revision, with fresh SOFT approval digest binding, immediate pre-actuation stale-target revalidation, protected Cotra approval-surface exclusion, and explicit denial of every other toggle-widening, coordinate, synthetic-input, screenshot, clipboard, network, and elevation shape.",
+  "scope": {
+    "include": [
+      "single new actuation shape uia.element/toggle bound to one server-allocated typed element identity with arguments element_id, expected_tree_generation, expected_control_type, expected_toggled, and toggled only",
+      "server-derived process identity binding PID, executable digest, process creation generation, session identity, workspace scope, and policy revision, with PID reuse and restart fail-closed at actuation time",
+      "typed window identity binding owning process, window handle, process generation, window generation, session and desktop identity, workspace scope, and policy revision, with destroyed, replaced, and reused-handle fail-closed at actuation time",
+      "typed element identity binding owning window, UIA runtime identity, tree snapshot generation, expected control type, supported patterns, workspace scope, and policy revision, with disappeared, replaced, role-changed, generation-changed, and policy-drifted fail-closed",
+      "Toggle eligibility allowlist limited to CheckBox and RadioButton control types with required Toggle pattern support and required enabled state, with all other control types, unsupported patterns, and disabled elements denied",
+      "explicit expected current toggle state plus requested target toggle state with state-drift fail-closed and no silent retargeting; no blind inversion without expected-state binding",
+      "fresh per-action SOFT approval with one-shot exact-digest binding over workspace, policy revision, process identity, process generation, window identity, window generation, element identity, tree generation, control type, expected toggle state, requested toggle state, and action material, with nonce, expiry, one-shot consumption, and stale-digest fail-closed",
+      "immediate pre-actuation revalidation of process liveness, executable identity, process generation, window existence, HWND ownership by the expected process, element existence, runtime identity, tree generation, control type, pattern support, enabled state, current toggle state, protected-surface status, workspace binding, and policy revision, with any drift denied without silent retargeting",
+      "protected Cotra approval and security surface exclusion so toggle can never target approval dialogs, STRONG presence surfaces, workspace trust controls, emergency revoke, or security-sensitive Cotra UI, failing closed on uncertainty",
+      "explicit denial of InvokePattern substitution, click fallback, Space fallback, Enter fallback, keyboard fallback, mouse fallback, SendInput fallback, coordinate fallback, and silent escalation when TogglePattern is unsupported or the target is stale, with no generic toggle fallback",
+      "deterministic unit and security tests for happy-path toggle, already-in-target-state idempotent path, stale process, restarted process, PID reuse, stale HWND, reused HWND, wrong process and window pairing, stale element, wrong runtime identity, wrong tree generation, changed control type, unsupported pattern, disabled element, protected Cotra surface, password and secret element, expected-state drift, missing approval, stale approval, reused approval, incorrect approval digest, policy drift, caller-supplied PID, caller-supplied HWND, caller-supplied runtime id, selector, coordinate fallback request, click fallback request, keyboard fallback request, mouse fallback request, SendInput request, invoke and value and select and scroll and focus shapes, and elevation requests",
+      "retention of all SG-000027 observation behavior, SG-000028 invoke behavior, SG-000029 value behavior, SG-000030 select behavior, SG-000018 one-shot and expiry and digest and history behavior, SG-000019 SOFT and STRONG class enforcement, SG-000020 trust and revoke behavior, and closed P08 registry behavior with no change outside UIA toggle policy",
+      "Windows and Ubuntu exact-head qualification with Windows-specific UIA qualification where required"
+    ],
+    "exclude": [
+      "invoke and InvokePattern actuation beyond the closed SG-000028 scope",
+      "value setting, text entry, and ValuePattern actuation beyond the closed SG-000029 scope",
+      "select and SelectionPattern actuation beyond the closed SG-000030 scope",
+      "scroll and ScrollPattern actuation of any kind",
+      "focus changes, window focus, and window close",
+      "keyboard input, mouse input, SendInput, and synthetic input of any kind",
+      "click, Space, and Enter substitution when TogglePattern is unavailable",
+      "coordinate requests and screen-coordinate fallback",
+      "screenshots and visual target proposals",
+      "elevation, UAC bypass, service installation, privileged desktop access, and secure desktop input",
+      "clipboard read and clipboard write",
+      "arbitrary process commands, process spawn, process injection, and process termination",
+      "raw Win32 command execution and PowerShell execution",
+      "unrestricted process memory introspection",
+      "password, credential, and Windows Hello material exposure",
+      "observation or control of protected Cotra approval surfaces",
+      "persistent approval reuse across operations",
+      "approval delegation to remote or MCP callers",
+      "caller-supplied approval boolean and caller-supplied approval material",
+      "generic network fetch and socket authority"
+    ]
+  },
+  "authority_delta": {
+    "filesystem": "No new filesystem authority. Toggle reads live element metadata through the existing observation registry and performs no file read or write.",
+    "process": "No new process launch, injection, or termination authority. The existing read-only process identity is reused for binding only, and the existing SG-000010 whoami-only spawn boundary is unchanged.",
+    "network": "None. UIA toggle is strictly local with no egress, and no fetch, socket, or tunnel authority is added.",
+    "browser": "None. The closed P08 structured-browser registry is unchanged, and no browser launch, attachment, navigation, download, or upload authority is added.",
+    "ui_input": "One narrow structured UI Automation actuation shape is newly added: uia.element/toggle on exact typed eligible elements with Toggle pattern support and enabled state only. No generic toggle, no click substitution, no keyboard, no mouse, no pointer, no coordinate, no synthetic-input, and no other UIA pattern authority is added.",
+    "secrets": "No password, credential, Windows Hello, cookie, token, or session material enters prompts, records, history, logs, MCP responses, snapshots, or evidence packets. Password and secret bearing elements are denied as toggle targets.",
+    "approval": "One fresh per-action SOFT approval is required for uia.element/toggle with exact digest binding over the complete toggle binding set including expected and requested toggle state, one-shot consumption, nonce, and expiry. No persistent reuse, no remote delegation, and no caller-supplied approval boolean is introduced.",
+    "privileged": "None. No elevation, UAC bypass, service installation, privileged desktop access, or secure desktop input is added."
+  },
+  "invariants": [
+    "toggle binds exact server-derived process identity and never caller-provided process claims",
+    "toggle binds exact typed window identity with handle, generations, session, desktop, workspace, and policy revision",
+    "toggle binds exact typed element identity with runtime identity, tree generation, control type, workspace, and policy revision",
+    "Only CheckBox and RadioButton elements with Toggle pattern support and enabled state are eligible",
+    "Expected current toggle state plus requested target toggle state are bound and state drift fails closed",
+    "Every toggle carries fresh SOFT approval with exact digest binding including toggle states and one-shot consumption",
+    "Stale, replaced, reused, foreign, wrong-session, wrong-desktop, role-changed, pattern-changed, disabled, protected-surface, and policy-drifted targets fail closed without silent retargeting",
+    "Protected Cotra approval and security surfaces are never toggle targets",
+    "Toggle failure never falls back to Invoke, click, Space, Enter, keyboard, mouse, SendInput, coordinates, screenshots, or elevation",
+    "A missing or denied UIA element never becomes coordinate authority",
+    "STRONG enforcement, one-shot, expiry, digest, workspace, and policy bindings are not weakened"
+  ],
+  "acceptance": [
+    {
+      "id": "A1",
+      "claim": "Tests prove toggle binds server-derived process identity with PID, executable digest, creation generation, session, workspace, and policy revision, and that fake process identity, PID reuse, stale processes, restarted processes, and wrong executable identity fail closed before approval."
+    },
+    {
+      "id": "A2",
+      "claim": "Tests prove toggle binds exact window identity with owning process, handle, process generation, window generation, session, desktop, workspace, and policy revision, and that stale HWNDs, reused handles, wrong process and window pairings, foreign windows, wrong sessions, and wrong desktops fail closed without retargeting."
+    },
+    {
+      "id": "A3",
+      "claim": "Tests prove toggle binds exact element identity with owning window, runtime identity, tree generation, control type, supported patterns, workspace, and policy revision, and that disappeared, replaced, role-changed, generation-changed, wrong runtime identity, and policy-drifted elements fail closed."
+    },
+    {
+      "id": "A4",
+      "claim": "Tests prove only CheckBox and RadioButton elements with Toggle pattern support and enabled state actuate, and that other control types, unsupported patterns, disabled elements, password and secret elements, and protected Cotra surfaces are denied with no click, Space, Enter, keyboard, or mouse fallback."
+    },
+    {
+      "id": "A5",
+      "claim": "Tests prove expected current toggle state is enforced and requested target toggle state is bound, and that expected-state drift fails closed without silent retargeting and without blind inversion."
+    },
+    {
+      "id": "A6",
+      "claim": "Tests prove every toggle requires fresh SOFT approval with exact digest binding over workspace, policy revision, process, window, element, generations, control type, expected toggle state, requested toggle state, and action material, and that missing, stale, reused, and digest-mismatched approvals fail closed with no caller-supplied approval boolean accepted."
+    },
+    {
+      "id": "A7",
+      "claim": "Tests prove immediate pre-actuation revalidation denies process drift, window drift, element drift, toggle-state drift, protected-surface drift, workspace drift, and policy-revision drift without silent retargeting and without Invoke, click, Space, Enter, keyboard, mouse, SendInput, coordinate, select, value, scroll, focus, screenshot, clipboard, network, or elevation fallback."
+    },
+    {
+      "id": "A8",
+      "claim": "Tests prove caller-supplied PID, HWND, runtime id, selector, xpath, coordinate, approval material, secret fields, and widening fields are rejected as malformed or denied, and that invoke, value, select, scroll, focus, keyboard, mouse, SendInput, coordinate, screenshot, clipboard, network, spawn, inject, terminate, and elevation shapes remain denied outside their closed scopes."
+    },
+    {
+      "id": "A9",
+      "claim": "Tests prove the agent cannot satisfy toggle through MCP tools, synthetic input, coordinate proposals, screenshots, child processes, approval forgery, trust forgery, or replayed prior approvals."
+    },
+    {
+      "id": "A10",
+      "claim": "Tests prove replay, expiry, digest mismatch, revision drift, trust-revision drift, and double-consumption protections remain enforced for both approval classes."
+    },
+    {
+      "id": "A11",
+      "claim": "Tests prove all SG-000027 observation regressions, SG-000028 invoke regressions, SG-000029 value regressions, SG-000030 select regressions, P06 approval flows, SG-000018 through SG-000020 regressions, and the closed P08 registry behavior still pass with digests unchanged outside UIA toggle labeling."
+    },
+    {
+      "id": "A12",
+      "claim": "Tests prove personal-profile-style widening, arbitrary DevTools or CDP, browser scripting, credential stores, clipboard access, screenshots, coordinates, visual proposals, and network egress remain unreachable through UIA toggle."
+    },
+    {
+      "id": "A13",
+      "claim": "Windows-specific qualification proves structured toggle binding against real Windows process identity where required without fabricating interactive desktop evidence, and headless toggle limits are recorded honestly with unavailable-path fail-closed."
+    },
+    {
+      "id": "A14",
+      "claim": "Exact-head Windows and Ubuntu Rust, Node, Governance, genuine TypeSafe Jev, Alibaba Open Code Review, exact-diff security review, manual review of excluded security-sensitive files, and zero unresolved blocking review threads all pass."
+    }
+  ],
+  "successor_requirements": {
+    "p09_actuation": "Scroll pattern with its own approval binding and stale-target revalidation remains successor work and must build on observation, invoke, value, select, and toggle identity without weakening STRONG enforcement, one-shot, expiry, or digest binding.",
+    "p09_exit": "COTRA-P09 exits when Cotra windows are protected, structured action is preferred, and expected process and window identity is enforced, which SG-000027 observation plus SG-000028 invoke plus SG-000029 value plus SG-000030 select plus SG-000031 toggle plus scroll successor must jointly satisfy.",
+    "p10_boundary": "Coordinate and synthetic-input fallback remains P10 work. A missing or denied UIA element must never silently grant coordinate authority."
+  },
+  "review": {
+    "diffcipline": true,
+    "jev_semantic_review": true,
+    "alibaba_open_code_review": "required exact-range qualification where integrated",
+    "security_review": true,
+    "exact_head_ci": true,
+    "native_network_qualification": false
+  },
+  "done_when": "Structured Windows UI Automation TogglePattern actuation on exact typed eligible elements is specified with server-derived process binding, typed window and element binding, Toggle eligibility, expected and requested toggle binding, fresh SOFT digest-bound approval, immediate stale-target revalidation, protected-surface exclusion, no fallback authority, and no new coordinate, synthetic-input, screenshot, clipboard, network, or elevation authority."
+}
