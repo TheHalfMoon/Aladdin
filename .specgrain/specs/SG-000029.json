@@ -2,7 +2,7 @@
   "id": "SG-000029",
   "title": "Structured Windows UI Automation ValuePattern actuation with approval binding and stale-target revalidation",
   "program": "COTRA-P09",
-  "state": "GRAIN",
+  "state": "CLOSED",
   "risk": "high",
   "created": "2026-09-29",
   "base": "f0383ef357072e1f5ab2e32f5b0bdf527a109f33",
@@ -139,5 +139,25 @@
     "exact_head_ci": true,
     "native_network_qualification": false
   },
-  "done_when": "Structured Windows UI Automation ValuePattern actuation on exact typed eligible elements is specified with server-derived process binding, typed window and element binding, Value eligibility, bounded non-secret values, fresh SOFT digest-bound approval including the value digest, immediate stale-target revalidation, protected-surface exclusion, no keyboard fallback authority, and no new coordinate, synthetic-input, screenshot, clipboard, network, or elevation authority."
+  "done_when": "Structured Windows UI Automation ValuePattern actuation on exact typed eligible elements is specified with server-derived process binding, typed window and element binding, Value eligibility, bounded non-secret values, fresh SOFT digest-bound approval including the value digest, immediate stale-target revalidation, protected-surface exclusion, no keyboard fallback authority, and no new coordinate, synthetic-input, screenshot, clipboard, network, or elevation authority.",
+  "qualified_head": "7d8396d74c6f4b5f988bd57fb06675da5c6b00f7",
+  "implementation_base": "fb2fb317730ddba64f0df7473f59a649ee6d27b8",
+  "implementation_merge": "76f58fcb94e88c486fe9b37de51202b1a2aa7f6d",
+  "pre_merge_ci": "36588566716",
+  "pre_merge_review_gates": "36588567457",
+  "post_merge_ci": "36588916843",
+  "canonical_evidence": {
+    "implementation_pr": 79,
+    "implementation_base": "fb2fb317730ddba64f0df7473f59a649ee6d27b8",
+    "qualified_head": "7d8396d74c6f4b5f988bd57fb06675da5c6b00f7",
+    "pre_merge_ci": "36588566716",
+    "pre_merge_review_gates": "36588567457",
+    "merge_sha": "76f58fcb94e88c486fe9b37de51202b1a2aa7f6d",
+    "post_merge_ci": "36588916843",
+    "jev": "PASSED: 18/18 hunks, zero findings, zero blocking findings, pin 31f89602797fb7bea007f8a480bf368bf564954e, TypeSafe SDK 0.6.0",
+    "ocr": "PASSED: Open Code Review v1.12.9 exact-range delegation, 8 files total, 7 reviewable, 1 excluded and manually reviewed",
+    "security_review": "PASS on exact qualified head; set_value binds server-derived process identity, typed window identity, and typed element identity with expected tree generation, expected control type, Value pattern support, enabled state, and bounded value; no shape accepts caller-supplied PID, HWND, runtime id, selector, coordinate, approval material, secret, or fallback fields; every set_value carries fresh SOFT approval with exact digest binding including the value digest and one-shot consumption; stale, replaced, reused, foreign, role-changed, pattern-changed, disabled, protected-surface, password, oversized, and policy-drifted targets fail closed without silent retargeting and without keyboard, clipboard, mouse, SendInput, coordinate, screenshot, network, or elevation fallback; successful set_value advances the window tree generation and evidence carries only the value digest; the native adapter proves real process identity on Windows and reports live set_value as unavailable instead of fabricating actuation; no MCP UIA tool exists; and retained observation, invoke, replay, class, trust, and P08 behavior is unchanged",
+    "unresolved_review_threads": 0,
+    "authority_boundary": "Only structured uia.element/set_value on exact typed Edit, Document, and ComboBox elements with Value pattern support, enabled state, and bounded non-secret values is newly added with fresh SOFT digest-bound approval including the value digest and immediate stale-target revalidation. Invoke remains closed under SG-000028. Select, toggle, scroll, focus, keyboard, mouse, SendInput, coordinates, screenshots, clipboard, network fetch, process spawn, injection, termination, elevation, and approval bypass remain absent, and existing file, process, Git, approval, presence, trust, browser, observation, and invoke behavior is unchanged."
+  }
 }
