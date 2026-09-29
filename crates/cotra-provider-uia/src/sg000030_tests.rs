@@ -45,6 +45,8 @@ fn select_item(runtime: &str) -> NativeElement {
         enabled: true,
         selected: false,
         toggled: false,
+        scroll_horizontal_percent: 0,
+        scroll_vertical_percent: 0,
         patterns: vec![SELECT_PATTERN_NAME.to_owned()],
         value: None,
         value_is_password: false,
@@ -79,6 +81,8 @@ fn button_element(runtime: &str) -> NativeElement {
         enabled: true,
         selected: false,
         toggled: false,
+        scroll_horizontal_percent: 0,
+        scroll_vertical_percent: 0,
         patterns: vec![INVOKE_PATTERN_NAME.to_owned()],
         value: None,
         value_is_password: false,
@@ -95,6 +99,8 @@ fn password_item(runtime: &str) -> NativeElement {
         enabled: true,
         selected: false,
         toggled: false,
+        scroll_horizontal_percent: 0,
+        scroll_vertical_percent: 0,
         patterns: vec![SELECT_PATTERN_NAME.to_owned()],
         value: Some("hunter2".to_owned()),
         value_is_password: true,
@@ -227,7 +233,12 @@ fn select_shape_and_eligibility_helpers_behave() {
     // coordinates, screenshots, clipboard, network, and elevation remain
     // denied.
     assert!(!is_denied_uia_shape("uia.element", "toggle"));
-    assert!(is_denied_uia_shape("uia.element", "scroll"));
+    // NOTE (SG-000032 successor): `uia.element/scroll` is lawfully
+    // authorized by the SG-000032 successor grain, so it is no longer
+    // denied for current-tree authority. Focus, synthetic input,
+    // coordinates, screenshots, clipboard, network, and elevation remain
+    // denied.
+    assert!(!is_denied_uia_shape("uia.element", "scroll"));
     assert!(is_denied_uia_shape("uia.input", "mouse"));
     assert!(is_denied_uia_shape("uia.input", "keyboard"));
     assert!(is_denied_uia_shape("uia.input", "sendinput"));
