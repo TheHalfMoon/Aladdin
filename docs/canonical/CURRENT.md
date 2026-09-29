@@ -1,11 +1,11 @@
 # Cotra Current Canonical Frontier
 
-Status: PROGRAM_EXIT_CANDIDATE
+Status: ACTIVE_GRAIN
 Date: 2026-09-29
-Governance snapshot base: 87f0a4cc35e519739eeeba88a621277e25a296d1
+Governance snapshot base: a9310c176493e2a2c2f5f10c717ace4364d1eb47
 Evidence ledger: `.specgrain/canonical-evidence.json`
 
-`Governance snapshot base` records the exact canonical parent from which this program-exit snapshot was authored. It deliberately does not claim the eventual merge SHA of the commit containing this file.
+`Governance snapshot base` records the exact canonical parent from which this activation snapshot was authored. It deliberately does not claim the eventual merge SHA of the commit containing this file.
 
 ## SpecGrain state semantics
 
@@ -244,17 +244,30 @@ All P09 closeouts (SG-000027 recorded here, SG-000028 recorded here, SG-000029 r
 
 ## Successor frontier
 
-COTRA-P09 is exited at this frontier, so the next lawful unit must be derived from the canonical COTRA-P10 vision and coordinate fallback plan. No successor grain beyond the P09 exit is authorized by this program-exit candidate.
-
-After this P09 exit merges and its post-merge CI succeeds, re-read the canonical architecture, delivery plan, threat model, evidence ledger, open governance records, and this `CURRENT.md` to derive the first lawful COTRA-P10 grain. Do not infer or pre-authorize the next SpecGrain identifier or exact vision and coordinate design from numbering alone.
-
-A first P10 grain must build on the SG-000018 replay-resistant foundation, SG-000019 class enforcement, SG-000020 trust and revoke records, the closed P08 structured-browser registry, and the closed P09 structured-UIA registry without weakening STRONG enforcement, one-shot, expiry, or digest binding. It must keep Cotra-owned approval surfaces excluded from screenshots and coordinate input and expose no unrestricted desktop input or elevation authority.
+COTRA-P10 begins at this frontier. No successor grain beyond SG-000033 is authorized by this activation.
 
 ## Active grain
 
-No COTRA-P09 grain is active. COTRA-P09 is exited at this frontier.
+SG-000033 - Bounded window-scoped screenshot capture with frame identity and stale-frame protection - is the sole active COTRA-P10 grain.
 
-No COTRA-P10 grain is active. The successor frontier is the first lawful COTRA-P10 grain itself.
+This activation authorizes implementation and qualification of a single narrow read-only vision shape on top of the closed COTRA-P09 structured-UIA registry, the SG-000018 replay-resistant foundation, SG-000019 class enforcement, SG-000020 trust and revoke records, and the closed COTRA-P08 registry: screenshot.capture bound to one server-allocated typed window identity with arguments window_id, expected_window_generation, and scope only, where scope is fixed to target-window; server-derived process identity with PID reuse and restart denial; typed window identity with destroyed, replaced, and reused-handle denial; server-allocated typed frame identity with capture generation, geometry, workspace, and policy revision binding; bounded capture payload with explicit truncation reporting; fresh per-action SOFT approval with one-shot exact-digest binding over workspace, policy revision, process, window, generations, capture scope, and action material; immediate pre-capture revalidation with no silent retargeting; protected Cotra approval-surface exclusion with redaction where capture-adjacent metadata could leak protected material; and explicit denial of visual target proposals, coordinate proposals, input execution, input leases, monitor scope, desktop scope, caller-selected regions, clipboard, network, and elevation, while deliberately keeping visual proposals, coordinate proposals, bounded input execution, and human interruption as successor work.
+
+Authorized target design:
+- screenshot.capture bound to one typed window with exact process pairing, window generation, session and desktop identity, fixed target-window scope, workspace, and policy revision;
+- fresh SOFT approval with digest binding over the complete capture binding set and one-shot consumption;
+- immediate pre-capture stale-target revalidation with TargetStale denial on any drift;
+- server-allocated typed frame identity with capture generation and geometry, where stale frames are never actionable;
+- bounded payload with explicit truncation reporting and no silent semantic change;
+- protected Cotra approval-surface exclusion with no capture path reaching presence or approval material;
+- password, secret, protected-surface, oversized, and widened-scope targets denied with no coordinate authority granted by a missing or denied frame, and deterministic unit and security tests for happy-path capture, stale process, restarted process, PID reuse, stale and reused HWND, wrong process and window pairing, stale window generation, protected surface, missing and stale and reused and digest-mismatched approval, policy drift, oversized payload, caller-supplied identities, caller-selected scope, monitor and desktop scope requests, coordinate and input execution requests, visual proposal shapes, and elevation requests.
+
+## Active acceptance frontier
+
+SG-000033 must prove that capture binds server-derived process and typed window identity and rejects caller-provided claims, that scope is fixed to the target window with monitor and desktop widening denied, that every capture mints a server-allocated typed frame identity with stale frames never actionable, that every capture carries fresh SOFT digest-bound approval with one-shot consumption, that immediate pre-capture revalidation fails closed on any drift without silent retargeting and without visual-proposal, coordinate, input-execution, clipboard, network, or elevation fallback, that protected Cotra surfaces are excluded with redaction where required, that the agent cannot reach capture through its own tool or input surface and cannot turn a frame into coordinate authority, and that Windows-specific qualification proves structured binding without fabricating interactive desktop evidence.
+
+Visual proposals, coordinate proposals, input execution, input leases, monitor and desktop scopes, clipboard access, generic network authority, persistent approval reuse, remote delegation, and elevation must remain absent, and STRONG enforcement, one-shot, expiry, and digest binding must not weaken.
+
+A P10 exit requires joint proof from SG-000033 capture plus visual, coordinate, input-lease, and interruption successors that the provider ceiling is enforced, protected surfaces are denied, stale-frame tests pass, and no silent fallback from structured denial into coordinates exists. It must not expose unrestricted desktop input or elevation authority.
 
 ## Canonical public authority boundary retained
 
