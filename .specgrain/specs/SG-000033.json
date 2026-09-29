@@ -1,0 +1,139 @@
+{
+  "id": "SG-000033",
+  "title": "Bounded window-scoped screenshot capture with frame identity and stale-frame protection",
+  "program": "COTRA-P10",
+  "state": "GRAIN",
+  "risk": "high",
+  "created": "2026-09-29",
+  "base": "a9310c176493e2a2c2f5f10c717ace4364d1eb47",
+  "dependencies": [
+    "SG-000032"
+  ],
+  "objective": "Establish the first narrow COTRA-P10 vision grain on top of the closed COTRA-P09 structured-UIA registry, the SG-000018 replay-resistant foundation, SG-000019 class enforcement, SG-000020 trust and revoke records, and the closed COTRA-P08 registry: a single approved window-scoped screenshot capture shape bound to server-derived process identity, typed window identity, expected window generation, capture scope limited to the target window, workspace scope, and policy revision, with fresh SOFT approval digest binding, server-allocated typed frame identity with capture generation and geometry, immediate pre-capture stale-target revalidation, protected Cotra surface exclusion and redaction, and explicit denial of every visual-target proposal, coordinate proposal, input execution, monitor and desktop scope, clipboard, network, and elevation shape.",
+  "scope": {
+    "include": [
+      "single new capture shape screenshot.capture bound to one server-allocated typed window identity with arguments window_id, expected_window_generation, and scope only; scope is fixed to target-window and no caller-selected region, monitor, or desktop scope is accepted",
+      "server-derived process identity binding PID, executable digest, process creation generation, session identity, workspace scope, and policy revision, with PID reuse and restart fail-closed at capture time",
+      "typed window identity binding owning process, window handle, process generation, window generation, session and desktop identity, workspace scope, and policy revision, with destroyed, replaced, and reused-handle fail-closed at capture time",
+      "server-allocated typed frame identity binding owning window, capture generation, geometry, workspace scope, and policy revision, with replayed, foreign, and policy-drifted frames fail-closed and stale frames never actionable",
+      "bounded capture payload with explicit byte limit, explicit dimension bound, and explicit truncation reporting, with oversized captures fail-closed and no silent downscaling that changes evidence semantics",
+      "fresh per-action SOFT approval with one-shot exact-digest binding over workspace, policy revision, process identity, process generation, window identity, window generation, capture scope, and action material, with nonce, expiry, one-shot consumption, and stale-digest fail-closed",
+      "immediate pre-capture revalidation of process liveness, executable identity, process generation, window existence, HWND ownership by the expected process, window generation, protected-surface status, workspace binding, and policy revision, with any drift denied without silent retargeting",
+      "protected Cotra approval and security surface exclusion so capture can never target approval dialogs, STRONG presence surfaces, workspace trust controls, emergency revoke, or security-sensitive Cotra UI, failing closed on uncertainty, with redaction where capture-adjacent metadata could leak protected material",
+      "explicit denial of visual target proposal, coordinate proposal, bounded input execution, input lease grant, monitor scope, full-desktop scope, and silent escalation when the target window is stale, protected, or unavailable, with no coordinate authority granted by a missing or denied frame",
+      "deterministic unit and security tests for happy-path capture, stale process, restarted process, PID reuse, stale HWND, reused HWND, wrong process and window pairing, stale window generation, protected Cotra surface, missing approval, stale approval, reused approval, incorrect approval digest, policy drift, oversized payload denial, caller-supplied PID, caller-supplied HWND, caller-selected scope, monitor scope request, desktop scope request, coordinate proposal request, input execution request, visual proposal shapes, and elevation requests",
+      "retention of all closed P09 structured-UIA behavior, SG-000018 one-shot and expiry and digest and history behavior, SG-000019 SOFT and STRONG class enforcement, SG-000020 trust and revoke behavior, and closed P08 registry behavior with no change outside screenshot capture policy",
+      "Windows and Ubuntu exact-head qualification with Windows-specific capture qualification where required"
+    ],
+    "exclude": [
+      "visual target proposals, semantic vision, and model-based target inference of any kind",
+      "coordinate proposals and screen-coordinate derivation of any kind",
+      "bounded input execution, mouse movement, clicking, dragging, keyboard injection, and SendInput of any kind",
+      "input leases, automation ownership, and human-interruption handling beyond retained P09 approval-pending lease suspension",
+      "monitor-region capture, full-monitor capture, and full-desktop capture of any kind",
+      "caller-selected capture regions, caller-selected geometry, and arbitrary scope widening",
+      "screenshots of protected Cotra approval surfaces",
+      "clipboard read and clipboard write",
+      "P09 UIA actuation beyond the closed SG-000027 through SG-000032 scopes",
+      "arbitrary process commands, process spawn, process injection, and process termination",
+      "raw Win32 command execution and PowerShell execution",
+      "password, credential, and Windows Hello material exposure",
+      "persistent approval reuse across operations",
+      "approval delegation to remote or MCP callers",
+      "caller-supplied approval boolean and caller-supplied approval material",
+      "generic network fetch and socket authority",
+      "elevation, UAC bypass, service installation, privileged desktop access, and secure desktop input"
+    ]
+  },
+  "authority_delta": {
+    "filesystem": "No new filesystem authority. Capture reads live window pixels through the session adapter and performs no file read or write; retention of captured frames outside bounded evidence is denied.",
+    "process": "No new process launch, injection, or termination authority. The existing read-only process identity is reused for binding only, and the existing SG-000010 whoami-only spawn boundary is unchanged.",
+    "network": "None. Screenshot capture is strictly local with no egress, and no fetch, socket, or tunnel authority is added.",
+    "browser": "None. The closed P08 structured-browser registry is unchanged, and no browser launch, attachment, navigation, download, or upload authority is added.",
+    "ui_input": "One narrow read-only vision shape is newly added: screenshot.capture scoped to the exact target window only. No visual proposal, no coordinate proposal, no input execution, no input lease, no monitor scope, no desktop scope, no pointer, no keyboard, no synthetic-input, and no other UIA pattern authority is added.",
+    "secrets": "No password, credential, Windows Hello, cookie, token, or session material enters prompts, records, history, logs, MCP responses, snapshots, or evidence packets. Protected Cotra surfaces are never capture targets, and capture-adjacent metadata is redacted where it could leak protected material.",
+    "approval": "One fresh per-action SOFT approval is required for screenshot.capture with exact digest binding over the complete capture binding set, one-shot consumption, nonce, and expiry. No persistent reuse, no remote delegation, and no caller-supplied approval boolean is introduced.",
+    "privileged": "None. No elevation, UAC bypass, service installation, privileged desktop access, or secure desktop input is added."
+  },
+  "invariants": [
+    "capture binds exact server-derived process identity and never caller-provided process claims",
+    "capture binds exact typed window identity with handle, generations, session, desktop, workspace, and policy revision",
+    "capture scope is fixed to the target window with no caller-selected region, monitor, or desktop widening",
+    "Every capture mints a server-allocated typed frame identity with capture generation and geometry",
+    "Stale frames are never actionable and replayed, foreign, and policy-drifted frames fail closed",
+    "Every capture carries fresh SOFT approval with exact digest binding and one-shot consumption",
+    "Stale, replaced, reused, foreign, wrong-session, wrong-desktop, protected-surface, and policy-drifted targets fail closed without silent retargeting",
+    "Protected Cotra approval and security surfaces are never capture targets",
+    "A missing or denied frame never becomes coordinate or input authority",
+    "Capture payload is bounded with explicit truncation reporting and no silent semantic change",
+    "STRONG enforcement, one-shot, expiry, digest, workspace, and policy bindings are not weakened"
+  ],
+  "acceptance": [
+    {
+      "id": "A1",
+      "claim": "Tests prove capture binds server-derived process identity with PID, executable digest, creation generation, session, workspace, and policy revision, and that fake process identity, PID reuse, stale processes, restarted processes, and wrong executable identity fail closed before approval."
+    },
+    {
+      "id": "A2",
+      "claim": "Tests prove capture binds exact window identity with owning process, handle, process generation, window generation, session, desktop, workspace, and policy revision, and that stale HWNDs, reused handles, wrong process and window pairings, foreign windows, wrong sessions, and wrong desktops fail closed without retargeting."
+    },
+    {
+      "id": "A3",
+      "claim": "Tests prove every capture mints a server-allocated typed frame identity bound to the exact window, capture generation, geometry, workspace, and policy revision, and that replayed, foreign, generation-drifted, and policy-drifted frames fail closed as stale."
+    },
+    {
+      "id": "A4",
+      "claim": "Tests prove capture scope is fixed to the target window, and that caller-selected regions, monitor scope, desktop scope, oversized payloads, and protected Cotra surfaces are denied with no silent widening."
+    },
+    {
+      "id": "A5",
+      "claim": "Tests prove every capture requires fresh SOFT approval with exact digest binding over workspace, policy revision, process, window, generations, capture scope, and action material, and that missing, stale, reused, and digest-mismatched approvals fail closed with no caller-supplied approval boolean accepted."
+    },
+    {
+      "id": "A6",
+      "claim": "Tests prove immediate pre-capture revalidation denies process drift, window drift, generation drift, protected-surface drift, workspace drift, and policy-revision drift without silent retargeting and without visual-proposal, coordinate, input-execution, clipboard, network, or elevation fallback."
+    },
+    {
+      "id": "A7",
+      "claim": "Tests prove caller-supplied PID, HWND, frame id, scope, geometry, approval material, secret fields, and widening fields are rejected as malformed or denied, and that visual proposal, coordinate proposal, input execution, clipboard, network, spawn, inject, terminate, and elevation shapes remain denied outside their closed scopes."
+    },
+    {
+      "id": "A8",
+      "claim": "Tests prove the agent cannot satisfy capture through MCP tools, child processes, approval forgery, trust forgery, or replayed prior approvals, and cannot turn a captured frame into coordinate authority."
+    },
+    {
+      "id": "A9",
+      "claim": "Tests prove replay, expiry, digest mismatch, revision drift, trust-revision drift, and double-consumption protections remain enforced for both approval classes."
+    },
+    {
+      "id": "A10",
+      "claim": "Tests prove all closed P09 structured-UIA regressions, P06 approval flows, SG-000018 through SG-000020 regressions, and the closed P08 registry behavior still pass with digests unchanged outside screenshot labeling."
+    },
+    {
+      "id": "A11",
+      "claim": "Tests prove personal-profile-style widening, arbitrary DevTools or CDP, browser scripting, credential stores, clipboard access, coordinates, visual proposals beyond the closed capture shape, and network egress remain unreachable through screenshot capture."
+    },
+    {
+      "id": "A12",
+      "claim": "Windows-specific qualification proves structured capture binding against real Windows process identity where required without fabricating interactive desktop evidence, and headless capture limits are recorded honestly with unavailable-path fail-closed."
+    },
+    {
+      "id": "A13",
+      "claim": "Exact-head Windows and Ubuntu Rust, Node, Governance, genuine TypeSafe Jev, Alibaba Open Code Review, exact-diff security review, manual review of excluded security-sensitive files, and zero unresolved blocking review threads all pass."
+    }
+  ],
+  "successor_requirements": {
+    "p10_vision": "Visual target proposals, coordinate proposals, bounded input execution with input leases, and human interruption remain successor work and must build on frame identity without weakening STRONG enforcement, one-shot, expiry, or digest binding.",
+    "p10_exit": "COTRA-P10 exits when provider ceiling is enforced, protected surfaces are denied, stale-frame tests pass, and no silent fallback from structured denial into coordinates exists, which SG-000033 capture plus visual, coordinate, input-lease, and interruption successors must jointly satisfy.",
+    "p11_boundary": "Clipboard and network authority remain P11 work and are not granted by screenshot capture."
+  },
+  "review": {
+    "diffcipline": true,
+    "jev_semantic_review": true,
+    "alibaba_open_code_review": "required exact-range qualification where integrated",
+    "security_review": true,
+    "exact_head_ci": true,
+    "native_network_qualification": false
+  },
+  "done_when": "Window-scoped screenshot capture with server-derived process binding, typed window binding, server-allocated frame identity, bounded payload, fresh SOFT digest-bound approval, immediate stale-target revalidation, protected-surface exclusion, no coordinate authority, and no new visual-proposal, input-execution, clipboard, network, or elevation authority is specified."
+}
