@@ -1,0 +1,151 @@
+{
+  "id": "SG-000032",
+  "title": "Structured Windows UI Automation ScrollPattern actuation with approval binding and stale-target revalidation",
+  "program": "COTRA-P09",
+  "state": "GRAIN",
+  "risk": "high",
+  "created": "2026-09-29",
+  "base": "0b56d8b95f69f5797fb8edf7871ec84b9013321c",
+  "dependencies": [
+    "SG-000031"
+  ],
+  "objective": "Establish the fifth and final narrow COTRA-P09 structured actuation grain on top of the SG-000027 observation registry, the SG-000028 invoke registry, the SG-000029 value registry, the SG-000030 select registry, the SG-000031 toggle registry, the SG-000018 replay-resistant foundation, SG-000019 class enforcement, SG-000020 trust and revoke records, and the closed COTRA-P08 registry: a single approved ScrollPattern actuation shape bound to server-derived process identity, typed window identity, typed element identity, expected tree generation, expected control type, expected Scroll pattern support, expected enabled state, expected current scroll position, bounded requested direction and amount, workspace scope, and policy revision, with fresh SOFT approval digest binding, immediate pre-actuation stale-target revalidation, protected Cotra approval-surface exclusion, and explicit denial of every other scroll-widening, wheel, touch, keyboard, coordinate, synthetic-input, screenshot, clipboard, network, and elevation shape.",
+  "scope": {
+    "include": [
+      "single new actuation shape uia.element/scroll bound to one server-allocated typed element identity with arguments element_id, expected_tree_generation, expected_control_type, direction, amount, expected_horizontal_percent, and expected_vertical_percent only",
+      "server-derived process identity binding PID, executable digest, process creation generation, session identity, workspace scope, and policy revision, with PID reuse and restart fail-closed at actuation time",
+      "typed window identity binding owning process, window handle, process generation, window generation, session and desktop identity, workspace scope, and policy revision, with destroyed, replaced, and reused-handle fail-closed at actuation time",
+      "typed element identity binding owning window, UIA runtime identity, tree snapshot generation, expected control type, supported patterns, workspace scope, and policy revision, with disappeared, replaced, role-changed, generation-changed, and policy-drifted fail-closed",
+      "Scroll eligibility allowlist limited to ScrollBar, Pane, List, and Tree control types with required Scroll pattern support and required enabled state, with all other control types, unsupported patterns, and disabled elements denied",
+      "bounded direction limited to up, down, left, and right with bounded amount between 1 and 100 inclusive and expected scroll position between 0 and 100 inclusive, with out-of-range, unbounded, and repeat-count widening denied and no indefinite scrolling",
+      "explicit expected current scroll position plus bounded requested direction and amount with state-drift fail-closed and no silent retargeting",
+      "fresh per-action SOFT approval with one-shot exact-digest binding over workspace, policy revision, process identity, process generation, window identity, window generation, element identity, tree generation, control type, expected scroll position, requested direction, requested amount, and action material, with nonce, expiry, one-shot consumption, and stale-digest fail-closed",
+      "immediate pre-actuation revalidation of process liveness, executable identity, process generation, window existence, HWND ownership by the expected process, element existence, runtime identity, tree generation, control type, pattern support, enabled state, current scroll position, protected-surface status, workspace binding, and policy revision, with any drift denied without silent retargeting",
+      "protected Cotra approval and security surface exclusion so scroll can never target approval dialogs, STRONG presence surfaces, workspace trust controls, emergency revoke, or security-sensitive Cotra UI, failing closed on uncertainty",
+      "explicit denial of mouse-wheel fallback, touch-simulation fallback, keyboard PageUp and PageDown fallback, SendInput fallback, coordinate fallback, and silent escalation when ScrollPattern is unsupported or the target is stale, with no generic scroll fallback",
+      "deterministic unit and security tests for happy-path scroll in each direction, stale process, restarted process, PID reuse, stale HWND, reused HWND, wrong process and window pairing, stale element, wrong runtime identity, wrong tree generation, changed control type, unsupported pattern, disabled element, protected Cotra surface, password and secret element, expected-position drift, out-of-range direction, out-of-range amount, unbounded repeat widening, missing approval, stale approval, reused approval, incorrect approval digest, policy drift, caller-supplied PID, caller-supplied HWND, caller-supplied runtime id, selector, coordinate fallback request, wheel fallback request, keyboard fallback request, SendInput request, invoke and value and select and toggle and focus shapes, and elevation requests",
+      "retention of all SG-000027 observation behavior, SG-000028 invoke behavior, SG-000029 value behavior, SG-000030 select behavior, SG-000031 toggle behavior, SG-000018 one-shot and expiry and digest and history behavior, SG-000019 SOFT and STRONG class enforcement, SG-000020 trust and revoke behavior, and closed P08 registry behavior with no change outside UIA scroll policy",
+      "Windows and Ubuntu exact-head qualification with Windows-specific UIA qualification where required"
+    ],
+    "exclude": [
+      "invoke and InvokePattern actuation beyond the closed SG-000028 scope",
+      "value setting, text entry, and ValuePattern actuation beyond the closed SG-000029 scope",
+      "select and SelectionPattern actuation beyond the closed SG-000030 scope",
+      "toggle and TogglePattern actuation beyond the closed SG-000031 scope",
+      "focus changes, window focus, and window close",
+      "mouse-wheel input, touch simulation, and gesture synthesis of any kind",
+      "keyboard PageUp, PageDown, Home, End, and arrow-key substitution when ScrollPattern is unavailable",
+      "keyboard input, mouse input, SendInput, and synthetic input of any kind",
+      "unbounded scrolling, repeat counts, and indefinite scroll loops",
+      "coordinate requests and screen-coordinate fallback",
+      "screenshots and visual target proposals",
+      "elevation, UAC bypass, service installation, privileged desktop access, and secure desktop input",
+      "clipboard read and clipboard write",
+      "arbitrary process commands, process spawn, process injection, and process termination",
+      "raw Win32 command execution and PowerShell execution",
+      "unrestricted process memory introspection",
+      "password, credential, and Windows Hello material exposure",
+      "observation or control of protected Cotra approval surfaces",
+      "persistent approval reuse across operations",
+      "approval delegation to remote or MCP callers",
+      "caller-supplied approval boolean and caller-supplied approval material",
+      "generic network fetch and socket authority"
+    ]
+  },
+  "authority_delta": {
+    "filesystem": "No new filesystem authority. Scroll reads live element metadata through the existing observation registry and performs no file read or write.",
+    "process": "No new process launch, injection, or termination authority. The existing read-only process identity is reused for binding only, and the existing SG-000010 whoami-only spawn boundary is unchanged.",
+    "network": "None. UIA scroll is strictly local with no egress, and no fetch, socket, or tunnel authority is added.",
+    "browser": "None. The closed P08 structured-browser registry is unchanged, and no browser launch, attachment, navigation, download, or upload authority is added.",
+    "ui_input": "One narrow structured UI Automation actuation shape is newly added: uia.element/scroll on exact typed eligible container elements with Scroll pattern support and enabled state only, with direction limited to up, down, left, and right and amount bounded between 1 and 100. No unbounded scrolling, no repeat loops, no wheel, no touch, no keyboard paging, no pointer, no coordinate, no synthetic-input, and no other UIA pattern authority is added.",
+    "secrets": "No password, credential, Windows Hello, cookie, token, or session material enters prompts, records, history, logs, MCP responses, snapshots, or evidence packets. Password and secret bearing elements are denied as scroll targets.",
+    "approval": "One fresh per-action SOFT approval is required for uia.element/scroll with exact digest binding over the complete scroll binding set including expected scroll position, requested direction, and requested amount, one-shot consumption, nonce, and expiry. No persistent reuse, no remote delegation, and no caller-supplied approval boolean is introduced.",
+    "privileged": "None. No elevation, UAC bypass, service installation, privileged desktop access, or secure desktop input is added."
+  },
+  "invariants": [
+    "scroll binds exact server-derived process identity and never caller-provided process claims",
+    "scroll binds exact typed window identity with handle, generations, session, desktop, workspace, and policy revision",
+    "scroll binds exact typed element identity with runtime identity, tree generation, control type, workspace, and policy revision",
+    "Only ScrollBar, Pane, List, and Tree elements with Scroll pattern support and enabled state are eligible",
+    "Expected current scroll position plus bounded requested direction and amount are bound and state drift fails closed",
+    "Requested amount is bounded between 1 and 100 inclusive with no repeat loops and no indefinite scrolling",
+    "Every scroll carries fresh SOFT approval with exact digest binding including scroll position, direction, and amount with one-shot consumption",
+    "Stale, replaced, reused, foreign, wrong-session, wrong-desktop, role-changed, pattern-changed, disabled, protected-surface, and policy-drifted targets fail closed without silent retargeting",
+    "Protected Cotra approval and security surfaces are never scroll targets",
+    "Scroll failure never falls back to wheel, touch, keyboard paging, SendInput, coordinates, screenshots, or elevation",
+    "A missing or denied UIA element never becomes coordinate authority",
+    "STRONG enforcement, one-shot, expiry, digest, workspace, and policy bindings are not weakened"
+  ],
+  "acceptance": [
+    {
+      "id": "A1",
+      "claim": "Tests prove scroll binds server-derived process identity with PID, executable digest, creation generation, session, workspace, and policy revision, and that fake process identity, PID reuse, stale processes, restarted processes, and wrong executable identity fail closed before approval."
+    },
+    {
+      "id": "A2",
+      "claim": "Tests prove scroll binds exact window identity with owning process, handle, process generation, window generation, session, desktop, workspace, and policy revision, and that stale HWNDs, reused handles, wrong process and window pairings, foreign windows, wrong sessions, and wrong desktops fail closed without retargeting."
+    },
+    {
+      "id": "A3",
+      "claim": "Tests prove scroll binds exact element identity with owning window, runtime identity, tree generation, control type, supported patterns, workspace, and policy revision, and that disappeared, replaced, role-changed, generation-changed, wrong runtime identity, and policy-drifted elements fail closed."
+    },
+    {
+      "id": "A4",
+      "claim": "Tests prove only ScrollBar, Pane, List, and Tree elements with Scroll pattern support and enabled state actuate, and that other control types, unsupported patterns, disabled elements, password and secret elements, and protected Cotra surfaces are denied with no wheel, touch, keyboard-paging, or mouse fallback."
+    },
+    {
+      "id": "A5",
+      "claim": "Tests prove expected current scroll position is enforced, requested direction is limited to up, down, left, and right, requested amount is bounded between 1 and 100 with no repeat loops, and that expected-position drift, invalid direction, out-of-range amount, and unbounded widening fail closed without silent retargeting."
+    },
+    {
+      "id": "A6",
+      "claim": "Tests prove every scroll requires fresh SOFT approval with exact digest binding over workspace, policy revision, process, window, element, generations, control type, expected scroll position, requested direction, requested amount, and action material, and that missing, stale, reused, and digest-mismatched approvals fail closed with no caller-supplied approval boolean accepted."
+    },
+    {
+      "id": "A7",
+      "claim": "Tests prove immediate pre-actuation revalidation denies process drift, window drift, element drift, scroll-position drift, protected-surface drift, workspace drift, and policy-revision drift without silent retargeting and without wheel, touch, keyboard, mouse, SendInput, coordinate, invoke, value, select, toggle, focus, screenshot, clipboard, network, or elevation fallback."
+    },
+    {
+      "id": "A8",
+      "claim": "Tests prove caller-supplied PID, HWND, runtime id, selector, xpath, coordinate, approval material, secret fields, and widening fields are rejected as malformed or denied, and that invoke, value, select, toggle, focus, keyboard, mouse, SendInput, coordinate, screenshot, clipboard, network, spawn, inject, terminate, and elevation shapes remain denied outside their closed scopes."
+    },
+    {
+      "id": "A9",
+      "claim": "Tests prove the agent cannot satisfy scroll through MCP tools, synthetic input, coordinate proposals, screenshots, child processes, approval forgery, trust forgery, or replayed prior approvals."
+    },
+    {
+      "id": "A10",
+      "claim": "Tests prove replay, expiry, digest mismatch, revision drift, trust-revision drift, and double-consumption protections remain enforced for both approval classes."
+    },
+    {
+      "id": "A11",
+      "claim": "Tests prove all SG-000027 observation regressions, SG-000028 invoke regressions, SG-000029 value regressions, SG-000030 select regressions, SG-000031 toggle regressions, P06 approval flows, SG-000018 through SG-000020 regressions, and the closed P08 registry behavior still pass with digests unchanged outside UIA scroll labeling."
+    },
+    {
+      "id": "A12",
+      "claim": "Tests prove personal-profile-style widening, arbitrary DevTools or CDP, browser scripting, credential stores, clipboard access, screenshots, coordinates, visual proposals, and network egress remain unreachable through UIA scroll."
+    },
+    {
+      "id": "A13",
+      "claim": "Windows-specific qualification proves structured scroll binding against real Windows process identity where required without fabricating interactive desktop evidence, and headless scroll limits are recorded honestly with unavailable-path fail-closed."
+    },
+    {
+      "id": "A14",
+      "claim": "Exact-head Windows and Ubuntu Rust, Node, Governance, genuine TypeSafe Jev, Alibaba Open Code Review, exact-diff security review, manual review of excluded security-sensitive files, and zero unresolved blocking review threads all pass."
+    }
+  ],
+  "successor_requirements": {
+    "p09_actuation": "No further P09 actuation pattern remains after scroll. The P09 exit must verify joint proof from observation, invoke, value, select, toggle, and scroll without weakening STRONG enforcement, one-shot, expiry, or digest binding.",
+    "p09_exit": "COTRA-P09 exits when Cotra windows are protected, structured action is preferred, and expected process and window identity is enforced, which SG-000027 observation plus SG-000028 invoke plus SG-000029 value plus SG-000030 select plus SG-000031 toggle plus SG-000032 scroll must jointly satisfy.",
+    "p10_boundary": "Coordinate and synthetic-input fallback remains P10 work. A missing or denied UIA element must never silently grant coordinate authority."
+  },
+  "review": {
+    "diffcipline": true,
+    "jev_semantic_review": true,
+    "alibaba_open_code_review": "required exact-range qualification where integrated",
+    "security_review": true,
+    "exact_head_ci": true,
+    "native_network_qualification": false
+  },
+  "done_when": "Structured Windows UI Automation ScrollPattern actuation on exact typed eligible container elements is specified with server-derived process binding, typed window and element binding, Scroll eligibility, bounded direction and amount, expected scroll-position binding, fresh SOFT digest-bound approval, immediate stale-target revalidation, protected-surface exclusion, no fallback authority, and no new coordinate, synthetic-input, screenshot, clipboard, network, or elevation authority."
+}
