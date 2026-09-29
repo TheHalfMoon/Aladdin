@@ -1,11 +1,11 @@
 # Cotra Current Canonical Frontier
 
-Status: ACTIVE_GRAIN
+Status: CLOSED_CANONICAL
 Date: 2026-09-29
-Governance snapshot base: f9c708075df1c6b33841ba3a6fa452147f60e24c
+Governance snapshot base: e74b2d2a2b5517108775ab86d0b1efe618a74c20
 Evidence ledger: `.specgrain/canonical-evidence.json`
 
-`Governance snapshot base` records the exact canonical parent from which this activation snapshot was authored. It deliberately does not claim the eventual merge SHA of the commit containing this file.
+`Governance snapshot base` records the exact canonical parent from which this closeout snapshot was authored. It deliberately does not claim the eventual merge SHA of the commit containing this file.
 
 ## SpecGrain state semantics
 
@@ -17,7 +17,7 @@ The machine-readable evidence for every `CLOSED` grain is recorded in `.specgrai
 
 ## Closed canonical grains
 
-SG-000001 through SG-000026 are `CLOSED` and canonical.
+SG-000001 through SG-000027 are `CLOSED` and canonical.
 
 SG-000016 implementation PR `#38` merged as `c85b79f24ce2deef46319d9c5790623fd70c3b0d` after exact-head CI `36339733920`, Review Gates `36339732607`, genuine TypeSafe Jev `15/15` hunk coverage with zero findings/blockers, Alibaba Open Code Review v1.12.9 exact-range delegation plus manual review of both excluded files, and zero unresolved review threads. Implementation post-merge CI `36339937619` completed SUCCESS.
 
@@ -168,31 +168,21 @@ Authority separation - COMPLETE:
 
 All P08 closeouts (SG-000021 PR `#55`, SG-000022 PR `#58`, SG-000023 PR `#61`, SG-000024 PR `#64`, SG-000025 PR `#67`, SG-000026 PR `#70`) merged normally with zero unresolved blocking review threads and successful post-merge CI.
 
+## Closed SG-000027 UIA observation
+
+SG-000027 closed canonically: activation PR `#72` (activation base `f9c708075df1c6b33841ba3a6fa452147f60e24c`, activation head `b0130b5598930e23a52d876c7b0b9d7e645425f5`, CI `36572228900`, Review Gates `36572228837`, Jev `3/3`, OCR v1.12.9 `1 reviewable + 1 excluded/manually reviewed`, merge `9621ebfb1764324ecfe794b4b2462d1a0469c365`, post-merge CI `36572575368`), implementation PR `#73` (qualified head `8f07fc36e33fe5bbcbab141e6a79e61081cf00c7`, CI `36576000440`, Review Gates `36576000906`, Jev `12/12` with zero findings and zero blocking findings, OCR v1.12.9 `9 reviewable + 2 excluded/manually reviewed`, merge `e74b2d2a2b5517108775ab86d0b1efe618a74c20`, post-merge CI `36576544932`), and governance closeout recorded here, all with zero unresolved review threads. The canonical SG-000027 authority adds only read-only `uia.process/observe`, `uia.window/list`, `uia.window/observe`, `uia.tree/observe`, and `uia.element/observe` against a process-lifetime typed identity registry, with no process launch, no input injection, and no network egress.
+
+SG-000027 proved that no UIA shape accepts caller-supplied PID, window handle, UIA runtime id, selector, coordinate, approval material, or secret fields, so callers can only present server-allocated typed identities; that process identities bind PID, executable digest, process generation, session identity, workspace, and policy revision with PID reuse and restart fail-closed; that window identities bind owning process, handle, window generation, session, desktop, workspace, and policy revision with destroyed and reused handles fail-closed; that element identities bind owning window, runtime id, tree generation, control type, workspace, and policy revision with disappeared, replaced, and role-changed elements fail-closed; that tree observation is bounded by window count, depth, node count, response size, and string length with explicit truncation reporting; that password and secret bearing values are redacted and never enter records, logs, or evidence; that protected Cotra approval surfaces are omitted from listings and denied on direct observation; that every invoke, click, value, select, toggle, scroll, focus, keyboard, mouse, SendInput, coordinate, screenshot, clipboard, network, process-spawn, injection, termination, and elevation shape fails closed; that the native adapter proves real process identity against Windows APIs on Windows while reporting the live desktop as unavailable instead of fabricating windows; and that the agent cannot reach UIA capability through its own tool or input surface.
+
 ## Successor frontier
 
-COTRA-P09 continues at this frontier. No successor grain beyond SG-000027 is authorized by this activation.
+COTRA-P09 continues at this frontier. No successor grain beyond SG-000027 is authorized by this closeout. The P09 gap matrix must be rebuilt against SG-000001 through SG-000027 and any remaining actuation gap addressed by a newly authorized grain before P09 can exit.
 
 ## Active grain
 
-SG-000027 - Read-only Windows UI Automation observation with typed process, window, and element identity - is the sole active COTRA-P09 grain.
+No COTRA-P09 grain is active. SG-000027 was the sole active grain and is now `CLOSED` and canonical.
 
-This activation authorizes implementation and qualification of a read-only UI Automation observation capability on top of the SG-000018 replay-resistant foundation, SG-000019 STRONG enforcement, SG-000020 trust and revoke records, and the closed COTRA-P08 structured-browser registry: server-derived process identity binding PID, executable identity, process creation generation, app identity, session context, workspace scope, and policy revision; typed window identity binding process identity, window handle, process and window generations, title and class metadata where relevant, session and desktop identity, workspace scope, and policy revision; typed element identity binding process, window, tree snapshot generation, UIA runtime identity, expected control type, supported patterns, workspace scope, and policy revision; bounded read-only tree observation exposing only control type, automation id, name, enabled state, selected and toggled state, supported patterns, hierarchy, bounded value metadata, and bounding metadata where safe; bounded observation limits with password and secret redaction; protected Cotra approval-surface exclusion; stale-identity fail-closed behavior with no silent retargeting; and explicit denial of invoke, click, value setting, text entry, select, toggle, scroll, focus, keyboard input, mouse input, SendInput, coordinate requests, screenshots, clipboard access, generic network authority, and elevation, while deliberately keeping UI actuation, coordinate fallback, synthetic input, visual automation, installer behavior, and privileged desktop access absent.
-
-Authorized target design:
-- uia.process observation bound to server-derived process identity with PID reuse and stale-process denial, with no process launch, injection, or termination;
-- uia.window observation bound to one typed window with exact process pairing, handle, generations, session, desktop, workspace, and policy revision;
-- uia.tree observation bound to one typed window and one tree snapshot generation with bounded depth, node count, response size, and string length;
-- uia.element observation bound to one typed element with exact process, window, tree generation, runtime identity, control type, workspace, and policy revision;
-- protected Cotra approval-surface exclusion with no observation or control path reaching presence or approval material;
-- explicit denial of invoke, click, value, select, toggle, scroll, focus, keyboard, mouse, SendInput, coordinates, screenshots, clipboard, network egress, and elevation, with deterministic unit and security tests for fake process identity, PID reuse, stale process, wrong executable identity, stale HWND, reused handle, wrong process and window pairing, wrong session, stale element, replaced element, wrong tree generation, secret and password reads, protected surfaces, attempted actuation, coordinate requests, elevation requests, and arbitrary process commands.
-
-## Active acceptance frontier
-
-SG-000027 must prove that process observation binds server-derived identity and rejects caller-provided claims, that window observation binds exact process, handle, generations, session, desktop, workspace, and policy revision, that element observation binds exact process, window, tree generation, runtime identity, control type, workspace, and policy revision, that stale, replaced, reused, foreign, wrong-session, wrong-desktop, and policy-drifted targets fail closed without silent retargeting, that tree observation is bounded and data-minimized with password and secret redaction, that protected Cotra approval surfaces are excluded, that every actuation, coordinate, synthetic-input, screenshot, clipboard, network-egress, and elevation shape fails closed, that the agent cannot reach UIA capability through its own tool or input surface, and that Windows-specific qualification proves read-only observation without fabricating interactive desktop evidence.
-
-UI actuation, coordinate fallback, synthetic input, screenshots, visual proposals, clipboard access, generic network authority, persistent approval reuse, remote delegation, and elevation must remain absent, and STRONG enforcement, one-shot, expiry, and digest binding must not weaken.
-
-A P09 exit requires joint proof from SG-000027 observation plus its successors that Cotra windows are protected, structured action is preferred, and expected process and window identity is enforced. It must not expose generic input injection, coordinate fallback, or elevation authority.
+The successor frontier is the P09 gap matrix itself: joint proof from SG-000027 observation plus successors covering structured Invoke, Value, Select, Toggle, and Scroll patterns with approval binding and stale-target revalidation that Cotra windows are protected, structured action is preferred, and expected process and window identity is enforced, without exposing generic input injection, coordinate fallback, or elevation authority. A missing or denied UIA element must never silently grant coordinate authority.
 
 ## Canonical public authority boundary retained
 
@@ -220,7 +210,9 @@ Existing SG-000025 scoped bounded downloads remain subject to their exact active
 
 Existing SG-000026 scoped bounded uploads remain subject to their exact active-page binding, exact origin and generations, workspace and policy revision, one recorded approved download artifact as the only admissible source, canonical filesystem identity containment with separator-boundary comparison, byte length and SHA-256 re-verification, one known enabled typed file-input target, one-shot expiring upload source identity, workspace trust binding, fresh SOFT digest-bound approval, bounded secret-free evidence reporting no page transfer, and file-input fill, directory upload, multiple-file upload, archive extraction, execution, and page byte transfer denial.
 
-Still denied or absent outside the closed COTRA-P07 scope and the closed COTRA-P08 scope:
+Retained SG-000027 read-only UIA observation remains subject to its exact server-derived process identity, typed window and element identity, expected-generation binding, workspace and policy revision, bounded data-minimized snapshots, password and secret redaction, protected Cotra surface exclusion, stale-identity fail-closed behavior, and actuation, coordinate, synthetic-input, screenshot, clipboard, network-egress, and elevation denial.
+
+Still denied or absent outside the closed COTRA-P07 scope, the closed COTRA-P08 scope, and the SG-000027 observation scope:
 - public `powershell.run`;
 - caller-provided PowerShell script text;
 - direct PowerShell executable authority through `process.spawn`;
@@ -239,7 +231,7 @@ Still denied or absent outside the closed COTRA-P07 scope and the closed COTRA-P
 - raw credential arguments and ambient credential-manager authority;
 - generic network fetch/socket authority;
 - generic browser automation beyond the closed structured registry (launch, attachment, debugging, scripting);
-- Windows UI Automation/input injection;
+- Windows UI Automation actuation and input injection beyond the closed read-only observation registry;
 - elevation;
 - approval bypass, persistent approval reuse, or remote approval delegation.
 - soft-button satisfaction of STRONG-class operations;

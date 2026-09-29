@@ -2,10 +2,16 @@
   "id": "SG-000027",
   "title": "Read-only Windows UI Automation observation with typed process, window, and element identity",
   "program": "COTRA-P09",
-  "state": "GRAIN",
+  "state": "CLOSED",
   "risk": "high",
   "created": "2026-09-29",
   "base": "f9c708075df1c6b33841ba3a6fa452147f60e24c",
+  "qualified_head": "8f07fc36e33fe5bbcbab141e6a79e61081cf00c7",
+  "implementation_base": "9621ebfb1764324ecfe794b4b2462d1a0469c365",
+  "implementation_merge": "e74b2d2a2b5517108775ab86d0b1efe618a74c20",
+  "pre_merge_ci": "36576000440",
+  "pre_merge_review_gates": "36576000906",
+  "post_merge_ci": "36576544932",
   "dependencies": ["SG-000020"],
   "objective": "Establish the first COTRA-P09 Windows UI Automation foundation on top of the SG-000018 replay-resistant foundation, SG-000019 STRONG enforcement, SG-000020 trust and revoke records, and the closed COTRA-P08 structured-browser registry: a dedicated read-only UI Automation observation capability with server-derived process identity, typed window identity, typed element identity, bounded tree observation, stale-identity fail-closed behavior, and protected Cotra approval-surface exclusion, so app and window state can be observed in a typed and auditable way before any actuation, coordinate, synthetic-input, or elevation authority is introduced.",
   "scope": {
@@ -87,6 +93,20 @@
     "security_review": true,
     "exact_head_ci": true,
     "native_network_qualification": false
+  },
+  "canonical_evidence": {
+    "implementation_pr": 73,
+    "implementation_base": "9621ebfb1764324ecfe794b4b2462d1a0469c365",
+    "qualified_head": "8f07fc36e33fe5bbcbab141e6a79e61081cf00c7",
+    "pre_merge_ci": "36576000440",
+    "pre_merge_review_gates": "36576000906",
+    "merge_sha": "e74b2d2a2b5517108775ab86d0b1efe618a74c20",
+    "post_merge_ci": "36576544932",
+    "jev": "PASSED: 12/12 hunks, zero findings, zero blocking findings, pin 31f89602797fb7bea007f8a480bf368bf564954e, TypeSafe SDK 0.6.0",
+    "ocr": "PASSED: Open Code Review v1.12.9 exact-range delegation, 11 files total, 9 reviewable, 2 excluded and manually reviewed",
+    "security_review": "PASS on exact qualified head; UIA authority is read-only observation with server-derived process identity, typed window identity, and typed element identity; no UIA shape accepts caller-supplied PID, HWND, runtime id, selector, coordinate, approval material, or secret fields; stale, replaced, reused, foreign, and drifted targets fail closed without silent retargeting; tree observation is bounded with truncation reporting; password and secret values are redacted and never enter records, logs, or evidence; protected Cotra approval surfaces are omitted from listings and denied on direct observation; the native adapter proves real process identity against Windows APIs on Windows and reports the live desktop as unavailable instead of fabricating windows; no MCP UIA tool exists; and retained SG-000018 replay, SG-000019 STRONG, SG-000020 trust, and closed P08 registry behavior is unchanged",
+    "unresolved_review_threads": 0,
+    "authority_boundary": "Only read-only uia.process/observe, uia.window/list, uia.window/observe, uia.tree/observe, and uia.element/observe are newly added against a process-lifetime typed identity registry with no browser launch, no process launch, no input injection, and no network egress. Invoke, click, value setting, text entry, select, toggle, scroll, focus, keyboard, mouse, SendInput, coordinates, screenshots, clipboard, network fetch, process spawn, injection, termination, elevation, and approval bypass remain absent, and existing file, process, Git, approval, presence, trust, and browser behavior is unchanged."
   },
   "done_when": "Read-only Windows UI Automation observation with typed process, window, and element identity is merged with stale-identity fail-closed behavior, protected Cotra surface exclusion, bounded data-minimized snapshots, password and secret redaction, actuation and coordinate and elevation denial, agent-forgery tests, retained replay and drift enforcement, Windows-specific qualification, and no new input-injection, coordinate, screenshot, clipboard, network-egress, or elevation authority."
 }
