@@ -1,0 +1,92 @@
+{
+  "id": "SG-000027",
+  "title": "Read-only Windows UI Automation observation with typed process, window, and element identity",
+  "program": "COTRA-P09",
+  "state": "GRAIN",
+  "risk": "high",
+  "created": "2026-09-29",
+  "base": "f9c708075df1c6b33841ba3a6fa452147f60e24c",
+  "dependencies": ["SG-000020"],
+  "objective": "Establish the first COTRA-P09 Windows UI Automation foundation on top of the SG-000018 replay-resistant foundation, SG-000019 STRONG enforcement, SG-000020 trust and revoke records, and the closed COTRA-P08 structured-browser registry: a dedicated read-only UI Automation observation capability with server-derived process identity, typed window identity, typed element identity, bounded tree observation, stale-identity fail-closed behavior, and protected Cotra approval-surface exclusion, so app and window state can be observed in a typed and auditable way before any actuation, coordinate, synthetic-input, or elevation authority is introduced.",
+  "scope": {
+    "include": [
+      "server-derived process identity binding PID, executable identity, process creation generation, app identity, session context, workspace scope, and policy revision, with PID reuse and stale process fail-closed",
+      "typed window identity binding process identity, window handle, process generation, window generation and epoch, title and class metadata where relevant, session and desktop identity, workspace scope, and policy revision, with stale, replaced, reused-handle, foreign-process, wrong-session, and wrong-desktop fail-closed",
+      "typed UI element identity binding process identity, window identity, tree snapshot generation, UIA runtime identity, expected control type, supported patterns, workspace scope, and policy revision, with disappeared, replaced, role-changed, generation-changed, and policy-drifted fail-closed",
+      "bounded read-only UIA tree observation exposing only control type, automation id, name, enabled state, selected and toggled state, supported patterns, hierarchy, bounded value metadata, and bounding metadata where safe, with no unrestricted process introspection and no raw COM and UIA internals as caller-controlled authority",
+      "bounded observation limits for window count, tree depth, node count, response size, string length, and snapshots, with password and secret field redaction or omission",
+      "protected Cotra approval and security surface exclusion so observation cannot target, control, or extract presence and approval material from trusted Cotra approval surfaces",
+      "explicit denial of all UI actuation shapes including invoke, click, value setting, text entry, select, toggle, scroll, focus, keyboard input, mouse input, SendInput, and coordinate requests",
+      "explicit denial of elevation, UAC bypass, service installation, privileged desktop access, secure desktop input, screenshots, visual and coordinate fallback, clipboard access, and generic network authority in this grain",
+      "deterministic unit and security tests for fake process identity, PID reuse, stale process, wrong executable identity, stale HWND, reused window handle, wrong process and window pairing, wrong session, stale element, replaced element, wrong tree generation, secret and password property reads, protected Cotra approval surfaces, attempted invoke, attempted value set, attempted click, attempted keyboard input, attempted mouse input, coordinate requests, elevation requests, and arbitrary process commands",
+      "retention of all SG-000018 one-shot, expiry, digest, history, SG-000019 STRONG enforcement, SG-000020 trust and revoke, and closed P08 registry behavior with no change outside UIA observation policy",
+      "Windows and Ubuntu exact-head qualification with Windows-specific UIA qualification where required"
+    ],
+    "exclude": [
+      "UI actuation of any kind including invoke, click, value setting, text entry, select, toggle, scroll, and focus",
+      "keyboard input, mouse input, SendInput, and synthetic input of any kind",
+      "coordinate requests and screen-coordinate fallback",
+      "screenshots and visual target proposals",
+      "elevation, UAC bypass, service installation, privileged desktop access, and secure desktop input",
+      "clipboard read and clipboard write",
+      "arbitrary process commands and process injection",
+      "raw Win32 command execution and PowerShell execution",
+      "unrestricted process memory introspection",
+      "password, credential, and Windows Hello material exposure",
+      "observation or control of protected Cotra approval surfaces",
+      "persistent approval reuse across operations",
+      "approval delegation to remote or MCP callers",
+      "generic network fetch and socket authority"
+    ]
+  },
+  "authority_delta": {
+    "filesystem": "No new filesystem authority. Observation reads live window and element metadata only and gains no readability or writability over workspace files, user files, credential stores, or unrelated paths.",
+    "process": "A bounded process-observation authority is newly added as local read-only identity only. No process is launched, attached for control, injected, or terminated in this grain, and the existing SG-000010 whoami-only spawn boundary is unchanged.",
+    "network": "None. UIA observation is strictly local with no egress, and no fetch, socket, or tunnel authority is added.",
+    "browser": "None. The closed P08 structured-browser registry is unchanged, and no browser launch, attachment, navigation, or download and upload authority is added.",
+    "ui_input": "Read-only UI Automation observation only. No input injection, focus change, invoke, value set, select, toggle, scroll, keyboard, pointer, coordinate, or synthetic-input authority is added.",
+    "secrets": "No password, credential, Windows Hello, cookie, token, or session material enters prompts, records, history, logs, MCP responses, snapshots, or evidence packets. Password and secret UI fields are redacted or omitted, and protected Cotra approval surfaces are excluded.",
+    "approval": "Future UIA actuation shapes are explicitly denied and require fresh approval design in a successor grain. No persistent reuse or remote delegation is introduced.",
+    "privileged": "None. No elevation, UAC bypass, service installation, privileged desktop access, or secure desktop input is added."
+  },
+  "invariants": [
+    "Observed UI state is always bound to server-derived process identity and never to caller-provided process claims",
+    "Every window binds exact process identity, handle, generations, session, desktop, workspace, and policy revision",
+    "Every element binds exact process, window, tree generation, runtime identity, control type, workspace, and policy revision",
+    "Stale, replaced, reused, foreign, wrong-session, wrong-desktop, and policy-drifted targets fail closed without silent retargeting",
+    "Observation is bounded and data-minimized with password and secret redaction",
+    "Protected Cotra approval and security surfaces are never observable or controllable targets",
+    "All actuation, coordinate, synthetic-input, screenshot, clipboard, network-egress, reuse, delegation, and elevation authority remains absent",
+    "STRONG enforcement, one-shot, expiry, digest, workspace, and policy bindings are not weakened",
+    "A missing UIA element never becomes coordinate authority"
+  ],
+  "acceptance": [
+    {"id": "A1", "claim": "Tests prove observed processes bind server-derived PID, executable identity, creation generation, app identity, session context, workspace scope, and policy revision, and that fake process identity, PID reuse, stale processes, and wrong executable identity fail closed."},
+    {"id": "A2", "claim": "Tests prove windows bind exact process identity, handle, process generation, window generation and epoch, session, desktop, workspace, and policy revision, and that stale HWNDs, reused handles, wrong process and window pairings, foreign windows, wrong sessions, and wrong desktops fail closed."},
+    {"id": "A3", "claim": "Tests prove elements bind exact process, window, tree generation, runtime identity, control type, supported patterns, workspace, and policy revision, and that disappeared, replaced, role-changed, generation-changed, and policy-drifted elements fail closed without silent retargeting."},
+    {"id": "A4", "claim": "Tests prove tree observation is bounded by window count, depth, node count, response size, string length, and snapshots, and exposes only the allowlisted property set with no unrestricted introspection and no raw COM internals as authority."},
+    {"id": "A5", "claim": "Tests prove password and secret UI fields are redacted or omitted and that secret and password property reads fail closed without leaking credential or Windows Hello material."},
+    {"id": "A6", "claim": "Tests prove protected Cotra approval and security surfaces are excluded from observation and cannot be used to extract presence or approval material."},
+    {"id": "A7", "claim": "Tests prove invoke, click, value setting, text entry, select, toggle, scroll, focus, keyboard input, mouse input, SendInput, coordinate requests, elevation requests, and arbitrary process commands all fail closed as denied capability shapes."},
+    {"id": "A8", "claim": "Tests prove the agent cannot satisfy UIA capability through MCP tools, synthetic input, coordinate proposals, screenshots, child processes, or replayed prior approvals."},
+    {"id": "A9", "claim": "Tests prove replay, expiry, digest mismatch, revision drift, trust-revision drift, and double-consumption protections remain enforced for both approval classes."},
+    {"id": "A10", "claim": "Tests prove all P06 approval flows, SG-000018 through SG-000020 regressions, and the closed P08 registry behavior still pass with digests unchanged outside UIA labeling."},
+    {"id": "A11", "claim": "Tests prove personal-profile-style widening, arbitrary DevTools or CDP, browser scripting, credential stores, clipboard access, screenshots, coordinates, and network egress remain unreachable through UIA observation."},
+    {"id": "A12", "claim": "Windows-specific qualification proves read-only UIA observation against real Windows APIs where required without fabricating interactive desktop evidence, and headless limits are recorded honestly."},
+    {"id": "A13", "claim": "Exact-head Windows and Ubuntu Rust, Node, Governance, genuine TypeSafe Jev, Alibaba Open Code Review, exact-diff security review, manual review of excluded security-sensitive files, and zero unresolved blocking review threads all pass."}
+  ],
+  "successor_requirements": {
+    "p09_actuation": "Invoke, value, select, toggle, scroll, focus, structured actuation, approval binding, stale-target revalidation, and protected-surface enforcement remain successor work and must build on typed observation identity without weakening STRONG enforcement, one-shot, expiry, or digest binding.",
+    "p09_exit": "COTRA-P09 exits when Cotra windows are protected, structured action is preferred, and expected process and window identity is enforced, which this grain plus its successors must jointly satisfy.",
+    "p10_boundary": "Coordinate and synthetic-input fallback remains P10 work. A missing or denied UIA element must never silently grant coordinate authority."
+  },
+  "review": {
+    "diffcipline": true,
+    "jev_semantic_review": true,
+    "alibaba_open_code_review": "required exact-range qualification where integrated",
+    "security_review": true,
+    "exact_head_ci": true,
+    "native_network_qualification": false
+  },
+  "done_when": "Read-only Windows UI Automation observation with typed process, window, and element identity is merged with stale-identity fail-closed behavior, protected Cotra surface exclusion, bounded data-minimized snapshots, password and secret redaction, actuation and coordinate and elevation denial, agent-forgery tests, retained replay and drift enforcement, Windows-specific qualification, and no new input-injection, coordinate, screenshot, clipboard, network-egress, or elevation authority."
+}
