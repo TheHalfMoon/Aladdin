@@ -1,11 +1,11 @@
 # Cotra Current Canonical Frontier
 
-Status: CLOSED_CANONICAL
-Date: 2026-09-28
-Governance snapshot base: c37579332f2755f8480c337e88cacef765677b6c
+Status: PROGRAM_EXIT_CANDIDATE
+Date: 2026-09-29
+Governance snapshot base: 75181787aec4282c3783e0d1e95b05c18e192f26
 Evidence ledger: `.specgrain/canonical-evidence.json`
 
-`Governance snapshot base` records the exact canonical parent from which this activation snapshot was authored. It deliberately does not claim the eventual merge SHA of the commit containing this file.
+`Governance snapshot base` records the exact canonical parent from which this program-exit snapshot was authored. It deliberately does not claim the eventual merge SHA of the commit containing this file.
 
 ## SpecGrain state semantics
 
@@ -131,19 +131,56 @@ SG-000025 proved that the destination root is always the approved workspace root
 
 ## Closed SG-000026 scoped uploads
 
-SG-000026 closed canonically: activation PR `#68` (activation base `c37579332f2755f8480c337e88cacef765677b6c`, activation head `f6d7635b9410f8c5f55605eca600d8652d0ba21a`, CI `36469132408`, merge `86e4f2a9f58ed37b7753badd7d5dc42faaa1b5c6`), implementation PR `#69` (qualified head `5e9e09efafbddbbcc6e2050a3d432f77164a747f`, CI `36478991825`, Review Gates `36478988310`, Jev `26/26` with zero findings and zero blocking findings, OCR v1.12.9 `8 reviewable + 1 excluded/manually reviewed`, merge `d35049bb39292b78e515a3b32c0ec88c30e2c877`, post-merge CI `36479358381`), and governance closeout recorded here, all with zero unresolved review threads. The canonical SG-000026 authority adds only scoped bounded `browser.upload/preview` and `browser.upload/submit` of one already recorded approved download artifact to one enabled typed file-input node, with no browser launch, no attachment, no page byte transfer, and no form submission.
+SG-000026 closed canonically: activation PR `#68` (activation base `c37579332f2755f8480c337e88cacef765677b6c`, activation head `f6d7635b9410f8c5f55605eca600d8652d0ba21a`, CI `36469132408`, merge `86e4f2a9f58ed37b7753badd7d5dc42faaa1b5c6`), implementation PR `#69` (qualified head `5e9e09efafbddbbcc6e2050a3d432f77164a747f`, CI `36478991825`, Review Gates `36478988310`, Jev `26/26` with zero findings and zero blocking findings, OCR v1.12.9 `8 reviewable + 1 excluded/manually reviewed`, merge `d35049bb39292b78e515a3b32c0ec88c30e2c877`, post-merge CI `36479358381`), and governance closeout PR `#70` (qualified head `1082a40820262c78f77ed9a9771128f35ac255a6`, CI `36480615368`, Review Gates `36480610977`, Jev `10/10` with zero findings and zero blocking findings, OCR v1.12.9 `3 reviewable + 1 excluded/manually reviewed`, merge `75181787aec4282c3783e0d1e95b05c18e192f26`, post-merge CI `36568753846`), all with zero unresolved review threads. The canonical SG-000026 authority adds only scoped bounded `browser.upload/preview` and `browser.upload/submit` of one already recorded approved download artifact to one enabled typed file-input node, with no browser launch, no attachment, no page byte transfer, and no form submission.
 
 SG-000026 proved that no upload shape accepts a path, file, content, directory, recursive, glob, or page-transfer field of any kind, so a caller can never name the file to read and the capability is strictly weaker than generic filesystem read; that the only admissible source is a file already recorded by the SG-000025 download registry inside the approved workspace download root, carrying a recorded content digest, so credential files, browser profile files, OS secret stores, user home files, workspace-authored files, and unrelated project files are unreachable by construction rather than by policy; that source identity shape is strictly validated as a `dl-` prefix with 64 lowercase hex characters and an upload source identity as a `ul-` prefix with 32, in both the policy and the dispatch layer, so a caller-typed fragment can never reach a registry lookup; that containment uses canonical filesystem identity of both the source parent and the source file with a separator-boundary comparison, so a Windows directory junction and a Unix symlink cannot redirect the read; that the source must be a regular file with a nonzero size within the hard maximum, and that byte length plus SHA-256 are re-verified against the recorded download, so a removed, replaced, or mutated artifact fails closed; that the target must be one known enabled `textbox`-role node with a `file` input type whose typed node identity is recomputed against the current profile, page, generation, origin, index, and policy revision, with wrong role, wrong input type, disabled state, replaced input, stale node, wrong page, wrong origin, wrong generation, and wrong workspace all failing closed; that filling a file input is denied, so the newly observable file input cannot be reached by typing a path and SG-000024 value entry does not widen; that workspace trust revision is bound into both the upload source identity and the approval digest, so an emergency revoke, a trust change, and a trust-revision change between preview and submit all fail closed; that upload source identities are server-allocated, one-shot, and deterministically expiring with bounded pending holds; that every upload carries fresh SOFT approval with digest binding over the complete binding set including the actual source content digest, spent before the upload is recorded; and that evidence is fixed-shape and secret-free, reporting `page_transfer_performed`, `executed`, `opened`, `extracted`, `cookies`, and `credentials` as `false` and carrying no file content, bytes, path, cookie, token, or session material.
 
+## COTRA-P08 exit
+
+COTRA-P08 is exited at this frontier. Structured browser operations are closed under SG-000021, SG-000022, SG-000023, SG-000024, SG-000025, and SG-000026, with isolated profile and origin binding plus successors proving SSRF denial, redirect-widening denial, and personal profile disabled by default, without exposing personal-profile access, debugging authority, broader egress, or approval bypass.
+
+This program-exit snapshot records SG-000026 as merged and canonical. The `CLOSED` classification above becomes part of the canonical frontier only after this program-exit change itself merges and the resulting canonical main passes post-merge CI.
+
+Exit matrix (each criterion is COMPLETE with canonical evidence in `.specgrain/canonical-evidence.json` and the grain blocks above):
+
+Isolated profile - COMPLETE:
+- isolated Cotra automation profile with fresh storage and no personal data via SG-000021 (activation PR `#53`, implementation PR `#54`, qualified head `f9912d7a4be7a822954e5dc260be5e698adf9ff8`, CI `36411407342`, Review Gates `36411407224`, Jev `10/10`, OCR v1.12.9 `8 reviewable + 2 excluded/manually reviewed`, merge `a4aef17a37999d7470912ad8c1a6ea72ae9561a3`, post-merge CI `36411958976`; governance closeout PR `#55`, qualified head `875b814b9f5307ff39254f65aaec8c4039752d43`, CI `36412559028`, Jev `8/8`, OCR `2 reviewable + 1 excluded/manually reviewed`, merge `e69708aca6b26f16b0351d8ad2313c2bc1d3c9bb`, post-merge CI `36413057165`).
+
+Origin binding and egress controls - COMPLETE:
+- exact scheme, host, and port binding with DNS re-resolution and post-resolution policy via SG-000021 with the same implementation evidence above;
+- SSRF denial for loopback, link-local, private, unspecified, multicast, and mapped IPv6 via SG-000021 with the same implementation evidence above;
+- redirect-widening denial with expected-origin exact binding and full revalidation via SG-000021 and SG-000022 (implementation PR `#57`, qualified head `2d8ae35db855dd50092efc46a5bd663f20d5d476`, CI `36432067459`, Review Gates `36432064800`, Jev `17/17`, OCR v1.12.9 `7 reviewable + 1 excluded/manually reviewed`, merge `698eff08e736c133b93100e1983fe4be2c5909d0`, post-merge CI `36432538358`; governance closeout PR `#58`);
+- typed page lifecycle with SOFT-approved origin-bound navigation and hop-by-hop redirect validation via SG-000022 with the same implementation evidence above.
+
+DOM and accessibility - COMPLETE:
+- read-only snapshot observation with typed node identity via SG-000023 (activation PR `#59`, implementation PR `#60`, qualified head `5ae3e03ee02b199ee35cd77331b4199f9c791a0a`, CI `36437199187`, Review Gates `36437195899`, Jev `16/16`, OCR v1.12.9 `7 reviewable + 1 excluded/manually reviewed`, merge `6b1259a29a4f3350597fbac5d9cfe5c64f86a8c4`, post-merge CI `36437754602`; governance closeout PR `#61`);
+- structured invoke and value-entry actuation on typed node identities with per-action SOFT approval via SG-000024 (activation PR `#62`, implementation PR `#63`, qualified head `421139092fa4aa8c9dc545240b48cd69b4398978`, CI `36441194364`, Review Gates `36441189927`, Jev `24/24`, OCR v1.12.9 `9 reviewable + 1 excluded/manually reviewed`, merge `0a42c9e440e451023518496cadb9afc1952b30c4`, post-merge CI `36441495286`; governance closeout PR `#64`).
+
+Download and upload scope - COMPLETE:
+- scoped bounded downloads into the approved workspace download root with canonical relative destination, create-only write, type and size allowlist, same-origin and redirect-widening denial, one-shot expiring source identity, fresh SOFT digest-bound approval, and non-execution via SG-000025 (activation PR `#65`, implementation PR `#66`, qualified head `52912c3cad6ac6d407cb9862f4fad6402fcc78fc`, CI `36466971400`, Review Gates `36466968515`, Jev `20/20`, OCR v1.12.9 `10 reviewable + 1 excluded/manually reviewed`, merge `f2a19535295158a40c7cf05a002b1b6201c6aabf`, post-merge CI `36467256256`; governance closeout PR `#67`);
+- scoped bounded uploads of one recorded approved download artifact to one enabled typed file-input node with canonical identity containment, digest and size re-verification, one-shot expiring source identity, workspace trust binding, fresh SOFT digest-bound approval, and no page transfer via SG-000026 (activation PR `#68`, implementation PR `#69`, qualified head `5e9e09efafbddbbcc6e2050a3d432f77164a747f`, CI `36478991825`, Review Gates `36478988310`, Jev `26/26`, OCR v1.12.9 `8 reviewable + 1 excluded/manually reviewed`, merge `d35049bb39292b78e515a3b32c0ec88c30e2c877`, post-merge CI `36479358381`; governance closeout PR `#70`, qualified head `1082a40820262c78f77ed9a9771128f35ac255a6`, CI `36480615368`, Review Gates `36480610977`, Jev `10/10`, OCR v1.12.9 `3 reviewable + 1 excluded/manually reviewed`, merge `75181787aec4282c3783e0d1e95b05c18e192f26`, post-merge CI `36568753846`).
+
+Personal profile disabled - COMPLETE:
+- personal-profile mode denied by default with no personal cookies, credentials, passwords, or sessions via SG-000021 with the same implementation evidence above, retained through SG-000022, SG-000023, SG-000024, SG-000025, and SG-000026 with no personal-profile widening.
+
+Authority separation - COMPLETE:
+- structured browser authority remains separate from approval authority with fresh SOFT approval and digest binding for navigation, actuation, download, and upload, STRONG enforcement retained, and no new network, UI automation, clipboard, installer, elevation, debugging, scripting, credential, coordinate, screenshot, or delegation authority beyond the dedicated browser registry APIs recorded in the six grain authority boundaries above.
+
+All P08 closeouts (SG-000021 PR `#55`, SG-000022 PR `#58`, SG-000023 PR `#61`, SG-000024 PR `#64`, SG-000025 PR `#67`, SG-000026 PR `#70`) merged normally with zero unresolved blocking review threads and successful post-merge CI.
+
 ## Successor frontier
 
-COTRA-P08 continues at this frontier. No successor grain beyond SG-000026 is authorized by this closeout. The P08 exit matrix must be rebuilt against SG-000001 through SG-000026 and any remaining gap addressed by a newly authorized grain before P08 can exit.
+COTRA-P08 is exited at this frontier, so the next lawful unit must be derived from the canonical COTRA-P09 Windows UI Automation plan. No successor grain beyond the P08 exit is authorized by this program-exit candidate.
+
+After this P08 exit merges and its post-merge CI succeeds, re-read the canonical architecture, delivery plan, threat model, evidence ledger, open governance records, and this `CURRENT.md` to derive the first lawful COTRA-P09 grain. Do not infer or pre-authorize the next SpecGrain identifier or exact UI Automation design from numbering alone.
+
+A first P09 grain must build on the SG-000018 replay-resistant foundation, SG-000019 class enforcement, SG-000020 trust and revoke records, and the closed P08 structured-browser registry without weakening STRONG enforcement, one-shot, expiry, or digest binding. It must keep Cotra-owned approval surfaces excluded from automation and expose no generic input injection, coordinate fallback, or elevation authority.
 
 ## Active grain
 
-No COTRA-P08 grain is active. SG-000026 was the sole active grain and is now `CLOSED` and canonical.
+No COTRA-P08 grain is active. COTRA-P08 is exited at this frontier.
 
-The successor frontier is the COTRA-P08 exit itself: joint proof from SG-000021 isolation and origin binding plus SG-000022 through SG-000026 that structured browser operations are proven with SSRF tests, redirect-widening tests, and the personal profile disabled by default, without exposing personal-profile access, debugging authority, broader egress, or approval bypass. Actual page rendering, page loading, and real form submission to a rendered page remain successor work, and a configured workspace upload-source allowlist for workspace-authored files, if ever authorized, must never accept a caller-controlled path, a user home path, a credential path, a browser profile path, or an OS secret path.
+No COTRA-P09 grain is active. The successor frontier is the first lawful COTRA-P09 grain itself.
 
 ## Canonical public authority boundary retained
 
@@ -165,13 +202,13 @@ Existing SG-000022 bounded navigation remains subject to its exact page lifecycl
 
 Existing SG-000023 DOM observation remains subject to its exact active-page binding, typed node identity, bounded data-minimized snapshot, password and secret redaction, and stale foreign drift controls with actuation denial.
 
-Retained SG-000024 DOM actuation remains subject to its exact node binding, role and state matching, per-action SOFT approval, generation-bump invalidation, bounded non-password values, password-fill denial, and stale foreign drift controls with extended-verb denial and no coordinate fallback.
+Existing SG-000024 DOM actuation remains subject to its exact node binding, role and state matching, per-action SOFT approval, generation-bump invalidation, bounded non-password values, password-fill denial, and stale foreign drift controls with extended-verb denial and no coordinate fallback.
 
-Retained SG-000025 scoped bounded downloads remain subject to their exact active-page binding, approved workspace download root, canonical relative destination, create-only write, type and size allowlist, same-origin and redirect-widening denial, one-shot expiring source identity, fresh SOFT digest-bound approval, bounded secret-free evidence, and downloaded-file non-execution controls.
+Existing SG-000025 scoped bounded downloads remain subject to their exact active-page binding, approved workspace download root, canonical relative destination, create-only write, type and size allowlist, same-origin and redirect-widening denial, one-shot expiring source identity, fresh SOFT digest-bound approval, bounded secret-free evidence, and downloaded-file non-execution controls.
 
-Retained SG-000026 scoped bounded uploads remain subject to their exact active-page binding, exact origin and generations, workspace and policy revision, one recorded approved download artifact as the only admissible source, canonical filesystem identity containment with separator-boundary comparison, byte length and SHA-256 re-verification, one known enabled typed file-input target, one-shot expiring upload source identity, workspace trust binding, fresh SOFT digest-bound approval, bounded secret-free evidence reporting no page transfer, and file-input fill, directory upload, multiple-file upload, archive extraction, execution, and page byte transfer denial.
+Existing SG-000026 scoped bounded uploads remain subject to their exact active-page binding, exact origin and generations, workspace and policy revision, one recorded approved download artifact as the only admissible source, canonical filesystem identity containment with separator-boundary comparison, byte length and SHA-256 re-verification, one known enabled typed file-input target, one-shot expiring upload source identity, workspace trust binding, fresh SOFT digest-bound approval, bounded secret-free evidence reporting no page transfer, and file-input fill, directory upload, multiple-file upload, archive extraction, execution, and page byte transfer denial.
 
-Still denied or absent outside the closed COTRA-P07 scope and the P08 browser scopes so far:
+Still denied or absent outside the closed COTRA-P07 scope and the closed COTRA-P08 scope:
 - public `powershell.run`;
 - caller-provided PowerShell script text;
 - direct PowerShell executable authority through `process.spawn`;
@@ -189,7 +226,7 @@ Still denied or absent outside the closed COTRA-P07 scope and the P08 browser sc
 - force push and branch deletion;
 - raw credential arguments and ambient credential-manager authority;
 - generic network fetch/socket authority;
-- browser automation;
+- generic browser automation beyond the closed structured registry (launch, attachment, debugging, scripting);
 - Windows UI Automation/input injection;
 - elevation;
 - approval bypass, persistent approval reuse, or remote approval delegation.
@@ -205,7 +242,7 @@ Still denied or absent outside the closed COTRA-P07 scope and the P08 browser sc
 - caller-selected download destinations, absolute destinations, and destinations outside the approved workspace root;
 - download persistence of cookies, credentials, tokens, session material, or personal browser state.
 
-COTRA-P07 is exited at this frontier, so a later lawful P08 grain must build only on top of the SG-000018 replay-resistant foundation, SG-000019 class enforcement, and SG-000020 trust and revoke records. Raw credentials must never be accepted merely because Git can consume them.
+COTRA-P07 and COTRA-P08 are exited at this frontier, so a later lawful P09 grain must build only on top of the SG-000018 replay-resistant foundation, SG-000019 class enforcement, SG-000020 trust and revoke records, and the closed P08 structured-browser registry. Raw credentials must never be accepted merely because Git can consume them.
 
 Windows public `process.spawn` remains positively restricted to the exact SG-000010-qualified `%SystemRoot%\System32\whoami.exe` target.
 
