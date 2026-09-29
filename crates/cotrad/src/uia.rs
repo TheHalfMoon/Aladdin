@@ -1,16 +1,16 @@
-//! SG-000031 structured Windows UI Automation TogglePattern dispatch.
+//! SG-000032 structured Windows UI Automation ScrollPattern dispatch.
 //!
 //! This module dispatches the five retained SG-000027 observation shapes,
 //! the retained SG-000028 `uia.element/invoke` shape, the retained
 //! SG-000029 `uia.element/set_value` shape, the retained SG-000030
-//! `uia.element/select` shape, plus the single SG-000031 actuation shape
-//! `uia.element/toggle` against a process-lifetime typed identity registry
-//! backed by the native adapter. Observation remains read-only with no
-//! approval. Invoke, set_value, select, and toggle each require fresh
-//! per-action SOFT approval with exact digest binding and immediate
-//! pre-actuation stale-target revalidation. Every other UIA-like shape
-//! returns `Ok(None)` so the caller fails closed through the STRONG gate
-//! or the legacy denial.
+//! `uia.element/select` shape, the retained SG-000031 `uia.element/toggle`
+//! shape, plus the single SG-000032 actuation shape `uia.element/scroll`
+//! against a process-lifetime typed identity registry backed by the native
+//! adapter. Observation remains read-only with no approval. Invoke,
+//! set_value, select, toggle, and scroll each require fresh per-action SOFT
+//! approval with exact digest binding and immediate pre-actuation
+//! stale-target revalidation. Every other UIA-like shape returns `Ok(None)`
+//! so the caller fails closed through the STRONG gate or the legacy denial.
 //!
 //! Identities are process-lifetime: a cotrad restart drops the registry,
 //! so pre-restart identities fail closed as unknown rather than retargeting.
@@ -20,8 +20,8 @@ use cotra_contracts::{FailureCode, RequestEnvelope};
 use cotra_policy::{Workspace, POLICY_REVISION};
 use cotra_provider_fs::ProviderError;
 use cotra_provider_uia::{
-    invoke_approval_digest, select_approval_digest, toggle_approval_digest, value_approval_digest,
-    NativeAdapter, UiaRegistry,
+    invoke_approval_digest, scroll_approval_digest, select_approval_digest, toggle_approval_digest,
+    value_approval_digest, NativeAdapter, UiaRegistry,
 };
 use serde_json::Value;
 use std::sync::{Mutex, OnceLock};
@@ -37,7 +37,7 @@ fn locked_registry() -> Result<std::sync::MutexGuard<'static, UiaRegistry>, Prov
         .map_err(|_| ProviderError::new(FailureCode::InternalError, "uia registry is unavailable"))
 }
 
-/// Dispatch the SG-000031 UIA shapes. Returns `Ok(None)` for non-UIA shapes
+/// Dispatch the SG-000032 UIA shapes. Returns `Ok(None)` for non-UIA shapes
 /// so the caller falls through to the browser, trust, Git, and legacy
 /// dispatchers.
 pub fn dispatch_uia(
@@ -45,6 +45,9 @@ pub fn dispatch_uia(
     approval: &impl ApprovalBroker,
     request: &RequestEnvelope,
 ) -> Result<Option<Value>, ProviderError> {
+    if cotra_provider_uia::is_scroll_shape(&request.capability, &request.operation) {
+        return scroll_with_approval(workspace, approval, request).map(Some);
+    }
     if cotra_provider_uia::is_toggle_shape(&request.capability, &request.operation) {
         return toggle_with_approval(workspace, approval, request).map(Some);
     }
@@ -429,6 +432,145 @@ fn select_with_approval(
             &expected_control_type,
             expected_selected,
             selected,
+            &workspace.id,
+            POLICY_REVISION,
+        )
+        .map_err(|error| ProviderError::new(error.code, error.message))?;
+    let mut stamped = evidence;
+    stamped["approval_record"] = Value::String(token.record_id);
+    Ok(stamped)
+}
+
+fn scroll_with_approval(
+    workspace: &Workspace,
+    approval: &impl ApprovalBroker,
+    request: &RequestEnvelope,
+) -> Result<Value, ProviderError> {
+    if request.target.is_some() {
+        return Err(ProviderError::new(
+            FailureCode::InvalidRequest,
+            "uia scroll shapes do not accept a target field",
+        ));
+    }
+    reject_uia_arguments(
+        request,
+        &[
+            "element_id",
+            "expected_tree_generation",
+            "expected_control_type",
+            "direction",
+            "amount",
+            "expected_horizontal_percent",
+            "expected_vertical_percent",
+        ],
+    )?;
+    let element_id = required_string(request, "element_id")?;
+    if !cotra_provider_uia::is_well_formed_element_id(&element_id) {
+        return Err(ProviderError::new(
+            FailureCode::InvalidRequest,
+            "uia scroll element_id is malformed",
+        ));
+    }
+    let expected_tree_generation = required_u64(request, "expected_tree_generation")?;
+    let expected_control_type = required_string(request, "expected_control_type")?;
+    if expected_control_type.is_empty() || expected_control_type.len() > 256 {
+        return Err(ProviderError::new(
+            FailureCode::InvalidRequest,
+            "uia scroll expected_control_type is empty or too large",
+        ));
+    }
+    if !cotra_provider_uia::is_scroll_eligible_control_type(&expected_control_type) {
+        return Err(ProviderError::new(
+            FailureCode::CapabilityDenied,
+            "uia scroll actuates only ScrollBar, Pane, List, and Tree elements",
+        ));
+    }
+    let direction = required_string(request, "direction")?;
+    if !cotra_provider_uia::is_scroll_direction(&direction) {
+        return Err(ProviderError::new(
+            FailureCode::InvalidRequest,
+            "uia scroll direction must be one of up, down, left, or right",
+        ));
+    }
+    let amount = required_u64(request, "amount")?;
+    if !(1..=cotra_provider_uia::MAX_SCROLL_AMOUNT).contains(&amount) {
+        return Err(ProviderError::new(
+            FailureCode::InvalidRequest,
+            "uia scroll amount must be between 1 and 100 inclusive",
+        ));
+    }
+    let expected_horizontal_percent = required_u64(request, "expected_horizontal_percent")?;
+    if expected_horizontal_percent > 100 {
+        return Err(ProviderError::new(
+            FailureCode::InvalidRequest,
+            "uia scroll expected_horizontal_percent must be between 0 and 100 inclusive",
+        ));
+    }
+    let expected_vertical_percent = required_u64(request, "expected_vertical_percent")?;
+    if expected_vertical_percent > 100 {
+        return Err(ProviderError::new(
+            FailureCode::InvalidRequest,
+            "uia scroll expected_vertical_percent must be between 0 and 100 inclusive",
+        ));
+    }
+    let binding = {
+        let guard = locked_registry()?;
+        guard
+            .scroll_binding(
+                &element_id,
+                expected_tree_generation,
+                &expected_control_type,
+                expected_horizontal_percent,
+                expected_vertical_percent,
+                &direction,
+                amount,
+                &workspace.id,
+                POLICY_REVISION,
+            )
+            .map_err(|error| ProviderError::new(error.code, error.message))?
+    };
+    let digest = scroll_approval_digest(&workspace.id, POLICY_REVISION, &binding);
+    let prompt = ApprovalPrompt::new(
+        workspace.id.clone(),
+        POLICY_REVISION,
+        "scroll UIA element",
+        element_id.clone(),
+        format!(
+            "process={} window={} element={} control={} tree={} action=scroll direction={} amount={} expected_h={} expected_v={}",
+            binding.process_id,
+            binding.window_id,
+            binding.element_id,
+            binding.control_type,
+            binding.tree_generation,
+            binding.direction,
+            binding.amount,
+            binding.expected_horizontal_percent,
+            binding.expected_vertical_percent,
+        ),
+        digest.clone(),
+    );
+    let token = approval
+        .request_token(&prompt)
+        .map_err(|error| ProviderError::new(error.code, error.message))?;
+    approval
+        .consume(
+            &token,
+            &ConsumeExpectation::new(digest, workspace.id.clone(), POLICY_REVISION),
+            cotra_approval::now_ms(),
+        )
+        .map_err(|error| ProviderError::new(error.code, error.message))?;
+    let adapter = NativeAdapter::new();
+    let mut guard = locked_registry()?;
+    let evidence = guard
+        .scroll_element(
+            &adapter,
+            &element_id,
+            expected_tree_generation,
+            &expected_control_type,
+            expected_horizontal_percent,
+            expected_vertical_percent,
+            &direction,
+            amount,
             &workspace.id,
             POLICY_REVISION,
         )

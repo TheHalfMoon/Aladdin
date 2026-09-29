@@ -47,6 +47,7 @@ pub const INVOKE_SCHEMA: &str = "cotra-uia-invoke-v1";
 pub const VALUE_SCHEMA: &str = "cotra-uia-value-v1";
 pub const SELECT_SCHEMA: &str = "cotra-uia-select-v1";
 pub const TOGGLE_SCHEMA: &str = "cotra-uia-toggle-v1";
+pub const SCROLL_SCHEMA: &str = "cotra-uia-scroll-v1";
 pub const PROCESS_ID_PREFIX: &str = "uia-proc-";
 pub const WINDOW_ID_PREFIX: &str = "uia-win-";
 pub const ELEMENT_ID_PREFIX: &str = "uia-el-";
@@ -123,10 +124,17 @@ pub fn is_allowed_uia_shape(capability: &str, operation: &str) -> bool {
 /// head recorded this shape as denied; current-tree authority records the
 /// successor delta. Scroll, focus, keyboard, mouse, coordinates,
 /// screenshots, clipboard, network, and elevation remain denied in every
-/// successor grain.
+/// successor grain prior to their own successor authorization.
+///
+/// NOTE (SG-000032 successor): `uia.element/scroll` is lawfully authorized
+/// by the SG-000032 successor grain and is therefore no longer in this
+/// denied set for current-tree authority. The frozen SG-000027 qualified
+/// head recorded this shape as denied; current-tree authority records the
+/// successor delta. Focus, keyboard, mouse, coordinates, screenshots,
+/// clipboard, network, and elevation remain denied in every successor
+/// grain.
 pub const DENIED_UIA_SHAPES: &[(&str, &str)] = &[
     ("uia.element", "click"),
-    ("uia.element", "scroll"),
     ("uia.element", "focus"),
     ("uia.window", "focus"),
     ("uia.window", "close"),
@@ -227,6 +235,38 @@ pub const TOGGLE_PATTERN_NAME: &str = "Toggle";
 
 pub fn is_toggle_eligible_control_type(control_type: &str) -> bool {
     TOGGLE_ELIGIBLE_CONTROL_TYPES.contains(&control_type)
+}
+
+/// The single SG-000032 scroll actuation shape. Toggle remains authorized
+/// through its own predicate; scroll is authorized separately so frozen
+/// policy meanings are preserved while current-tree authority records the
+/// successor delta.
+pub fn is_scroll_shape(capability: &str, operation: &str) -> bool {
+    matches!((capability, operation), ("uia.element", "scroll"))
+}
+
+/// Control types eligible for ScrollPattern actuation. All other control
+/// types must fail closed as denied, including invoke-capable, value
+/// capable, selection capable, toggle capable, password, and secret controls.
+pub const SCROLL_ELIGIBLE_CONTROL_TYPES: &[&str] = &["ScrollBar", "Pane", "List", "Tree"];
+
+/// The required UIA pattern name for scroll targets.
+pub const SCROLL_PATTERN_NAME: &str = "Scroll";
+
+/// Scroll directions authorized for structured scrolling. Any other
+/// direction string fails closed.
+pub const SCROLL_DIRECTIONS: &[&str] = &["up", "down", "left", "right"];
+
+/// Maximum scroll amount per structured scroll action. Larger amounts,
+/// repeat counts, and indefinite scrolling fail closed.
+pub const MAX_SCROLL_AMOUNT: u64 = 100;
+
+pub fn is_scroll_eligible_control_type(control_type: &str) -> bool {
+    SCROLL_ELIGIBLE_CONTROL_TYPES.contains(&control_type)
+}
+
+pub fn is_scroll_direction(direction: &str) -> bool {
+    SCROLL_DIRECTIONS.contains(&direction)
 }
 
 /// SHA-256 hex digest of one requested value, used in approval digests and
@@ -351,6 +391,8 @@ pub struct NativeElement {
     pub enabled: bool,
     pub selected: bool,
     pub toggled: bool,
+    pub scroll_horizontal_percent: u8,
+    pub scroll_vertical_percent: u8,
     pub patterns: Vec<String>,
     pub value: Option<String>,
     pub value_is_password: bool,
@@ -429,6 +471,26 @@ pub trait UiaAdapter {
         Err(UiaError::new(
             FailureCode::ProviderUnavailable,
             "structured UIA toggle requires an interactive session broker and is unavailable in this context",
+        ))
+    }
+    /// Perform one structured ScrollPattern actuation against the live
+    /// element identified by window handle and UIA runtime identity. The
+    /// registry revalidates every binding before calling this method, so
+    /// adapters must not retarget, fall back to wheel, touch, keyboard
+    /// paging, mouse, or coordinates, repeat the scroll, or synthesize
+    /// generic input. The default implementation fails closed as
+    /// unavailable, which the native adapter uses until an interactive
+    /// session broker exists.
+    fn scroll_element(
+        &self,
+        _hwnd: u64,
+        _runtime_id: &str,
+        _direction: &str,
+        _amount: u64,
+    ) -> Result<(), UiaError> {
+        Err(UiaError::new(
+            FailureCode::ProviderUnavailable,
+            "structured UIA scroll requires an interactive session broker and is unavailable in this context",
         ))
     }
 }
@@ -595,6 +657,8 @@ struct ElementRecord {
     enabled: bool,
     selected: bool,
     toggled: bool,
+    scroll_horizontal_percent: u8,
+    scroll_vertical_percent: u8,
     patterns: Vec<String>,
     value: Option<String>,
     value_is_password: bool,
@@ -1116,6 +1180,8 @@ impl UiaRegistry {
             enabled: native.enabled,
             selected: native.selected,
             toggled: native.toggled,
+            scroll_horizontal_percent: native.scroll_horizontal_percent.min(100),
+            scroll_vertical_percent: native.scroll_vertical_percent.min(100),
             patterns: native.patterns.iter().take(16).cloned().collect(),
             value,
             value_is_password: native.value_is_password,
@@ -1872,6 +1938,281 @@ impl UiaRegistry {
         })
     }
 
+    /// Resolve the current scroll binding for approval digest computation.
+    /// This performs the same fail-closed revalidation as `scroll_element`
+    /// but performs no adapter mutation, so dispatch can bind approval
+    /// before actuation and then revalidate again immediately before the
+    /// adapter call.
+    #[allow(clippy::too_many_arguments)]
+    pub fn scroll_binding(
+        &self,
+        element_id: &str,
+        expected_tree_generation: u64,
+        expected_control_type: &str,
+        expected_horizontal_percent: u64,
+        expected_vertical_percent: u64,
+        direction: &str,
+        amount: u64,
+        workspace_id: &str,
+        policy_revision: &str,
+    ) -> Result<ScrollBinding, UiaError> {
+        let resolved = self.require_scroll_target(
+            element_id,
+            expected_tree_generation,
+            expected_control_type,
+            expected_horizontal_percent,
+            expected_vertical_percent,
+            direction,
+            amount,
+            workspace_id,
+            policy_revision,
+        )?;
+        Ok(resolved)
+    }
+
+    /// Perform one structured ScrollPattern actuation against the injected
+    /// adapter after immediate pre-actuation revalidation. Any drift fails
+    /// closed without silent retargeting and without fallback to wheel,
+    /// touch, keyboard paging, mouse, SendInput, coordinates, screenshots,
+    /// or elevation. Repeat counts and indefinite scrolling are denied: at
+    /// most one bounded scroll executes per approval. On success the owning
+    /// window tree generation is advanced and its elements are removed so
+    /// stale identities cannot be replayed.
+    #[allow(clippy::too_many_arguments)]
+    pub fn scroll_element(
+        &mut self,
+        adapter: &impl UiaAdapter,
+        element_id: &str,
+        expected_tree_generation: u64,
+        expected_control_type: &str,
+        expected_horizontal_percent: u64,
+        expected_vertical_percent: u64,
+        direction: &str,
+        amount: u64,
+        workspace_id: &str,
+        policy_revision: &str,
+    ) -> Result<Value, UiaError> {
+        let binding = self.require_scroll_target(
+            element_id,
+            expected_tree_generation,
+            expected_control_type,
+            expected_horizontal_percent,
+            expected_vertical_percent,
+            direction,
+            amount,
+            workspace_id,
+            policy_revision,
+        )?;
+        adapter
+            .scroll_element(binding.hwnd, &binding.runtime_id, direction, amount)
+            .map_err(|error| {
+                UiaError::new(
+                    error.code,
+                    format!("uia scroll actuation failed: {}", error.message),
+                )
+            })?;
+        let prior_tree_generation = binding.tree_generation;
+        self.tree_counter += 1;
+        let new_tree_generation = self.tree_counter;
+        if let Some(stored) = self.windows.get_mut(&binding.window_id) {
+            stored.tree_generation = new_tree_generation;
+        }
+        self.remove_window_elements(&binding.window_id);
+        let result = json!({
+            "schema": SCROLL_SCHEMA,
+            "action": "scroll",
+            "element_id": binding.element_id,
+            "window_id": binding.window_id,
+            "process_id": binding.process_id,
+            "process_generation": binding.process_generation,
+            "window_generation": binding.window_generation,
+            "prior_tree_generation": prior_tree_generation,
+            "new_tree_generation": new_tree_generation,
+            "control_type": binding.control_type,
+            "pattern": SCROLL_PATTERN_NAME,
+            "expected_horizontal_percent": binding.expected_horizontal_percent,
+            "expected_vertical_percent": binding.expected_vertical_percent,
+            "direction": binding.direction,
+            "amount": binding.amount,
+            "workspace_id": workspace_id,
+            "policy_revision": policy_revision,
+        });
+        enforce_response_bytes(&result)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn require_scroll_target(
+        &self,
+        element_id: &str,
+        expected_tree_generation: u64,
+        expected_control_type: &str,
+        expected_horizontal_percent: u64,
+        expected_vertical_percent: u64,
+        direction: &str,
+        amount: u64,
+        workspace_id: &str,
+        policy_revision: &str,
+    ) -> Result<ScrollBinding, UiaError> {
+        if !is_well_formed_element_id(element_id) {
+            return Err(UiaError::new(
+                FailureCode::InvalidRequest,
+                "uia element identity is malformed",
+            ));
+        }
+        if expected_control_type.is_empty() || expected_control_type.len() > MAX_STRING_CHARS {
+            return Err(UiaError::new(
+                FailureCode::InvalidRequest,
+                "uia scroll expected_control_type is empty or too large",
+            ));
+        }
+        if !is_scroll_eligible_control_type(expected_control_type) {
+            return Err(UiaError::new(
+                FailureCode::CapabilityDenied,
+                "uia scroll actuates only ScrollBar, Pane, List, and Tree elements",
+            ));
+        }
+        if !is_scroll_direction(direction) {
+            return Err(UiaError::new(
+                FailureCode::InvalidRequest,
+                "uia scroll direction must be one of up, down, left, or right",
+            ));
+        }
+        if !(1..=MAX_SCROLL_AMOUNT).contains(&amount) {
+            return Err(UiaError::new(
+                FailureCode::InvalidRequest,
+                "uia scroll amount must be between 1 and 100 inclusive",
+            ));
+        }
+        if expected_horizontal_percent > 100 || expected_vertical_percent > 100 {
+            return Err(UiaError::new(
+                FailureCode::InvalidRequest,
+                "uia scroll expected scroll position must be between 0 and 100 inclusive",
+            ));
+        }
+        let record = self.elements.get(element_id).ok_or_else(|| {
+            UiaError::new(
+                FailureCode::TargetStale,
+                "uia element identity is unknown; it may have disappeared or never existed",
+            )
+        })?;
+        if record.control_type != expected_control_type {
+            return Err(UiaError::new(
+                FailureCode::TargetStale,
+                "uia element control type changed since observation; stale targets fail closed",
+            ));
+        }
+        if !is_scroll_eligible_control_type(&record.control_type) {
+            return Err(UiaError::new(
+                FailureCode::CapabilityDenied,
+                "uia scroll target control type is not eligible for ScrollPattern actuation",
+            ));
+        }
+        if !record
+            .patterns
+            .iter()
+            .any(|pattern| pattern == SCROLL_PATTERN_NAME)
+        {
+            return Err(UiaError::new(
+                FailureCode::CapabilityDenied,
+                "uia scroll target does not support the Scroll pattern; no wheel, touch, keyboard-paging, or mouse fallback is permitted",
+            ));
+        }
+        if !record.enabled {
+            return Err(UiaError::new(
+                FailureCode::CapabilityDenied,
+                "uia scroll targets only enabled elements; disabled elements are denied",
+            ));
+        }
+        if record.value_is_password
+            || record.redacted
+            || is_password_field(&record.control_type, &record.automation_id, &record.name)
+        {
+            return Err(UiaError::new(
+                FailureCode::CapabilityDenied,
+                "uia scroll of a password or secret bearing element is denied",
+            ));
+        }
+        if u64::from(record.scroll_horizontal_percent) != expected_horizontal_percent
+            || u64::from(record.scroll_vertical_percent) != expected_vertical_percent
+        {
+            return Err(UiaError::new(
+                FailureCode::TargetStale,
+                "uia scroll expected scroll position drifted; the target must be re-observed",
+            ));
+        }
+        let window = self.windows.get(&record.window_id).ok_or_else(|| {
+            UiaError::new(
+                FailureCode::TargetStale,
+                "uia element identity lost its owning window",
+            )
+        })?;
+        if window.workspace_id != workspace_id {
+            return Err(UiaError::new(
+                FailureCode::TargetStale,
+                "uia element identity belongs to another workspace",
+            ));
+        }
+        if window.policy_revision != policy_revision {
+            return Err(UiaError::new(
+                FailureCode::TargetStale,
+                "uia element identity was issued under another policy revision",
+            ));
+        }
+        if record.tree_generation != expected_tree_generation
+            || record.tree_generation != window.tree_generation
+        {
+            return Err(UiaError::new(
+                FailureCode::TargetStale,
+                "uia element identity is stale; the UI tree regenerated and the target must be re-observed",
+            ));
+        }
+        if is_protected_window(&window.title, &window.class) {
+            return Err(UiaError::new(
+                FailureCode::CapabilityDenied,
+                "uia scroll of a protected Cotra surface is denied",
+            ));
+        }
+        let process = self.processes.get(&window.process_id).ok_or_else(|| {
+            UiaError::new(
+                FailureCode::TargetStale,
+                "uia scroll target lost its owning process",
+            )
+        })?;
+        if process.superseded {
+            return Err(UiaError::new(
+                FailureCode::TargetStale,
+                "uia scroll target process was superseded by a restart and fails closed",
+            ));
+        }
+        if process.workspace_id != workspace_id {
+            return Err(UiaError::new(
+                FailureCode::TargetStale,
+                "uia scroll target process belongs to another workspace",
+            ));
+        }
+        if process.policy_revision != policy_revision {
+            return Err(UiaError::new(
+                FailureCode::TargetStale,
+                "uia scroll target process was issued under another policy revision",
+            ));
+        }
+        Ok(ScrollBinding {
+            process_id: process.process_id.clone(),
+            process_generation: process.process_generation,
+            window_id: window.window_id.clone(),
+            window_generation: window.window_generation,
+            element_id: record.element_id.clone(),
+            tree_generation: record.tree_generation,
+            control_type: record.control_type.clone(),
+            expected_horizontal_percent: expected_horizontal_percent as u8,
+            expected_vertical_percent: expected_vertical_percent as u8,
+            direction: direction.to_owned(),
+            amount,
+            hwnd: window.hwnd,
+            runtime_id: record.runtime_id.clone(),
+        })
+    }
+
     fn require_value_target(
         &self,
         element_id: &str,
@@ -2324,6 +2665,55 @@ pub fn toggle_approval_digest(
     digest_hex(&material, 64)
 }
 
+/// Server-resolved scroll binding used for approval digest computation and
+/// evidence. Callers never supply these values directly; they are resolved
+/// from the typed element identity immediately before actuation, except for
+/// the bounded direction, bounded amount, and expected scroll position,
+/// which are validated against strict bounds and then bound into the
+/// approval digest.
+#[derive(Debug, Clone)]
+pub struct ScrollBinding {
+    pub process_id: String,
+    pub process_generation: u64,
+    pub window_id: String,
+    pub window_generation: u64,
+    pub element_id: String,
+    pub tree_generation: u64,
+    pub control_type: String,
+    pub expected_horizontal_percent: u8,
+    pub expected_vertical_percent: u8,
+    pub direction: String,
+    pub amount: u64,
+    pub hwnd: u64,
+    pub runtime_id: String,
+}
+
+/// Compute the exact approval digest for one structured scroll. The digest
+/// binds expected scroll position, requested direction, and requested
+/// amount, and dispatch revalidates the same binding set immediately before
+/// the adapter call so any material drift invalidates the approval.
+pub fn scroll_approval_digest(
+    workspace_id: &str,
+    policy_revision: &str,
+    binding: &ScrollBinding,
+) -> String {
+    let material = format!(
+        "cotra-uia-scroll-v1|{workspace_id}|{policy_revision}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|scroll",
+        binding.process_id,
+        binding.process_generation,
+        binding.window_id,
+        binding.window_generation,
+        binding.element_id,
+        binding.tree_generation,
+        binding.control_type,
+        binding.expected_horizontal_percent,
+        binding.expected_vertical_percent,
+        binding.direction,
+        binding.amount,
+    );
+    digest_hex(&material, 64)
+}
+
 fn render_element(record: &ElementRecord) -> Value {
     json!({
         "schema": UIA_SCHEMA,
@@ -2336,6 +2726,8 @@ fn render_element(record: &ElementRecord) -> Value {
         "enabled": record.enabled,
         "selected": record.selected,
         "toggled": record.toggled,
+        "scroll_horizontal_percent": record.scroll_horizontal_percent,
+        "scroll_vertical_percent": record.scroll_vertical_percent,
         "patterns": record.patterns,
         "value": record.value,
         "value_is_password": record.value_is_password,
@@ -2387,3 +2779,5 @@ mod sg000029_tests;
 mod sg000030_tests;
 #[cfg(test)]
 mod sg000031_tests;
+#[cfg(test)]
+mod sg000032_tests;
