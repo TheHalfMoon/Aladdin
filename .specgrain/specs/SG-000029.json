@@ -1,0 +1,143 @@
+{
+  "id": "SG-000029",
+  "title": "Structured Windows UI Automation ValuePattern actuation with approval binding and stale-target revalidation",
+  "program": "COTRA-P09",
+  "state": "GRAIN",
+  "risk": "high",
+  "created": "2026-09-29",
+  "base": "f0383ef357072e1f5ab2e32f5b0bdf527a109f33",
+  "dependencies": [
+    "SG-000028"
+  ],
+  "objective": "Establish the second narrow COTRA-P09 structured actuation grain on top of the SG-000027 observation registry, the SG-000028 invoke registry, the SG-000018 replay-resistant foundation, SG-000019 class enforcement, SG-000020 trust and revoke records, and the closed COTRA-P08 registry: a single approved ValuePattern actuation shape bound to server-derived process identity, typed window identity, typed element identity, expected tree generation, expected control type, expected Value pattern support, expected enabled state, bounded value material, workspace scope, and policy revision, with fresh SOFT approval digest binding, immediate pre-actuation stale-target revalidation, protected Cotra approval-surface exclusion, password and secret write protection, and explicit denial of every other Value-widening, coordinate, synthetic-input, screenshot, clipboard, network, and elevation shape.",
+  "scope": {
+    "include": [
+      "single new actuation shape uia.element/set_value bound to one server-allocated typed element identity with arguments element_id, expected_tree_generation, expected_control_type, and value only",
+      "server-derived process identity binding PID, executable digest, process creation generation, session identity, workspace scope, and policy revision, with PID reuse and restart fail-closed at actuation time",
+      "typed window identity binding owning process, window handle, process generation, window generation, session and desktop identity, workspace scope, and policy revision, with destroyed, replaced, and reused-handle fail-closed at actuation time",
+      "typed element identity binding owning window, UIA runtime identity, tree snapshot generation, expected control type, supported patterns, workspace scope, and policy revision, with disappeared, replaced, role-changed, generation-changed, and policy-drifted fail-closed",
+      "Value eligibility allowlist limited to Edit, Document, and ComboBox control types with required Value pattern support and required enabled state, with all other control types, unsupported patterns, and disabled elements denied",
+      "bounded value writes of at most 1024 characters with password and secret bearing targets denied, protected Cotra targets denied, and oversized values denied",
+      "fresh per-action SOFT approval with one-shot exact-digest binding over workspace, policy revision, process identity, process generation, window identity, window generation, element identity, tree generation, control type, value digest, and action material, with nonce, expiry, one-shot consumption, and stale-digest fail-closed",
+      "immediate pre-actuation revalidation of process liveness, executable identity, process generation, window existence, HWND ownership by the expected process, element existence, runtime identity, tree generation, control type, pattern support, enabled state, protected-surface status, workspace binding, and policy revision, with any drift denied without silent retargeting",
+      "protected Cotra approval and security surface exclusion so set_value can never target approval dialogs, STRONG presence surfaces, workspace trust controls, emergency revoke, or security-sensitive Cotra UI, failing closed on uncertainty",
+      "explicit denial of keyboard fallback, mouse fallback, SendInput fallback, and silent escalation when ValuePattern is unsupported or the target is stale, with no generic text-entry fallback",
+      "deterministic unit and security tests for happy-path set_value, stale process, restarted process, PID reuse, stale HWND, reused HWND, wrong process and window pairing, stale element, wrong runtime identity, wrong tree generation, changed control type, unsupported pattern, disabled element, protected Cotra surface, password and secret element, oversized value, missing approval, stale approval, reused approval, incorrect approval digest, policy drift, state drift, caller-supplied PID, caller-supplied HWND, caller-supplied runtime id, selector, coordinate fallback request, keyboard fallback request, mouse fallback request, SendInput request, invoke and select and toggle and scroll and focus shapes, and elevation requests",
+      "retention of all SG-000027 observation behavior, SG-000028 invoke behavior, SG-000018 one-shot and expiry and digest and history behavior, SG-000019 SOFT and STRONG class enforcement, SG-000020 trust and revoke behavior, and closed P08 registry behavior with no change outside UIA value policy",
+      "Windows and Ubuntu exact-head qualification with Windows-specific UIA qualification where required"
+    ],
+    "exclude": [
+      "invoke and InvokePattern actuation beyond the closed SG-000028 scope",
+      "selection and SelectionPattern actuation of any kind",
+      "toggle and TogglePattern actuation of any kind",
+      "scroll and ScrollPattern actuation of any kind",
+      "focus changes, window focus, and window close",
+      "keyboard input, mouse input, SendInput, and synthetic input of any kind",
+      "coordinate requests and screen-coordinate fallback",
+      "screenshots and visual target proposals",
+      "elevation, UAC bypass, service installation, privileged desktop access, and secure desktop input",
+      "clipboard read and clipboard write",
+      "arbitrary process commands, process spawn, process injection, and process termination",
+      "raw Win32 command execution and PowerShell execution",
+      "unrestricted process memory introspection",
+      "password, credential, and Windows Hello material exposure and password-field writes",
+      "oversized value writes beyond the bounded limit",
+      "observation or control of protected Cotra approval surfaces",
+      "persistent approval reuse across operations",
+      "approval delegation to remote or MCP callers",
+      "caller-supplied approval boolean and caller-supplied approval material",
+      "generic network fetch and socket authority"
+    ]
+  },
+  "authority_delta": {
+    "filesystem": "No new filesystem authority. set_value reads live element metadata through the existing observation registry and performs no file read or write.",
+    "process": "No new process launch, injection, or termination authority. The existing read-only process identity is reused for binding only, and the existing SG-000010 whoami-only spawn boundary is unchanged.",
+    "network": "None. UIA set_value is strictly local with no egress, and no fetch, socket, or tunnel authority is added.",
+    "browser": "None. The closed P08 structured-browser registry is unchanged, and no browser launch, attachment, navigation, download, or upload authority is added.",
+    "ui_input": "One narrow structured UI Automation actuation shape is newly added: uia.element/set_value on exact typed eligible elements with ValuePattern support, enabled state, and bounded values only. No generic text entry, no keyboard, no pointer, no coordinate, no synthetic-input, and no other UIA pattern authority is added.",
+    "secrets": "No password, credential, Windows Hello, cookie, token, or session material enters prompts, records, history, logs, MCP responses, snapshots, or evidence packets. Password and secret bearing elements are denied as set_value targets, and values never carry secret material into evidence beyond a digest.",
+    "approval": "One fresh per-action SOFT approval is required for uia.element/set_value with exact digest binding over the complete value binding set including the value digest, one-shot consumption, nonce, and expiry. No persistent reuse, no remote delegation, and no caller-supplied approval boolean is introduced.",
+    "privileged": "None. No elevation, UAC bypass, service installation, privileged desktop access, or secure desktop input is added."
+  },
+  "invariants": [
+    "set_value binds exact server-derived process identity and never caller-provided process claims",
+    "set_value binds exact typed window identity with handle, generations, session, desktop, workspace, and policy revision",
+    "set_value binds exact typed element identity with runtime identity, tree generation, control type, workspace, and policy revision",
+    "Only Edit, Document, and ComboBox elements with Value pattern support and enabled state are eligible, with bounded values only",
+    "Password, secret, protected-surface, disabled, and oversized targets never actuate",
+    "Every set_value carries fresh SOFT approval with exact digest binding including the value digest and one-shot consumption",
+    "Stale, replaced, reused, foreign, wrong-session, wrong-desktop, role-changed, pattern-changed, disabled, protected-surface, and policy-drifted targets fail closed without silent retargeting",
+    "Protected Cotra approval and security surfaces are never set_value targets",
+    "set_value failure never falls back to keyboard, mouse, SendInput, coordinates, screenshots, or elevation",
+    "A missing or denied UIA element never becomes coordinate authority",
+    "STRONG enforcement, one-shot, expiry, digest, workspace, and policy bindings are not weakened"
+  ],
+  "acceptance": [
+    {
+      "id": "A1",
+      "claim": "Tests prove set_value binds server-derived process identity with PID, executable digest, creation generation, session, workspace, and policy revision, and that fake process identity, PID reuse, stale processes, restarted processes, and wrong executable identity fail closed before approval."
+    },
+    {
+      "id": "A2",
+      "claim": "Tests prove set_value binds exact window identity with owning process, handle, process generation, window generation, session, desktop, workspace, and policy revision, and that stale HWNDs, reused handles, wrong process and window pairings, foreign windows, wrong sessions, and wrong desktops fail closed without retargeting."
+    },
+    {
+      "id": "A3",
+      "claim": "Tests prove set_value binds exact element identity with owning window, runtime identity, tree generation, control type, supported patterns, workspace, and policy revision, and that disappeared, replaced, role-changed, generation-changed, wrong runtime identity, and policy-drifted elements fail closed."
+    },
+    {
+      "id": "A4",
+      "claim": "Tests prove only Edit, Document, and ComboBox elements with Value pattern support and enabled state actuate with bounded values, and that other control types, unsupported patterns, disabled elements, password and secret elements, protected Cotra surfaces, and oversized values are denied with no keyboard fallback."
+    },
+    {
+      "id": "A5",
+      "claim": "Tests prove every set_value requires fresh SOFT approval with exact digest binding over workspace, policy revision, process, window, element, generations, control type, value digest, and action material, and that missing, stale, reused, and digest-mismatched approvals fail closed with no caller-supplied approval boolean accepted."
+    },
+    {
+      "id": "A6",
+      "claim": "Tests prove immediate pre-actuation revalidation denies process drift, window drift, element drift, value drift, state drift, protected-surface drift, workspace drift, and policy-revision drift without silent retargeting and without coordinate, keyboard, mouse, SendInput, click, invoke, select, toggle, scroll, focus, screenshot, clipboard, network, or elevation fallback."
+    },
+    {
+      "id": "A7",
+      "claim": "Tests prove caller-supplied PID, HWND, runtime id, selector, xpath, coordinate, approval material, secret fields, and widening fields are rejected as malformed or denied, and that invoke, click, select, toggle, scroll, focus, keyboard, mouse, SendInput, coordinate, screenshot, clipboard, network, spawn, inject, terminate, and elevation shapes remain denied outside their closed scopes."
+    },
+    {
+      "id": "A8",
+      "claim": "Tests prove the agent cannot satisfy set_value through MCP tools, synthetic input, coordinate proposals, screenshots, child processes, approval forgery, trust forgery, or replayed prior approvals."
+    },
+    {
+      "id": "A9",
+      "claim": "Tests prove replay, expiry, digest mismatch, revision drift, trust-revision drift, and double-consumption protections remain enforced for both approval classes."
+    },
+    {
+      "id": "A10",
+      "claim": "Tests prove all SG-000027 observation regressions, SG-000028 invoke regressions, P06 approval flows, SG-000018 through SG-000020 regressions, and the closed P08 registry behavior still pass with digests unchanged outside UIA value labeling."
+    },
+    {
+      "id": "A11",
+      "claim": "Tests prove personal-profile-style widening, arbitrary DevTools or CDP, browser scripting, credential stores, clipboard access, screenshots, coordinates, visual proposals, and network egress remain unreachable through UIA set_value."
+    },
+    {
+      "id": "A12",
+      "claim": "Windows-specific qualification proves structured value binding against real Windows process identity where required without fabricating interactive desktop evidence, and headless set_value limits are recorded honestly with unavailable-path fail-closed."
+    },
+    {
+      "id": "A13",
+      "claim": "Exact-head Windows and Ubuntu Rust, Node, Governance, genuine TypeSafe Jev, Alibaba Open Code Review, exact-diff security review, manual review of excluded security-sensitive files, and zero unresolved blocking review threads all pass."
+    }
+  ],
+  "successor_requirements": {
+    "p09_actuation": "Select, toggle, and scroll patterns with their own approval binding and stale-target revalidation remain successor work and must build on observation, invoke, and value identity without weakening STRONG enforcement, one-shot, expiry, or digest binding.",
+    "p09_exit": "COTRA-P09 exits when Cotra windows are protected, structured action is preferred, and expected process and window identity is enforced, which SG-000027 observation plus SG-000028 invoke plus SG-000029 value plus select, toggle, and scroll successors must jointly satisfy.",
+    "p10_boundary": "Coordinate and synthetic-input fallback remains P10 work. A missing or denied UIA element must never silently grant coordinate authority."
+  },
+  "review": {
+    "diffcipline": true,
+    "jev_semantic_review": true,
+    "alibaba_open_code_review": "required exact-range qualification where integrated",
+    "security_review": true,
+    "exact_head_ci": true,
+    "native_network_qualification": false
+  },
+  "done_when": "Structured Windows UI Automation ValuePattern actuation on exact typed eligible elements is specified with server-derived process binding, typed window and element binding, Value eligibility, bounded non-secret values, fresh SOFT digest-bound approval including the value digest, immediate stale-target revalidation, protected-surface exclusion, no keyboard fallback authority, and no new coordinate, synthetic-input, screenshot, clipboard, network, or elevation authority."
+}
