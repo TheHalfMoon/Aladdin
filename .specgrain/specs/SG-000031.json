@@ -2,7 +2,7 @@
   "id": "SG-000031",
   "title": "Structured Windows UI Automation TogglePattern actuation with approval binding and stale-target revalidation",
   "program": "COTRA-P09",
-  "state": "GRAIN",
+  "state": "CLOSED",
   "risk": "high",
   "created": "2026-09-29",
   "base": "17cd5826cf03056fd789309eae18ca58f89db64f",
@@ -143,5 +143,25 @@
     "exact_head_ci": true,
     "native_network_qualification": false
   },
-  "done_when": "Structured Windows UI Automation TogglePattern actuation on exact typed eligible elements is specified with server-derived process binding, typed window and element binding, Toggle eligibility, expected and requested toggle binding, fresh SOFT digest-bound approval, immediate stale-target revalidation, protected-surface exclusion, no fallback authority, and no new coordinate, synthetic-input, screenshot, clipboard, network, or elevation authority."
+  "done_when": "Structured Windows UI Automation TogglePattern actuation on exact typed eligible elements is specified with server-derived process binding, typed window and element binding, Toggle eligibility, expected and requested toggle binding, fresh SOFT digest-bound approval, immediate stale-target revalidation, protected-surface exclusion, no fallback authority, and no new coordinate, synthetic-input, screenshot, clipboard, network, or elevation authority.",
+  "qualified_head": "55cf7316ba229336abaabfa6ba75347ef0eb9794",
+  "implementation_base": "5eb07c3930044a7c7064bbb8dcb6e378f7b6958b",
+  "implementation_merge": "dd641c1d4580232cff83cc847591d81eb6b35b40",
+  "pre_merge_ci": "36603636127",
+  "pre_merge_review_gates": "36603636116",
+  "post_merge_ci": "36604072712",
+  "canonical_evidence": {
+    "implementation_pr": 85,
+    "implementation_base": "5eb07c3930044a7c7064bbb8dcb6e378f7b6958b",
+    "qualified_head": "55cf7316ba229336abaabfa6ba75347ef0eb9794",
+    "pre_merge_ci": "36603636127",
+    "pre_merge_review_gates": "36603636116",
+    "merge_sha": "dd641c1d4580232cff83cc847591d81eb6b35b40",
+    "post_merge_ci": "36604072712",
+    "jev": "PASSED: 20/20 hunks, zero findings, zero blocking findings, pin 31f89602797fb7bea007f8a480bf368bf564954e, TypeSafe SDK 0.6.0",
+    "ocr": "PASSED: Open Code Review v1.12.9 exact-range delegation, 9 files total, 8 reviewable, 1 excluded and manually reviewed",
+    "security_review": "PASS on exact qualified head; toggle binds server-derived process identity, typed window identity, and typed element identity with expected tree generation, expected control type, Toggle pattern support, enabled state, and expected plus requested toggle; no shape accepts caller-supplied PID, HWND, runtime id, selector, coordinate, approval material, secret, or fallback fields; every toggle carries fresh SOFT approval with exact digest binding including expected and requested toggle and one-shot consumption; stale, replaced, reused, foreign, role-changed, pattern-changed, disabled, protected-surface, password, expected-state-drifted, and policy-drifted targets fail closed without silent retargeting and without Invoke, click, Space, Enter, keyboard, mouse, SendInput, coordinate, screenshot, clipboard, network, or elevation fallback; successful toggle advances the window tree generation and evidence carries only identities and toggle states; the native adapter proves real process identity on Windows and reports live toggle as unavailable instead of fabricating actuation; no MCP UIA tool exists; and retained observation, invoke, value, select, replay, class, trust, and P08 behavior is unchanged",
+    "unresolved_review_threads": 0,
+    "authority_boundary": "Only structured uia.element/toggle on exact typed CheckBox and RadioButton elements with Toggle pattern support and enabled state is newly added with fresh SOFT digest-bound approval including expected and requested toggle and immediate stale-target revalidation. Invoke remains closed under SG-000028, value remains closed under SG-000029, and select remains closed under SG-000030. Scroll, focus, keyboard, mouse, SendInput, coordinates, screenshots, clipboard, network fetch, process spawn, injection, termination, elevation, and approval bypass remain absent, and existing file, process, Git, approval, presence, trust, browser, observation, invoke, value, and select behavior is unchanged."
+  }
 }
