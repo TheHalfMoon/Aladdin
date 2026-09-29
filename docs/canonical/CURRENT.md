@@ -1,11 +1,11 @@
 # Cotra Current Canonical Frontier
 
-Status: CLOSED_CANONICAL
+Status: ACTIVE_GRAIN
 Date: 2026-09-29
-Governance snapshot base: 8a8688cc5416b064569233e49d6df7bd8763a883
+Governance snapshot base: f0383ef357072e1f5ab2e32f5b0bdf527a109f33
 Evidence ledger: `.specgrain/canonical-evidence.json`
 
-`Governance snapshot base` records the exact canonical parent from which this closeout snapshot was authored. It deliberately does not claim the eventual merge SHA of the commit containing this file.
+`Governance snapshot base` records the exact canonical parent from which this activation snapshot was authored. It deliberately does not claim the eventual merge SHA of the commit containing this file.
 
 ## SpecGrain state semantics
 
@@ -182,13 +182,28 @@ SG-000028 proved that no invoke shape accepts caller-supplied PID, window handle
 
 ## Successor frontier
 
-COTRA-P09 continues at this frontier. No successor grain beyond SG-000028 is authorized by this closeout. The P09 gap matrix must be rebuilt against SG-000001 through SG-000028 and any remaining Value, Select, Toggle, and Scroll gap addressed by a newly authorized grain before P09 can exit.
+COTRA-P09 continues at this frontier. No successor grain beyond SG-000029 is authorized by this activation.
 
 ## Active grain
 
-No COTRA-P09 grain is active. SG-000028 was the sole active grain and is now `CLOSED` and canonical.
+SG-000029 - Structured Windows UI Automation ValuePattern actuation with approval binding and stale-target revalidation - is the sole active COTRA-P09 grain.
 
-The successor frontier is the P09 gap matrix itself: joint proof from SG-000027 observation plus SG-000028 invoke plus successors covering structured Value, Select, Toggle, and Scroll patterns with approval binding and stale-target revalidation that Cotra windows are protected, structured action is preferred, and expected process and window identity is enforced, without exposing generic input injection, coordinate fallback, or elevation authority. A missing or denied UIA element must never silently grant coordinate authority.
+This activation authorizes implementation and qualification of a single narrow structured value actuation shape on top of the SG-000027 observation registry, the SG-000028 invoke registry, the SG-000018 replay-resistant foundation, SG-000019 class enforcement, SG-000020 trust and revoke records, and the closed COTRA-P08 registry: uia.element/set_value bound to one server-allocated typed element with arguments element_id, expected_tree_generation, expected_control_type, and value only; server-derived process identity with PID reuse and restart denial; typed window identity with destroyed, replaced, and reused-handle denial; typed element identity with disappeared, replaced, role-changed, and generation-changed denial; Value eligibility limited to Edit, Document, and ComboBox with required Value pattern support and required enabled state; bounded values of at most 1024 characters with password, secret, protected-surface, and oversized denial; fresh per-action SOFT approval with one-shot exact-digest binding over workspace, policy revision, process, window, element, generations, control type, value digest, and action material; immediate pre-actuation revalidation with no silent retargeting; protected Cotra approval-surface exclusion; and explicit denial of keyboard fallback, mouse fallback, SendInput fallback, invoke, select, toggle, scroll, focus, coordinates, screenshots, clipboard, network, and elevation, while deliberately keeping SelectionPattern, TogglePattern, and ScrollPattern as successor work.
+
+Authorized target design:
+- uia.element/set_value bound to one typed element with exact process pairing, window pairing, tree generation, runtime identity, control type, Value pattern, enabled state, bounded value, workspace, and policy revision;
+- fresh SOFT approval with digest binding including the value digest and one-shot consumption;
+- immediate pre-actuation stale-target revalidation with TargetStale denial on any drift;
+- protected Cotra approval-surface exclusion with no value path reaching presence or approval material;
+- password, secret, disabled, oversized, and ineligible targets denied with no keyboard fallback, and deterministic unit and security tests for happy-path value, stale process, restarted process, PID reuse, stale and reused HWND, wrong process and window pairing, stale element, wrong runtime identity, wrong tree generation, changed control type, unsupported pattern, disabled element, protected surface, password element, oversized value, missing and stale and reused and digest-mismatched approval, policy drift, state drift, caller-supplied identities, selector and coordinate requests, fallback requests, and elevation requests.
+
+## Active acceptance frontier
+
+SG-000029 must prove that set_value binds server-derived process, typed window, and typed element identity and rejects caller-provided claims, that only Edit, Document, and ComboBox elements with Value support and enabled state actuate with bounded non-secret values, that every set_value carries fresh SOFT digest-bound approval including the value digest with one-shot consumption, that immediate pre-actuation revalidation fails closed on any drift without silent retargeting and without fallback to keyboard, mouse, SendInput, coordinates, screenshots, clipboard, network, or elevation, that protected Cotra surfaces and password targets are excluded, that the agent cannot reach value through its own tool or input surface, and that Windows-specific qualification proves structured binding without fabricating interactive desktop evidence.
+
+Select, toggle, scroll, focus, generic input injection, coordinate fallback, screenshots, visual proposals, clipboard access, generic network authority, persistent approval reuse, remote delegation, and elevation must remain absent, and STRONG enforcement, one-shot, expiry, and digest binding must not weaken.
+
+A P09 exit requires joint proof from SG-000027 observation plus SG-000028 invoke plus SG-000029 value plus select, toggle, and scroll successors that Cotra windows are protected, structured action is preferred, and expected process and window identity is enforced. It must not expose generic input injection, coordinate fallback, or elevation authority.
 
 ## Canonical public authority boundary retained
 
