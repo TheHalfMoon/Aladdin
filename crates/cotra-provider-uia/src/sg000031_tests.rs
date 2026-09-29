@@ -1,6 +1,6 @@
-//! SG-000030 deterministic structured SelectionPattern actuation tests.
+//! SG-000031 deterministic structured TogglePattern actuation tests.
 //!
-//! These tests use an injected fake adapter, so they prove select binding,
+//! These tests use an injected fake adapter, so they prove toggle binding,
 //! approval digest shape, stale fail-closed behavior, protected-surface
 //! exclusion, password denial, expected-state enforcement, and fallback
 //! denial deterministically on every platform without a live desktop. Real
@@ -11,8 +11,8 @@ use super::*;
 use std::cell::RefCell;
 use std::collections::HashMap;
 
-const WORKSPACE: &str = "uia-select-test-workspace";
-const POLICY: &str = "sg-000030-v1";
+const WORKSPACE: &str = "uia-toggle-test-workspace";
+const POLICY: &str = "sg-000031-v1";
 
 fn fake_process(pid: u32, exe: &str, generation: u64) -> NativeProcess {
     NativeProcess {
@@ -36,36 +36,36 @@ fn fake_window(hwnd: u64, title: &str, class: &str, nonce: u64) -> NativeWindow 
     }
 }
 
-fn select_item(runtime: &str) -> NativeElement {
+fn toggle_item(runtime: &str) -> NativeElement {
     NativeElement {
         runtime_id: runtime.to_owned(),
-        control_type: "ListItem".to_owned(),
+        control_type: "CheckBox".to_owned(),
         automation_id: format!("auto-{runtime}"),
         name: "Option".to_owned(),
         enabled: true,
         selected: false,
         toggled: false,
-        patterns: vec![SELECT_PATTERN_NAME.to_owned()],
+        patterns: vec![TOGGLE_PATTERN_NAME.to_owned()],
         value: None,
         value_is_password: false,
         children: Vec::new(),
     }
 }
 
-fn selected_item(runtime: &str) -> NativeElement {
-    let mut element = select_item(runtime);
-    element.selected = true;
+fn toggled_item(runtime: &str) -> NativeElement {
+    let mut element = toggle_item(runtime);
+    element.toggled = true;
     element
 }
 
 fn disabled_item(runtime: &str) -> NativeElement {
-    let mut element = select_item(runtime);
+    let mut element = toggle_item(runtime);
     element.enabled = false;
     element
 }
 
 fn no_pattern_item(runtime: &str) -> NativeElement {
-    let mut element = select_item(runtime);
+    let mut element = toggle_item(runtime);
     element.patterns = vec!["LegacyIAccessible".to_owned()];
     element
 }
@@ -86,16 +86,32 @@ fn button_element(runtime: &str) -> NativeElement {
     }
 }
 
-fn password_item(runtime: &str) -> NativeElement {
+fn list_item_element(runtime: &str) -> NativeElement {
     NativeElement {
         runtime_id: runtime.to_owned(),
         control_type: "ListItem".to_owned(),
+        automation_id: format!("auto-{runtime}"),
+        name: "Option".to_owned(),
+        enabled: true,
+        selected: false,
+        toggled: false,
+        patterns: vec![SELECT_PATTERN_NAME.to_owned()],
+        value: None,
+        value_is_password: false,
+        children: Vec::new(),
+    }
+}
+
+fn password_item(runtime: &str) -> NativeElement {
+    NativeElement {
+        runtime_id: runtime.to_owned(),
+        control_type: "CheckBox".to_owned(),
         automation_id: "login-password".to_owned(),
         name: "Password".to_owned(),
         enabled: true,
         selected: false,
         toggled: false,
-        patterns: vec![SELECT_PATTERN_NAME.to_owned()],
+        patterns: vec![TOGGLE_PATTERN_NAME.to_owned()],
         value: Some("hunter2".to_owned()),
         value_is_password: true,
         children: Vec::new(),
@@ -103,19 +119,19 @@ fn password_item(runtime: &str) -> NativeElement {
 }
 
 #[derive(Default)]
-struct FakeSelectState {
+struct FakeToggleState {
     processes: Vec<NativeProcess>,
     windows_by_pid: HashMap<u32, Vec<NativeWindow>>,
     trees_by_hwnd: HashMap<u64, Vec<NativeElement>>,
-    selects: Vec<(u64, String, bool)>,
+    toggles: Vec<(u64, String, bool)>,
 }
 
 #[derive(Default)]
-struct FakeSelectAdapter {
-    state: RefCell<FakeSelectState>,
+struct FakeToggleAdapter {
+    state: RefCell<FakeToggleState>,
 }
 
-impl FakeSelectAdapter {
+impl FakeToggleAdapter {
     fn with_process(pid: u32, exe: &str, generation: u64) -> Self {
         let adapter = Self::default();
         adapter
@@ -134,12 +150,12 @@ impl FakeSelectAdapter {
         self.state.borrow_mut().trees_by_hwnd.insert(hwnd, roots);
     }
 
-    fn select_count(&self) -> usize {
-        self.state.borrow().selects.len()
+    fn toggle_count(&self) -> usize {
+        self.state.borrow().toggles.len()
     }
 }
 
-impl UiaAdapter for FakeSelectAdapter {
+impl UiaAdapter for FakeToggleAdapter {
     fn list_processes(&self) -> Result<Vec<NativeProcess>, UiaError> {
         Ok(self.state.borrow().processes.clone())
     }
@@ -164,19 +180,19 @@ impl UiaAdapter for FakeSelectAdapter {
             .unwrap_or_default())
     }
 
-    fn select_element(&self, hwnd: u64, runtime_id: &str, selected: bool) -> Result<(), UiaError> {
+    fn toggle_element(&self, hwnd: u64, runtime_id: &str, toggled: bool) -> Result<(), UiaError> {
         self.state
             .borrow_mut()
-            .selects
-            .push((hwnd, runtime_id.to_owned(), selected));
+            .toggles
+            .push((hwnd, runtime_id.to_owned(), toggled));
         Ok(())
     }
 }
 
-fn setup_item() -> (FakeSelectAdapter, UiaRegistry, String, u64, String) {
-    let adapter = FakeSelectAdapter::with_process(4242, "notepad", 9001);
+fn setup_item() -> (FakeToggleAdapter, UiaRegistry, String, u64, String) {
+    let adapter = FakeToggleAdapter::with_process(4242, "notepad", 9001);
     adapter.set_windows(4242, vec![fake_window(100, "Document", "Notepad", 1)]);
-    adapter.set_tree(100, vec![select_item("item-1")]);
+    adapter.set_tree(100, vec![toggle_item("item-1")]);
     let mut registry = UiaRegistry::new();
     let list = registry.list_windows(&adapter, WORKSPACE, POLICY).unwrap();
     let window_id = list["windows"][0]["window_id"]
@@ -206,27 +222,24 @@ fn setup_item() -> (FakeSelectAdapter, UiaRegistry, String, u64, String) {
 }
 
 #[test]
-fn select_shape_and_eligibility_helpers_behave() {
-    assert!(is_select_shape("uia.element", "select"));
-    assert!(!is_select_shape("uia.element", "invoke"));
-    assert!(!is_select_shape("uia.element", "set_value"));
-    assert!(!is_select_shape("uia.element", "observe"));
-    assert!(is_select_eligible_control_type("ListItem"));
-    assert!(is_select_eligible_control_type("TreeItem"));
-    assert!(is_select_eligible_control_type("TabItem"));
-    assert!(!is_select_eligible_control_type("Button"));
-    assert!(!is_select_eligible_control_type("Edit"));
-    assert!(!is_select_eligible_control_type("CheckBox"));
-    assert!(!is_select_eligible_control_type(""));
-    assert_eq!(SELECT_PATTERN_NAME, "SelectionItem");
-    assert_eq!(SELECT_SCHEMA, "cotra-uia-select-v1");
-    assert!(!is_denied_uia_shape("uia.element", "select"));
-    // NOTE (SG-000031 successor): `uia.element/toggle` is lawfully
-    // authorized by the SG-000031 successor grain, so it is no longer
-    // denied for current-tree authority. Scroll, synthetic input,
-    // coordinates, screenshots, clipboard, network, and elevation remain
-    // denied.
+fn toggle_shape_and_eligibility_helpers_behave() {
+    assert!(is_toggle_shape("uia.element", "toggle"));
+    assert!(!is_toggle_shape("uia.element", "invoke"));
+    assert!(!is_toggle_shape("uia.element", "set_value"));
+    assert!(!is_toggle_shape("uia.element", "select"));
+    assert!(!is_toggle_shape("uia.element", "observe"));
+    assert!(is_toggle_eligible_control_type("CheckBox"));
+    assert!(is_toggle_eligible_control_type("RadioButton"));
+    assert!(!is_toggle_eligible_control_type("Button"));
+    assert!(!is_toggle_eligible_control_type("ListItem"));
+    assert!(!is_toggle_eligible_control_type("Edit"));
+    assert!(!is_toggle_eligible_control_type(""));
+    assert_eq!(TOGGLE_PATTERN_NAME, "Toggle");
+    assert_eq!(TOGGLE_SCHEMA, "cotra-uia-toggle-v1");
     assert!(!is_denied_uia_shape("uia.element", "toggle"));
+    assert!(!is_denied_uia_shape("uia.element", "select"));
+    assert!(!is_denied_uia_shape("uia.element", "set_value"));
+    assert!(!is_denied_uia_shape("uia.element", "invoke"));
     assert!(is_denied_uia_shape("uia.element", "scroll"));
     assert!(is_denied_uia_shape("uia.input", "mouse"));
     assert!(is_denied_uia_shape("uia.input", "keyboard"));
@@ -236,13 +249,13 @@ fn select_shape_and_eligibility_helpers_behave() {
 }
 
 #[test]
-fn happy_path_select_actuates_and_invalidates_old_tree() {
+fn happy_path_toggle_actuates_and_invalidates_old_tree() {
     let (adapter, mut registry, element_id, tree_generation, window_id) = setup_item();
     let binding = registry
-        .select_binding(
+        .toggle_binding(
             &element_id,
             tree_generation,
-            "ListItem",
+            "CheckBox",
             false,
             true,
             WORKSPACE,
@@ -250,36 +263,36 @@ fn happy_path_select_actuates_and_invalidates_old_tree() {
         )
         .expect("binding resolves");
     assert_eq!(binding.element_id, element_id);
-    assert_eq!(binding.control_type, "ListItem");
-    assert!(!binding.expected_selected);
-    assert!(binding.selected);
-    let digest = select_approval_digest(WORKSPACE, POLICY, &binding);
+    assert_eq!(binding.control_type, "CheckBox");
+    assert!(!binding.expected_toggled);
+    assert!(binding.toggled);
+    let digest = toggle_approval_digest(WORKSPACE, POLICY, &binding);
     assert_eq!(digest.len(), 64);
     let evidence = registry
-        .select_element(
+        .toggle_element(
             &adapter,
             &element_id,
             tree_generation,
-            "ListItem",
+            "CheckBox",
             false,
             true,
             WORKSPACE,
             POLICY,
         )
-        .expect("select succeeds");
-    assert_eq!(evidence["action"], "select");
+        .expect("toggle succeeds");
+    assert_eq!(evidence["action"], "toggle");
     assert_eq!(evidence["element_id"], element_id.as_str());
-    assert_eq!(evidence["control_type"], "ListItem");
-    assert_eq!(evidence["pattern"], "SelectionItem");
-    assert_eq!(evidence["expected_selected"], false);
-    assert_eq!(evidence["selected"], true);
-    assert_eq!(adapter.select_count(), 1);
+    assert_eq!(evidence["control_type"], "CheckBox");
+    assert_eq!(evidence["pattern"], "Toggle");
+    assert_eq!(evidence["expected_toggled"], false);
+    assert_eq!(evidence["toggled"], true);
+    assert_eq!(adapter.toggle_count(), 1);
     let error = registry
-        .select_element(
+        .toggle_element(
             &adapter,
             &element_id,
             tree_generation,
-            "ListItem",
+            "CheckBox",
             false,
             true,
             WORKSPACE,
@@ -287,7 +300,7 @@ fn happy_path_select_actuates_and_invalidates_old_tree() {
         )
         .expect_err("replay against the old tree must fail");
     assert_eq!(error.code, FailureCode::TargetStale);
-    assert_eq!(adapter.select_count(), 1);
+    assert_eq!(adapter.toggle_count(), 1);
     let (_, new_tree) = registry
         .window_generations(&window_id)
         .expect("window remains");
@@ -295,25 +308,25 @@ fn happy_path_select_actuates_and_invalidates_old_tree() {
 }
 
 #[test]
-fn select_digest_binds_material_state() {
+fn toggle_digest_binds_material_state() {
     let (adapter, registry, element_id, tree_generation, _) = setup_item();
     let first = registry
-        .select_binding(
+        .toggle_binding(
             &element_id,
             tree_generation,
-            "ListItem",
+            "CheckBox",
             false,
             true,
             WORKSPACE,
             POLICY,
         )
         .expect("binding");
-    let base_digest = select_approval_digest(WORKSPACE, POLICY, &first);
+    let base_digest = toggle_approval_digest(WORKSPACE, POLICY, &first);
     let second = registry
-        .select_binding(
+        .toggle_binding(
             &element_id,
             tree_generation,
-            "ListItem",
+            "CheckBox",
             false,
             false,
             WORKSPACE,
@@ -322,28 +335,28 @@ fn select_digest_binds_material_state() {
         .expect("binding");
     assert_ne!(
         base_digest,
-        select_approval_digest(WORKSPACE, POLICY, &second)
+        toggle_approval_digest(WORKSPACE, POLICY, &second)
     );
     assert_ne!(
         base_digest,
-        select_approval_digest("foreign-workspace", POLICY, &first)
+        toggle_approval_digest("foreign-workspace", POLICY, &first)
     );
     assert_ne!(
         base_digest,
-        select_approval_digest(WORKSPACE, "sg-000029-v1", &first)
+        toggle_approval_digest(WORKSPACE, "sg-000030-v1", &first)
     );
     let _ = adapter;
 }
 
 #[test]
-fn malformed_and_ineligible_select_targets_fail_closed() {
+fn malformed_and_ineligible_toggle_targets_fail_closed() {
     let (adapter, mut registry, element_id, tree_generation, _) = setup_item();
     let error = registry
-        .select_element(
+        .toggle_element(
             &adapter,
             "uia-el-short",
             tree_generation,
-            "ListItem",
+            "CheckBox",
             false,
             true,
             WORKSPACE,
@@ -352,7 +365,7 @@ fn malformed_and_ineligible_select_targets_fail_closed() {
         .expect_err("malformed element must fail");
     assert_eq!(error.code, FailureCode::InvalidRequest);
     let error = registry
-        .select_element(
+        .toggle_element(
             &adapter,
             &element_id,
             tree_generation,
@@ -365,7 +378,7 @@ fn malformed_and_ineligible_select_targets_fail_closed() {
         .expect_err("empty control type must fail");
     assert_eq!(error.code, FailureCode::InvalidRequest);
     let error = registry
-        .select_element(
+        .toggle_element(
             &adapter,
             &element_id,
             tree_generation,
@@ -380,11 +393,10 @@ fn malformed_and_ineligible_select_targets_fail_closed() {
         error.code,
         FailureCode::CapabilityDenied | FailureCode::TargetStale
     ));
-    let forged = format!("{ELEMENT_ID_PREFIX}{}", "d".repeat(ID_HEX_CHARS));
     let error = registry
-        .select_element(
+        .toggle_element(
             &adapter,
-            &forged,
+            &element_id,
             tree_generation,
             "ListItem",
             false,
@@ -392,39 +404,56 @@ fn malformed_and_ineligible_select_targets_fail_closed() {
             WORKSPACE,
             POLICY,
         )
+        .expect_err("selection control type must fail for toggle");
+    assert!(matches!(
+        error.code,
+        FailureCode::CapabilityDenied | FailureCode::TargetStale
+    ));
+    let forged = format!("{ELEMENT_ID_PREFIX}{}", "d".repeat(ID_HEX_CHARS));
+    let error = registry
+        .toggle_element(
+            &adapter,
+            &forged,
+            tree_generation,
+            "CheckBox",
+            false,
+            true,
+            WORKSPACE,
+            POLICY,
+        )
         .expect_err("unknown element must fail");
     assert_eq!(error.code, FailureCode::TargetStale);
-    assert_eq!(adapter.select_count(), 0);
+    assert_eq!(adapter.toggle_count(), 0);
 }
 
 #[test]
 fn expected_state_drift_fails_closed() {
     let (adapter, mut registry, element_id, tree_generation, _) = setup_item();
     let error = registry
-        .select_element(
+        .toggle_element(
             &adapter,
             &element_id,
             tree_generation,
-            "ListItem",
+            "CheckBox",
             true,
             true,
             WORKSPACE,
             POLICY,
         )
-        .expect_err("wrong expected selection must fail");
+        .expect_err("wrong expected toggle must fail");
     assert_eq!(error.code, FailureCode::TargetStale);
-    assert_eq!(adapter.select_count(), 0);
+    assert_eq!(adapter.toggle_count(), 0);
 }
 
 #[test]
 fn stale_tree_and_control_type_drift_fail_closed() {
     let (adapter, mut registry, element_id, tree_generation, window_id) = setup_item();
     let error = registry
-        .select_element(
+        .toggle_element(
             &adapter,
             &element_id,
             tree_generation + 1,
-            "ListItem",
+            "CheckBox",
             false,
             true,
             WORKSPACE,
@@ -433,11 +462,11 @@ fn stale_tree_and_control_type_drift_fail_closed() {
         .expect_err("wrong tree generation must fail");
     assert_eq!(error.code, FailureCode::TargetStale);
     let error = registry
-        .select_element(
+        .toggle_element(
             &adapter,
             &element_id,
             tree_generation,
-            "TreeItem",
+            "RadioButton",
             false,
             true,
             WORKSPACE,
@@ -447,11 +476,11 @@ fn stale_tree_and_control_type_drift_fail_closed() {
     assert_eq!(error.code, FailureCode::TargetStale);
     assert!(registry.invalidate_tree(&window_id));
     let error = registry
-        .select_element(
+        .toggle_element(
             &adapter,
             &element_id,
             tree_generation,
-            "ListItem",
+            "CheckBox",
             false,
             true,
             WORKSPACE,
@@ -459,12 +488,12 @@ fn stale_tree_and_control_type_drift_fail_closed() {
         )
         .expect_err("regenerated tree must fail the old identity");
     assert_eq!(error.code, FailureCode::TargetStale);
-    assert_eq!(adapter.select_count(), 0);
+    assert_eq!(adapter.toggle_count(), 0);
 }
 
 #[test]
 fn unsupported_pattern_disabled_ineligible_and_secret_targets_are_denied() {
-    let adapter = FakeSelectAdapter::with_process(4242, "notepad", 9001);
+    let adapter = FakeToggleAdapter::with_process(4242, "notepad", 9001);
     adapter.set_windows(4242, vec![fake_window(100, "Document", "Notepad", 1)]);
     adapter.set_tree(
         100,
@@ -472,6 +501,7 @@ fn unsupported_pattern_disabled_ineligible_and_secret_targets_are_denied() {
             no_pattern_item("item-no-pattern"),
             disabled_item("item-disabled"),
             button_element("btn-1"),
+            list_item_element("item-list"),
             password_item("item-password"),
         ],
     );
@@ -496,19 +526,19 @@ fn unsupported_pattern_disabled_ineligible_and_secret_targets_are_denied() {
         )
         .unwrap();
     let nodes = tree["nodes"].as_array().expect("nodes");
-    assert_eq!(nodes.len(), 4);
+    assert_eq!(nodes.len(), 5);
     for node in nodes {
         let element_id = node["element_id"].as_str().expect("element id");
         let tree_generation = tree["tree_generation"].as_u64().expect("tree generation");
         let control_type = node["control_type"].as_str().expect("control type");
-        let expected_selected = node["selected"].as_bool().unwrap_or(false);
+        let expected_toggled = node["toggled"].as_bool().unwrap_or(false);
         let error = registry
-            .select_element(
+            .toggle_element(
                 &adapter,
                 element_id,
                 tree_generation,
                 control_type,
-                expected_selected,
+                expected_toggled,
                 true,
                 WORKSPACE,
                 POLICY,
@@ -519,17 +549,17 @@ fn unsupported_pattern_disabled_ineligible_and_secret_targets_are_denied() {
             FailureCode::CapabilityDenied | FailureCode::TargetStale
         ));
     }
-    assert_eq!(adapter.select_count(), 0);
+    assert_eq!(adapter.toggle_count(), 0);
 }
 
 #[test]
-fn protected_window_select_is_denied() {
-    let adapter = FakeSelectAdapter::with_process(4242, "notepad", 9001);
+fn protected_window_toggle_is_denied() {
+    let adapter = FakeToggleAdapter::with_process(4242, "notepad", 9001);
     adapter.set_windows(
         4242,
         vec![fake_window(100, "Cotra Approval", "CotraApproveDialog", 1)],
     );
-    adapter.set_tree(100, vec![select_item("item-1")]);
+    adapter.set_tree(100, vec![toggle_item("item-1")]);
     let mut registry = UiaRegistry::new();
     let list = registry.list_windows(&adapter, WORKSPACE, POLICY).unwrap();
     assert_eq!(list["window_count"], 0);
@@ -537,10 +567,10 @@ fn protected_window_select_is_denied() {
 }
 
 #[test]
-fn selected_item_requires_true_expected_state() {
-    let adapter = FakeSelectAdapter::with_process(4242, "notepad", 9001);
+fn toggled_item_requires_true_expected_state() {
+    let adapter = FakeToggleAdapter::with_process(4242, "notepad", 9001);
     adapter.set_windows(4242, vec![fake_window(100, "Document", "Notepad", 1)]);
-    adapter.set_tree(100, vec![selected_item("item-selected")]);
+    adapter.set_tree(100, vec![toggled_item("item-toggled")]);
     let mut registry = UiaRegistry::new();
     let list = registry.list_windows(&adapter, WORKSPACE, POLICY).unwrap();
     let window_id = list["windows"][0]["window_id"]
@@ -567,29 +597,29 @@ fn selected_item_requires_true_expected_state() {
         .expect("element id")
         .to_owned();
     registry
-        .select_element(
+        .toggle_element(
             &adapter,
             &element_id,
             tree_generation,
-            "ListItem",
+            "CheckBox",
             true,
             false,
             WORKSPACE,
             POLICY,
         )
-        .expect("deselect of a selected item succeeds");
-    assert_eq!(adapter.select_count(), 1);
+        .expect("untoggle of a toggled item succeeds");
+    assert_eq!(adapter.toggle_count(), 1);
 }
 
 #[test]
 fn workspace_policy_and_disappearance_drift_fail_closed() {
     let (adapter, mut registry, element_id, tree_generation, _) = setup_item();
     let error = registry
-        .select_element(
+        .toggle_element(
             &adapter,
             &element_id,
             tree_generation,
-            "ListItem",
+            "CheckBox",
             false,
             true,
             "foreign-workspace",
@@ -598,25 +628,25 @@ fn workspace_policy_and_disappearance_drift_fail_closed() {
         .expect_err("foreign workspace must fail");
     assert_eq!(error.code, FailureCode::TargetStale);
     let error = registry
-        .select_element(
+        .toggle_element(
             &adapter,
             &element_id,
             tree_generation,
-            "ListItem",
+            "CheckBox",
             false,
             true,
             WORKSPACE,
-            "sg-000029-v1",
+            "sg-000030-v1",
         )
         .expect_err("policy drift must fail");
     assert_eq!(error.code, FailureCode::TargetStale);
     assert!(registry.remove_element(&element_id));
     let error = registry
-        .select_element(
+        .toggle_element(
             &adapter,
             &element_id,
             tree_generation,
-            "ListItem",
+            "CheckBox",
             false,
             true,
             WORKSPACE,
@@ -624,20 +654,20 @@ fn workspace_policy_and_disappearance_drift_fail_closed() {
         )
         .expect_err("disappeared element must fail");
     assert_eq!(error.code, FailureCode::TargetStale);
-    assert_eq!(adapter.select_count(), 0);
+    assert_eq!(adapter.toggle_count(), 0);
 }
 
 #[test]
-fn superseded_process_select_fails_closed() {
+fn superseded_process_toggle_fails_closed() {
     let (adapter, mut registry, element_id, tree_generation, _) = setup_item();
     let native = fake_process(4242, "notepad", 9001);
     let (process_id, _) = registry.register_process(&native, WORKSPACE, POLICY);
     assert!(registry.mark_process_superseded(&process_id));
     let error = registry
-        .select_binding(
+        .toggle_binding(
             &element_id,
             tree_generation,
-            "ListItem",
+            "CheckBox",
             false,
             true,
             WORKSPACE,
@@ -645,15 +675,15 @@ fn superseded_process_select_fails_closed() {
         )
         .expect_err("superseded process binding must fail");
     assert_eq!(error.code, FailureCode::TargetStale);
-    assert_eq!(adapter.select_count(), 0);
+    assert_eq!(adapter.toggle_count(), 0);
 }
 
 #[test]
-fn native_adapter_select_reports_unavailable_without_fabrication() {
+fn native_adapter_toggle_reports_unavailable_without_fabrication() {
     let native = NativeAdapter::new();
     let error = native
-        .select_element(123, "runtime-1", true)
-        .expect_err("native select without a broker must be unavailable");
+        .toggle_element(123, "runtime-1", true)
+        .expect_err("native toggle without a broker must be unavailable");
     assert_eq!(error.code, FailureCode::ProviderUnavailable);
 }
 
@@ -674,11 +704,11 @@ fn adapter_failure_is_reported_without_generation_bump() {
         fn read_tree(&self, _hwnd: u64) -> Result<Vec<NativeElement>, UiaError> {
             Ok(self.tree.clone())
         }
-        fn select_element(
+        fn toggle_element(
             &self,
             _hwnd: u64,
             _runtime_id: &str,
-            _selected: bool,
+            _toggled: bool,
         ) -> Result<(), UiaError> {
             Err(UiaError::new(
                 FailureCode::ProviderUnavailable,
@@ -689,7 +719,7 @@ fn adapter_failure_is_reported_without_generation_bump() {
     let failing = FailingAdapter {
         processes: vec![fake_process(4242, "notepad", 9001)],
         windows: vec![fake_window(100, "Document", "Notepad", 1)],
-        tree: vec![select_item("item-1")],
+        tree: vec![toggle_item("item-1")],
     };
     let mut registry = UiaRegistry::new();
     let list = registry.list_windows(&failing, WORKSPACE, POLICY).unwrap();
@@ -720,11 +750,11 @@ fn adapter_failure_is_reported_without_generation_bump() {
         .window_generations(&window_id)
         .expect("generations");
     let error = registry
-        .select_element(
+        .toggle_element(
             &failing,
             &element_id,
             tree_generation,
-            "ListItem",
+            "CheckBox",
             false,
             true,
             WORKSPACE,

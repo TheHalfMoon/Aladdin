@@ -1,12 +1,13 @@
-//! SG-000030 structured Windows UI Automation SelectionPattern dispatch.
+//! SG-000031 structured Windows UI Automation TogglePattern dispatch.
 //!
 //! This module dispatches the five retained SG-000027 observation shapes,
 //! the retained SG-000028 `uia.element/invoke` shape, the retained
-//! SG-000029 `uia.element/set_value` shape, plus the single SG-000030
-//! actuation shape `uia.element/select` against a process-lifetime typed
-//! identity registry backed by the native adapter. Observation remains
-//! read-only with no approval. Invoke, set_value, and select each require
-//! fresh per-action SOFT approval with exact digest binding and immediate
+//! SG-000029 `uia.element/set_value` shape, the retained SG-000030
+//! `uia.element/select` shape, plus the single SG-000031 actuation shape
+//! `uia.element/toggle` against a process-lifetime typed identity registry
+//! backed by the native adapter. Observation remains read-only with no
+//! approval. Invoke, set_value, select, and toggle each require fresh
+//! per-action SOFT approval with exact digest binding and immediate
 //! pre-actuation stale-target revalidation. Every other UIA-like shape
 //! returns `Ok(None)` so the caller fails closed through the STRONG gate
 //! or the legacy denial.
@@ -19,8 +20,8 @@ use cotra_contracts::{FailureCode, RequestEnvelope};
 use cotra_policy::{Workspace, POLICY_REVISION};
 use cotra_provider_fs::ProviderError;
 use cotra_provider_uia::{
-    invoke_approval_digest, select_approval_digest, value_approval_digest, NativeAdapter,
-    UiaRegistry,
+    invoke_approval_digest, select_approval_digest, toggle_approval_digest, value_approval_digest,
+    NativeAdapter, UiaRegistry,
 };
 use serde_json::Value;
 use std::sync::{Mutex, OnceLock};
@@ -36,7 +37,7 @@ fn locked_registry() -> Result<std::sync::MutexGuard<'static, UiaRegistry>, Prov
         .map_err(|_| ProviderError::new(FailureCode::InternalError, "uia registry is unavailable"))
 }
 
-/// Dispatch the SG-000030 UIA shapes. Returns `Ok(None)` for non-UIA shapes
+/// Dispatch the SG-000031 UIA shapes. Returns `Ok(None)` for non-UIA shapes
 /// so the caller falls through to the browser, trust, Git, and legacy
 /// dispatchers.
 pub fn dispatch_uia(
@@ -44,6 +45,9 @@ pub fn dispatch_uia(
     approval: &impl ApprovalBroker,
     request: &RequestEnvelope,
 ) -> Result<Option<Value>, ProviderError> {
+    if cotra_provider_uia::is_toggle_shape(&request.capability, &request.operation) {
+        return toggle_with_approval(workspace, approval, request).map(Some);
+    }
     if cotra_provider_uia::is_select_shape(&request.capability, &request.operation) {
         return select_with_approval(workspace, approval, request).map(Some);
     }
@@ -425,6 +429,111 @@ fn select_with_approval(
             &expected_control_type,
             expected_selected,
             selected,
+            &workspace.id,
+            POLICY_REVISION,
+        )
+        .map_err(|error| ProviderError::new(error.code, error.message))?;
+    let mut stamped = evidence;
+    stamped["approval_record"] = Value::String(token.record_id);
+    Ok(stamped)
+}
+
+fn toggle_with_approval(
+    workspace: &Workspace,
+    approval: &impl ApprovalBroker,
+    request: &RequestEnvelope,
+) -> Result<Value, ProviderError> {
+    if request.target.is_some() {
+        return Err(ProviderError::new(
+            FailureCode::InvalidRequest,
+            "uia toggle shapes do not accept a target field",
+        ));
+    }
+    reject_uia_arguments(
+        request,
+        &[
+            "element_id",
+            "expected_tree_generation",
+            "expected_control_type",
+            "expected_toggled",
+            "toggled",
+        ],
+    )?;
+    let element_id = required_string(request, "element_id")?;
+    if !cotra_provider_uia::is_well_formed_element_id(&element_id) {
+        return Err(ProviderError::new(
+            FailureCode::InvalidRequest,
+            "uia toggle element_id is malformed",
+        ));
+    }
+    let expected_tree_generation = required_u64(request, "expected_tree_generation")?;
+    let expected_control_type = required_string(request, "expected_control_type")?;
+    if expected_control_type.is_empty() || expected_control_type.len() > 256 {
+        return Err(ProviderError::new(
+            FailureCode::InvalidRequest,
+            "uia toggle expected_control_type is empty or too large",
+        ));
+    }
+    if !cotra_provider_uia::is_toggle_eligible_control_type(&expected_control_type) {
+        return Err(ProviderError::new(
+            FailureCode::CapabilityDenied,
+            "uia toggle actuates only CheckBox and RadioButton elements",
+        ));
+    }
+    let expected_toggled = required_bool(request, "expected_toggled")?;
+    let toggled = required_bool(request, "toggled")?;
+    let binding = {
+        let guard = locked_registry()?;
+        guard
+            .toggle_binding(
+                &element_id,
+                expected_tree_generation,
+                &expected_control_type,
+                expected_toggled,
+                toggled,
+                &workspace.id,
+                POLICY_REVISION,
+            )
+            .map_err(|error| ProviderError::new(error.code, error.message))?
+    };
+    let digest = toggle_approval_digest(&workspace.id, POLICY_REVISION, &binding);
+    let prompt = ApprovalPrompt::new(
+        workspace.id.clone(),
+        POLICY_REVISION,
+        "toggle UIA element",
+        element_id.clone(),
+        format!(
+            "process={} window={} element={} control={} tree={} action=toggle expected_toggled={} toggled={}",
+            binding.process_id,
+            binding.window_id,
+            binding.element_id,
+            binding.control_type,
+            binding.tree_generation,
+            binding.expected_toggled,
+            binding.toggled,
+        ),
+        digest.clone(),
+    );
+    let token = approval
+        .request_token(&prompt)
+        .map_err(|error| ProviderError::new(error.code, error.message))?;
+    approval
+        .consume(
+            &token,
+            &ConsumeExpectation::new(digest, workspace.id.clone(), POLICY_REVISION),
+            cotra_approval::now_ms(),
+        )
+        .map_err(|error| ProviderError::new(error.code, error.message))?;
+    let adapter = NativeAdapter::new();
+    let mut guard = locked_registry()?;
+    let evidence = guard
+        .toggle_element(
+            &adapter,
+            &element_id,
+            expected_tree_generation,
+            &expected_control_type,
+            expected_toggled,
+            toggled,
             &workspace.id,
             POLICY_REVISION,
         )
