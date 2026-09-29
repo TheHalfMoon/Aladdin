@@ -1,11 +1,11 @@
 # Cotra Current Canonical Frontier
 
-Status: CLOSED_CANONICAL
+Status: PROGRAM_EXIT_CANDIDATE
 Date: 2026-09-29
-Governance snapshot base: 162866cfa29ca5660e25875250c8ff223ca1f855
+Governance snapshot base: 87f0a4cc35e519739eeeba88a621277e25a296d1
 Evidence ledger: `.specgrain/canonical-evidence.json`
 
-`Governance snapshot base` records the exact canonical parent from which this closeout snapshot was authored. It deliberately does not claim the eventual merge SHA of the commit containing this file.
+`Governance snapshot base` records the exact canonical parent from which this program-exit snapshot was authored. It deliberately does not claim the eventual merge SHA of the commit containing this file.
 
 ## SpecGrain state semantics
 
@@ -204,15 +204,57 @@ SG-000032 closed canonically: activation PR `#87` (activation base `0b56d8b95f69
 
 SG-000032 proved that no scroll shape accepts caller-supplied PID, window handle, UIA runtime id, selector, coordinate, repeat count, approval material, secret, or fallback fields, so callers can only present one server-allocated typed element plus expected tree generation, expected control type, bounded direction, bounded amount, and expected scroll position; that scroll binds server-derived process identity, typed window identity, and typed element identity with PID reuse, restart, destroyed and reused handles, disappeared, replaced, and role-changed elements fail-closed; that only ScrollBar, Pane, List, and Tree elements with Scroll support and enabled state actuate with direction limited to up, down, left, and right and amount bounded between 1 and 100 while other control types, unsupported patterns, disabled elements, password and secret elements, protected Cotra surfaces, expected-position drift, invalid directions, out-of-range amounts, and unbounded widening are denied with no wheel, touch, keyboard-paging, or mouse fallback; that every scroll carries fresh SOFT approval with exact digest binding over workspace, policy revision, process, window, element, generations, control type, expected scroll position, requested direction, requested amount, and action material with one-shot consumption and stale-digest fail-closed; that immediate pre-actuation revalidation denies process, window, element, scroll-position, protected-surface, workspace, and policy drift without silent retargeting and without fallback to wheel, touch, keyboard paging, mouse, SendInput, coordinates, screenshots, clipboard, network, or elevation; that successful scroll advances the window tree generation so stale identities cannot be replayed and evidence carries only identities, scroll position, direction, and amount; that the native adapter proves real process identity against Windows APIs on Windows while reporting live scroll as unavailable instead of fabricating actuation; and that the agent cannot reach scroll through its own tool or input surface.
 
+## COTRA-P09 exit
+
+COTRA-P09 is exited at this frontier. Structured Windows UI Automation is closed under SG-000027 observation, SG-000028 invoke, SG-000029 value, SG-000030 select, SG-000031 toggle, and SG-000032 scroll, with server-derived process identity, typed window and element identity, stale-target revalidation, expected-state binding, approval digest binding, protected Cotra surface exclusion, and password and secret redaction, without exposing generic input injection, coordinate fallback, screenshots, or elevation authority.
+
+This program-exit snapshot records SG-000032 as merged and canonical. The `CLOSED` classification above becomes part of the canonical frontier only after this program-exit change itself merges and the resulting canonical main passes post-merge CI.
+
+Exit matrix (each criterion is COMPLETE with canonical evidence in `.specgrain/canonical-evidence.json` and the grain blocks above):
+
+Observation and identity - COMPLETE:
+- server-derived process identity with PID, executable digest, process generation, session identity, workspace, and policy revision binding plus PID reuse and restart fail-closed via SG-000027 (activation PR `#72`, implementation PR `#73`, qualified head `8f07fc36e33fe5bbcbab141e6a79e61081cf00c7`, CI `36576000440`, Review Gates `36576000906`, Jev `12/12`, OCR v1.12.9 `9 reviewable + 2 excluded/manually reviewed`, merge `e74b2d2a2b5517108775ab86d0b1efe618a74c20`, post-merge CI `36576544932`; governance closeout recorded here);
+- typed window identity with owning process, handle, window generation, session, desktop, workspace, and policy revision binding plus destroyed and reused-handle fail-closed via SG-000027 with the same implementation evidence above;
+- typed element identity with owning window, runtime identity, tree generation, control type, workspace, and policy revision binding plus disappeared, replaced, and role-changed fail-closed via SG-000027 with the same implementation evidence above;
+- bounded tree observation by window count, depth, node count, response size, and string length with explicit truncation reporting via SG-000027 with the same implementation evidence above.
+
+Invoke - COMPLETE:
+- structured `uia.element/invoke` on exact typed Button, Hyperlink, MenuItem, and SplitButton elements with Invoke pattern support, enabled state, fresh SOFT digest-bound approval, and immediate stale-target revalidation via SG-000028 (activation PR `#75`, implementation PR `#76`, qualified head `50bd49a48610fbbd51ee3d47df6c262ae852ee19`, CI `36582708688`, Review Gates `36582708941`, Jev `18/18`, OCR v1.12.9 `7 reviewable + 1 excluded/manually reviewed`, merge `8a8688cc5416b064569233e49d6df7bd8763a883`, post-merge CI `36583168629`; governance closeout recorded here).
+
+Value - COMPLETE:
+- structured `uia.element/set_value` on exact typed Edit, Document, and ComboBox elements with Value pattern support, enabled state, bounded non-secret values of at most 1024 characters, fresh SOFT digest-bound approval including the value digest, and immediate stale-target revalidation via SG-000029 (activation PR `#78`, implementation PR `#79`, qualified head `7d8396d74c6f4b5f988bd57fb06675da5c6b00f7`, CI `36588566716`, Review Gates `36588567457`, Jev `18/18`, OCR v1.12.9 `7 reviewable + 1 excluded/manually reviewed`, merge `76f58fcb94e88c486fe9b37de51202b1a2aa7f6d`, post-merge CI `36588916843`; governance closeout recorded here).
+
+Select - COMPLETE:
+- structured `uia.element/select` on exact typed ListItem, TreeItem, and TabItem elements with SelectionItem pattern support, enabled state, expected plus requested selection binding, fresh SOFT digest-bound approval, and immediate stale-target revalidation via SG-000030 (activation PR `#81`, implementation PR `#82`, qualified head `01e93fdbc016f9846b3ed2227acebff5629b186b`, CI `36598047800`, Review Gates `36598048002`, Jev `19/19`, OCR v1.12.9 `7 reviewable + 1 excluded/manually reviewed`, merge `e3cebef8b44bd9f7721fe29e3ede044fcb437fb1`, post-merge CI `36598536750`; governance closeout PR `#83`).
+
+Toggle - COMPLETE:
+- structured `uia.element/toggle` on exact typed CheckBox and RadioButton elements with Toggle pattern support, enabled state, expected plus requested toggle binding with no blind inversion, fresh SOFT digest-bound approval, and immediate stale-target revalidation via SG-000031 (activation PR `#84`, implementation PR `#85`, qualified head `55cf7316ba229336abaabfa6ba75347ef0eb9794`, CI `36603636127`, Review Gates `36603636116`, Jev `20/20`, OCR v1.12.9 `8 reviewable + 1 excluded/manually reviewed`, merge `dd641c1d4580232cff83cc847591d81eb6b35b40`, post-merge CI `36604072712`; governance closeout PR `#86`).
+
+Scroll - COMPLETE:
+- structured `uia.element/scroll` on exact typed ScrollBar, Pane, List, and Tree elements with Scroll pattern support, enabled state, expected scroll-position binding, bounded direction, bounded amount between 1 and 100, fresh SOFT digest-bound approval, and immediate stale-target revalidation via SG-000032 (activation PR `#87`, implementation PR `#88`, qualified head `29dbd1a0168496e6844a5bf52d98330c10dd8c73`, CI `36607306923`, Review Gates `36607307027`, Jev `39/39`, OCR v1.12.9 `12 reviewable + 1 excluded/manually reviewed`, merge `162866cfa29ca5660e25875250c8ff223ca1f855`, post-merge CI `36608016906`; governance closeout PR `#89`).
+
+Protected surfaces and redaction - COMPLETE:
+- protected Cotra approval surfaces omitted from listings and denied on direct observation and actuation via SG-000027 with the same implementation evidence above, retained through SG-000028, SG-000029, SG-000030, SG-000031, and SG-000032 with no protected-surface widening;
+- password and secret bearing values redacted and denied as actuation targets via SG-000027 with the same implementation evidence above, retained through every successor with no secret leakage.
+
+Authority separation - COMPLETE:
+- structured UIA authority remains separate from approval authority with fresh SOFT approval and digest binding for invoke, value, select, toggle, and scroll, STRONG enforcement retained, and no new coordinate, synthetic-input, screenshot, clipboard, network, installer, elevation, debugging, scripting, credential, or delegation authority beyond the dedicated UIA registry APIs recorded in the six grain authority boundaries above.
+
+All P09 closeouts (SG-000027 recorded here, SG-000028 recorded here, SG-000029 recorded here, SG-000030 PR `#83`, SG-000031 PR `#86`, SG-000032 PR `#89`) merged normally with zero unresolved blocking review threads and successful post-merge CI.
+
 ## Successor frontier
 
-COTRA-P09 implementation is complete at this frontier. No successor implementation grain beyond SG-000032 is authorized by this closeout. The P09 exit matrix must be built against SG-000001 through SG-000032 and P09 exited canonically before P10 begins.
+COTRA-P09 is exited at this frontier, so the next lawful unit must be derived from the canonical COTRA-P10 vision and coordinate fallback plan. No successor grain beyond the P09 exit is authorized by this program-exit candidate.
+
+After this P09 exit merges and its post-merge CI succeeds, re-read the canonical architecture, delivery plan, threat model, evidence ledger, open governance records, and this `CURRENT.md` to derive the first lawful COTRA-P10 grain. Do not infer or pre-authorize the next SpecGrain identifier or exact vision and coordinate design from numbering alone.
+
+A first P10 grain must build on the SG-000018 replay-resistant foundation, SG-000019 class enforcement, SG-000020 trust and revoke records, the closed P08 structured-browser registry, and the closed P09 structured-UIA registry without weakening STRONG enforcement, one-shot, expiry, or digest binding. It must keep Cotra-owned approval surfaces excluded from screenshots and coordinate input and expose no unrestricted desktop input or elevation authority.
 
 ## Active grain
 
-No COTRA-P09 grain is active. SG-000032 was the sole active grain and is now `CLOSED` and canonical.
+No COTRA-P09 grain is active. COTRA-P09 is exited at this frontier.
 
-The successor frontier is the P09 exit itself: joint proof from SG-000027 observation plus SG-000028 invoke plus SG-000029 value plus SG-000030 select plus SG-000031 toggle plus SG-000032 scroll that Cotra windows are protected, structured action is preferred, and expected process and window identity is enforced, without exposing generic input injection, coordinate fallback, or elevation authority. A missing or denied UIA element must never silently grant coordinate authority.
+No COTRA-P10 grain is active. The successor frontier is the first lawful COTRA-P10 grain itself.
 
 ## Canonical public authority boundary retained
 
@@ -240,19 +282,19 @@ Existing SG-000025 scoped bounded downloads remain subject to their exact active
 
 Existing SG-000026 scoped bounded uploads remain subject to their exact active-page binding, exact origin and generations, workspace and policy revision, one recorded approved download artifact as the only admissible source, canonical filesystem identity containment with separator-boundary comparison, byte length and SHA-256 re-verification, one known enabled typed file-input target, one-shot expiring upload source identity, workspace trust binding, fresh SOFT digest-bound approval, bounded secret-free evidence reporting no page transfer, and file-input fill, directory upload, multiple-file upload, archive extraction, execution, and page byte transfer denial.
 
-Retained SG-000027 read-only UIA observation remains subject to its exact server-derived process identity, typed window and element identity, expected-generation binding, workspace and policy revision, bounded data-minimized snapshots, password and secret redaction, protected Cotra surface exclusion, stale-identity fail-closed behavior, and value, select, toggle, scroll, focus, coordinate, synthetic-input, screenshot, clipboard, network-egress, and elevation denial beyond the SG-000028 invoke scope.
+Existing SG-000027 read-only UIA observation remains subject to its exact server-derived process identity, typed window and element identity, expected-generation binding, workspace and policy revision, bounded data-minimized snapshots, password and secret redaction, protected Cotra surface exclusion, stale-identity fail-closed behavior, and value, select, toggle, scroll, focus, coordinate, synthetic-input, screenshot, clipboard, network-egress, and elevation denial beyond the SG-000028 invoke scope.
 
-Retained SG-000028 structured UIA invoke remains subject to its exact server-derived process binding, typed window and element binding, expected tree generation, expected Button, Hyperlink, MenuItem, and SplitButton control type, required Invoke pattern support, required enabled state, workspace and policy revision, fresh per-action SOFT digest-bound approval with one-shot consumption, immediate pre-actuation stale-target revalidation with generation-bump invalidation, protected Cotra surface exclusion, password and secret target denial, and coordinate, mouse, keyboard, SendInput, click fallback, value, select, toggle, scroll, focus, screenshot, clipboard, network-egress, and elevation denial.
+Existing SG-000028 structured UIA invoke remains subject to its exact server-derived process binding, typed window and element binding, expected tree generation, expected Button, Hyperlink, MenuItem, and SplitButton control type, required Invoke pattern support, required enabled state, workspace and policy revision, fresh per-action SOFT digest-bound approval with one-shot consumption, immediate pre-actuation stale-target revalidation with generation-bump invalidation, protected Cotra surface exclusion, password and secret target denial, and coordinate, mouse, keyboard, SendInput, click fallback, value, select, toggle, scroll, focus, screenshot, clipboard, network-egress, and elevation denial.
 
-Retained SG-000029 structured UIA value remains subject to its exact server-derived process binding, typed window and element binding, expected tree generation, expected Edit, Document, and ComboBox control type, required Value pattern support, required enabled state, bounded non-secret values of at most 1024 characters, workspace and policy revision, fresh per-action SOFT digest-bound approval including the value digest with one-shot consumption, immediate pre-actuation stale-target revalidation with generation-bump invalidation, protected Cotra surface exclusion, password and secret target denial, and keyboard, clipboard, mouse, SendInput, coordinate, invoke, select, toggle, scroll, focus, screenshot, network-egress, and elevation denial.
+Existing SG-000029 structured UIA value remains subject to its exact server-derived process binding, typed window and element binding, expected tree generation, expected Edit, Document, and ComboBox control type, required Value pattern support, required enabled state, bounded non-secret values of at most 1024 characters, workspace and policy revision, fresh per-action SOFT digest-bound approval including the value digest with one-shot consumption, immediate pre-actuation stale-target revalidation with generation-bump invalidation, protected Cotra surface exclusion, password and secret target denial, and keyboard, clipboard, mouse, SendInput, coordinate, invoke, select, toggle, scroll, focus, screenshot, network-egress, and elevation denial.
 
-Retained SG-000030 structured UIA select remains subject to its exact server-derived process binding, typed window and element binding, expected tree generation, expected ListItem, TreeItem, and TabItem control type, required SelectionItem pattern support, required enabled state, expected plus requested selection binding, workspace and policy revision, fresh per-action SOFT digest-bound approval including expected and requested selection with one-shot consumption, immediate pre-actuation stale-target revalidation with generation-bump invalidation, protected Cotra surface exclusion, password and secret target denial, and mouse, keyboard, SendInput, coordinate, invoke, value, toggle, scroll, focus, screenshot, clipboard, network-egress, and elevation denial.
+Existing SG-000030 structured UIA select remains subject to its exact server-derived process binding, typed window and element binding, expected tree generation, expected ListItem, TreeItem, and TabItem control type, required SelectionItem pattern support, required enabled state, expected plus requested selection binding, workspace and policy revision, fresh per-action SOFT digest-bound approval including expected and requested selection with one-shot consumption, immediate pre-actuation stale-target revalidation with generation-bump invalidation, protected Cotra surface exclusion, password and secret target denial, and mouse, keyboard, SendInput, coordinate, invoke, value, toggle, scroll, focus, screenshot, clipboard, network-egress, and elevation denial.
 
-Retained SG-000031 structured UIA toggle remains subject to its exact server-derived process binding, typed window and element binding, expected tree generation, expected CheckBox and RadioButton control type, required Toggle pattern support, required enabled state, expected plus requested toggle binding with no blind inversion, workspace and policy revision, fresh per-action SOFT digest-bound approval including expected and requested toggle with one-shot consumption, immediate pre-actuation stale-target revalidation with generation-bump invalidation, protected Cotra surface exclusion, password and secret target denial, and Invoke, click, Space, Enter, keyboard, mouse, SendInput, coordinate, select, value, scroll, focus, screenshot, clipboard, network-egress, and elevation denial.
+Existing SG-000031 structured UIA toggle remains subject to its exact server-derived process binding, typed window and element binding, expected tree generation, expected CheckBox and RadioButton control type, required Toggle pattern support, required enabled state, expected plus requested toggle binding with no blind inversion, workspace and policy revision, fresh per-action SOFT digest-bound approval including expected and requested toggle with one-shot consumption, immediate pre-actuation stale-target revalidation with generation-bump invalidation, protected Cotra surface exclusion, password and secret target denial, and Invoke, click, Space, Enter, keyboard, mouse, SendInput, coordinate, select, value, scroll, focus, screenshot, clipboard, network-egress, and elevation denial.
 
-Retained SG-000032 structured UIA scroll remains subject to its exact server-derived process binding, typed window and element binding, expected tree generation, expected ScrollBar, Pane, List, and Tree control type, required Scroll pattern support, required enabled state, expected scroll-position binding, bounded direction limited to up, down, left, and right, bounded amount between 1 and 100 with no repeat loops, workspace and policy revision, fresh per-action SOFT digest-bound approval including expected scroll position, requested direction, and requested amount with one-shot consumption, immediate pre-actuation stale-target revalidation with generation-bump invalidation, protected Cotra surface exclusion, password and secret target denial, and wheel, touch, keyboard paging, mouse, SendInput, coordinate, invoke, value, select, toggle, focus, screenshot, clipboard, network-egress, and elevation denial.
+Existing SG-000032 structured UIA scroll remains subject to its exact server-derived process binding, typed window and element binding, expected tree generation, expected ScrollBar, Pane, List, and Tree control type, required Scroll pattern support, required enabled state, expected scroll-position binding, bounded direction limited to up, down, left, and right, bounded amount between 1 and 100 with no repeat loops, workspace and policy revision, fresh per-action SOFT digest-bound approval including expected scroll position, requested direction, and requested amount with one-shot consumption, immediate pre-actuation stale-target revalidation with generation-bump invalidation, protected Cotra surface exclusion, password and secret target denial, and wheel, touch, keyboard paging, mouse, SendInput, coordinate, invoke, value, select, toggle, focus, screenshot, clipboard, network-egress, and elevation denial.
 
-Still denied or absent outside the closed COTRA-P07 scope, the closed COTRA-P08 scope, and the SG-000027 observation plus SG-000028 invoke scope:
+Still denied or absent outside the closed COTRA-P07 scope, the closed COTRA-P08 scope, and the closed COTRA-P09 scope:
 - public `powershell.run`;
 - caller-provided PowerShell script text;
 - direct PowerShell executable authority through `process.spawn`;
@@ -271,7 +313,7 @@ Still denied or absent outside the closed COTRA-P07 scope, the closed COTRA-P08 
 - raw credential arguments and ambient credential-manager authority;
 - generic network fetch/socket authority;
 - generic browser automation beyond the closed structured registry (launch, attachment, debugging, scripting);
-- Windows UI Automation value, select, toggle, scroll, focus, and input injection beyond the closed observation plus structured invoke registry;
+- Windows UI Automation focus and input injection beyond the closed structured registry;
 - elevation;
 - approval bypass, persistent approval reuse, or remote approval delegation.
 - soft-button satisfaction of STRONG-class operations;
@@ -286,7 +328,7 @@ Still denied or absent outside the closed COTRA-P07 scope, the closed COTRA-P08 
 - caller-selected download destinations, absolute destinations, and destinations outside the approved workspace root;
 - download persistence of cookies, credentials, tokens, session material, or personal browser state.
 
-COTRA-P07 and COTRA-P08 are exited at this frontier, so a later lawful P09 grain must build only on top of the SG-000018 replay-resistant foundation, SG-000019 class enforcement, SG-000020 trust and revoke records, and the closed P08 structured-browser registry. Raw credentials must never be accepted merely because Git can consume them.
+COTRA-P07, COTRA-P08, and COTRA-P09 are exited at this frontier, so a later lawful P10 grain must build only on top of the SG-000018 replay-resistant foundation, SG-000019 class enforcement, SG-000020 trust and revoke records, the closed P08 structured-browser registry, and the closed P09 structured-UIA registry. Raw credentials must never be accepted merely because Git can consume them.
 
 Windows public `process.spawn` remains positively restricted to the exact SG-000010-qualified `%SystemRoot%\System32\whoami.exe` target.
 
