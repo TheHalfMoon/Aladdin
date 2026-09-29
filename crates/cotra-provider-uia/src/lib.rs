@@ -48,9 +48,11 @@ pub const VALUE_SCHEMA: &str = "cotra-uia-value-v1";
 pub const SELECT_SCHEMA: &str = "cotra-uia-select-v1";
 pub const TOGGLE_SCHEMA: &str = "cotra-uia-toggle-v1";
 pub const SCROLL_SCHEMA: &str = "cotra-uia-scroll-v1";
+pub const CAPTURE_SCHEMA: &str = "cotra-screenshot-capture-v1";
 pub const PROCESS_ID_PREFIX: &str = "uia-proc-";
 pub const WINDOW_ID_PREFIX: &str = "uia-win-";
 pub const ELEMENT_ID_PREFIX: &str = "uia-el-";
+pub const FRAME_ID_PREFIX: &str = "uia-frame-";
 pub const POLICY_REVISION: &str = "sg-000027-v1";
 pub const INVOKE_POLICY_REVISION: &str = "sg-000028-v1";
 
@@ -133,6 +135,16 @@ pub fn is_allowed_uia_shape(capability: &str, operation: &str) -> bool {
 /// successor delta. Focus, keyboard, mouse, coordinates, screenshots,
 /// clipboard, network, and elevation remain denied in every successor
 /// grain.
+///
+/// NOTE (SG-000033 successor): `uia.screenshot/capture` is lawfully
+/// authorized by the SG-000033 successor grain as a single read-only
+/// window-scoped capture shape and is therefore no longer in this denied
+/// set for current-tree authority. The frozen SG-000027 qualified head
+/// recorded this shape as denied; current-tree authority records the
+/// successor delta. Visual target proposals, coordinate proposals, input
+/// execution, monitor scope, desktop scope, focus, keyboard, mouse,
+/// clipboard, network, and elevation remain denied in every successor
+/// grain prior to their own successor authorization.
 pub const DENIED_UIA_SHAPES: &[(&str, &str)] = &[
     ("uia.element", "click"),
     ("uia.element", "focus"),
@@ -142,7 +154,6 @@ pub const DENIED_UIA_SHAPES: &[(&str, &str)] = &[
     ("uia.input", "mouse"),
     ("uia.input", "sendinput"),
     ("uia.coordinates", "request"),
-    ("uia.screenshot", "capture"),
     ("uia.clipboard", "read"),
     ("uia.clipboard", "write"),
     ("uia.network", "fetch"),
@@ -269,6 +280,42 @@ pub fn is_scroll_direction(direction: &str) -> bool {
     SCROLL_DIRECTIONS.contains(&direction)
 }
 
+/// The single SG-000033 read-only vision shape. Scroll remains authorized
+/// through its own predicate; window-scoped screenshot capture is
+/// authorized separately so frozen policy meanings are preserved while
+/// current-tree authority records the successor delta. A capture never
+/// grants visual target proposals, coordinate proposals, input execution,
+/// monitor scope, or desktop scope.
+pub fn is_capture_shape(capability: &str, operation: &str) -> bool {
+    matches!((capability, operation), ("uia.screenshot", "capture"))
+}
+
+/// The only capture scope SG-000033 authorizes: the exact target window.
+/// Monitor scope, desktop scope, caller-selected regions, and arbitrary
+/// rectangles fail closed.
+pub const CAPTURE_SCOPE_TARGET_WINDOW: &str = "target-window";
+
+pub fn is_capture_scope(scope: &str) -> bool {
+    scope == CAPTURE_SCOPE_TARGET_WINDOW
+}
+
+/// Maximum capture payload in bytes. Oversized captures fail closed with
+/// no silent downscaling that changes evidence semantics.
+pub const MAX_CAPTURE_BYTES: usize = 8 * 1024 * 1024;
+
+/// Maximum capture dimensions in pixels. Geometry outside these bounds
+/// fails closed.
+pub const MAX_CAPTURE_WIDTH: u32 = 7680;
+pub const MAX_CAPTURE_HEIGHT: u32 = 4320;
+
+/// Fixed pixel format reported by the bounded capture provider. Adapters
+/// report raw 8-bit RGBA bytes in row-major order.
+pub const CAPTURE_PIXEL_FORMAT: &str = "rgba8";
+
+pub fn is_well_formed_frame_id(value: &str) -> bool {
+    is_well_formed_typed_id(value, FRAME_ID_PREFIX)
+}
+
 /// SHA-256 hex digest of one requested value, used in approval digests and
 /// evidence so raw value bytes never enter approval prompts beyond the
 /// bounded request itself and never enter evidence at all.
@@ -354,6 +401,30 @@ fn allocate_element_id(window_id: &str, runtime_id: &str) -> String {
     )
 }
 
+fn allocate_frame_id(window_id: &str, capture_generation: u64) -> String {
+    format!(
+        "{FRAME_ID_PREFIX}{}",
+        digest_hex(
+            &format!("{CAPTURE_SCHEMA}|frame|{window_id}|{capture_generation}"),
+            ID_HEX_CHARS
+        )
+    )
+}
+
+/// SHA-256 hex digest of one capture payload, used in approval-adjacent
+/// evidence and frame records so payload comparisons never require moving
+/// raw pixels through logs or metadata paths.
+pub fn capture_payload_digest(bytes: &[u8]) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(b"cotra-screenshot-capture-v1|payload|");
+    hasher.update(bytes);
+    let digest = hasher.finalize();
+    digest
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect::<String>()
+}
+
 /// A process as reported by an adapter. Adapters never allocate authority;
 /// they only report OS-visible facts that the registry binds into typed
 /// identities.
@@ -397,6 +468,18 @@ pub struct NativeElement {
     pub value: Option<String>,
     pub value_is_password: bool,
     pub children: Vec<NativeElement>,
+}
+
+/// One window-scoped capture as reported by an adapter. Adapters report
+/// raw pixels for the exact target window only; scope enforcement,
+/// identity binding, bounds, and protected-surface exclusion live in the
+/// registry, so adapters stay small and deterministic tests never need a
+/// live desktop. Pixel bytes are 8-bit RGBA in row-major order.
+#[derive(Debug, Clone)]
+pub struct CapturedImage {
+    pub width: u32,
+    pub height: u32,
+    pub bytes: Vec<u8>,
 }
 
 /// The adapter boundary. Policy logic, identity allocation, stale checks,
@@ -491,6 +574,19 @@ pub trait UiaAdapter {
         Err(UiaError::new(
             FailureCode::ProviderUnavailable,
             "structured UIA scroll requires an interactive session broker and is unavailable in this context",
+        ))
+    }
+    /// Capture the exact target window identified by window handle. The
+    /// registry revalidates every binding before calling this method, so
+    /// adapters must capture the bound window only and must never widen to
+    /// monitor scope, desktop scope, caller-selected regions, or adjacent
+    /// windows. The default implementation fails closed as unavailable,
+    /// which the native adapter uses until an interactive session broker
+    /// exists.
+    fn capture_window(&self, _hwnd: u64) -> Result<CapturedImage, UiaError> {
+        Err(UiaError::new(
+            FailureCode::ProviderUnavailable,
+            "window-scoped screenshot capture requires an interactive session broker and is unavailable in this context",
         ))
     }
 }
@@ -666,6 +762,27 @@ struct ElementRecord {
     tree_generation: u64,
 }
 
+/// One server-allocated capture frame. Frames are evidence for successor
+/// visual grains and are never themselves input-execution authority. A
+/// frame binds its owning window, capture generation, geometry, payload
+/// digest, workspace, and policy revision; replayed, foreign, and
+/// policy-drifted frames fail closed as stale and stale frames are never
+/// actionable.
+#[derive(Debug, Clone)]
+struct FrameRecord {
+    frame_id: String,
+    window_id: String,
+    process_id: String,
+    process_generation: u64,
+    window_generation: u64,
+    capture_generation: u64,
+    width: u32,
+    height: u32,
+    payload_digest: String,
+    workspace_id: String,
+    policy_revision: String,
+}
+
 /// Server-side typed identity registry. Identities are allocated here and
 /// can never be named by callers; every observation revalidates the exact
 /// binding set and fails closed on drift.
@@ -674,8 +791,10 @@ pub struct UiaRegistry {
     processes: HashMap<String, ProcessRecord>,
     windows: HashMap<String, WindowRecord>,
     elements: HashMap<String, ElementRecord>,
+    frames: HashMap<String, FrameRecord>,
     window_counter: u64,
     tree_counter: u64,
+    capture_counter: u64,
 }
 
 impl UiaRegistry {
@@ -693,6 +812,10 @@ impl UiaRegistry {
 
     pub fn element_count(&self) -> usize {
         self.elements.len()
+    }
+
+    pub fn frame_count(&self) -> usize {
+        self.frames.len()
     }
 
     /// Register or refresh one native process. A changed start generation
@@ -2213,6 +2336,292 @@ impl UiaRegistry {
         })
     }
 
+    /// Resolve the current capture binding for approval digest computation.
+    /// This performs the same fail-closed revalidation as `capture_window`
+    /// but performs no adapter capture, so dispatch can bind approval
+    /// before capture and then revalidate again immediately before the
+    /// adapter call.
+    pub fn capture_binding(
+        &self,
+        window_id: &str,
+        expected_window_generation: u64,
+        scope: &str,
+        workspace_id: &str,
+        policy_revision: &str,
+    ) -> Result<CaptureBinding, UiaError> {
+        self.require_capture_target(
+            window_id,
+            expected_window_generation,
+            scope,
+            workspace_id,
+            policy_revision,
+        )
+    }
+
+    /// Perform one window-scoped screenshot capture against the adapter
+    /// after immediate pre-capture revalidation. Any drift fails closed
+    /// without silent retargeting and without fallback to monitor scope,
+    /// desktop scope, caller-selected regions, visual target proposals,
+    /// coordinate proposals, input execution, clipboard, network, or
+    /// elevation. On success a server-allocated typed frame identity is
+    /// minted with a fresh capture generation and the exact geometry; the
+    /// frame is evidence for successor visual grains and never grants
+    /// coordinate or input authority. Oversized or geometry-mismatched
+    /// payloads fail closed with no silent downscaling.
+    pub fn capture_window(
+        &mut self,
+        adapter: &impl UiaAdapter,
+        window_id: &str,
+        expected_window_generation: u64,
+        scope: &str,
+        workspace_id: &str,
+        policy_revision: &str,
+    ) -> Result<Value, UiaError> {
+        let binding = self.require_capture_target(
+            window_id,
+            expected_window_generation,
+            scope,
+            workspace_id,
+            policy_revision,
+        )?;
+        let image = adapter.capture_window(binding.hwnd).map_err(|error| {
+            UiaError::new(
+                error.code,
+                format!("window-scoped screenshot capture failed: {}", error.message),
+            )
+        })?;
+        if image.width == 0
+            || image.height == 0
+            || image.width > MAX_CAPTURE_WIDTH
+            || image.height > MAX_CAPTURE_HEIGHT
+        {
+            return Err(UiaError::new(
+                FailureCode::InvalidRequest,
+                "screenshot capture geometry is empty or exceeds the bounded dimensions",
+            ));
+        }
+        let expected_len = (image.width as usize)
+            .checked_mul(image.height as usize)
+            .and_then(|pixels| pixels.checked_mul(4));
+        match expected_len {
+            Some(len) if len == image.bytes.len() && len <= MAX_CAPTURE_BYTES => {}
+            _ => {
+                return Err(UiaError::new(
+                    FailureCode::OutputLimit,
+                    "screenshot capture payload exceeds the bounded size or mismatches its geometry",
+                ));
+            }
+        }
+        self.capture_counter += 1;
+        let capture_generation = self.capture_counter;
+        let frame_id = allocate_frame_id(&binding.window_id, capture_generation);
+        let payload_digest = capture_payload_digest(&image.bytes);
+        self.frames.insert(
+            frame_id.clone(),
+            FrameRecord {
+                frame_id: frame_id.clone(),
+                window_id: binding.window_id.clone(),
+                process_id: binding.process_id.clone(),
+                process_generation: binding.process_generation,
+                window_generation: binding.window_generation,
+                capture_generation,
+                width: image.width,
+                height: image.height,
+                payload_digest: payload_digest.clone(),
+                workspace_id: workspace_id.to_owned(),
+                policy_revision: policy_revision.to_owned(),
+            },
+        );
+        let result = json!({
+            "schema": CAPTURE_SCHEMA,
+            "action": "capture",
+            "frame_id": frame_id,
+            "window_id": binding.window_id,
+            "process_id": binding.process_id,
+            "process_generation": binding.process_generation,
+            "window_generation": binding.window_generation,
+            "capture_generation": capture_generation,
+            "scope": CAPTURE_SCOPE_TARGET_WINDOW,
+            "pixel_format": CAPTURE_PIXEL_FORMAT,
+            "width": image.width,
+            "height": image.height,
+            "payload_digest": payload_digest,
+            "pixels": image.bytes,
+            "truncated": false,
+            "workspace_id": workspace_id,
+            "policy_revision": policy_revision,
+        });
+        enforce_response_bytes(&result)
+    }
+
+    /// Describe one server-allocated capture frame without returning raw
+    /// pixels. Successor visual grains validate frames through this
+    /// read-only check; replayed, foreign, generation-drifted, and
+    /// policy-drifted frames fail closed as stale. A missing or denied
+    /// frame is never actionable and never becomes coordinate authority.
+    pub fn describe_frame(
+        &self,
+        frame_id: &str,
+        expected_capture_generation: u64,
+        workspace_id: &str,
+        policy_revision: &str,
+    ) -> Result<Value, UiaError> {
+        if !is_well_formed_frame_id(frame_id) {
+            return Err(UiaError::new(
+                FailureCode::InvalidRequest,
+                "screenshot frame identity is malformed",
+            ));
+        }
+        let record = self.frames.get(frame_id).ok_or_else(|| {
+            UiaError::new(
+                FailureCode::TargetStale,
+                "screenshot frame identity is unknown or stale and is never actionable",
+            )
+        })?;
+        if record.workspace_id != workspace_id {
+            return Err(UiaError::new(
+                FailureCode::TargetStale,
+                "screenshot frame identity belongs to another workspace",
+            ));
+        }
+        if record.policy_revision != policy_revision {
+            return Err(UiaError::new(
+                FailureCode::TargetStale,
+                "screenshot frame identity was issued under another policy revision",
+            ));
+        }
+        if record.capture_generation != expected_capture_generation {
+            return Err(UiaError::new(
+                FailureCode::TargetStale,
+                "screenshot frame generation drifted; the frame is stale and never actionable",
+            ));
+        }
+        let window = self.windows.get(&record.window_id).ok_or_else(|| {
+            UiaError::new(
+                FailureCode::TargetStale,
+                "screenshot frame lost its owning window",
+            )
+        })?;
+        if window.window_generation != record.window_generation {
+            return Err(UiaError::new(
+                FailureCode::TargetStale,
+                "screenshot frame owning window drifted; the frame is stale and never actionable",
+            ));
+        }
+        let process = self.processes.get(&record.process_id).ok_or_else(|| {
+            UiaError::new(
+                FailureCode::TargetStale,
+                "screenshot frame lost its owning process",
+            )
+        })?;
+        if process.superseded || process.process_generation != record.process_generation {
+            return Err(UiaError::new(
+                FailureCode::TargetStale,
+                "screenshot frame owning process drifted; the frame is stale and never actionable",
+            ));
+        }
+        Ok(json!({
+            "schema": CAPTURE_SCHEMA,
+            "frame_id": record.frame_id,
+            "window_id": record.window_id,
+            "process_id": record.process_id,
+            "process_generation": record.process_generation,
+            "window_generation": record.window_generation,
+            "capture_generation": record.capture_generation,
+            "scope": CAPTURE_SCOPE_TARGET_WINDOW,
+            "pixel_format": CAPTURE_PIXEL_FORMAT,
+            "width": record.width,
+            "height": record.height,
+            "payload_digest": record.payload_digest,
+            "workspace_id": record.workspace_id,
+            "policy_revision": record.policy_revision,
+        }))
+    }
+
+    fn require_capture_target(
+        &self,
+        window_id: &str,
+        expected_window_generation: u64,
+        scope: &str,
+        workspace_id: &str,
+        policy_revision: &str,
+    ) -> Result<CaptureBinding, UiaError> {
+        if !is_well_formed_window_id(window_id) {
+            return Err(UiaError::new(
+                FailureCode::InvalidRequest,
+                "uia window identity is malformed",
+            ));
+        }
+        if !is_capture_scope(scope) {
+            return Err(UiaError::new(
+                FailureCode::CapabilityDenied,
+                "screenshot capture scope is fixed to the target window; monitor scope, desktop scope, and caller-selected regions are denied",
+            ));
+        }
+        let window = self.windows.get(window_id).ok_or_else(|| {
+            UiaError::new(
+                FailureCode::TargetStale,
+                "uia window identity is unknown; it may have been destroyed or never existed",
+            )
+        })?;
+        if window.workspace_id != workspace_id {
+            return Err(UiaError::new(
+                FailureCode::TargetStale,
+                "uia window identity belongs to another workspace",
+            ));
+        }
+        if window.policy_revision != policy_revision {
+            return Err(UiaError::new(
+                FailureCode::TargetStale,
+                "uia window identity was issued under another policy revision",
+            ));
+        }
+        if window.window_generation != expected_window_generation {
+            return Err(UiaError::new(
+                FailureCode::TargetStale,
+                "uia window generation drifted; the window may have been destroyed and its handle reused",
+            ));
+        }
+        if is_protected_window(&window.title, &window.class) {
+            return Err(UiaError::new(
+                FailureCode::CapabilityDenied,
+                "screenshot capture of a protected Cotra surface is denied",
+            ));
+        }
+        let process = self.processes.get(&window.process_id).ok_or_else(|| {
+            UiaError::new(
+                FailureCode::TargetStale,
+                "screenshot capture target lost its owning process",
+            )
+        })?;
+        if process.superseded {
+            return Err(UiaError::new(
+                FailureCode::TargetStale,
+                "screenshot capture target process was superseded by a restart and fails closed",
+            ));
+        }
+        if process.workspace_id != workspace_id {
+            return Err(UiaError::new(
+                FailureCode::TargetStale,
+                "screenshot capture target process belongs to another workspace",
+            ));
+        }
+        if process.policy_revision != policy_revision {
+            return Err(UiaError::new(
+                FailureCode::TargetStale,
+                "screenshot capture target process was issued under another policy revision",
+            ));
+        }
+        Ok(CaptureBinding {
+            process_id: process.process_id.clone(),
+            process_generation: process.process_generation,
+            window_id: window.window_id.clone(),
+            window_generation: window.window_generation,
+            scope: CAPTURE_SCOPE_TARGET_WINDOW.to_owned(),
+            hwnd: window.hwnd,
+        })
+    }
+
     fn require_value_target(
         &self,
         element_id: &str,
@@ -2714,6 +3123,41 @@ pub fn scroll_approval_digest(
     digest_hex(&material, 64)
 }
 
+/// Server-resolved capture binding used for approval digest computation
+/// and evidence. Callers never supply these values directly; they are
+/// resolved from the typed window identity immediately before capture,
+/// except for the fixed target-window scope, which is validated and then
+/// bound into the approval digest.
+#[derive(Debug, Clone)]
+pub struct CaptureBinding {
+    pub process_id: String,
+    pub process_generation: u64,
+    pub window_id: String,
+    pub window_generation: u64,
+    pub scope: String,
+    pub hwnd: u64,
+}
+
+/// Compute the exact approval digest for one window-scoped screenshot
+/// capture. The digest binds the fixed capture scope, and dispatch
+/// revalidates the same binding set immediately before the adapter call
+/// so any material drift invalidates the approval.
+pub fn capture_approval_digest(
+    workspace_id: &str,
+    policy_revision: &str,
+    binding: &CaptureBinding,
+) -> String {
+    let material = format!(
+        "cotra-screenshot-capture-v1|{workspace_id}|{policy_revision}|{}|{}|{}|{}|{}|capture",
+        binding.process_id,
+        binding.process_generation,
+        binding.window_id,
+        binding.window_generation,
+        binding.scope,
+    );
+    digest_hex(&material, 64)
+}
+
 fn render_element(record: &ElementRecord) -> Value {
     json!({
         "schema": UIA_SCHEMA,
@@ -2781,3 +3225,5 @@ mod sg000030_tests;
 mod sg000031_tests;
 #[cfg(test)]
 mod sg000032_tests;
+#[cfg(test)]
+mod sg000033_tests;

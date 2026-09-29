@@ -1,15 +1,18 @@
-//! SG-000032 structured Windows UI Automation ScrollPattern dispatch.
+//! SG-000033 window-scoped screenshot capture dispatch.
 //!
 //! This module dispatches the five retained SG-000027 observation shapes,
 //! the retained SG-000028 `uia.element/invoke` shape, the retained
 //! SG-000029 `uia.element/set_value` shape, the retained SG-000030
 //! `uia.element/select` shape, the retained SG-000031 `uia.element/toggle`
-//! shape, plus the single SG-000032 actuation shape `uia.element/scroll`
+//! shape, the retained SG-000032 `uia.element/scroll` shape, plus the
+//! single SG-000033 read-only vision shape `uia.screenshot/capture`
 //! against a process-lifetime typed identity registry backed by the native
 //! adapter. Observation remains read-only with no approval. Invoke,
-//! set_value, select, toggle, and scroll each require fresh per-action SOFT
-//! approval with exact digest binding and immediate pre-actuation
-//! stale-target revalidation. Every other UIA-like shape returns `Ok(None)`
+//! set_value, select, toggle, scroll, and capture each require fresh
+//! per-action SOFT approval with exact digest binding and immediate
+//! pre-action stale-target revalidation. Capture mints a server-allocated
+//! typed frame identity that is evidence only and never grants coordinate
+//! or input authority. Every other UIA-like shape returns `Ok(None)`
 //! so the caller fails closed through the STRONG gate or the legacy denial.
 //!
 //! Identities are process-lifetime: a cotrad restart drops the registry,
@@ -20,8 +23,9 @@ use cotra_contracts::{FailureCode, RequestEnvelope};
 use cotra_policy::{Workspace, POLICY_REVISION};
 use cotra_provider_fs::ProviderError;
 use cotra_provider_uia::{
-    invoke_approval_digest, scroll_approval_digest, select_approval_digest, toggle_approval_digest,
-    value_approval_digest, NativeAdapter, UiaRegistry,
+    capture_approval_digest, invoke_approval_digest, scroll_approval_digest,
+    select_approval_digest, toggle_approval_digest, value_approval_digest, NativeAdapter,
+    UiaRegistry,
 };
 use serde_json::Value;
 use std::sync::{Mutex, OnceLock};
@@ -37,7 +41,7 @@ fn locked_registry() -> Result<std::sync::MutexGuard<'static, UiaRegistry>, Prov
         .map_err(|_| ProviderError::new(FailureCode::InternalError, "uia registry is unavailable"))
 }
 
-/// Dispatch the SG-000032 UIA shapes. Returns `Ok(None)` for non-UIA shapes
+/// Dispatch the SG-000033 UIA shapes. Returns `Ok(None)` for non-UIA shapes
 /// so the caller falls through to the browser, trust, Git, and legacy
 /// dispatchers.
 pub fn dispatch_uia(
@@ -45,6 +49,9 @@ pub fn dispatch_uia(
     approval: &impl ApprovalBroker,
     request: &RequestEnvelope,
 ) -> Result<Option<Value>, ProviderError> {
+    if cotra_provider_uia::is_capture_shape(&request.capability, &request.operation) {
+        return capture_with_approval(workspace, approval, request).map(Some);
+    }
     if cotra_provider_uia::is_scroll_shape(&request.capability, &request.operation) {
         return scroll_with_approval(workspace, approval, request).map(Some);
     }
@@ -432,6 +439,87 @@ fn select_with_approval(
             &expected_control_type,
             expected_selected,
             selected,
+            &workspace.id,
+            POLICY_REVISION,
+        )
+        .map_err(|error| ProviderError::new(error.code, error.message))?;
+    let mut stamped = evidence;
+    stamped["approval_record"] = Value::String(token.record_id);
+    Ok(stamped)
+}
+
+fn capture_with_approval(
+    workspace: &Workspace,
+    approval: &impl ApprovalBroker,
+    request: &RequestEnvelope,
+) -> Result<Value, ProviderError> {
+    if request.target.is_some() {
+        return Err(ProviderError::new(
+            FailureCode::InvalidRequest,
+            "uia screenshot capture shapes do not accept a target field",
+        ));
+    }
+    reject_uia_arguments(
+        request,
+        &["window_id", "expected_window_generation", "scope"],
+    )?;
+    let window_id = required_string(request, "window_id")?;
+    if !cotra_provider_uia::is_well_formed_window_id(&window_id) {
+        return Err(ProviderError::new(
+            FailureCode::InvalidRequest,
+            "uia screenshot capture window_id is malformed",
+        ));
+    }
+    let expected_window_generation = required_u64(request, "expected_window_generation")?;
+    let scope = required_string(request, "scope")?;
+    if !cotra_provider_uia::is_capture_scope(&scope) {
+        return Err(ProviderError::new(
+            FailureCode::CapabilityDenied,
+            "uia screenshot capture scope is fixed to target-window; monitor scope, desktop scope, and caller-selected regions are denied",
+        ));
+    }
+    let binding = {
+        let guard = locked_registry()?;
+        guard
+            .capture_binding(
+                &window_id,
+                expected_window_generation,
+                &scope,
+                &workspace.id,
+                POLICY_REVISION,
+            )
+            .map_err(|error| ProviderError::new(error.code, error.message))?
+    };
+    let digest = capture_approval_digest(&workspace.id, POLICY_REVISION, &binding);
+    let prompt = ApprovalPrompt::new(
+        workspace.id.clone(),
+        POLICY_REVISION,
+        "capture window screenshot",
+        window_id.clone(),
+        format!(
+            "process={} window={} window_generation={} scope={} action=capture",
+            binding.process_id, binding.window_id, binding.window_generation, binding.scope,
+        ),
+        digest.clone(),
+    );
+    let token = approval
+        .request_token(&prompt)
+        .map_err(|error| ProviderError::new(error.code, error.message))?;
+    approval
+        .consume(
+            &token,
+            &ConsumeExpectation::new(digest, workspace.id.clone(), POLICY_REVISION),
+            cotra_approval::now_ms(),
+        )
+        .map_err(|error| ProviderError::new(error.code, error.message))?;
+    let adapter = NativeAdapter::new();
+    let mut guard = locked_registry()?;
+    let evidence = guard
+        .capture_window(
+            &adapter,
+            &window_id,
+            expected_window_generation,
+            &scope,
             &workspace.id,
             POLICY_REVISION,
         )
