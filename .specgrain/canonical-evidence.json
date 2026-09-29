@@ -364,6 +364,17 @@
       "review_basis": "Exact-head genuine TypeSafe Jev 18/18 hunks with zero findings/blocking findings, Alibaba Open Code Review v1.12.9 exact-range delegation over 8 files with 7 reviewable and 1 excluded file manually reviewed, exact-diff manual security review, Windows/Ubuntu Rust Node Governance qualification with real Windows process identity proof, successful post-merge CI, and zero unresolved review threads.",
       "unresolved_review_threads": 0,
       "authority_boundary": "Only structured uia.element/invoke on exact typed Button, Hyperlink, MenuItem, and SplitButton elements with Invoke pattern support and enabled state is newly added against the process-lifetime typed identity registry with fresh SOFT digest-bound approval and immediate stale-target revalidation. Value, select, toggle, scroll, focus, click fallback, keyboard, mouse, SendInput, coordinates, screenshots, clipboard, network fetch, process spawn, injection, termination, elevation, and approval bypass remain absent, and existing file, process, Git, approval, presence, trust, browser, and UIA observation behavior is unchanged."
+    },
+    "SG-000029": {
+      "implementation_pr": 79,
+      "implementation_base": "fb2fb317730ddba64f0df7473f59a649ee6d27b8",
+      "qualified_head": "7d8396d74c6f4b5f988bd57fb06675da5c6b00f7",
+      "pre_merge_ci": "36588566716",
+      "merge_sha": "76f58fcb94e88c486fe9b37de51202b1a2aa7f6d",
+      "post_merge_ci": "36588916843",
+      "review_basis": "Exact-head genuine TypeSafe Jev 18/18 hunks with zero findings/blocking findings, Alibaba Open Code Review v1.12.9 exact-range delegation over 8 files with 7 reviewable and 1 excluded file manually reviewed, exact-diff manual security review, Windows/Ubuntu Rust Node Governance qualification with real Windows process identity proof, successful post-merge CI, and zero unresolved review threads.",
+      "unresolved_review_threads": 0,
+      "authority_boundary": "Only structured uia.element/set_value on exact typed Edit, Document, and ComboBox elements with Value pattern support, enabled state, and bounded non-secret values is newly added with fresh SOFT digest-bound approval including the value digest and immediate stale-target revalidation. Invoke remains closed under SG-000028. Select, toggle, scroll, focus, keyboard, mouse, SendInput, coordinates, screenshots, clipboard, network fetch, process spawn, injection, termination, elevation, and approval bypass remain absent, and existing file, process, Git, approval, presence, trust, browser, observation, and invoke behavior is unchanged."
     }
   }
 }
