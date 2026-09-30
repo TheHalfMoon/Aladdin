@@ -1,252 +1,113 @@
+#[path = "git_fetch_legacy.rs"]
+mod legacy;
+
+pub use legacy::{system_resolver, FetchDestinationLookup, PolicyFetchLookup};
+
 use cotra_approval::{now_ms, ApprovalBroker, ApprovalPrompt, ConsumeExpectation};
 use cotra_contracts::{FailureCode, RequestEnvelope};
-use cotra_policy::{FetchDestination, Workspace, POLICY_REVISION};
+use cotra_policy::{Workspace, POLICY_REVISION};
 use cotra_provider_fs::ProviderError;
-use cotra_provider_git::{
-    fetch::{
-        select_pinned_address, validate_branch, validate_expected_head, validate_expected_prior,
-        validate_policy_id, DnsResolver, GitFetchDestination, SystemResolver,
-    },
-    GitProvider, GitProviderError,
-};
+use cotra_provider_network::{DnsResolver, SystemResolver, SystemTransport, Transport};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
-use std::net::IpAddr;
 
 pub fn dispatch(
     workspace: &Workspace,
     approval: &impl ApprovalBroker,
     request: &RequestEnvelope,
     lookup: &impl FetchDestinationLookup,
-    resolver: &impl DnsResolver,
+    resolver: &impl cotra_provider_git::fetch::DnsResolver,
 ) -> Result<Option<Value>, ProviderError> {
-    match (request.capability.as_str(), request.operation.as_str()) {
-        ("git.fetch.preview", "preview") => {
-            let policy_id = required_string(request, "policy_id")?.to_owned();
-            let branch = required_string(request, "branch")?.to_owned();
-            let repository = required_target(request)?;
-            let destination = lookup
-                .destination(&request.workspace_id, &policy_id)
-                .ok_or_else(|| {
-                    ProviderError::new(
-                        FailureCode::CapabilityDenied,
-                        "Git fetch destination is not configured for this workspace",
-                    )
-                })?;
-            let provider = GitProvider::new(&workspace.root).map_err(map_git_error)?;
-            let provider_destination = provider_destination(&destination)?;
-            let preview = provider
-                .fetch_preview(repository, &policy_id, &branch, &provider_destination)
-                .map_err(map_git_error)?;
-            Ok(Some(preview.to_json()))
-        }
-        ("git.fetch", "fetch") => {
-            let policy_id = required_string(request, "policy_id")?.to_owned();
-            let branch = required_string(request, "branch")?.to_owned();
-            let expected_head = required_string(request, "expected_head")?.to_owned();
-            let expected_prior = required_string(request, "expected_prior")?.to_owned();
-            let repository = required_target(request)?.to_owned();
-            validate_policy_id(&policy_id).map_err(map_git_error)?;
-            validate_branch(&branch).map_err(map_git_error)?;
-            validate_expected_head(&expected_head).map_err(map_git_error)?;
-            validate_expected_prior(&expected_prior).map_err(map_git_error)?;
-            let destination = lookup
-                .destination(&request.workspace_id, &policy_id)
-                .ok_or_else(|| {
-                    ProviderError::new(
-                        FailureCode::CapabilityDenied,
-                        "Git fetch destination is not configured for this workspace",
-                    )
-                })?;
-            let provider = GitProvider::new(&workspace.root).map_err(map_git_error)?;
-            let provider_destination = provider_destination(&destination)?;
-            let preview = provider
-                .fetch_preview(&repository, &policy_id, &branch, &provider_destination)
-                .map_err(map_git_error)?;
-            if preview.head != expected_head {
-                return Err(ProviderError::new(
-                    FailureCode::TargetStale,
-                    "Git HEAD does not match arguments.expected_head from preview",
-                ));
-            }
-            if preview.prior != expected_prior {
-                return Err(ProviderError::new(
-                    FailureCode::TargetStale,
-                    "destination-ref state does not match arguments.expected_prior from preview",
-                ));
-            }
-            let resolved = resolver
-                .resolve(&provider_destination.hostname)
-                .map_err(map_git_error)?;
-            let pinned = select_pinned_address(&resolved).map_err(map_git_error)?;
-            let digest = fetch_digest(
-                workspace,
-                request,
-                &destination,
-                &provider_destination,
-                &pinned,
-                &preview,
-            );
-            let prompt = ApprovalPrompt::new(
-                workspace.id.clone(),
-                POLICY_REVISION,
-                "fetch one approved Git branch over pinned HTTPS",
-                repository.clone(),
-                fetch_summary(
-                    &destination,
-                    &provider_destination,
-                    &pinned,
-                    &branch,
-                    &preview,
-                ),
-                digest.clone(),
-            );
-            let token = require_approval(approval, &prompt)?;
-            approval
-                .consume(
-                    &token,
-                    &ConsumeExpectation::new(digest, workspace.id.clone(), POLICY_REVISION),
-                    now_ms(),
-                )
-                .map_err(|error| ProviderError::new(error.code, error.message))?;
-            let fetch_args = cotra_provider_git::fetch::ApprovedFetch {
-                relative: &repository,
-                destination: &provider_destination,
-                policy_id: &policy_id,
-                branch: &branch,
-                expected_head: &expected_head,
-                expected_prior: &expected_prior,
-                pinned: &pinned,
-            };
-            let result = provider
-                .fetch_approved(&fetch_args, resolver)
-                .map_err(map_git_error)?;
-            Ok(Some(result))
-        }
-        _ => Ok(None),
+    if cotra_provider_network::is_network_fetch_shape(&request.capability, &request.operation) {
+        let network_resolver = SystemResolver;
+        let transport = SystemTransport;
+        return dispatch_network(workspace, approval, request, &network_resolver, &transport);
     }
+    legacy::dispatch(workspace, approval, request, lookup, resolver)
 }
 
-pub trait FetchDestinationLookup {
-    fn destination(&self, workspace_id: &str, policy_id: &str) -> Option<FetchDestination>;
-}
-
-pub struct PolicyFetchLookup<'a> {
-    pub policy: &'a cotra_policy::PolicyEngine,
-}
-
-impl FetchDestinationLookup for PolicyFetchLookup<'_> {
-    fn destination(&self, workspace_id: &str, policy_id: &str) -> Option<FetchDestination> {
-        self.policy
-            .fetch_destination(workspace_id, policy_id)
-            .cloned()
-    }
-}
-
-pub fn provider_destination(
-    destination: &FetchDestination,
-) -> Result<GitFetchDestination, ProviderError> {
-    Ok(GitFetchDestination {
-        id: destination.id.clone(),
-        canonical_url: destination.canonical_url.clone(),
-        hostname: destination.hostname.clone(),
-        port: destination.port,
-    })
-}
-
-pub fn system_resolver() -> SystemResolver {
-    SystemResolver
-}
-
-fn fetch_summary(
-    destination: &FetchDestination,
-    provider_destination: &GitFetchDestination,
-    pinned: &IpAddr,
-    branch: &str,
-    preview: &cotra_provider_git::fetch::FetchPreview,
-) -> String {
-    format!(
-        "policy={} url={} host={} port={} pinned={} source={} dest={} expected_head={} expected_prior={} branch={}",
-        destination.id,
-        provider_destination.canonical_url,
-        provider_destination.hostname,
-        provider_destination.port,
-        pinned,
-        preview.source_ref,
-        preview.destination_ref,
-        preview.head,
-        preview.prior,
-        branch,
-    )
-}
-
-fn fetch_digest(
+fn dispatch_network(
     workspace: &Workspace,
-    request: &RequestEnvelope,
-    destination: &FetchDestination,
-    provider_destination: &GitFetchDestination,
-    pinned: &IpAddr,
-    preview: &cotra_provider_git::fetch::FetchPreview,
-) -> String {
-    let mut hasher = Sha256::new();
-    digest_field(&mut hasher, b"COTRA_GIT_FETCH_APPROVAL_V1");
-    digest_field(&mut hasher, workspace.id.as_bytes());
-    digest_field(&mut hasher, POLICY_REVISION.as_bytes());
-    digest_field(&mut hasher, request.capability.as_bytes());
-    digest_field(&mut hasher, request.operation.as_bytes());
-    digest_field(
-        &mut hasher,
-        request.target.as_deref().unwrap_or_default().as_bytes(),
-    );
-    digest_field(&mut hasher, preview.repository_root.as_bytes());
-    digest_field(&mut hasher, destination.id.as_bytes());
-    digest_field(&mut hasher, provider_destination.canonical_url.as_bytes());
-    digest_field(&mut hasher, provider_destination.hostname.as_bytes());
-    digest_field(
-        &mut hasher,
-        provider_destination.port.to_string().as_bytes(),
-    );
-    digest_field(&mut hasher, pinned.to_string().as_bytes());
-    digest_field(&mut hasher, preview.source_ref.as_bytes());
-    digest_field(&mut hasher, preview.destination_ref.as_bytes());
-    digest_field(&mut hasher, preview.head.as_bytes());
-    digest_field(&mut hasher, preview.prior.as_bytes());
-    hex_lower(&hasher.finalize())
-}
-
-fn require_approval(
     approval: &impl ApprovalBroker,
-    prompt: &ApprovalPrompt,
-) -> Result<cotra_approval::ApprovedToken, ProviderError> {
-    match approval.request_token(prompt) {
-        Ok(token) => Ok(token),
-        Err(error) => Err(ProviderError::new(error.code, error.message)),
-    }
-}
-
-fn required_target(request: &RequestEnvelope) -> Result<&str, ProviderError> {
-    request.target.as_deref().ok_or_else(|| {
-        ProviderError::new(
-            FailureCode::InvalidRequest,
-            "Git fetch repository target is required",
-        )
-    })
-}
-
-fn required_string<'a>(request: &'a RequestEnvelope, name: &str) -> Result<&'a str, ProviderError> {
-    request
+    request: &RequestEnvelope,
+    resolver: &impl DnsResolver,
+    transport: &impl Transport,
+) -> Result<Option<Value>, ProviderError> {
+    let url = request
         .arguments
-        .get(name)
+        .get("url")
         .and_then(Value::as_str)
         .ok_or_else(|| {
             ProviderError::new(
                 FailureCode::InvalidRequest,
-                format!("Git fetch requires arguments.{name}"),
+                "network/fetch requires string arguments.url",
             )
-        })
+        })?;
+
+    let prepared = cotra_provider_network::prepare(url, resolver).map_err(map_network_error)?;
+    let digest = network_digest(workspace, request, &prepared);
+    let prompt = ApprovalPrompt::new(
+        workspace.id.clone(),
+        POLICY_REVISION,
+        "fetch one bounded approved HTTPS GET destination",
+        prepared.target.host.clone(),
+        format!(
+            "scheme=https host={} port=443 path_digest={} address_set_digest={} max_response={}",
+            prepared.target.host,
+            prepared.target.path_digest,
+            prepared.address_set_digest,
+            cotra_provider_network::MAX_BODY_BYTES
+        ),
+        digest.clone(),
+    );
+
+    let token = approval
+        .request_token(&prompt)
+        .map_err(|error| ProviderError::new(error.code, error.message))?;
+    approval
+        .consume(
+            &token,
+            &ConsumeExpectation::new(digest, workspace.id.clone(), POLICY_REVISION),
+            now_ms(),
+        )
+        .map_err(|error| ProviderError::new(error.code, error.message))?;
+
+    let result = cotra_provider_network::execute_prepared(&prepared, resolver, transport)
+        .map_err(map_network_error)?;
+    Ok(Some(result.to_json(&workspace.id, POLICY_REVISION)))
 }
 
-fn map_git_error(error: GitProviderError) -> ProviderError {
+fn network_digest(
+    workspace: &Workspace,
+    request: &RequestEnvelope,
+    prepared: &cotra_provider_network::PreparedFetch,
+) -> String {
+    let mut hasher = Sha256::new();
+    digest_field(&mut hasher, b"COTRA_NETWORK_FETCH_APPROVAL_V1");
+    digest_field(&mut hasher, workspace.id.as_bytes());
+    digest_field(&mut hasher, POLICY_REVISION.as_bytes());
+    digest_field(&mut hasher, request.capability.as_bytes());
+    digest_field(&mut hasher, request.operation.as_bytes());
+    digest_field(&mut hasher, b"GET");
+    digest_field(&mut hasher, prepared.target.scheme.as_bytes());
+    digest_field(&mut hasher, prepared.target.host.as_bytes());
+    digest_field(&mut hasher, prepared.target.port.to_string().as_bytes());
+    digest_field(&mut hasher, prepared.target.path_digest.as_bytes());
+    digest_field(&mut hasher, prepared.address_set_digest.as_bytes());
+    digest_field(
+        &mut hasher,
+        cotra_provider_network::MAX_BODY_BYTES
+            .to_string()
+            .as_bytes(),
+    );
+    digest_field(
+        &mut hasher,
+        cotra_provider_network::MAX_REDIRECTS.to_string().as_bytes(),
+    );
+    hex_lower(&hasher.finalize())
+}
+
+fn map_network_error(error: cotra_provider_network::NetworkError) -> ProviderError {
     ProviderError::new(error.code, error.message)
 }
 
@@ -265,199 +126,118 @@ fn hex_lower(bytes: &[u8]) -> String {
 }
 
 #[cfg(test)]
-mod tests {
+mod network_tests {
     use super::*;
     use cotra_approval::test_support::FixedApprovalBroker;
     use cotra_approval::ApprovalDecision;
     use cotra_contracts::INTERNAL_PROTOCOL_VERSION;
+    use cotra_provider_network::{NetworkError, TransportResponse};
     use serde_json::json;
-    use std::collections::BTreeMap;
-    use std::fs;
-    use std::path::{Path, PathBuf};
-    use std::process::Command;
-    use std::time::{SystemTime, UNIX_EPOCH};
+    use std::collections::VecDeque;
+    use std::net::IpAddr;
+    use std::path::PathBuf;
+    use std::sync::Mutex;
 
-    struct StaticLookup {
-        destination: FetchDestination,
+    struct Resolver {
+        answers: Mutex<VecDeque<Vec<IpAddr>>>,
     }
 
-    impl FetchDestinationLookup for StaticLookup {
-        fn destination(&self, _workspace_id: &str, policy_id: &str) -> Option<FetchDestination> {
-            if policy_id == self.destination.id {
-                Some(self.destination.clone())
-            } else {
-                None
+    impl Resolver {
+        fn public(times: usize) -> Self {
+            let mut answers = VecDeque::new();
+            for _ in 0..times {
+                answers.push_back(vec!["8.8.8.8".parse().unwrap()]);
+            }
+            Self {
+                answers: Mutex::new(answers),
             }
         }
     }
 
-    struct StaticResolver {
-        addresses: Vec<IpAddr>,
-    }
-
-    impl DnsResolver for StaticResolver {
-        fn resolve(&self, _hostname: &str) -> Result<Vec<IpAddr>, GitProviderError> {
-            Ok(self.addresses.clone())
-        }
-    }
-
-    struct DenyAll;
-
-    impl ApprovalBroker for DenyAll {
-        fn request_token(
-            &self,
-            _prompt: &ApprovalPrompt,
-        ) -> Result<cotra_approval::ApprovedToken, cotra_approval::ApprovalError> {
-            Err(cotra_approval::ApprovalError {
-                code: FailureCode::ApprovalDenied,
-                message: "local user denied Git fetch".into(),
-            })
-        }
-
-        fn consume(
-            &self,
-            _token: &cotra_approval::ApprovedToken,
-            _expected: &ConsumeExpectation,
-            _now_ms: u64,
-        ) -> Result<(), cotra_approval::ApprovalError> {
-            Err(cotra_approval::ApprovalError {
-                code: FailureCode::ApprovalDenied,
-                message: "no approval was granted".into(),
+    impl DnsResolver for Resolver {
+        fn resolve(&self, _host: &str) -> Result<Vec<IpAddr>, NetworkError> {
+            self.answers.lock().unwrap().pop_front().ok_or_else(|| {
+                NetworkError::new(FailureCode::ProviderUnavailable, "resolver exhausted")
             })
         }
     }
 
-    fn temp_root() -> PathBuf {
-        let suffix = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("clock")
-            .as_nanos();
-        let root = std::env::temp_dir().join(format!(
-            "cotra-fetch-dispatch-{}-{suffix}",
-            std::process::id()
-        ));
-        fs::create_dir_all(&root).expect("root");
-        root
+    struct OneResponse(Mutex<Option<TransportResponse>>);
+
+    impl Transport for OneResponse {
+        fn get(
+            &self,
+            _target: &cotra_provider_network::FetchTarget,
+            _allowed: &[IpAddr],
+        ) -> Result<TransportResponse, NetworkError> {
+            self.0.lock().unwrap().take().ok_or_else(|| {
+                NetworkError::new(FailureCode::ProviderUnavailable, "transport exhausted")
+            })
+        }
     }
 
-    fn git(cwd: &Path, args: &[&str]) -> String {
-        let output = Command::new("git")
-            .args(args)
-            .current_dir(cwd)
-            .env("GIT_CONFIG_NOSYSTEM", "1")
-            .env("GIT_CONFIG_GLOBAL", null_device())
-            .output()
-            .expect("git");
-        assert!(
-            output.status.success(),
-            "git failed: {}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-        String::from_utf8_lossy(&output.stdout).into_owned()
-    }
-
-    fn repository() -> PathBuf {
-        let root = temp_root();
-        git(&root, &["init"]);
-        git(&root, &["config", "user.name", "Cotra Test"]);
-        git(&root, &["config", "user.email", "cotra@example.invalid"]);
-        fs::write(root.join("a.txt"), "one\n").expect("write");
-        git(&root, &["add", "a.txt"]);
-        git(&root, &["commit", "-m", "initial"]);
-        root
-    }
-
-    fn workspace(root: &Path) -> Workspace {
+    fn workspace() -> Workspace {
         Workspace {
             id: "default".into(),
-            root: fs::canonicalize(root).expect("canonical"),
+            root: PathBuf::from("."),
         }
     }
 
-    fn destination() -> FetchDestination {
-        FetchDestination {
+    fn request() -> RequestEnvelope {
+        RequestEnvelope {
+            version: INTERNAL_PROTOCOL_VERSION,
+            request_id: "network-fetch".into(),
+            client_session_id: "session".into(),
             workspace_id: "default".into(),
-            id: "test-origin".into(),
-            canonical_url: "https://example.com/repo.git".into(),
-            hostname: "example.com".into(),
-            port: 443,
+            capability: "network".into(),
+            operation: "fetch".into(),
+            target: None,
+            arguments: json!({"url": "https://example.com/data"}),
         }
     }
 
     #[test]
-    fn preview_is_local_and_denial_fails_closed_without_network() {
-        let root = repository();
-        let head = git(&root, &["rev-parse", "HEAD"]).trim().to_owned();
-        let request = RequestEnvelope {
-            version: INTERNAL_PROTOCOL_VERSION,
-            request_id: "fetch-preview".into(),
-            client_session_id: "session".into(),
-            workspace_id: "default".into(),
-            capability: "git.fetch.preview".into(),
-            operation: "preview".into(),
-            target: Some(".".into()),
-            arguments: json!({"policy_id": "test-origin", "branch": "main"}),
-        };
-        let lookup = StaticLookup {
-            destination: destination(),
-        };
-        // Preview performs no DNS resolution. The denial fetch below must reach
-        // the approval broker, so resolve a public address here; non-public
-        // rejection is covered by dedicated provider tests.
-        let resolver = StaticResolver {
-            addresses: vec!["8.8.8.8".parse().unwrap()],
-        };
-        let before_refs = git(&root, &["show-ref"]);
-        let result = dispatch(
-            &workspace(&root),
+    fn network_fetch_requires_approval_and_returns_bounded_result() {
+        let resolver = Resolver::public(3);
+        let transport = OneResponse(Mutex::new(Some(TransportResponse {
+            status: 200,
+            peer: "8.8.8.8".parse().unwrap(),
+            location: None,
+            body: b"hello".to_vec(),
+        })));
+        let result = dispatch_network(
+            &workspace(),
             &FixedApprovalBroker(ApprovalDecision::Approved),
-            &request,
-            &lookup,
+            &request(),
             &resolver,
+            &transport,
         )
-        .expect("dispatch")
-        .expect("handled");
-        assert_eq!(result["head"], head);
-        assert_eq!(result["source_ref"], "refs/heads/main");
-        assert_eq!(
-            result["destination_ref"],
-            "refs/remotes/cotra/test-origin/main"
-        );
-        assert_eq!(result["prior"], "ABSENT");
-        assert_eq!(git(&root, &["show-ref"]), before_refs);
-        assert_eq!(git(&root, &["rev-parse", "HEAD"]).trim(), head);
+        .unwrap()
+        .unwrap();
+        assert_eq!(result["status"], 200);
+        assert_eq!(result["byte_length"], 5);
+        assert_eq!(result["host"], "example.com");
+        assert_eq!(result["body"], json!([104, 101, 108, 108, 111]));
+    }
 
-        let fetch_request = RequestEnvelope {
-            version: INTERNAL_PROTOCOL_VERSION,
-            request_id: "fetch-deny".into(),
-            client_session_id: "session".into(),
-            workspace_id: "default".into(),
-            capability: "git.fetch".into(),
-            operation: "fetch".into(),
-            target: Some(".".into()),
-            arguments: json!({"policy_id": "test-origin", "branch": "main", "expected_head": head, "expected_prior": "ABSENT"}),
-        };
-        let error = dispatch(
-            &workspace(&root),
-            &DenyAll,
-            &fetch_request,
-            &lookup,
+    #[test]
+    fn denied_approval_prevents_transport() {
+        let resolver = Resolver::public(1);
+        let transport = OneResponse(Mutex::new(Some(TransportResponse {
+            status: 200,
+            peer: "8.8.8.8".parse().unwrap(),
+            location: None,
+            body: b"should-not-run".to_vec(),
+        })));
+        let error = dispatch_network(
+            &workspace(),
+            &FixedApprovalBroker(ApprovalDecision::Denied),
+            &request(),
             &resolver,
+            &transport,
         )
-        .expect_err("denial");
+        .unwrap_err();
         assert_eq!(error.code, FailureCode::ApprovalDenied);
-        assert_eq!(git(&root, &["rev-parse", "HEAD"]).trim(), head);
-        let _ = fs::remove_dir_all(root);
-        let _ = BTreeMap::<String, String>::new();
-    }
-
-    #[cfg(windows)]
-    fn null_device() -> &'static str {
-        "NUL"
-    }
-
-    #[cfg(not(windows))]
-    fn null_device() -> &'static str {
-        "/dev/null"
+        assert!(transport.0.lock().unwrap().is_some());
     }
 }
