@@ -1,11 +1,11 @@
 # Cotra Current Canonical Frontier
 
-Status: CLOSED_CANONICAL
-Date: 2026-09-30
-Governance snapshot base: 0133e500802e9c9b8e6181df3c73614c67bb06e2
+Status: PROGRAM_EXIT_CANDIDATE
+Date: 2026-10-01
+Governance snapshot base: c2e63f3135eacd5d537afb5f093eb843e1fbb7ed
 Evidence ledger: `.specgrain/canonical-evidence.json`
 
-`Governance snapshot base` records the exact canonical implementation merge from which this closeout snapshot was authored. It deliberately does not claim the eventual merge SHA of the commit containing this file.
+`Governance snapshot base` records the exact canonical parent from which this program-exit snapshot was authored. It deliberately does not claim the eventual merge SHA of the commit containing this file.
 
 ## SpecGrain state semantics
 
@@ -289,9 +289,62 @@ Authority separation - COMPLETE:
 
 All P10 closeouts (SG-000033 recorded here, SG-000034 recorded here, SG-000035 recorded here, SG-000036 PR `#102`, SG-000037 PR `#105`) merged normally with zero unresolved blocking review threads and successful post-merge CI.
 
+## COTRA-P11 exit
+
+COTRA-P11 is exited at this frontier. Clipboard and bounded network is closed under SG-000038 bounded clipboard read, SG-000039 bounded clipboard write, and SG-000040 destination-scoped HTTPS GET fetch, with explicit bounded reads and writes, no continuous clipboard surveillance, no paste or input authority from placement, https/443-only destination policy, public-only resolution, exact address-set and peer binding, manual same-origin redirects, fresh SOFT digest-bound one-shot approvals, bounded secret-free evidence, and no generic socket, CONNECT-proxy, WebSocket, standing-session, MCP network, or elevation authority.
+
+This program-exit snapshot records SG-000038, SG-000039, and SG-000040 as merged and canonical. The `CLOSED` classification above becomes part of the canonical frontier only after this program-exit change itself merges and the resulting canonical main passes post-merge CI.
+
+Exit matrix (each criterion is COMPLETE with canonical evidence in `.specgrain/canonical-evidence.json` and the grain blocks above):
+
+Bounded clipboard read - COMPLETE:
+- one explicit bounded `clipboard.read` sample returning Unicode text only through the dedicated clipboard provider with a 65536-byte hard bound, independent content-type verification, clipboard-sequence state binding, fresh SOFT digest-bound approval, one-shot per-approval reads, and bounded secret-free evidence via SG-000038 (activation PR `#107`, implementation PR `#108`, qualified head `b5a049c5473ba12a77f92e8476df5fa33e03d00a`, CI `36733308971`, Review Gates `36733308973`, Jev `12/12` with zero findings and zero blocking findings, OCR v1.12.9 `9 reviewable + 2 excluded/manually reviewed`, merge `743664c571694be08c1e17d8bc0ca42cd39b2c4b`, post-merge CI `36734083790`; governance closeout PR `#109`).
+
+Bounded clipboard write - COMPLETE:
+- one explicit bounded `clipboard.write` placement of Unicode text only with a 65536-byte hard bound, exactly one caller `text` argument, deterministic secret-pattern denial before any placement, fresh SOFT digest-bound approval including the text digest, one-shot per-approval writes, and sequence-advancing bounded secret-free evidence via SG-000039 (activation PR `#110`, implementation PR `#111`, qualified head `c1cdd37465b1bcfeda447333db81b3467963befe`, CI `36739493197`, Review Gates `36739493127`, Jev `29/29` with zero findings and zero blocking findings, OCR v1.12.9 `7 reviewable + 1 excluded/manually reviewed`, merge `2f06ac43e2130f8003209d6dddaf84debb04317f`, post-merge CI `36740297215`; governance closeout PR `#112`).
+
+No continuous clipboard surveillance - COMPLETE:
+- no clipboard subscription, watcher, polling loop, background collection, history accumulation, or standing session exists in any P11 clipboard shape: the `clipboard.subscribe`, `clipboard.poll`, `clipboard.monitor`, `clipboard.history`, and `clipboard.watch` shapes are a typed denial catalog that fails closed without reaching the provider, and no MCP clipboard tool exists on the agent surface, via SG-000038 and SG-000039 with the implementation evidence above.
+
+Clipboard write grants no paste or input authority - COMPLETE:
+- placement synthesizes no input, write evidence carries no input-capable material, UIA leases and interruption epochs remain untouched, and `clipboard.write` never authorizes paste, keyboard, input execution, or desktop authority via SG-000039 with the implementation evidence above, retained through SG-000040 with no widening.
+
+Destination-scoped fetch remains HTTPS GET only - COMPLETE:
+- fixed lowercase `https` scheme, port 443 only, GET method only, exactly one caller field `url`, a 2048-character URL bound, no request body, and no caller headers via SG-000040 (activation PR `#113`, implementation PR `#114`, qualified head `75862656012dd626445d10ac7686846bda67a98e`, CI `36767820258`, Review Gates `36767815559`, genuine TypeSafe Jev `13/13` hunks with zero findings and zero blocking findings, Alibaba Open Code Review v1.12.9 `9 reviewable + 3 excluded/manually reviewed`, merge `0133e500802e9c9b8e6181df3c73614c67bb06e2`, post-merge CI `36769671042`; governance closeout PR `#116`).
+
+Destination policy and private-address denial - COMPLETE:
+- dotted DNS hostname validation with literals, numeric forms, userinfo, fragments, backslashes, whitespace, control data, and localhost denial, and public-only resolution failing closed on loopback, private, link-local, multicast, unspecified, documentation, CGNAT, mapped-private, and reserved IPv4/IPv6 classes via SG-000040 with the same implementation evidence above.
+
+DNS/peer binding and redirect rules - COMPLETE:
+- exact pre-approval and post-approval address-set consistency with DNS drift failing closed as stale, pre-send Windows peer pinning with exact post-response connected-peer verification closing the validation-to-connect window, and manual per-hop redirects limited to five hops with exact-origin, loop, cross-origin, scheme-downgrade, and private-target denial via SG-000040 with the same implementation evidence above.
+
+Generic sockets, proxying, WebSockets, and standing sessions remain unavailable - COMPLETE:
+- every `network` shape other than the closed `fetch` shape is rejected by policy before reaching any provider; transport is direct with no proxy, no CONNECT, and one fresh connection per approved fetch with keep-alive reuse, cookie reuse, and ambient credentials absent; and no standing network session exists in any P11 shape, all via SG-000040 with the same implementation evidence above.
+
+Secrets not emitted - COMPLETE:
+- secret-pattern clipboard content is denied before any return or placement with no secret bytes in results, evidence, prompts, logs, audit, or MCP responses via SG-000038 and SG-000039 with the implementation evidence above, and fetch carries no ambient credentials, cookie jar reuse, authorization headers, or secret material with bounded secret-free evidence via SG-000040 with the same implementation evidence above.
+
+Approval nonce, expiry, digest, workspace, policy, and one-shot protections remain intact - COMPLETE:
+- every P11 action carries fresh SOFT approval with exact digest binding over workspace, policy revision, capability, operation, and action material with nonce, expiry, one-shot consumption, and stale-digest fail-closed, inheriting the SG-000018 replay-resistant foundation, SG-000019 class enforcement, and SG-000020 trust and revoke records, whose recorded evidence above remains unchanged, with the P11 grain evidence above.
+
+STRONG/SOFT class boundaries remain intact - COMPLETE:
+- the three closed P11 shapes are SOFT with fresh digest-bound approval, denied alternate shapes in the clipboard and network families are classified STRONG and rejected before any provider dispatch, STRONG presence enforcement is unchanged, and no STRONG-to-SOFT downgrade and no soft-button satisfaction of STRONG-class operations exists, via SG-000019 class enforcement retained and the P11 grain evidence above.
+
+MCP exposure unchanged - COMPLETE:
+- the MCP surface registers no clipboard tool and no network tool, `index.ts` contains no clipboard or network capability registration, and the Node surface tests assert that no MCP tool source forwards a clipboard or network capability to the kernel, via the SG-000038 through SG-000040 implementation evidence above.
+
+Authority separation - COMPLETE:
+- clipboard and network authority remains separate from approval authority with fresh SOFT approval and digest binding, STRONG enforcement retained, and no new filesystem, process, Git, browser, UI automation, vision, installer, elevation, debugging, scripting, credential, or delegation authority beyond the dedicated clipboard and network registry APIs recorded in the three grain authority boundaries above.
+
+All P11 closeouts (SG-000038 PR `#109`, SG-000039 PR `#112`, SG-000040 PR `#116`) merged normally with zero unresolved blocking review threads and successful post-merge CI.
+
 ## Successor frontier
 
-COTRA-P11 continues at this frontier. No successor grain beyond SG-000040 is authorized by this activation.
+COTRA-P11 is exited at this frontier, so the next lawful unit must be derived from the canonical COTRA-P12 installer and lifecycle plan. No successor grain beyond the P11 exit is authorized by this program-exit candidate.
+
+After this P11 exit merges and its post-merge CI succeeds, re-read the canonical architecture, delivery plan, threat model, evidence ledger, open governance records, and this `CURRENT.md` to derive the first lawful COTRA-P12 grain. Do not infer or pre-authorize the next SpecGrain identifier or the exact installer, lifecycle, or tunnel-supervision design from numbering alone.
+
+A first P12 grain must build on the SG-000018 replay-resistant foundation, SG-000019 class enforcement, SG-000020 trust and revoke records, the closed P11 clipboard and bounded-network registry, and the existing `cotra-tunnel` supervisor without weakening STRONG enforcement, one-shot, expiry, or digest binding. It must expose no installer, update, or lifecycle authority that weakens the existing capability boundaries, must prefer a per-user install unless platform evidence requires otherwise, must never fabricate health or installer state, must fail closed on missing prerequisites, must keep tunnel and runtime credentials out of logs, model-visible output, child environments, and support bundles, and must not reimplement the OpenAI Secure MCP Tunnel.
 
 ## Closed SG-000033 screenshot capture
 
@@ -343,11 +396,13 @@ SG-000040 proved the exact URL and destination ceilings; full dangerous-address 
 
 ## Active grain
 
-No COTRA-P11 grain is active. SG-000038 bounded clipboard read, SG-000039 bounded clipboard write, and SG-000040 destination-scoped network fetch are all closed canonically.
+No COTRA-P11 grain is active. COTRA-P11 is exited at this frontier.
+
+No COTRA-P12 grain is active. The successor frontier is the first lawful COTRA-P12 grain itself.
 
 ## Successor frontier
 
-The next lawful unit is COTRA-P11 program-exit governance only. It must jointly prove from SG-000038, SG-000039, and SG-000040 that clipboard access remains bounded and non-surveillant, clipboard write grants no paste or input authority, destination policy and private-address denial remain enforced, network authority remains limited to the closed destination-scoped HTTPS GET shape, approval replay/expiry/digest/workspace/policy/class controls remain intact, and secrets are never emitted. No COTRA-P12 installer or lifecycle grain is authorized until that P11 exit is merged and its post-merge CI succeeds.
+The first lawful COTRA-P12 grain may be derived only after this P11 exit merges and its post-merge CI succeeds. It must deliver a secure Windows-first installation path that prefers a per-user install unless platform evidence requires otherwise, tunnel-client setup supervision without reimplementing the OpenAI Secure MCP Tunnel, `cotra start`, `cotra stop`, `cotra status`, and `cotra doctor` lifecycle management with real state inspection and no fabricated health, explicit retained-data choices, clean upgrade and uninstall, and recovery from failed updates, with tunnel and runtime credentials excluded from logs, model-visible output, child environments, and support bundles. No COTRA-P12 grain is authorized by this program-exit candidate.
 
 ## Canonical public authority boundary retained
 
@@ -437,7 +492,7 @@ Still denied or absent outside the closed COTRA-P07 scope, the closed COTRA-P08 
 - caller-selected download destinations, absolute destinations, and destinations outside the approved workspace root;
 - download persistence of cookies, credentials, tokens, session material, or personal browser state.
 
-COTRA-P07 through COTRA-P10 are exited at this frontier. COTRA-P11 now has its three planned capability grains closed, but P11 itself does not exit until the dedicated joint program-exit governance unit merges and passes post-merge CI. P12 remains unauthorized until that exit. Raw credentials must never be accepted merely because Git or a network transport can consume them.
+COTRA-P07 through COTRA-P11 are exited at this frontier. COTRA-P12 remains unauthorized until this P11 exit merges and its post-merge CI succeeds. Raw credentials must never be accepted merely because Git or a network transport can consume them.
 
 Windows public `process.spawn` remains positively restricted to the exact SG-000010-qualified `%SystemRoot%\System32\whoami.exe` target.
 
