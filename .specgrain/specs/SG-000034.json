@@ -1,0 +1,134 @@
+{
+  "id": "SG-000034",
+  "title": "Non-actuating visual target proposals bound to frame identity",
+  "program": "COTRA-P10",
+  "state": "GRAIN",
+  "risk": "high",
+  "created": "2026-09-30",
+  "base": "12ee3a81801ff82ecaf97455707a02ac13854eec",
+  "dependencies": [
+    "SG-000033"
+  ],
+  "objective": "Establish the second narrow COTRA-P10 vision grain on top of the closed SG-000033 window-scoped capture registry, the closed COTRA-P09 structured-UIA registry, the SG-000018 replay-resistant foundation, SG-000019 class enforcement, SG-000020 trust and revoke records, and the closed COTRA-P08 registry: a single approved non-actuating visual target proposal shape bound to one server-allocated typed frame identity with arguments frame_id, expected_capture_generation, and bounded region only, with server-allocated typed proposal identity, fresh SOFT approval digest binding, immediate pre-proposal stale-frame revalidation, protected Cotra surface exclusion, bounded proposal payload, and explicit denial of every coordinate proposal, coordinate derivation, input execution, input lease, monitor and desktop scope, clipboard, network, and elevation shape.",
+  "scope": {
+    "include": [
+      "single new proposal shape uia.visual/propose bound to one server-allocated typed frame identity with arguments frame_id, expected_capture_generation, and region only; region is bounded to explicit pixel bounds inside the exact frame geometry and no unbounded, oversized, or frame-external region is accepted",
+      "server-derived frame binding with capture generation, owning window, owning process, geometry, workspace scope, and policy revision, with replayed, foreign, generation-drifted, and policy-drifted frames fail-closed before approval",
+      "server-allocated typed proposal identity binding owning frame, proposal generation, bounded region, workspace scope, and policy revision, with replayed, foreign, and policy-drifted proposals fail-closed and stale proposals never actionable",
+      "bounded proposal payload with explicit region bound, explicit payload limit, and explicit truncation reporting, with oversized proposals fail-closed and no silent region expansion that changes evidence semantics",
+      "fresh per-action SOFT approval with one-shot exact-digest binding over workspace, policy revision, frame identity, capture generation, owning window, window generation, bounded region, and action material, with nonce, expiry, one-shot consumption, and stale-digest fail-closed",
+      "immediate pre-proposal revalidation of frame liveness, capture generation, owning window existence, owning process liveness, protected-surface status, workspace binding, and policy revision, with any drift denied without silent retargeting",
+      "protected Cotra approval and security surface exclusion so proposals can never target approval dialogs, STRONG presence surfaces, workspace trust controls, emergency revoke, or security-sensitive Cotra UI, failing closed on uncertainty, with redaction where proposal-adjacent metadata could leak protected material",
+      "explicit denial of coordinate proposals, coordinate derivation, bounded input execution, input lease grants, and silent escalation when the frame is stale, protected, or unavailable, with no input authority granted by a missing or denied proposal",
+      "deterministic unit and security tests for happy-path proposal, stale frame, restarted owning process, PID reuse, stale window, wrong frame and window pairing, stale capture generation, protected Cotra surface, missing approval, stale approval, reused approval, incorrect approval digest, policy drift, oversized region denial, caller-supplied frame fields, caller-supplied proposal id, monitor and desktop scope requests, coordinate proposal requests, input execution requests, and elevation requests",
+      "retention of all closed SG-000033 capture behavior, all closed P09 structured-UIA behavior, SG-000018 one-shot and expiry and digest and history behavior, SG-000019 SOFT and STRONG class enforcement, SG-000020 trust and revoke behavior, and closed P08 registry behavior with no change outside visual proposal policy",
+      "Windows and Ubuntu exact-head qualification with Windows-specific proposal qualification where required"
+    ],
+    "exclude": [
+      "coordinate proposals and screen-coordinate derivation of any kind",
+      "bounded input execution, mouse movement, clicking, dragging, keyboard injection, and SendInput of any kind",
+      "input leases, automation ownership, and human-interruption handling beyond retained approval-pending lease suspension",
+      "proposals against caller-selected capture regions, monitor scope, or desktop scope",
+      "proposals on protected Cotra approval surfaces",
+      "visual model inference runtimes, model weights, and remote vision delegation",
+      "clipboard read and clipboard write",
+      "P09 UIA actuation beyond the closed SG-000027 through SG-000032 scopes",
+      "SG-000033 capture beyond the closed window-scoped shape",
+      "arbitrary process commands, process spawn, process injection, and process termination",
+      "raw Win32 command execution and PowerShell execution",
+      "password, credential, and Windows Hello material exposure",
+      "persistent approval reuse across operations",
+      "approval delegation to remote or MCP callers",
+      "caller-supplied approval boolean and caller-supplied approval material",
+      "generic network fetch and socket authority",
+      "elevation, UAC bypass, service installation, privileged desktop access, and secure desktop input"
+    ]
+  },
+  "authority_delta": {
+    "filesystem": "No new filesystem authority. Proposals read bounded frame metadata already held by the SG-000033 frame registry and perform no file read or write; retention of proposals outside bounded evidence is denied.",
+    "process": "No new process launch, injection, or termination authority. The existing read-only process identity is reused for binding only, and the existing SG-000010 whoami-only spawn boundary is unchanged.",
+    "network": "None. Visual target proposal is strictly local with no egress, and no fetch, socket, or tunnel authority is added.",
+    "browser": "None. The closed P08 structured-browser registry is unchanged, and no browser launch, attachment, navigation, download, or upload authority is added.",
+    "ui_input": "One narrow non-actuating proposal shape is newly added: uia.visual/propose returning evidence-bound proposal identities for exact-frame regions only. No coordinate proposal, no coordinate derivation, no input execution, no input lease, no monitor scope, no desktop scope, no pointer, no keyboard, no synthetic-input, and no other UIA pattern authority is added.",
+    "secrets": "No password, credential, Windows Hello, cookie, token, or session material enters prompts, records, history, logs, MCP responses, snapshots, or evidence packets. Protected Cotra surfaces are never proposal targets, and proposal-adjacent metadata is redacted where it could leak protected material.",
+    "approval": "One fresh per-action SOFT approval is required for uia.visual/propose with exact digest binding over the complete proposal binding set, one-shot consumption, nonce, and expiry. No persistent reuse, no remote delegation, and no caller-supplied approval boolean is introduced.",
+    "privileged": "None. No elevation, UAC bypass, service installation, privileged desktop access, or secure desktop input is added."
+  },
+  "invariants": [
+    "proposal binds one exact server-derived frame identity and never caller-provided frame claims",
+    "proposal binds exact capture generation with stale, replaced, foreign, and policy-drifted frames fail-closed",
+    "proposal region is bounded inside the exact frame geometry with no unbounded, oversized, or frame-external widening",
+    "Every proposal mints a server-allocated typed proposal identity with proposal generation",
+    "Stale proposals are never actionable and replayed, foreign, and policy-drifted proposals fail closed",
+    "Every proposal carries fresh SOFT approval with exact digest binding and one-shot consumption",
+    "Stale, replaced, reused, foreign, protected-surface, and policy-drifted targets fail closed without silent retargeting",
+    "Protected Cotra approval and security surfaces are never proposal targets",
+    "A missing or denied proposal never becomes coordinate or input authority",
+    "Proposal payload is bounded with explicit truncation reporting and no silent semantic change",
+    "STRONG enforcement, one-shot, expiry, digest, workspace, and policy bindings are not weakened"
+  ],
+  "acceptance": [
+    {
+      "id": "A1",
+      "claim": "Tests prove proposals bind server-derived frame identity with capture generation, owning window, owning process, geometry, workspace, and policy revision, and that forged frames, PID reuse, stale processes, restarted processes, and wrong executable identity fail closed before approval."
+    },
+    {
+      "id": "A2",
+      "claim": "Tests prove every proposal mints a server-allocated typed proposal identity bound to the exact frame, proposal generation, bounded region, workspace, and policy revision, and that replayed, foreign, generation-drifted, and policy-drifted proposals fail closed as stale."
+    },
+    {
+      "id": "A3",
+      "claim": "Tests prove proposal regions are bounded inside the exact frame geometry, and that unbounded regions, oversized regions, frame-external regions, monitor scope, desktop scope, and protected Cotra surfaces are denied with no silent expansion."
+    },
+    {
+      "id": "A4",
+      "claim": "Tests prove every proposal requires fresh SOFT approval with exact digest binding over workspace, policy revision, frame, capture generation, owning window, window generation, bounded region, and action material, and that missing, stale, reused, and digest-mismatched approvals fail closed with no caller-supplied approval boolean accepted."
+    },
+    {
+      "id": "A5",
+      "claim": "Tests prove immediate pre-proposal revalidation denies frame drift, window drift, process drift, generation drift, protected-surface drift, workspace drift, and policy-revision drift without silent retargeting and without coordinate, input-execution, clipboard, network, or elevation fallback."
+    },
+    {
+      "id": "A6",
+      "claim": "Tests prove caller-supplied frame bytes, proposal ids, region widening fields, coordinate fields, approval material, secret fields, and widening fields are rejected as malformed or denied, and that coordinate proposal, input execution, clipboard, network, spawn, inject, terminate, and elevation shapes remain denied outside their closed scopes."
+    },
+    {
+      "id": "A7",
+      "claim": "Tests prove the agent cannot satisfy proposals through MCP tools, child processes, approval forgery, trust forgery, or replayed prior approvals, and cannot turn a proposal into coordinate or input authority."
+    },
+    {
+      "id": "A8",
+      "claim": "Tests prove replay, expiry, digest mismatch, revision drift, trust-revision drift, and double-consumption protections remain enforced for both approval classes."
+    },
+    {
+      "id": "A9",
+      "claim": "Tests prove all closed SG-000033 capture regressions, all closed P09 structured-UIA regressions, P06 approval flows, SG-000018 through SG-000020 regressions, and the closed P08 registry behavior still pass with digests unchanged outside proposal labeling."
+    },
+    {
+      "id": "A10",
+      "claim": "Tests prove personal-profile-style widening, arbitrary DevTools or CDP, browser scripting, credential stores, clipboard access, coordinates, input execution beyond the closed proposal shape, and network egress remain unreachable through visual proposals."
+    },
+    {
+      "id": "A11",
+      "claim": "Windows-specific qualification proves structured proposal binding against real Windows process identity where required without fabricating interactive desktop evidence, and headless proposal limits are recorded honestly with unavailable-path fail-closed."
+    },
+    {
+      "id": "A12",
+      "claim": "Exact-head Windows and Ubuntu Rust, Node, Governance, genuine TypeSafe Jev, Alibaba Open Code Review, exact-diff security review, manual review of excluded security-sensitive files, and zero unresolved blocking review threads all pass."
+    }
+  ],
+  "successor_requirements": {
+    "p10_vision": "Coordinate proposals, bounded input execution with input leases, and human interruption remain successor work and must build on proposal identity without weakening STRONG enforcement, one-shot, expiry, or digest binding.",
+    "p10_exit": "COTRA-P10 exits when provider ceiling is enforced, protected surfaces are denied, stale-frame tests pass, and no silent fallback from structured denial into coordinates exists, which SG-000033 capture, SG-000034 proposals, plus coordinate, input-lease, and interruption successors must jointly satisfy.",
+    "p11_boundary": "Clipboard and network authority remain P11 work and are not granted by visual proposals."
+  },
+  "review": {
+    "diffcipline": true,
+    "jev_semantic_review": true,
+    "alibaba_open_code_review": "required exact-range qualification where integrated",
+    "security_review": true,
+    "exact_head_ci": true,
+    "native_network_qualification": false
+  },
+  "done_when": "Non-actuating visual target proposals with server-derived frame binding, server-allocated proposal identity, bounded regions, fresh SOFT digest-bound approval, immediate stale-frame revalidation, protected-surface exclusion, no coordinate or input authority, and no new capture, clipboard, network, or elevation authority is specified."
+}
