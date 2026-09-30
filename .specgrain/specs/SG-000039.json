@@ -1,0 +1,140 @@
+{
+  "id": "SG-000039",
+  "title": "Bounded clipboard write with secret denial",
+  "program": "COTRA-P11",
+  "state": "GRAIN",
+  "risk": "high",
+  "created": "2026-09-30",
+  "base": "54702117efff7993080058c6087faf4df4a062b2",
+  "dependencies": [
+    "SG-000038"
+  ],
+  "objective": "Establish the second narrow COTRA-P11 clipboard grain on top of the closed SG-000038 bounded clipboard-read registry, the closed COTRA-P10 vision registry, the closed COTRA-P09 structured-UIA registry, the SG-000018 replay-resistant foundation, SG-000019 class enforcement, SG-000020 trust and revoke records, and the closed COTRA-P08 registry: a single explicit bounded clipboard-write shape placing Unicode text only, with a hard size bound, caller-text validation, secret-pattern denial, fresh SOFT approval digest binding over the text digest, one-shot per-approval writes, sequence-advancing bounded secret-free evidence, and explicit denial of clipboard surveillance, watcher creation, paste/input authority, binary formats, and every network shape.",
+  "scope": {
+    "include": [
+      "single new write shape clipboard/write with explicit bounded Unicode-text argument only, placing at most 65536 bytes of Unicode text and failing closed on missing, empty, oversized, non-text, or unwritable clipboard state",
+      "server-derived write binding with text digest, byte length, fixed Unicode-text format, workspace scope, and policy revision, with foreign and policy-drifted writes fail-closed",
+      "caller-text validation so only explicit Unicode text within the hard bound is placed and binary, object, file-drop, image, and shell formats are denied with no hidden transfer",
+      "secret-pattern denial so credential, token, password, private-key, seed-phrase, session-secret, and Cotra-protected text is denied before placement with no secret bytes entering results, evidence, prompts, logs, or MCP responses",
+      "fresh per-write SOFT approval with one-shot exact-digest binding over workspace, policy revision, capability, operation, text digest, byte length, format bound, and action material, with nonce, expiry, one-shot consumption, and stale-digest fail-closed",
+      "one-shot write semantics so each approval authorizes at most one clipboard placement with no watcher creation, no background activity, no subscription, no polling, no history, and no standing clipboard session of any kind",
+      "sequence-advancing bounded write evidence carrying only format, byte length, content digest, resulting sequence, workspace, and policy revision with explicit truncation reporting and no raw content retention outside the approved request",
+      "explicit separation proving clipboard writes never authorize paste, input, keyboard, or desktop authority of any kind",
+      "deterministic unit and security tests for happy-path text write, empty text, oversized text, exact size boundary, secret-pattern denial across credential and key families, missing approval, stale approval, reused approval, digest mismatch, replayed write, watcher-creation denial, background-activity denial, paste-authority denial, write-then-read round trip with fresh approvals, policy drift, caller-supplied format fields, and cross-workspace writes",
+      "retention of all closed SG-000038 read behavior, all closed P10 vision behavior, all closed P09 structured-UIA behavior, SG-000018 one-shot and expiry and digest and history behavior, SG-000019 SOFT and STRONG class enforcement, SG-000020 trust and revoke behavior, and closed P08 registry behavior with no change outside clipboard-write policy",
+      "Windows and Ubuntu exact-head qualification with honest headless limits: deterministic injected adapters prove write, bound, denial, and secret policy on every platform, the native adapter proves real clipboard placement gating on Windows, live clipboard content is never fabricated, and headless unavailability fails closed"
+    ],
+    "exclude": [
+      "clipboard subscriptions, change listeners, event sinks, and viewer chains of any kind",
+      "clipboard watchers, background monitors, polling loops, and interval sampling of any kind",
+      "clipboard history collection, retention, and replay of any kind",
+      "paste, input injection, keyboard, mouse, SendInput, and desktop actuation of any kind",
+      "binary, image, file-drop, audio, shell-object, and other non-text clipboard formats of any kind",
+      "HTML, RTF, or formatted content transfer beyond plain Unicode text of any kind",
+      "secret, credential, token, password, private-key, and session material placement of any kind",
+      "standing clipboard sessions and persistent clipboard handles of any kind",
+      "SG-000038 reads beyond their closed shape",
+      "P10 vision actuation beyond the closed SG-000033 through SG-000037 scopes",
+      "P09 UIA actuation beyond the closed SG-000027 through SG-000032 scopes",
+      "generic network fetch and socket authority",
+      "browser launch, attachment, navigation, download, and upload beyond the closed P08 registry",
+      "arbitrary process commands, process spawn, process injection, and process termination",
+      "raw Win32 command execution and PowerShell execution",
+      "password, credential, and Windows Hello material exposure",
+      "persistent approval reuse across writes",
+      "approval delegation to remote or MCP callers",
+      "caller-supplied approval boolean and caller-supplied approval material",
+      "elevation, UAC bypass, service installation, privileged desktop access, and secure desktop input"
+    ]
+  },
+  "authority_delta": {
+    "filesystem": "No new filesystem authority. Clipboard writes touch no files and perform no file read or write; retention of clipboard content outside the approved request and bounded evidence is denied.",
+    "process": "No new process launch, injection, or termination authority. The existing SG-000010 whoami-only spawn boundary is unchanged.",
+    "network": "None. Clipboard writes are strictly local with no egress, and no fetch, socket, or tunnel authority is added.",
+    "browser": "None. The closed P08 structured-browser registry is unchanged, and no browser launch, attachment, navigation, download, or upload authority is added.",
+    "ui_input": "None. Clipboard writes never authorize paste, input injection, keyboard, mouse, or desktop actuation. The closed P10 vision registry and SG-000038 read registry are unchanged, and no screenshot, proposal, derivation, execution, lease, or read authority beyond the closed scopes is added.",
+    "secrets": "No password, credential, Windows Hello, cookie, token, session, private-key, or seed material is placed or retained. Secret-pattern write text is denied before any placement, and prompts, records, history, logs, MCP responses, snapshots, and evidence packets carry only format, size, and digests, never secret bytes.",
+    "approval": "One fresh per-write SOFT approval is required for clipboard/write with exact digest binding over the complete write binding set including the text digest, one-shot consumption, nonce, and expiry. No persistent reuse, no remote delegation, and no caller-supplied approval boolean is introduced.",
+    "privileged": "None. No elevation, UAC bypass, service installation, privileged desktop access, or secure desktop input is added."
+  },
+  "invariants": [
+    "clipboard writes place at most 65536 bytes of Unicode text and never binary or object formats",
+    "clipboard writes bind text digest, byte length, fixed format, workspace, and policy revision",
+    "secret-pattern write text is denied before any placement and never enters results or evidence",
+    "every write carries fresh SOFT approval with exact digest binding including the text digest and one-shot consumption",
+    "each approval authorizes at most one clipboard placement with no watcher, background, subscription, or history authority",
+    "write evidence carries only format, size, digests, and resulting sequence with no raw content retention",
+    "clipboard writes never authorize paste, input, keyboard, or desktop authority of any kind",
+    "empty, oversized, foreign, and policy-drifted writes fail closed",
+    "clipboard surveillance and network authority remain absent",
+    "STRONG enforcement, one-shot, expiry, digest, workspace, and policy bindings are not weakened"
+  ],
+  "acceptance": [
+    {
+      "id": "A1",
+      "claim": "Tests prove clipboard writes place bounded Unicode text only, and that empty, oversized, and unwritable clipboard state fails closed without binary transfer."
+    },
+    {
+      "id": "A2",
+      "claim": "Tests prove secret-pattern write text across credential, token, password, private-key, seed-phrase, session-secret, and Cotra-protected families is denied before any placement, with no secret bytes in results, evidence, prompts, logs, or MCP responses."
+    },
+    {
+      "id": "A3",
+      "claim": "Tests prove every write requires fresh SOFT approval with exact digest binding over workspace, policy revision, capability, operation, text digest, byte length, format bound, and action material, and that missing, stale, reused, and digest-mismatched approvals fail closed with no caller-supplied approval boolean accepted."
+    },
+    {
+      "id": "A4",
+      "claim": "Tests prove each approval authorizes at most one clipboard placement, and that watcher creation, background activity, subscription, polling, history, and standing-session attempts fail closed."
+    },
+    {
+      "id": "A5",
+      "claim": "Tests prove clipboard writes never authorize paste, input injection, keyboard, mouse, or desktop authority, and that UIA leases and interruption epochs are unaffected by writes."
+    },
+    {
+      "id": "A6",
+      "claim": "Tests prove write evidence carries only format, byte length, content digest, resulting sequence, workspace, and policy revision with truncation enforcement and no raw content retention outside the approved request."
+    },
+    {
+      "id": "A7",
+      "claim": "Tests prove caller-supplied format fields, watcher fields, approval material, secret fields, and widening fields are rejected as malformed or denied, and that surveillance, network, spawn, inject, terminate, and elevation shapes remain denied outside their closed scopes."
+    },
+    {
+      "id": "A8",
+      "claim": "Tests prove the agent cannot reach clipboard writes through MCP tools, child processes, approval forgery, trust forgery, or replayed prior approvals, and that no MCP clipboard tool exists."
+    },
+    {
+      "id": "A9",
+      "claim": "Tests prove replay, expiry, digest mismatch, revision drift, trust-revision drift, cross-workspace, and double-consumption protections remain enforced for both approval classes."
+    },
+    {
+      "id": "A10",
+      "claim": "Tests prove all closed SG-000038 read regressions, all closed P10 vision regressions, all closed P09 structured-UIA regressions, P06 approval flows, SG-000018 through SG-000020 regressions, and the closed P08 registry behavior still pass with digests unchanged outside clipboard-write labeling."
+    },
+    {
+      "id": "A11",
+      "claim": "Tests prove personal-profile-style widening, arbitrary DevTools or CDP, browser scripting, credential stores, standing sessions, input surveillance, paste automation, and network egress remain unreachable through clipboard writes."
+    },
+    {
+      "id": "A12",
+      "claim": "Windows-specific qualification proves clipboard placement gating against real Windows APIs where required without fabricating clipboard content, and headless clipboard limits are recorded honestly with unavailable-path fail-closed."
+    },
+    {
+      "id": "A13",
+      "claim": "Exact-head Windows and Ubuntu Rust, Node, Governance, genuine TypeSafe Jev, Alibaba Open Code Review, exact-diff security review, manual review of excluded security-sensitive files, and zero unresolved blocking review threads all pass."
+    }
+  ],
+  "successor_requirements": {
+    "p11_network": "Destination-scoped bounded network remains successor work after clipboard write and must build on clipboard records without weakening secret denial, one-shot, expiry, or digest binding, and without introducing generic networking.",
+    "p11_exit": "COTRA-P11 exits when bounded clipboard read plus bounded clipboard write plus destination-scoped network fetch are jointly proven with no continuous surveillance, destination policy and private-address tests passing, and secrets never emitted.",
+    "p12_boundary": "Installer and lifecycle authority remain P12 work and are not granted by clipboard writes."
+  },
+  "review": {
+    "diffcipline": true,
+    "jev_semantic_review": true,
+    "alibaba_open_code_review": "required exact-range qualification where integrated",
+    "security_review": true,
+    "exact_head_ci": true,
+    "native_network_qualification": false
+  },
+  "done_when": "Bounded clipboard write with Unicode-text-only placement, hard size bound, caller-text validation, secret-pattern denial, fresh SOFT digest-bound approval including the text digest, one-shot per-approval writes, sequence-advancing secret-free evidence, no paste or input authority, and no surveillance, binary, network, or elevation authority is specified."
+}
