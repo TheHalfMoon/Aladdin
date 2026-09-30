@@ -1,11 +1,11 @@
 # Cotra Current Canonical Frontier
 
-Status: ACTIVE_GRAIN
+Status: CLOSED_CANONICAL
 Date: 2026-09-30
-Governance snapshot base: 54702117efff7993080058c6087faf4df4a062b2
+Governance snapshot base: 2f06ac43e2130f8003209d6dddaf84debb04317f
 Evidence ledger: `.specgrain/canonical-evidence.json`
 
-`Governance snapshot base` records the exact canonical parent from which this activation snapshot was authored. It deliberately does not claim the eventual merge SHA of the commit containing this file.
+`Governance snapshot base` records the exact canonical parent from which this closeout snapshot was authored. It deliberately does not claim the eventual merge SHA of the commit containing this file.
 
 ## SpecGrain state semantics
 
@@ -291,7 +291,7 @@ All P10 closeouts (SG-000033 recorded here, SG-000034 recorded here, SG-000035 r
 
 ## Successor frontier
 
-COTRA-P11 continues at this frontier. No successor grain beyond SG-000039 is authorized by this activation.
+COTRA-P11 continues at this frontier. No successor grain beyond SG-000039 is authorized by this closeout. The P11 successor (destination-scoped bounded network) must be activated as a narrow lawful grain before implementation.
 
 ## Closed SG-000033 screenshot capture
 
@@ -329,29 +329,17 @@ SG-000038 closed canonically: activation PR `#107` (activation base `b9d8a4a479e
 
 SG-000038 proved that the read shape accepts no caller arguments with format, size, sequence, and content server-derived; that only Unicode text is returned with bitmap, file-drop, audio, shell-object, and other binary formats denied; that empty content fails closed as stale, oversized content fails closed without truncation, and locked or unreadable clipboards fail closed as unavailable; that secret-pattern content across credential, token, key, seed, and Cotra-protected families is denied before any return with no secret bytes in results, evidence, prompts, logs, or MCP responses; that the clipboard sequence is observed before approval without moving content and revalidated after approval with drift fail-closed; that every read carries fresh SOFT approval with digest binding over workspace, policy revision, sequence, format bound, and size bound with one-shot consumption authorizing at most one sample; that polling, subscription, history, and standing-session attempts fail closed with clipboard write, network, spawn, and elevation shapes denied and no MCP clipboard tool; that the native adapter queries the real clipboard sequence and reads real Unicode text through the Win32 clipboard APIs on Windows while reporting headless access as unavailable instead of fabricating content; and that the agent cannot reach clipboard reads through its own tool surface.
 
+## Closed SG-000039 clipboard write
+
+SG-000039 closed canonically: activation PR `#110` (activation base `54702117efff7993080058c6087faf4df4a062b2`, activation head `25fc6ba0d83b654911c1ebcd0aebc02e83fad1dc`, CI `36735878961`, Review Gates `36735878823`, Jev `4/4`, OCR v1.12.9 `1 reviewable + 1 excluded/manually reviewed`, merge `7032e55fb6eac95723710ca1b72aa4d842080298`, post-merge CI `36736531574`), implementation PR `#111` (qualified head `c1cdd37465b1bcfeda447333db81b3467963befe`, CI `36739493197`, Review Gates `36739493127`, Jev `29/29` with zero findings and zero blocking findings, OCR v1.12.9 `7 reviewable + 1 excluded/manually reviewed`, merge `2f06ac43e2130f8003209d6dddaf84debb04317f`, post-merge CI `36740297215`), and governance closeout recorded here, all with zero unresolved review threads. The canonical SG-000039 authority adds only one explicit bounded `clipboard/write` placement of Unicode text only through the dedicated clipboard provider, with a 65536-byte hard bound, caller-text validation, deterministic secret-pattern denial in policy and provider before any placement, fresh SOFT digest-bound approval including the text digest, one-shot per-approval writes, sequence-advancing bounded secret-free evidence, and proven separation showing placement never authorizes paste, input, keyboard, or desktop authority, and with no subscription, watcher, polling, monitoring, history, standing session, binary transfer, network, or elevation authority.
+
+SG-000039 proved that the write shape accepts exactly one explicit `text` argument with format and sequence server-derived; that only Unicode text within the hard bound is placed with binary and object formats denied; that empty text fails closed as malformed, oversized text fails closed without truncation, and locked or unwritable clipboards fail closed as unavailable; that secret-pattern text across credential, token, password, private-key, seed-phrase, session-secret, and Cotra-protected families is denied in policy and provider before any placement with no secret bytes in results, evidence, prompts, logs, audit, or MCP responses; that every write carries fresh SOFT approval with digest binding over workspace, policy revision, text digest, byte length, format bound, and action material with one-shot consumption authorizing at most one placement; that the native adapter places real Unicode text through the Win32 clipboard APIs on Windows with global-memory ownership transferred to the system only on success and freed on every failure path while returning the real resulting sequence; that placement synthesizes no input with write evidence carrying no input-capable material and UIA leases and interruption epochs untouched; that watcher, background, subscription, history, and standing-session attempts fail closed with network, spawn, and elevation shapes denied and no MCP clipboard tool; that write-then-read round trips advance the sequence with fresh approvals; and that the agent cannot reach clipboard writes through its own tool surface.
+
 ## Active grain
 
-SG-000039 - Bounded clipboard write with secret denial - is the sole active COTRA-P11 grain.
+No COTRA-P11 grain is active. SG-000039 was the sole active grain and is now `CLOSED` and canonical.
 
-This activation authorizes implementation and qualification of a single narrow bounded clipboard-write shape on top of the closed SG-000038 bounded clipboard-read registry, the closed COTRA-P10 vision registry, the closed COTRA-P09 structured-UIA registry, the SG-000018 replay-resistant foundation, SG-000019 class enforcement, SG-000020 trust and revoke records, and the closed COTRA-P08 registry: clipboard/write with one explicit bounded Unicode-text argument placing at most 65536 bytes of Unicode text only; server-derived write binding with text digest, byte length, fixed format, workspace, and policy revision; caller-text validation with binary and object formats denied; secret-pattern denial with credential, token, password, private-key, seed-phrase, session-secret, and Cotra-protected text fail-closed before any placement; fresh per-write SOFT approval with one-shot exact-digest binding including the text digest; one-shot write semantics with no watcher creation, background activity, subscription, polling, history, or standing sessions; sequence-advancing bounded secret-free evidence with explicit truncation reporting; explicit separation proving writes never authorize paste, input, keyboard, or desktop authority; and explicit denial of surveillance, binary transfer, network, and elevation, while deliberately keeping destination-scoped networking as successor work.
-
-Authorized target design:
-- clipboard/write bound to workspace and policy revision with text digest, byte length, and fixed format, failing closed on empty, oversized, unwritable, foreign, and policy-drifted content;
-- Unicode-text-only placement with binary, object, file-drop, and image formats denied with no hidden transfer;
-- secret-pattern denial across credential, token, key, seed, and Cotra-protected families with no secret bytes in results, evidence, prompts, logs, or MCP responses;
-- fresh SOFT approval with digest binding over the complete write binding set including the text digest and one-shot consumption;
-- one-shot per-approval writes with watcher, background, subscription, history, and standing-session attempts denied;
-- bounded evidence with format, size, digests, and resulting sequence only and no raw content retention;
-- proven separation showing writes never grant paste, input, keyboard, mouse, SendInput, or desktop authority;
-- deterministic unit and security tests for happy-path writes, empty and oversized text, exact size boundary, secret denial, missing and stale and reused and digest-mismatched approval, replayed writes, surveillance attempts, paste-authority denial, write-then-read round trips, policy drift, caller-supplied fields, and cross-workspace writes.
-
-## Active acceptance frontier
-
-SG-000039 must prove that writes place bounded Unicode text only, that secret-pattern text is denied before any placement, that every write carries fresh SOFT digest-bound approval including the text digest with one-shot consumption, that each approval authorizes at most one placement with no surveillance, that writes never authorize paste or input authority, that evidence carries only format, size, digests, and sequence, that the agent cannot reach writes through MCP tools, and that Windows-specific qualification proves placement gating without fabricating clipboard content.
-
-Clipboard surveillance, subscriptions, watchers, history, paste automation, binary transfer, generic network authority, persistent approval reuse, remote delegation, and elevation must remain absent, and STRONG enforcement, one-shot, expiry, and digest binding must not weaken.
-
-A P11 exit requires joint proof from bounded clipboard read plus bounded clipboard write plus destination-scoped network fetch that no continuous surveillance exists, destination policy and private-address tests pass, and secrets are never emitted. It must not expose unrestricted networking.
+The successor frontier is P11 bounded-network work: destination-scoped fetches bound to scheme, host, port, resolved address, bounds, redirect policy, workspace, policy revision, approval, and evidence, without generic networking, SSRF exposure, rebinding windows, redirect widening, or secret emission. A missing or denied approval must never silently grant network authority.
 
 ## Canonical public authority boundary retained
 
@@ -402,6 +390,8 @@ Existing SG-000036 bounded coordinate execution remains subject to its exact ser
 Existing SG-000037 human-interruption invalidation remains subject to its exact monotonic interruption epoch starting at zero with exactly-once increment per valid bounded physical-source report and no decrement or reset, lease epoch binding at grant time with epoch-drifted leases fail-closed as stale, approval digest epoch binding with pre-interruption approvals fail-closed after override, immediate pre-execution interruption revalidation without silent retargeting and without replay or continuation, Cotra-synthetic exclusion with unknown-input fail-closed ambiguity and forged-origin suppression resistance, bounded secret-free interruption evidence with no input-content material, protected Cotra surface exclusion regardless of epoch state, and no new actuating input, keyboard, drag, input-content surveillance, hooks, polling, monitor scope, desktop scope, clipboard, network-egress, or elevation authority.
 
 Existing SG-000038 bounded clipboard read remains subject to its exact Unicode-text-only return with 65536-byte hard bound, independent content-type verification with binary and object formats denied, deterministic secret-pattern denial with denied content never entering results or evidence, clipboard-sequence state binding with post-approval drift fail-closed, fresh per-read SOFT digest-bound approval with one-shot consumption authorizing at most one sample, bounded secret-free evidence with no raw content retention, and clipboard write, subscription, polling, monitoring, history, standing session, network-egress, and elevation denial.
+
+Existing SG-000039 bounded clipboard write remains subject to its exact Unicode-text-only placement with 65536-byte hard bound, exactly-one text argument with binary and object formats denied, deterministic secret-pattern denial in policy and provider before any placement with denied text never entering results, evidence, prompts, logs, audit, or MCP responses, fresh per-write SOFT digest-bound approval including the text digest with one-shot consumption authorizing at most one placement, sequence-advancing bounded secret-free evidence with no raw content retention, proven separation showing placement never authorizes paste, input, keyboard, or desktop authority, and subscription, watcher, polling, monitoring, history, standing session, network-egress, and elevation denial.
 
 Still denied or absent outside the closed COTRA-P07 scope, the closed COTRA-P08 scope, and the closed COTRA-P09 scope:
 - public `powershell.run`;
