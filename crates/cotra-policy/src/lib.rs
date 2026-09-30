@@ -53,6 +53,27 @@ impl PolicyEngine {
             ));
         }
 
+        Self::with_protected_state_roots(
+            workspaces,
+            crate::protected_state::protected_state_roots(),
+        )
+    }
+
+    fn with_protected_state_roots(
+        workspaces: Vec<Workspace>,
+        protected_roots: Vec<PathBuf>,
+    ) -> Result<Self, PolicyError> {
+        let protected_roots = protected_roots
+            .iter()
+            .map(|root| crate::protected_state::resolve_protected_root(root))
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|error| {
+                PolicyError::new(
+                    FailureCode::WorkspaceDenied,
+                    format!("Cotra protected state could not be resolved: {error}"),
+                )
+            })?;
+
         let mut map = HashMap::new();
         for mut workspace in workspaces {
             if workspace.id.trim().is_empty() {
@@ -74,6 +95,18 @@ impl PolicyEngine {
                 return Err(PolicyError::new(
                     FailureCode::WorkspaceDenied,
                     format!("workspace root is not a directory: {}", workspace.id),
+                ));
+            }
+            if protected_roots
+                .iter()
+                .any(|root| crate::protected_state::paths_overlap(&workspace.root, root))
+            {
+                return Err(PolicyError::new(
+                    FailureCode::WorkspaceDenied,
+                    format!(
+                        "workspace {} overlaps Cotra protected state and is refused",
+                        workspace.id
+                    ),
                 ));
             }
             if map.insert(workspace.id.clone(), workspace).is_some() {
@@ -513,6 +546,107 @@ mod tests {
             root: root.to_path_buf(),
         }])
         .expect("policy")
+    }
+
+    fn workspace(id: &str, root: &Path) -> Workspace {
+        Workspace {
+            id: id.into(),
+            root: root.to_path_buf(),
+        }
+    }
+
+    fn sg41_refused(root: &Path, protected: &Path) -> bool {
+        match PolicyEngine::with_protected_state_roots(
+            vec![workspace("default", root)],
+            vec![protected.to_path_buf()],
+        ) {
+            Ok(_) => false,
+            Err(error) => {
+                assert_eq!(error.code, FailureCode::WorkspaceDenied);
+                assert!(error.message.contains("overlaps Cotra protected state"));
+                true
+            }
+        }
+    }
+
+    #[test]
+    fn sg000041_refuses_workspace_equal_to_above_or_below_protected_state() {
+        let base = temp_root();
+        let state = base.join("Cotra");
+        std::fs::create_dir_all(state.join("state")).unwrap();
+        assert!(sg41_refused(&state, &state));
+        assert!(sg41_refused(&base, &state));
+        assert!(sg41_refused(&state.join("state"), &state));
+        let _ = std::fs::remove_dir_all(base);
+    }
+
+    #[test]
+    fn sg000041_refuses_ancestor_of_missing_protected_root() {
+        let base = temp_root();
+        assert!(sg41_refused(&base, &base.join("Cotra").join("audit.jsonl")));
+        let _ = std::fs::remove_dir_all(base);
+    }
+
+    #[test]
+    fn sg000041_refuses_workspace_containing_each_override() {
+        let base = temp_root();
+        let roots = crate::protected_state::protected_state_roots_from(&|name| match name {
+            "LOCALAPPDATA" => Some(base.join("lad").into_os_string()),
+            "COTRA_AUDIT_PATH" => Some(base.join("audit").join("a.jsonl").into_os_string()),
+            "COTRA_TRUST_PATH" => Some(base.join("trust").join("t.jsonl").into_os_string()),
+            "COTRA_APPROVAL_HISTORY_PATH" => {
+                Some(base.join("history").join("h.jsonl").into_os_string())
+            }
+            "COTRA_BROWSER_STATE_DIR" => Some(base.join("browser").into_os_string()),
+            _ => None,
+        });
+        assert_eq!(roots.len(), 5);
+        for dir in ["lad", "audit", "trust", "history", "browser"] {
+            let workspace_root = base.join(dir);
+            std::fs::create_dir_all(&workspace_root).unwrap();
+            let refused = PolicyEngine::with_protected_state_roots(
+                vec![workspace("default", &workspace_root)],
+                roots.clone(),
+            );
+            assert!(refused.is_err(), "{dir} must be refused");
+        }
+        let _ = std::fs::remove_dir_all(base);
+    }
+
+    #[test]
+    fn sg000041_accepts_sibling_and_prefix_sharing_roots() {
+        let base = temp_root();
+        let state = base.join("Cotra");
+        std::fs::create_dir_all(&state).unwrap();
+        for sibling in ["Cotra-work", "Cotr", "project"] {
+            let root = base.join(sibling);
+            std::fs::create_dir_all(&root).unwrap();
+            assert!(!sg41_refused(&root, &state), "{sibling} must be accepted");
+        }
+        let _ = std::fs::remove_dir_all(base);
+    }
+
+    #[test]
+    fn sg000041_parent_relative_override_fails_closed() {
+        let base = temp_root();
+        let error = PolicyEngine::with_protected_state_roots(
+            vec![workspace("default", &base)],
+            vec![base.join("x").join("..").join("audit.jsonl")],
+        )
+        .unwrap_err();
+        assert_eq!(error.code, FailureCode::WorkspaceDenied);
+        let _ = std::fs::remove_dir_all(base);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn sg000041_case_variant_workspace_is_refused_on_windows() {
+        let base = temp_root();
+        let state = base.join("Cotra");
+        std::fs::create_dir_all(&state).unwrap();
+        let upper = PathBuf::from(base.to_string_lossy().to_uppercase()).join("COTRA");
+        assert!(sg41_refused(&state, &upper));
+        let _ = std::fs::remove_dir_all(base);
     }
 
     #[test]

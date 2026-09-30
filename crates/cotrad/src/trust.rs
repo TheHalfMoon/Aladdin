@@ -368,4 +368,23 @@ mod tests {
         assert!(store.history.is_empty());
         let _ = std::fs::remove_file(path);
     }
+
+    #[test]
+    fn sg000041_state_defaults_lie_within_protected_state_roots() {
+        let roots = cotra_policy::protected_state::protected_state_roots();
+        for path in [
+            default_trust_path(),
+            cotra_audit::default_audit_path(),
+            cotra_approval::default_approval_history_path(),
+            cotra_provider_browser::default_profile_root(),
+        ] {
+            assert!(
+                roots
+                    .iter()
+                    .any(|root| cotra_policy::protected_state::path_within(&path, root)),
+                "{} must be protected state",
+                path.display()
+            );
+        }
+    }
 }
