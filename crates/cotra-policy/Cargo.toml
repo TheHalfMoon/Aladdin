@@ -7,12 +7,13 @@ repository.workspace = true
 rust-version.workspace = true
 
 [lib]
-path = "src/sg000039.rs"
+path = "src/sg000040.rs"
 
 [dependencies]
 cotra-approval = { path = "../cotra-approval" }
 cotra-contracts = { path = "../cotra-contracts" }
 cotra-provider-browser = { path = "../cotra-provider-browser" }
 cotra-provider-clipboard = { path = "../cotra-provider-clipboard" }
+cotra-provider-network = { path = "../cotra-provider-network" }
 cotra-provider-uia = { path = "../cotra-provider-uia" }
 serde_json.workspace = true

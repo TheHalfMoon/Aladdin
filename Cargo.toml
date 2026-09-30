@@ -11,6 +11,7 @@ members = [
   "crates/cotra-provider-browser",
   "crates/cotra-provider-uia",
   "crates/cotra-provider-clipboard",
+  "crates/cotra-provider-network",
   "crates/cotra-tunnel",
   "crates/cotrad",
 ]
