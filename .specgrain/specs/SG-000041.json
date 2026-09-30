@@ -1,0 +1,95 @@
+{
+  "id": "SG-000041",
+  "title": "Protected Cotra state isolation from trusted workspaces",
+  "program": "COTRA-P12",
+  "state": "GRAIN",
+  "risk": "high",
+  "created": "2026-10-01",
+  "base": "b69c5ba7cf9b4a6c2009e301ccc1eda97f934353",
+  "dependencies": [
+    "SG-000040"
+  ],
+  "objective": "Close the pre-existing gap found by the COTRA-P12 design review in which a trusted workspace root that contains Cotra protected state (trust records, approval history, audit log, browser profile, and, after P12, configuration, binaries, and the tunnel runtime key) lets workspace-scoped providers reach that state. The policy kernel must refuse every configured workspace whose resolved final root equals, contains, or is contained by a protected Cotra state root, so cotrad fails closed at startup, before any installer or lifecycle code places configuration or secrets under the Cotra state root.",
+  "scope": {
+    "include": [
+      "a policy-kernel function computing the protected Cotra state roots: the Cotra state root (LOCALAPPDATA\\Cotra, or the existing temp-directory fallback when LOCALAPPDATA is absent), the configured COTRA_BROWSER_STATE_DIR, and the configured COTRA_AUDIT_PATH, COTRA_TRUST_PATH, and COTRA_APPROVAL_HISTORY_PATH files, matching the defaults of the existing audit, trust, approval, and browser code exactly",
+      "resolution of protected roots to final paths by canonicalizing the nearest existing ancestor and appending the remaining components, failing closed on parent-directory components or unresolvable paths",
+      "refusal in PolicyEngine construction of any workspace whose canonical root equals, is an ancestor of, or is a descendant of any protected root, with a typed WorkspaceDenied error that names the workspace id and not the protected path contents",
+      "component-wise path comparison that is case-insensitive on Windows and does not rely on string prefixes",
+      "regression tests for workspace roots equal to, above, and below the protected root, for drive-root and profile-root style ancestors, for each state-file override, for unrelated sibling roots that must remain accepted, and for junction or symlink entries inside an accepted workspace that point into protected state and must remain denied by the existing final-path containment",
+      "retention of every closed SG-000001 through SG-000040 behavior with no capability, approval, or provider change beyond workspace admission"
+    ],
+    "exclude": [
+      "any new capability, MCP tool, provider operation, or approval class",
+      "installer, lifecycle, update, or tunnel-setup code, which remain successor P12 grains",
+      "changes to trust, approval, audit, or browser state formats or locations",
+      "string-prefix path security",
+      "weakening of any existing workspace, path, reparse-point, approval, or class check",
+      "elevation, service installation, or ACL changes"
+    ]
+  },
+  "authority_delta": {
+    "filesystem": "Narrowed only. Workspace roots that overlap protected Cotra state are refused, so filesystem, Git, and scoped browser upload and download providers can no longer reach Cotra state through an ancestor workspace. No filesystem authority is added.",
+    "process": "None. The SG-000010 whoami-only spawn boundary is unchanged.",
+    "network": "None. The closed SG-000040 fetch shape is unchanged.",
+    "browser": "Narrowed only through workspace admission; no browser authority is added.",
+    "ui_input": "None.",
+    "secrets": "Protected state that will hold the tunnel runtime key and configuration becomes unreachable from any admitted workspace. No secret handling is added.",
+    "approval": "None. SOFT and STRONG approval, nonce, expiry, one-shot, digest, workspace, and policy bindings are unchanged.",
+    "privileged": "None."
+  },
+  "invariants": [
+    "no admitted workspace root equals, contains, or is contained by a protected Cotra state root",
+    "protected roots are computed from the same environment overrides and defaults as the audit, trust, approval, and browser state code",
+    "path comparisons use resolved final paths and component-wise comparison, case-insensitive on Windows",
+    "an unresolvable or parent-relative protected root fails closed",
+    "overlap denial happens at policy construction, before any request is served",
+    "no capability, approval, or provider authority is added, and every closed SG-000001 through SG-000040 behavior is retained"
+  ],
+  "acceptance": [
+    {
+      "id": "A1",
+      "claim": "Tests prove a workspace root equal to, an ancestor of, or a descendant of the Cotra state root is refused with WorkspaceDenied at policy construction."
+    },
+    {
+      "id": "A2",
+      "claim": "Tests prove each state override (COTRA_AUDIT_PATH, COTRA_TRUST_PATH, COTRA_APPROVAL_HISTORY_PATH, COTRA_BROWSER_STATE_DIR) contributes a protected root, and that a workspace containing any overridden state file is refused."
+    },
+    {
+      "id": "A3",
+      "claim": "Tests prove sibling and unrelated workspace roots remain accepted, including roots whose names share a string prefix with the protected root."
+    },
+    {
+      "id": "A4",
+      "claim": "Tests prove Windows comparison is case-insensitive and that parent-directory components in a protected override fail closed."
+    },
+    {
+      "id": "A5",
+      "claim": "Tests prove a junction or symlink inside an accepted workspace that targets protected state remains denied by final-path containment for read and write."
+    },
+    {
+      "id": "A6",
+      "claim": "Tests prove the protected-root computation matches the default path functions of the audit, trust, approval, and browser state code."
+    },
+    {
+      "id": "A7",
+      "claim": "All closed SG-000001 through SG-000040 regressions pass unchanged on Windows and Ubuntu."
+    },
+    {
+      "id": "A8",
+      "claim": "Exact-head Windows and Ubuntu Rust, Node, Governance, genuine TypeSafe Jev, Alibaba Open Code Review, exact-diff security review, manual review of excluded files, and zero unresolved blocking review threads all pass."
+    }
+  ],
+  "successor_requirements": {
+    "p12_install": "The per-user install foundation may be activated only after this grain closes, and must place configuration, binaries, and secrets only under the protected Cotra state root.",
+    "p12_design": "Successor P12 grains follow docs/canonical/P12_INSTALLER_LIFECYCLE_DESIGN.md."
+  },
+  "review": {
+    "diffcipline": true,
+    "jev_semantic_review": true,
+    "alibaba_open_code_review": "required exact-range qualification where integrated",
+    "security_review": true,
+    "exact_head_ci": true
+  },
+  "done_when": "Protected Cotra state isolation from trusted workspaces is specified: overlapping workspace roots are refused at policy construction using resolved final paths, with no capability, approval, or provider authority added."
+}
