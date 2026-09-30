@@ -107,8 +107,11 @@ pub fn path_without_entry(path: &str, dir: &str) -> Option<String> {
 }
 
 /// Validates an SDDL DACL string: `protected` requires the `P` flag, and
-/// every ACE must be an allow ACE for `user_sid` or SYSTEM.
-pub fn check_sddl(sddl: &str, user_sid: &str, protected: bool) -> Result<(), String> {
+/// every ACE must be an allow ACE for SYSTEM or for one of `user_tokens`:
+/// the user's SID and the exact token this machine renders it as (Windows
+/// abbreviates some account SIDs, such as the built-in Administrator, to
+/// aliases like `LA`).
+pub fn check_sddl(sddl: &str, user_tokens: &[&str], protected: bool) -> Result<(), String> {
     let body = sddl
         .strip_prefix("D:")
         .ok_or_else(|| "security descriptor has no DACL".to_string())?;
@@ -133,7 +136,11 @@ pub fn check_sddl(sddl: &str, user_sid: &str, protected: bool) -> Result<(), Str
             return Err(format!("unexpected ACE type {}", fields[0]));
         }
         let sid = fields[5];
-        if sid != "SY" && !sid.eq_ignore_ascii_case(user_sid) {
+        if sid != "SY"
+            && !user_tokens
+                .iter()
+                .any(|token| sid.eq_ignore_ascii_case(token))
+        {
             return Err(format!("unexpected principal {sid}"));
         }
     }
@@ -280,6 +287,51 @@ mod windows {
         Ok(sid)
     }
 
+    /// Returns the token this machine uses for `sid` in SDDL output, by
+    /// round-tripping a one-ACE DACL through the SDDL converters.
+    fn sddl_token_for(sid: &str) -> Result<String, LifecycleError> {
+        let input = wide(std::ffi::OsStr::new(&format!("D:(A;;FA;;;{sid})")));
+        let mut descriptor: PSECURITY_DESCRIPTOR = ptr::null_mut();
+        if unsafe {
+            ConvertStringSecurityDescriptorToSecurityDescriptorW(
+                input.as_ptr(),
+                SDDL_REVISION_1,
+                &mut descriptor,
+                ptr::null_mut(),
+            )
+        } == 0
+        {
+            return Err(last_error(
+                "ConvertStringSecurityDescriptorToSecurityDescriptorW",
+            ));
+        }
+        let mut text: *mut u16 = ptr::null_mut();
+        let ok = unsafe {
+            ConvertSecurityDescriptorToStringSecurityDescriptorW(
+                descriptor,
+                SDDL_REVISION_1,
+                DACL_SECURITY_INFORMATION,
+                &mut text,
+                ptr::null_mut(),
+            )
+        };
+        unsafe { LocalFree(descriptor as _) };
+        if ok == 0 {
+            return Err(last_error(
+                "ConvertSecurityDescriptorToStringSecurityDescriptorW",
+            ));
+        }
+        let rendered = from_wide_ptr(text);
+        unsafe { LocalFree(text as _) };
+        rendered
+            .trim_end_matches(')')
+            .rsplit(';')
+            .next()
+            .filter(|token| !token.is_empty())
+            .map(str::to_owned)
+            .ok_or_else(|| LifecycleError::platform("unexpected SDDL rendering of the user SID"))
+    }
+
     fn dacl_sddl(path: &Path) -> Result<String, LifecycleError> {
         let name = wide(path.as_os_str());
         let mut descriptor: PSECURITY_DESCRIPTOR = ptr::null_mut();
@@ -413,13 +465,15 @@ mod windows {
 
         fn verify_tree_acl(&self, root: &Path) -> Result<(), LifecycleError> {
             let sid = current_user_sid()?;
-            check_sddl(&dacl_sddl(root)?, &sid, true).map_err(|reason| {
+            let rendered = sddl_token_for(&sid)?;
+            let tokens = [sid.as_str(), rendered.as_str()];
+            check_sddl(&dacl_sddl(root)?, &tokens, true).map_err(|reason| {
                 LifecycleError::platform(format!("{}: {reason}", root.display()))
             })?;
             let mut children = Vec::new();
             walk(root, &mut children)?;
             for child in children {
-                check_sddl(&dacl_sddl(&child)?, &sid, false).map_err(|reason| {
+                check_sddl(&dacl_sddl(&child)?, &tokens, false).map_err(|reason| {
                     LifecycleError::platform(format!("{}: {reason}", child.display()))
                 })?;
             }
@@ -607,28 +661,34 @@ mod tests {
     #[test]
     fn sddl_check_requires_protection_and_known_principals() {
         let sid = "S-1-5-21-1-2-3-1001";
-        assert!(check_sddl(
+        let tokens = [sid];
+        let ok = |sddl: &str, protected| check_sddl(sddl, &tokens, protected).is_ok();
+        assert!(ok(
             &format!("D:PAI(A;OICI;FA;;;{sid})(A;OICI;FA;;;SY)"),
-            sid,
             true
-        )
-        .is_ok());
-        assert!(check_sddl(
+        ));
+        assert!(ok(
             &format!("D:AI(A;OICIID;FA;;;{sid})(A;OICIID;FA;;;SY)"),
-            sid,
             false
-        )
-        .is_ok());
-        assert!(check_sddl(&format!("D:AI(A;OICI;FA;;;{sid})"), sid, true).is_err());
-        assert!(check_sddl(
+        ));
+        assert!(!ok(&format!("D:AI(A;OICI;FA;;;{sid})"), true));
+        assert!(!ok(
             &format!("D:P(A;OICI;FA;;;{sid})(A;OICI;FA;;;BU)"),
-            sid,
             true
-        )
-        .is_err());
-        assert!(check_sddl(&format!("D:P(A;OICI;FA;;;{sid})(A;;FA;;;WD)"), sid, true).is_err());
-        assert!(check_sddl(&format!("D:P(D;OICI;FA;;;{sid})"), sid, true).is_err());
-        assert!(check_sddl("D:P", sid, true).is_err());
-        assert!(check_sddl("O:SY", sid, true).is_err());
+        ));
+        assert!(!ok(&format!("D:P(A;OICI;FA;;;{sid})(A;;FA;;;WD)"), true));
+        assert!(!ok(&format!("D:P(D;OICI;FA;;;{sid})"), true));
+        assert!(!ok("D:P", true));
+        assert!(!ok("O:SY", true));
+    }
+
+    #[test]
+    fn rendered_user_alias_is_accepted_but_other_aliases_are_not() {
+        let tokens = ["S-1-5-21-1-2-3-500", "LA"];
+        assert!(check_sddl("D:PAI(A;OICI;FA;;;LA)(A;OICI;FA;;;SY)", &tokens, true).is_ok());
+        for alias in ["BA", "BU", "AU", "WD", "LG"] {
+            let sddl = format!("D:PAI(A;OICI;FA;;;LA)(A;OICI;FA;;;{alias})");
+            assert!(check_sddl(&sddl, &tokens, true).is_err(), "{alias}");
+        }
     }
 }
