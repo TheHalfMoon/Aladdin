@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "snapshot_base": "9d89f83fa4059281ab13e664e5d9259a05295751",
+  "snapshot_base": "0133e500802e9c9b8e6181df3c73614c67bb06e2",
   "state_semantics": {
     "GRAIN": "Authorized or active work packet whose acceptance is not yet canonically proven.",
     "PROVEN": "Acceptance and required qualification are proven, but canonical closeout/governance is not yet complete.",
@@ -485,6 +485,17 @@
       "review_basis": "Exact-head genuine TypeSafe Jev 29/29 hunks with zero findings/blocking findings, Alibaba Open Code Review v1.12.9 exact-range delegation over 8 files with 7 reviewable and 1 excluded file manually reviewed, exact-diff manual security review, Windows/Ubuntu Rust Node Governance qualification with real Windows clipboard placement proof, successful post-merge CI, and zero unresolved review threads.",
       "unresolved_review_threads": 0,
       "authority_boundary": "One explicit bounded clipboard/write placement is newly added with Unicode-text-only return, hard size bound, caller-text validation, secret-pattern denial, fresh SOFT digest-bound approval including the text digest, one-shot per-approval writes, and sequence-advancing secret-free evidence. Placement never authorizes paste, input, keyboard, or desktop authority. Clipboard reads remain closed under SG-000038, vision remains closed under SG-000033 through SG-000037, structured UIA remains closed under SG-000027 through SG-000032, and subscriptions, polling, monitoring, history, watchers, standing sessions, binary transfer, network fetch, process spawn, injection, termination, elevation, and approval bypass remain absent, and existing file, process, Git, approval, presence, trust, browser, observation, capture, proposal, derivation, execution, and interruption behavior is unchanged."
+    },
+    "SG-000040": {
+      "implementation_pr": 114,
+      "implementation_base": "ffaad8ad0d1ee189c7a41dc058ef6f7165e41e28",
+      "qualified_head": "75862656012dd626445d10ac7686846bda67a98e",
+      "pre_merge_ci": "36767820258",
+      "merge_sha": "0133e500802e9c9b8e6181df3c73614c67bb06e2",
+      "post_merge_ci": "36769671042",
+      "review_basis": "Exact-head genuine TypeSafe Jev 13/13 hunks with zero findings/blocking findings, Alibaba Open Code Review v1.12.9 exact-range delegation over 12 files with 9 reviewable and 3 excluded files manually reviewed, exact-diff manual security review, Windows/Ubuntu Rust Node Governance qualification including a real Windows WinHTTP HTTPS/TLS peer-pin test, successful post-merge CI, and zero unresolved review threads. One unrelated SG-000013 Windows timing flake on the first attempt passed on exact-head job rerun without any code change.",
+      "unresolved_review_threads": 0,
+      "authority_boundary": "One explicit bounded internal network/fetch HTTPS GET is closed with https/443-only destination policy, public-only resolution, exact address-set and connected-peer binding, manual same-origin redirects, bounded request/response/timeouts, direct no-proxy transport, no ambient credentials, fresh SOFT digest-bound one-shot approval, and bounded secret-free evidence. Generic sockets, CONNECT, WebSockets, alternate methods/schemes/ports, standing sessions, MCP network tools, elevation, and authority outside the closed P11 shapes remain absent."
     }
   }
 }

@@ -1,11 +1,11 @@
 # Cotra Current Canonical Frontier
 
-Status: ACTIVE_GRAIN
+Status: CLOSED_CANONICAL
 Date: 2026-09-30
-Governance snapshot base: 633d0b32924e45669301994d90dc8ef40502e2e0
+Governance snapshot base: 0133e500802e9c9b8e6181df3c73614c67bb06e2
 Evidence ledger: `.specgrain/canonical-evidence.json`
 
-`Governance snapshot base` records the exact canonical parent from which this activation snapshot was authored. It deliberately does not claim the eventual merge SHA of the commit containing this file.
+`Governance snapshot base` records the exact canonical implementation merge from which this closeout snapshot was authored. It deliberately does not claim the eventual merge SHA of the commit containing this file.
 
 ## SpecGrain state semantics
 
@@ -335,31 +335,19 @@ SG-000039 closed canonically: activation PR `#110` (activation base `54702117eff
 
 SG-000039 proved that the write shape accepts exactly one explicit `text` argument with format and sequence server-derived; that only Unicode text within the hard bound is placed with binary and object formats denied; that empty text fails closed as malformed, oversized text fails closed without truncation, and locked or unwritable clipboards fail closed as unavailable; that secret-pattern text across credential, token, password, private-key, seed-phrase, session-secret, and Cotra-protected families is denied in policy and provider before any placement with no secret bytes in results, evidence, prompts, logs, audit, or MCP responses; that every write carries fresh SOFT approval with digest binding over workspace, policy revision, text digest, byte length, format bound, and action material with one-shot consumption authorizing at most one placement; that the native adapter places real Unicode text through the Win32 clipboard APIs on Windows with global-memory ownership transferred to the system only on success and freed on every failure path while returning the real resulting sequence; that placement synthesizes no input with write evidence carrying no input-capable material and UIA leases and interruption epochs untouched; that watcher, background, subscription, history, and standing-session attempts fail closed with network, spawn, and elevation shapes denied and no MCP clipboard tool; that write-then-read round trips advance the sequence with fresh approvals; and that the agent cannot reach clipboard writes through its own tool surface.
 
+## Closed SG-000040 destination-scoped network fetch
+
+SG-000040 closed canonically: activation PR `#113` (activation base `633d0b32924e45669301994d90dc8ef40502e2e0`, activation head `e5c39e7802a5a93e4b1fc9f12d3d4ef95c3e8ac8`, CI `36742809059`, Review Gates `36742809200`, merge `ffaad8ad0d1ee189c7a41dc058ef6f7165e41e28`, post-merge CI `36744853181`), implementation PR `#114` (qualified head `75862656012dd626445d10ac7686846bda67a98e`, CI `36767820258`, Review Gates `36767815559`, genuine TypeSafe Jev `13/13` hunks with zero findings and zero blocking findings, Alibaba Open Code Review v1.12.9 `9 reviewable + 3 excluded/manually reviewed`, merge `0133e500802e9c9b8e6181df3c73614c67bb06e2`, post-merge CI `36769671042`), exact-diff manual security review, and zero unresolved review threads. The canonical SG-000040 authority adds only one explicit internal bounded `network/fetch` operation: fixed HTTPS GET to port 443, public-only destination resolution, exact pre/post-approval and per-hop address-set consistency, pre-send Windows peer pinning with post-response exact-peer verification, manual exact-origin redirects bounded to five hops, direct/no-proxy fresh transport, bounded timeouts, a 1048576-byte incremental response ceiling, no ambient credentials, and fresh SOFT digest-bound one-shot approval. No MCP network tool, generic sockets, CONNECT proxying, WebSockets, standing sessions, alternate methods/schemes/ports, filesystem/process/UI authority, elevation, or approval bypass is added.
+
+SG-000040 proved the exact URL and destination ceilings; full dangerous-address denial across private, loopback, link-local, multicast, unspecified, documentation, CGNAT, mapped-private, and reserved IPv4/IPv6 classes; post-approval and per-hop DNS drift failure as stale; exact connected-peer enforcement; manual redirect loop, cross-origin, private-target, scheme-downgrade, and over-five-hop denial; exact 2048-character URL and 1048576-byte response bounds; typed remote HTTP failures without response-body leakage; direct no-proxy transport with cookies, authentication, automatic redirects, keep-alive, caller headers, request bodies, and ambient credentials absent; inherited replay, expiry, digest, workspace, policy, one-shot, and approval-class enforcement; no MCP network exposure; and real Windows WinHTTP HTTPS/TLS transport against `https://example.com/` with the validated peer pinned before send and verified after response. The first exact-head Windows run had only transient unrelated SG-000013 PowerShell timing failures; the exact same qualified head was rerun without code changes and the entire Windows Rust suite passed.
+
 ## Active grain
 
-SG-000040 - Destination-scoped bounded HTTPS GET fetch - is the sole active COTRA-P11 grain.
+No COTRA-P11 grain is active. SG-000038 bounded clipboard read, SG-000039 bounded clipboard write, and SG-000040 destination-scoped network fetch are all closed canonically.
 
-This activation authorizes implementation and qualification of a single narrow destination-scoped fetch shape on top of the closed SG-000039 bounded clipboard-write registry, the closed SG-000038 bounded clipboard-read registry, the closed COTRA-P10 vision registry, the closed COTRA-P09 structured-UIA registry, the SG-000018 replay-resistant foundation, SG-000019 class enforcement, SG-000020 trust and revoke records, and the closed COTRA-P08 registry: network/fetch with one explicit url argument and fixed GET method over https to port 443 only; exact URL parsing with userinfo, non-HTTPS, non-443, oversized, and wrong-method requests denied; public-only resolved-address validation with loopback, private, link-local, metadata, multicast, unspecified, mapped-private, and alternate-form addresses fail-closed; double-resolution consistency binding the pre-approval address set with post-approval mismatch fail-closed; post-connection peer verification closing the validation-to-connect window; manual per-hop redirect revalidation with exact-origin matching, at most 5 hops, and loop and downgrade denial; request bounds of 2048-character URLs with no body and no caller headers plus bounded timeouts and direct connections with no proxy; response bounds of 1048576 bytes with incremental enforcement; fresh per-fetch SOFT approval with one-shot exact-digest binding; one-shot fetch semantics with no generic sockets, proxying, WebSockets, reuse, or standing sessions; fresh transport sessions with no cookies, credentials, tokens, or authorization material; bounded secret-free evidence; and explicit denial of other methods, schemes, ports, ambient credentials, and elevation, while completing the P11 capability set for a joint exit afterward.
+## Successor frontier
 
-Authorized target design:
-- network/fetch bound to workspace and policy revision with scheme, lowercase host, port, path digest, and resolved address-set digest, failing closed on malformed, non-HTTPS, non-443, oversized, userinfo, foreign, and policy-drifted requests;
-- fixed GET method with POST, PUT, DELETE, PATCH, HEAD, OPTIONS, and every other method denied;
-- public-only resolution with the full dangerous-address catalog denied;
-- identical-set double resolution with rebinding mismatches fail-closed as stale;
-- peer membership in the validated set with mismatches fail-closed;
-- manual redirects with exact-origin per-hop matches, re-resolution, peer verification, 5-hop bound, loop and downgrade denial;
-- fresh SOFT approval with digest binding over the complete fetch binding set and one-shot consumption;
-- one-shot per-approval fetches with socket, proxy, WebSocket, reuse, and standing-session attempts denied;
-- bounded evidence with destination metadata, status, sizes, digests, and hop counts only;
-- deterministic unit and security tests for public GET, the full SSRF catalog including alternate 127 forms and mapped addresses, rebinding mismatches, peer mismatches, redirect attacks, bound violations, credential-header denial, approval attacks, replayed fetches, policy drift, caller-supplied fields, and raw socket attempts.
-
-## Active acceptance frontier
-
-SG-000040 must prove that fetches use fixed GET over https to port 443 only, that every resolved address is public, that double resolution agrees with peer membership enforced, that redirects are manual with exact-origin per-hop matches, that request and response bounds hold with direct connections and no ambient credentials, that every fetch carries fresh SOFT digest-bound approval with one-shot consumption, that each approval authorizes at most one fetch, that the agent cannot reach fetches through MCP tools, and that Windows-specific qualification proves HTTPS transport gating with OS certificate validation intact.
-
-Other methods, schemes, ports, generic sockets, proxying, WebSockets, reuse, standing sessions, ambient credentials, persistent approval reuse, remote delegation, and elevation must remain absent, and STRONG enforcement, one-shot, expiry, and digest binding must not weaken.
-
-A P11 exit requires joint proof from bounded clipboard read plus bounded clipboard write plus SG-000040 destination-scoped fetch that no continuous surveillance exists, destination policy and private-address tests pass, and secrets are never emitted. It must not expose unrestricted networking.
+The next lawful unit is COTRA-P11 program-exit governance only. It must jointly prove from SG-000038, SG-000039, and SG-000040 that clipboard access remains bounded and non-surveillant, clipboard write grants no paste or input authority, destination policy and private-address denial remain enforced, network authority remains limited to the closed destination-scoped HTTPS GET shape, approval replay/expiry/digest/workspace/policy/class controls remain intact, and secrets are never emitted. No COTRA-P12 installer or lifecycle grain is authorized until that P11 exit is merged and its post-merge CI succeeds.
 
 ## Canonical public authority boundary retained
 
@@ -413,6 +401,8 @@ Existing SG-000038 bounded clipboard read remains subject to its exact Unicode-t
 
 Existing SG-000039 bounded clipboard write remains subject to its exact Unicode-text-only placement with 65536-byte hard bound, exactly-one text argument with binary and object formats denied, deterministic secret-pattern denial in policy and provider before any placement with denied text never entering results, evidence, prompts, logs, audit, or MCP responses, fresh per-write SOFT digest-bound approval including the text digest with one-shot consumption authorizing at most one placement, sequence-advancing bounded secret-free evidence with no raw content retention, proven separation showing placement never authorizes paste, input, keyboard, or desktop authority, and subscription, watcher, polling, monitoring, history, standing session, network-egress, and elevation denial.
 
+Existing SG-000040 destination-scoped bounded network fetch remains subject to fixed HTTPS GET and port 443 only, dotted DNS hostname validation, public-only resolution, exact pre/post-approval and per-hop address-set consistency, pre-send Windows peer pinning with exact post-response connected-peer verification, manual exact-origin redirects bounded to five hops, direct no-proxy fresh transport, bounded timeouts, a 1048576-byte incremental response ceiling, no caller headers or body, no cookies or ambient credentials, fresh SOFT exact-digest one-shot approval, bounded secret-free evidence, and denial of generic sockets, CONNECT, WebSockets, standing sessions, alternate methods/schemes/ports, MCP network exposure, and elevation.
+
 Still denied or absent outside the closed COTRA-P07 scope, the closed COTRA-P08 scope, and the closed COTRA-P09 scope:
 - public `powershell.run`;
 - caller-provided PowerShell script text;
@@ -430,7 +420,7 @@ Still denied or absent outside the closed COTRA-P07 scope, the closed COTRA-P08 
 - public process kill capability;
 - force push and branch deletion;
 - raw credential arguments and ambient credential-manager authority;
-- generic network fetch/socket authority;
+- generic network fetch/socket authority beyond the closed SG-000040 destination-scoped HTTPS GET shape;
 - generic browser automation beyond the closed structured registry (launch, attachment, debugging, scripting);
 - Windows UI Automation focus and input injection beyond the closed structured registry;
 - elevation;
@@ -447,7 +437,7 @@ Still denied or absent outside the closed COTRA-P07 scope, the closed COTRA-P08 
 - caller-selected download destinations, absolute destinations, and destinations outside the approved workspace root;
 - download persistence of cookies, credentials, tokens, session material, or personal browser state.
 
-COTRA-P07, COTRA-P08, and COTRA-P09 are exited at this frontier, so a later lawful P10 grain must build only on top of the SG-000018 replay-resistant foundation, SG-000019 class enforcement, SG-000020 trust and revoke records, the closed P08 structured-browser registry, and the closed P09 structured-UIA registry. Raw credentials must never be accepted merely because Git can consume them.
+COTRA-P07 through COTRA-P10 are exited at this frontier. COTRA-P11 now has its three planned capability grains closed, but P11 itself does not exit until the dedicated joint program-exit governance unit merges and passes post-merge CI. P12 remains unauthorized until that exit. Raw credentials must never be accepted merely because Git or a network transport can consume them.
 
 Windows public `process.spawn` remains positively restricted to the exact SG-000010-qualified `%SystemRoot%\System32\whoami.exe` target.
 
