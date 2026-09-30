@@ -2,7 +2,7 @@
   "id": "SG-000035",
   "title": "Proposal-only coordinate derivation bound to proposal identity",
   "program": "COTRA-P10",
-  "state": "GRAIN",
+  "state": "CLOSED",
   "risk": "high",
   "created": "2026-09-30",
   "base": "01f61669168d5687d57ecf210de56e26fb0de41b",
@@ -132,5 +132,25 @@
     "exact_head_ci": true,
     "native_network_qualification": false
   },
-  "done_when": "Proposal-only coordinate derivation with server-derived proposal binding, deterministic frame-relative coordinates, server-allocated coordinate identity, fresh SOFT digest-bound approval, immediate stale-proposal revalidation, protected-surface exclusion, no input authority, and no new capture, proposal, clipboard, network, or elevation authority is specified."
+  "done_when": "Proposal-only coordinate derivation with server-derived proposal binding, deterministic frame-relative coordinates, server-allocated coordinate identity, fresh SOFT digest-bound approval, immediate stale-proposal revalidation, protected-surface exclusion, no input authority, and no new capture, proposal, clipboard, network, or elevation authority is specified.",
+  "qualified_head": "acbb8de01449eef7af725b4c234bda536c1a196a",
+  "implementation_base": "a8d6a1166b8bf5299a3d2792f211474c269b78a4",
+  "implementation_merge": "ac0d4efead77ab5c442340aacaa1c366b11161d1",
+  "pre_merge_ci": "36683838980",
+  "pre_merge_review_gates": "36683838939",
+  "post_merge_ci": "36684218460",
+  "canonical_evidence": {
+    "implementation_pr": 98,
+    "implementation_base": "a8d6a1166b8bf5299a3d2792f211474c269b78a4",
+    "qualified_head": "acbb8de01449eef7af725b4c234bda536c1a196a",
+    "pre_merge_ci": "36683838980",
+    "pre_merge_review_gates": "36683838939",
+    "merge_sha": "ac0d4efead77ab5c442340aacaa1c366b11161d1",
+    "post_merge_ci": "36684218460",
+    "jev": "PASSED: 22/22 hunks, zero findings, zero blocking findings, pin 31f89602797fb7bea007f8a480bf368bf564954e, TypeSafe SDK 0.6.0",
+    "ocr": "PASSED: Open Code Review v1.12.9 exact-range delegation, 8 files total, 7 reviewable, 1 excluded and manually reviewed",
+    "security_review": "PASS on exact qualified head; derivations bind server-derived proposal identity with proposal generation, owning frame, capture generation, owning window, owning process, bounded region, workspace, and policy revision; coordinates are derived deterministically from the exact bounded region with callers supplying no coordinates and raw requests denied; every derivation mints a server-allocated typed coordinate identity with derivation generation, coordinates, workspace, and policy revision binding and stale identities are never actionable; every derivation carries fresh SOFT approval with exact digest binding over workspace, policy revision, proposal, proposal generation, frame, capture generation, window, process, generations, coordinates, and action material with one-shot consumption; replayed proposals, generation drift, replaced windows, superseded processes, wrong pairings, protected surfaces, workspace drift, policy drift, and caller-supplied identities fail closed without silent retargeting and without input-execution, clipboard, network, or elevation fallback; derivation is pure registry computation that never calls any input API; no MCP coordinate tool exists; and retained proposal, capture, observation, invoke, value, select, toggle, scroll, replay, class, trust, and P08 behavior is unchanged",
+    "unresolved_review_threads": 0,
+    "authority_boundary": "Only proposal-only uia.coordinates/propose on one exact typed proposal with no caller coordinates is newly added with deterministic frame-relative derivation, server-allocated typed coordinate identity, fresh SOFT digest-bound approval, and immediate stale-proposal revalidation. Visual proposals remain closed under SG-000034, capture remains closed under SG-000033, and structured UIA remains closed under SG-000027 through SG-000032. Raw coordinate requests, input execution, input leases, monitor scope, desktop scope, keyboard, mouse, SendInput, focus, clipboard, network fetch, process spawn, injection, termination, elevation, and approval bypass remain absent, and existing file, process, Git, approval, presence, trust, browser, observation, capture, proposal, and actuation behavior is unchanged."
+  }
 }
