@@ -7,7 +7,7 @@ repository.workspace = true
 rust-version.workspace = true
 
 [lib]
-path = "src/sg000038.rs"
+path = "src/sg000039.rs"
 
 [dependencies]
 cotra-approval = { path = "../cotra-approval" }

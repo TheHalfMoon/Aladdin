@@ -15,45 +15,55 @@ const POLICY: &str = "sg-000038-v1";
 
 struct FakeClipboardAdapter {
     sequence: Cell<u64>,
-    content: Option<String>,
+    content: std::cell::RefCell<Option<String>>,
     non_text: bool,
     locked: bool,
+    writes: Cell<usize>,
+    last_placed: std::cell::RefCell<Option<String>>,
 }
 
 impl FakeClipboardAdapter {
     fn with_text(sequence: u64, text: impl Into<String>) -> Self {
         Self {
             sequence: Cell::new(sequence),
-            content: Some(text.into()),
+            content: std::cell::RefCell::new(Some(text.into())),
             non_text: false,
             locked: false,
+            writes: Cell::new(0),
+            last_placed: std::cell::RefCell::new(None),
         }
     }
 
     fn empty(sequence: u64) -> Self {
         Self {
             sequence: Cell::new(sequence),
-            content: None,
+            content: std::cell::RefCell::new(None),
             non_text: false,
             locked: false,
+            writes: Cell::new(0),
+            last_placed: std::cell::RefCell::new(None),
         }
     }
 
     fn non_text(sequence: u64) -> Self {
         Self {
             sequence: Cell::new(sequence),
-            content: None,
+            content: std::cell::RefCell::new(None),
             non_text: true,
             locked: false,
+            writes: Cell::new(0),
+            last_placed: std::cell::RefCell::new(None),
         }
     }
 
     fn locked(sequence: u64) -> Self {
         Self {
             sequence: Cell::new(sequence),
-            content: None,
+            content: std::cell::RefCell::new(None),
             non_text: false,
             locked: true,
+            writes: Cell::new(0),
+            last_placed: std::cell::RefCell::new(None),
         }
     }
 
@@ -86,13 +96,27 @@ impl ClipboardAdapter for FakeClipboardAdapter {
                 "clipboard holds no Unicode text; bounded reads never transfer binary or object formats",
             ));
         }
-        match &self.content {
+        match &*self.content.borrow() {
             Some(text) => Ok(text.clone()),
             None => Err(ClipboardError::new(
                 FailureCode::TargetStale,
                 "clipboard is empty; there is no readable text",
             )),
         }
+    }
+
+    fn write_unicode_text(&self, text: &str) -> Result<u64, ClipboardError> {
+        if self.locked {
+            return Err(ClipboardError::new(
+                FailureCode::ProviderUnavailable,
+                "clipboard is locked by another owner and cannot be placed now",
+            ));
+        }
+        self.writes.set(self.writes.get().saturating_add(1));
+        self.last_placed.replace(Some(text.to_owned()));
+        self.content.replace(Some(text.to_owned()));
+        self.bump_sequence();
+        Ok(self.sequence.get())
     }
 }
 
@@ -101,6 +125,17 @@ fn read(
     expected: Option<u64>,
 ) -> Result<ReadOutcome, ClipboardError> {
     read_bounded_text(adapter, expected, WORKSPACE, POLICY)
+}
+
+/// Process-global serialization for the two native clipboard tests.
+/// The Win32 clipboard is process-global state: a test holding a locked
+/// clipboard view while another test empties or replaces clipboard data
+/// corrupts the heap, so native tests must never run concurrently.
+fn native_clipboard_test_lock() -> std::sync::MutexGuard<'static, ()> {
+    static LOCK: std::sync::OnceLock<std::sync::Mutex<()>> = std::sync::OnceLock::new();
+    LOCK.get_or_init(|| std::sync::Mutex::new(()))
+        .lock()
+        .expect("native clipboard test lock")
 }
 
 #[test]
@@ -113,16 +148,22 @@ fn read_shape_predicates_behave() {
     assert!(!is_clipboard_read_shape("clipboard", "history"));
     assert!(!is_clipboard_read_shape("clipboard", "watch"));
     assert!(!is_clipboard_read_shape("uia.input", "execute"));
-    for operation in ["write", "subscribe", "poll", "monitor", "history", "watch"] {
+    assert!(is_clipboard_write_shape("clipboard", "write"));
+    assert!(!is_clipboard_write_shape("clipboard", "read"));
+    assert!(!is_clipboard_write_shape("clipboard", "subscribe"));
+    assert!(!is_clipboard_write_shape("clipboard", "paste"));
+    for operation in ["subscribe", "poll", "monitor", "history", "watch"] {
         assert!(
             is_denied_clipboard_shape("clipboard", operation),
             "operation must stay denied: {operation}"
         );
     }
     assert!(!is_denied_clipboard_shape("clipboard", "read"));
+    assert!(!is_denied_clipboard_shape("clipboard", "write"));
     assert_eq!(MAX_CLIPBOARD_BYTES, 65536);
     assert_eq!(UNICODE_TEXT_FORMAT, "unicode-text");
     assert_eq!(CLIPBOARD_SCHEMA, "cotra-clipboard-read-v1");
+    assert_eq!(WRITE_SCHEMA, "cotra-clipboard-write-v1");
 }
 
 #[test]
@@ -303,6 +344,11 @@ fn cross_policy_reads_bind_their_own_revision() {
 
 #[test]
 fn native_adapter_reports_honest_typed_results() {
+    // The Win32 clipboard is process-global: parallel tests must not
+    // hold a locked clipboard view while another test empties or
+    // replaces clipboard data, so native clipboard tests serialize on
+    // this mutex. Product dispatch paths are single-call and unaffected.
+    let _guard = native_clipboard_test_lock();
     let native = NativeAdapter::new();
     match native.sequence_number() {
         Ok(sequence) => {
@@ -330,6 +376,196 @@ fn native_adapter_reports_honest_typed_results() {
             assert_eq!(error.code, FailureCode::ProviderUnavailable);
             #[cfg(windows)]
             panic!("native sequence state must be queryable on Windows");
+        }
+    }
+}
+
+fn write(adapter: &FakeClipboardAdapter, text: &str) -> Result<WriteOutcome, ClipboardError> {
+    write_bounded_text(adapter, text, WORKSPACE, POLICY)
+}
+
+#[test]
+fn happy_path_text_write_places_bounded_text_with_secret_free_evidence() {
+    let adapter = FakeClipboardAdapter::with_text(7, "old clipboard text");
+    let outcome = write(&adapter, "deploy the staging build at noon").unwrap();
+    assert_eq!(outcome.resulting_sequence, 8);
+    assert_eq!(outcome.evidence["schema"], WRITE_SCHEMA);
+    assert_eq!(outcome.evidence["action"], "write");
+    assert_eq!(outcome.evidence["format"], UNICODE_TEXT_FORMAT);
+    assert_eq!(outcome.evidence["byte_length"], 32);
+    assert_eq!(outcome.evidence["resulting_sequence"], 8);
+    assert_eq!(outcome.evidence["workspace_id"], WORKSPACE);
+    assert_eq!(outcome.evidence["policy_revision"], POLICY);
+    let digest = outcome.evidence["content_digest"]
+        .as_str()
+        .expect("content digest");
+    assert_eq!(digest.len(), 64);
+    assert!(digest.chars().all(|byte| byte.is_ascii_hexdigit()));
+    assert_eq!(
+        digest,
+        clipboard_write_content_digest("deploy the staging build at noon")
+    );
+    assert_eq!(adapter.writes.get(), 1);
+    assert_eq!(
+        adapter.last_placed.borrow().as_deref(),
+        Some("deploy the staging build at noon")
+    );
+    for key in [
+        "text", "content", "password", "secret", "token", "approval", "pixels",
+    ] {
+        assert!(
+            outcome.evidence.get(key).is_none(),
+            "evidence must not carry {key}"
+        );
+    }
+}
+
+#[test]
+fn empty_write_text_fails_closed_without_touching_the_adapter() {
+    let adapter = FakeClipboardAdapter::with_text(7, "old clipboard text");
+    let error = write(&adapter, "").expect_err("empty write must fail");
+    assert_eq!(error.code, FailureCode::InvalidRequest);
+    assert_eq!(adapter.writes.get(), 0);
+    assert!(adapter.last_placed.borrow().is_none());
+}
+
+#[test]
+fn write_size_boundaries_behave() {
+    let adapter = FakeClipboardAdapter::with_text(1, "old");
+    let outcome = write(&adapter, &"a".repeat(MAX_CLIPBOARD_BYTES)).unwrap();
+    assert_eq!(outcome.evidence["byte_length"], MAX_CLIPBOARD_BYTES as u64);
+    let error = write(&adapter, &"a".repeat(MAX_CLIPBOARD_BYTES + 1))
+        .expect_err("oversized write must fail");
+    assert_eq!(error.code, FailureCode::OutputLimit);
+    assert_eq!(adapter.writes.get(), 1);
+    // 65535 ASCII bytes plus one two-byte character is 65537 bytes.
+    let mut pathological = "a".repeat(MAX_CLIPBOARD_BYTES - 1);
+    pathological.push('\u{e9}');
+    let error = write(&adapter, &pathological).expect_err("encoding size must fail");
+    assert_eq!(error.code, FailureCode::OutputLimit);
+}
+
+#[test]
+fn write_secret_families_are_denied_before_placement() {
+    // Synthetic credential-shaped fixtures only; bodies are sequential
+    // or repeated characters with no live secret material. Assembled
+    // with `concat!` where noted so repository secret-scanning push
+    // protection does not false-positive on the non-secret fixtures.
+    let secrets = [
+        "deploy password=hunter2 tonight",
+        "api_secret=shhh-do-not-share",
+        "Authorization: Bearer abcdef123456",
+        "token=tok_live_999",
+        concat!("ghp_", "1234567890abcdef1234567890abcdef1234"),
+        concat!("xox", "b-123456789012-abcdefghijklmnopqrstuvwx"),
+        "-----BEGIN OPENSSH PRIVATE KEY-----\nAAAAC3",
+        "ssh private_key material below",
+        "write down this seed phrase now",
+        "use recovery-code 482913 on file",
+        "paste the cotra-approval nonce here: 123",
+    ];
+    for secret in secrets {
+        let adapter = FakeClipboardAdapter::with_text(1, "old");
+        let error = write(&adapter, secret).expect_err("secret write must fail");
+        assert_eq!(error.code, FailureCode::CapabilityDenied);
+        assert!(
+            !error.message.contains(secret),
+            "denial must not quote secret bytes"
+        );
+        assert_eq!(adapter.writes.get(), 0);
+        assert!(adapter.last_placed.borrow().is_none());
+    }
+}
+
+#[test]
+fn locked_adapter_fails_write_closed_as_unavailable() {
+    let adapter = FakeClipboardAdapter::locked(3);
+    let error = write(&adapter, "plain placement text").expect_err("locked write must fail");
+    assert_eq!(error.code, FailureCode::ProviderUnavailable);
+}
+
+#[test]
+fn write_approval_digest_binds_payload_workspace_and_policy() {
+    let digest = clipboard_write_content_digest("placement text");
+    let first = clipboard_write_digest(WORKSPACE, POLICY, &digest, 14);
+    assert_eq!(first.len(), 64);
+    assert!(first.chars().all(|byte| byte.is_ascii_hexdigit()));
+    assert_eq!(
+        first,
+        clipboard_write_digest(WORKSPACE, POLICY, &digest, 14)
+    );
+    assert_ne!(
+        first,
+        clipboard_write_digest(
+            WORKSPACE,
+            POLICY,
+            &clipboard_write_content_digest("other"),
+            14
+        )
+    );
+    assert_ne!(
+        first,
+        clipboard_write_digest(WORKSPACE, POLICY, &digest, 15)
+    );
+    assert_ne!(
+        first,
+        clipboard_write_digest("other-workspace", POLICY, &digest, 14)
+    );
+    assert_ne!(
+        first,
+        clipboard_write_digest(WORKSPACE, "sg-000039-v1", &digest, 14)
+    );
+    assert_ne!(
+        clipboard_write_content_digest("placement text"),
+        clipboard_content_digest("placement text")
+    );
+}
+
+#[test]
+fn write_malformed_scope_fails_closed() {
+    let adapter = FakeClipboardAdapter::with_text(1, "old");
+    let error = write_bounded_text(&adapter, "plain text", "", POLICY)
+        .expect_err("empty workspace must fail");
+    assert_eq!(error.code, FailureCode::InvalidRequest);
+    let error = write_bounded_text(&adapter, "plain text", WORKSPACE, "")
+        .expect_err("empty policy must fail");
+    assert_eq!(error.code, FailureCode::InvalidRequest);
+    assert_eq!(adapter.writes.get(), 0);
+}
+
+#[test]
+fn write_then_read_round_trip_with_fresh_sequence() {
+    let adapter = FakeClipboardAdapter::with_text(20, "old clipboard text");
+    let placed = write(&adapter, "standup notes").unwrap();
+    assert_eq!(placed.resulting_sequence, 21);
+    let sampled = read(&adapter, Some(21)).unwrap();
+    assert_eq!(sampled.text, "standup notes");
+    assert_eq!(sampled.evidence["sequence"], 21);
+}
+
+#[test]
+fn native_write_path_reports_honest_typed_results() {
+    let _guard = native_clipboard_test_lock();
+    let native = NativeAdapter::new();
+    // This test performs one real placement of benign marker text
+    // through the Win32 clipboard APIs where an interactive session
+    // exists, which genuinely proves the placement path including the
+    // resulting sequence number. The marker is non-secret and the
+    // mutation is disclosed here; ephemeral CI runners are unaffected
+    // beyond their throwaway session clipboard. In headless contexts
+    // the adapter must fail closed as unavailable instead of
+    // fabricating success.
+    match native.write_unicode_text("cotra-write-gating-probe") {
+        Ok(sequence) => {
+            assert!(sequence <= u32::MAX as u64);
+        }
+        Err(error) => {
+            assert!(matches!(
+                error.code,
+                FailureCode::ProviderUnavailable
+                    | FailureCode::CapabilityDenied
+                    | FailureCode::OutputLimit
+            ));
         }
     }
 }

@@ -1,36 +1,45 @@
-//! SG-000038 bounded clipboard-read provider.
+//! SG-000038 bounded clipboard-read provider with SG-000039 bounded
+//! clipboard-write extension.
 //!
-//! This crate implements the narrow P11 clipboard-read authority
-//! authorized by the SG-000038 SpecGrain: one explicit `clipboard/read`
-//! shape returning Unicode text only, with a hard 65536-byte bound,
-//! independent content-type verification, deterministic secret-pattern
-//! denial, clipboard-sequence binding, and bounded secret-free evidence.
+//! This crate implements the narrow P11 clipboard authority authorized
+//! by the SG-000038 and SG-000039 SpecGrains: one explicit
+//! `clipboard/read` shape returning Unicode text only, and one explicit
+//! `clipboard/write` shape placing Unicode text only, each with a hard
+//! 65536-byte bound, independent content-type verification,
+//! deterministic secret-pattern denial, clipboard-sequence binding, and
+//! bounded secret-free evidence.
 //!
-//! The request represents a single bounded point-in-time sample. It never
-//! becomes persistent observation authority: clipboard write,
-//! subscriptions, polling, monitoring, history collection, and standing
-//! sessions have no function here and must fail closed in the policy and
-//! dispatch layers. Network authority does not exist in this crate.
+//! Every request represents a single bounded operation. Reads never
+//! become persistent observation authority and writes never become
+//! paste, input, keyboard, or desktop authority: clipboard write,
+//! subscriptions, polling, monitoring, history collection, standing
+//! sessions, input injection, and paste automation have no function here
+//! beyond the single explicit placement, and must fail closed in the
+//! policy and dispatch layers. Network authority does not exist in this
+//! crate.
 //!
 //! Secret model: secret-pattern clipboard content is denied before any
-//! return path and never enters results, evidence, prompts, logs, or MCP
-//! responses. Detection is deterministic pattern matching over documented
-//! credential, token, key, seed, and Cotra-protected families. It is not
-//! claimed to be perfect: novel exfiltration shapes outside the
-//! documented families are a stated limitation, and the fail-closed
-//! direction (deny on match, never leak on match) is the guarantee.
+//! placement or return path and never enters results, evidence, prompts,
+//! logs, or MCP responses. Detection is deterministic pattern matching
+//! over documented credential, token, key, seed, and Cotra-protected
+//! families. It is not claimed to be perfect: novel exfiltration shapes
+//! outside the documented families are a stated limitation, and the
+//! fail-closed direction (deny on match, never leak on match) is the
+//! guarantee.
 //!
-//! Windows reality: the native adapter reads Unicode text through the
-//! real Win32 clipboard APIs (`OpenClipboard`, `GetClipboardData` with
-//! `CF_UNICODETEXT`, `GlobalLock`) and binds the real clipboard sequence
-//! number (`GetClipboardSequenceNumber`) without reading content, so
-//! pre-approval and post-approval sequence drift fails closed. A locked,
-//! empty, non-text, or otherwise unreadable clipboard fails closed with
-//! a typed error instead of fabricated content. Deterministic read,
-//! bound, denial, and secret policy is proven through the injected fake
-//! adapter on every platform. These limits are recorded honestly and must
-//! not be read as interactive clipboard evidence beyond what the tests
-//! and the native gating test genuinely prove.
+//! Windows reality: the native adapter moves Unicode text through the
+//! real Win32 clipboard APIs (`OpenClipboard`, `GetClipboardData` and
+//! `SetClipboardData` with `CF_UNICODETEXT`, `GlobalLock`,
+//! `GlobalAlloc`) and binds the real clipboard sequence number
+//! (`GetClipboardSequenceNumber`) without moving content for state
+//! binding, so pre-approval and post-approval sequence drift fails
+//! closed. A locked, empty, non-text, oversized, unwritable, or
+//! otherwise unreadable clipboard fails closed with a typed error
+//! instead of fabricated content. Deterministic read, write, bound,
+//! denial, and secret policy is proven through the injected fake
+//! adapter on every platform. These limits are recorded honestly and
+//! must not be read as interactive clipboard evidence beyond what the
+//! tests and the native gating test genuinely prove.
 
 use cotra_contracts::FailureCode;
 use serde_json::{json, Value};
@@ -38,6 +47,9 @@ use sha2::{Digest, Sha256};
 
 /// Schema label for bounded clipboard-read results and evidence.
 pub const CLIPBOARD_SCHEMA: &str = "cotra-clipboard-read-v1";
+
+/// Schema label for bounded clipboard-write evidence.
+pub const WRITE_SCHEMA: &str = "cotra-clipboard-write-v1";
 
 /// The only clipboard content format SG-000038 authorizes: plain Unicode
 /// text. Bitmap, file-drop, audio, shell-object, HTML/RTF objects, and
@@ -59,12 +71,19 @@ pub fn is_clipboard_read_shape(capability: &str, operation: &str) -> bool {
     matches!((capability, operation), ("clipboard", "read"))
 }
 
+/// The single SG-000039 write shape. Placement never authorizes paste,
+/// input, keyboard, or desktop authority of any kind.
+pub fn is_clipboard_write_shape(capability: &str, operation: &str) -> bool {
+    matches!((capability, operation), ("clipboard", "write"))
+}
+
 /// Typed denial catalog for clipboard shapes that remain unauthorized.
-/// Write, subscription, polling, monitoring, history, and watch shapes
-/// are denied here so policy can map them to the STRONG gate and dispatch
-/// can fail closed without reaching the provider.
+/// Subscription, polling, monitoring, history, and watch shapes are
+/// denied here so policy can map them to the STRONG gate and dispatch
+/// can fail closed without reaching the provider. Clipboard write left
+/// this catalog under SG-000039 and is authorized separately; clipboard
+/// read never appeared here.
 pub const DENIED_CLIPBOARD_SHAPES: &[(&str, &str)] = &[
-    ("clipboard", "write"),
     ("clipboard", "subscribe"),
     ("clipboard", "poll"),
     ("clipboard", "monitor"),
@@ -109,6 +128,15 @@ fn digest_hex(material: &str, chars: usize) -> String {
 /// because denial happens before digest binding.
 pub fn clipboard_content_digest(text: &str) -> String {
     digest_hex(&format!("{CLIPBOARD_SCHEMA}|payload|{text}"), 64)
+}
+
+/// SHA-256 hex digest of one approved clipboard-write payload, used in
+/// approval digests and evidence so raw text never enters approval
+/// prompts beyond the bounded request itself and never enters evidence
+/// at all. Secret-denied content never reaches this function because
+/// denial happens before digest binding.
+pub fn clipboard_write_content_digest(text: &str) -> String {
+    digest_hex(&format!("{WRITE_SCHEMA}|payload|{text}"), 64)
 }
 
 /// Compute the exact approval digest for one bounded clipboard read. The
@@ -229,9 +257,11 @@ fn has_sk_style_token(haystack: &str) -> bool {
 }
 
 /// The adapter boundary. Policy logic, bounds, secret denial, sequence
-/// binding, and evidence live in [`read_bounded_text`], so adapters stay
-/// small and deterministic tests never need a live desktop. Adapters
-/// report raw clipboard facts only and never decide authorization.
+/// binding, and evidence live in [`read_bounded_text`] and
+/// [`write_bounded_text`], so adapters stay small and deterministic tests
+/// never need a live desktop. Adapters move raw clipboard facts only and
+/// never decide authorization. Placement adapters never synthesize input,
+/// keystrokes, paste, or focus changes of any kind.
 pub trait ClipboardAdapter {
     /// Return the current clipboard sequence number without reading
     /// content. The sequence binds clipboard state into the approval
@@ -241,6 +271,11 @@ pub trait ClipboardAdapter {
     /// validation. Bounds, format, and secret policy live in
     /// [`read_bounded_text`], not in adapters.
     fn read_unicode_text(&self) -> Result<String, ClipboardError>;
+    /// Place Unicode text onto the clipboard without validation and
+    /// return the resulting clipboard sequence number. Bounds and secret
+    /// policy live in [`write_bounded_text`], not in adapters. Placement
+    /// must not synthesize input, paste, keystrokes, or focus changes.
+    fn write_unicode_text(&self, text: &str) -> Result<u64, ClipboardError>;
 }
 
 /// One bounded clipboard-read outcome: secret-free evidence plus the
@@ -319,11 +354,102 @@ pub fn read_bounded_text(
     Ok(ReadOutcome { evidence, text })
 }
 
+/// Compute the exact approval digest for one bounded clipboard write.
+/// The digest binds the workspace, the policy revision, the content
+/// digest of the exact caller text, the byte length, the fixed
+/// Unicode-text format bound, and the fixed size bound. Unlike reads,
+/// write content is known before approval, so the digest binds the
+/// payload itself; dispatch still revalidates bounds and secrets after
+/// approval, so smuggled state fails closed.
+pub fn clipboard_write_digest(
+    workspace_id: &str,
+    policy_revision: &str,
+    text_digest: &str,
+    byte_length: usize,
+) -> String {
+    let material = format!(
+        "{WRITE_SCHEMA}|{workspace_id}|{policy_revision}|{text_digest}|{byte_length}|{UNICODE_TEXT_FORMAT}|{MAX_CLIPBOARD_BYTES}|write"
+    );
+    digest_hex(&material, 64)
+}
+
+/// One bounded clipboard-write outcome: secret-free evidence plus the
+/// resulting clipboard sequence number. The placed text travels only in
+/// the approved request, never in logs, evidence, or metadata paths.
+#[derive(Debug, Clone)]
+pub struct WriteOutcome {
+    pub evidence: Value,
+    pub resulting_sequence: u64,
+}
+
+/// Perform one bounded clipboard placement. Empty, oversized, and
+/// secret-bearing text fails closed before the adapter is touched, so
+/// denied content never reaches the operating system. Evidence carries
+/// only format, size, digests, the resulting sequence, workspace, and
+/// policy revision with no raw content retention. Placement never
+/// authorizes paste, input, keyboard, or desktop authority: the adapter
+/// contract forbids synthesizing input of any kind.
+pub fn write_bounded_text(
+    adapter: &impl ClipboardAdapter,
+    text: &str,
+    workspace_id: &str,
+    policy_revision: &str,
+) -> Result<WriteOutcome, ClipboardError> {
+    if workspace_id.is_empty() || workspace_id.chars().count() > MAX_SCOPE_CHARS {
+        return Err(ClipboardError::new(
+            FailureCode::InvalidRequest,
+            "clipboard write workspace is empty or too large",
+        ));
+    }
+    if policy_revision.is_empty() || policy_revision.chars().count() > MAX_SCOPE_CHARS {
+        return Err(ClipboardError::new(
+            FailureCode::InvalidRequest,
+            "clipboard write policy revision is empty or too large",
+        ));
+    }
+    if text.is_empty() {
+        return Err(ClipboardError::new(
+            FailureCode::InvalidRequest,
+            "clipboard write text must not be empty",
+        ));
+    }
+    let byte_length = text.len();
+    if byte_length > MAX_CLIPBOARD_BYTES {
+        return Err(ClipboardError::new(
+            FailureCode::OutputLimit,
+            "clipboard write text exceeds the bounded placement size",
+        ));
+    }
+    if contains_secret_material(text) {
+        return Err(ClipboardError::new(
+            FailureCode::CapabilityDenied,
+            "clipboard write holds secret material which bounded writes never place",
+        ));
+    }
+    let resulting_sequence = adapter.write_unicode_text(text)?;
+    let evidence = json!({
+        "schema": WRITE_SCHEMA,
+        "action": "write",
+        "format": UNICODE_TEXT_FORMAT,
+        "byte_length": byte_length,
+        "content_digest": clipboard_write_content_digest(text),
+        "resulting_sequence": resulting_sequence,
+        "workspace_id": workspace_id,
+        "policy_revision": policy_revision,
+    });
+    Ok(WriteOutcome {
+        evidence,
+        resulting_sequence,
+    })
+}
+
 /// The native adapter. On Windows it queries the real clipboard sequence
-/// number and reads real Unicode text through the Win32 clipboard APIs.
-/// A locked, empty, non-text, oversized, or otherwise unreadable
-/// clipboard fails closed with a typed error instead of fabricated
-/// content. Outside Windows every call fails closed as unavailable.
+/// number, reads real Unicode text, and places real Unicode text through
+/// the Win32 clipboard APIs. A locked, empty, non-text, oversized,
+/// unwritable, or otherwise unreadable clipboard fails closed with a
+/// typed error instead of fabricated content. Placement synthesizes no
+/// input, keystrokes, paste, or focus changes. Outside Windows every call
+/// fails closed as unavailable.
 pub struct NativeAdapter;
 
 impl NativeAdapter {
@@ -345,6 +471,10 @@ impl ClipboardAdapter for NativeAdapter {
 
     fn read_unicode_text(&self) -> Result<String, ClipboardError> {
         native_read_unicode_text()
+    }
+
+    fn write_unicode_text(&self, text: &str) -> Result<u64, ClipboardError> {
+        native_write_unicode_text(text)
     }
 }
 
@@ -449,6 +579,89 @@ fn native_read_unicode_text() -> Result<String, ClipboardError> {
     Err(ClipboardError::new(
         FailureCode::ProviderUnavailable,
         "clipboard reads require Windows clipboard APIs and are unavailable in this context",
+    ))
+}
+
+#[cfg(windows)]
+fn native_write_unicode_text(text: &str) -> Result<u64, ClipboardError> {
+    use windows::Win32::Foundation::{GlobalFree, HANDLE, HWND};
+    use windows::Win32::System::DataExchange::{
+        CloseClipboard, EmptyClipboard, GetClipboardSequenceNumber, OpenClipboard, SetClipboardData,
+    };
+    use windows::Win32::System::Memory::{GlobalAlloc, GlobalLock, GlobalUnlock, GMEM_MOVEABLE};
+
+    /// Win32 `CF_UNICODETEXT` clipboard format identifier (winuser.h).
+    /// Kept as a local constant because the generated bindings expose it
+    /// under an unrelated Ole module; the value is stable Win32 ABI.
+    const CF_UNICODETEXT: u32 = 13;
+
+    struct ClipboardGuard;
+    impl Drop for ClipboardGuard {
+        fn drop(&mut self) {
+            unsafe {
+                let _ = CloseClipboard();
+            }
+        }
+    }
+
+    // Encode first so oversized or unencodable caller text fails before
+    // the clipboard is ever opened.
+    let units: Vec<u16> = text.encode_utf16().chain(std::iter::once(0)).collect();
+    let byte_size = units.len().saturating_mul(2);
+    if byte_size > MAX_CLIPBOARD_BYTES.saturating_add(2) {
+        return Err(ClipboardError::new(
+            FailureCode::OutputLimit,
+            "clipboard write text exceeds the bounded placement size",
+        ));
+    }
+    unsafe {
+        OpenClipboard(HWND(std::ptr::null_mut())).map_err(|_| {
+            ClipboardError::new(
+                FailureCode::ProviderUnavailable,
+                "clipboard is locked by another owner and cannot be placed now",
+            )
+        })?;
+        let _guard = ClipboardGuard;
+        EmptyClipboard().map_err(|_| {
+            ClipboardError::new(
+                FailureCode::ProviderUnavailable,
+                "clipboard cannot be prepared for placement in this session",
+            )
+        })?;
+        let global = GlobalAlloc(GMEM_MOVEABLE, byte_size).map_err(|_| {
+            ClipboardError::new(
+                FailureCode::ProviderUnavailable,
+                "clipboard placement memory is unavailable in this session",
+            )
+        })?;
+        let locked = GlobalLock(global);
+        if locked.is_null() {
+            let _ = GlobalFree(global);
+            return Err(ClipboardError::new(
+                FailureCode::ProviderUnavailable,
+                "clipboard placement memory is unavailable in this session",
+            ));
+        }
+        std::ptr::copy_nonoverlapping(units.as_ptr(), locked as *mut u16, units.len());
+        let _ = GlobalUnlock(global);
+        if SetClipboardData(CF_UNICODETEXT, HANDLE(global.0)).is_err() {
+            let _ = GlobalFree(global);
+            return Err(ClipboardError::new(
+                FailureCode::ProviderUnavailable,
+                "clipboard placement was rejected in this session",
+            ));
+        }
+        // Success transfers global-memory ownership to the system; the
+        // block must not be freed here.
+        Ok(GetClipboardSequenceNumber() as u64)
+    }
+}
+
+#[cfg(not(windows))]
+fn native_write_unicode_text(_text: &str) -> Result<u64, ClipboardError> {
+    Err(ClipboardError::new(
+        FailureCode::ProviderUnavailable,
+        "clipboard writes require Windows clipboard APIs and are unavailable in this context",
     ))
 }
 

@@ -1,41 +1,50 @@
-//! SG-000038 bounded clipboard-read dispatch.
+//! SG-000038 bounded clipboard-read dispatch with SG-000039 bounded
+//! clipboard-write extension.
 //!
 //! This module dispatches the single SG-000038 `clipboard/read` shape
-//! against the dedicated clipboard provider backed by the native
-//! adapter. One explicit read returns at most 65536 bytes of Unicode
-//! text with secret-pattern denial, clipboard-sequence binding, and
-//! bounded secret-free evidence.
+//! and the single SG-000039 `clipboard/write` shape against the
+//! dedicated clipboard provider backed by the native adapter. One
+//! explicit read returns at most 65536 bytes of Unicode text and one
+//! explicit write places at most 65536 bytes of Unicode text, each with
+//! secret-pattern denial, clipboard-sequence binding, and bounded
+//! secret-free evidence.
 //!
-//! Every read requires fresh per-read SOFT approval with exact digest
-//! binding over the workspace, the policy revision, the clipboard
-//! sequence observed immediately before approval, the fixed Unicode-text
-//! format bound, and the fixed size bound. The sequence is revalidated
-//! immediately after approval, so clipboard content that changes in
-//! between fails closed as stale. Each approval authorizes at most one
-//! sample: clipboard write, subscriptions, polling, monitoring, history,
-//! and standing sessions have no dispatch path and return `Ok(None)` so
-//! the caller fails closed through the STRONG gate or the legacy denial.
-//! No MCP clipboard tool exists; the agent cannot reach reads through
-//! its own tool surface.
+//! Every read and every write requires fresh per-operation SOFT approval
+//! with exact digest binding. Reads bind the clipboard sequence observed
+//! immediately before approval and revalidate it immediately after, so
+//! clipboard content that changes in between fails closed as stale.
+//! Writes bind the content digest of the exact caller text, and the
+//! provider revalidates bounds and secrets after approval. Each approval
+//! authorizes at most one operation: clipboard subscriptions, polling,
+//! monitoring, history, watchers, and standing sessions have no dispatch
+//! path and return `Ok(None)` so the caller fails closed through the
+//! STRONG gate or the legacy denial. Placement never authorizes paste,
+//! input, keyboard, or desktop authority of any kind. No MCP clipboard
+//! tool exists; the agent cannot reach reads or writes through its own
+//! tool surface.
 
 use cotra_approval::{ApprovalBroker, ApprovalPrompt, ConsumeExpectation};
 use cotra_contracts::{FailureCode, RequestEnvelope};
 use cotra_policy::{Workspace, POLICY_REVISION};
 use cotra_provider_clipboard::{
-    clipboard_read_digest, read_bounded_text, ClipboardAdapter, NativeAdapter, MAX_CLIPBOARD_BYTES,
+    clipboard_read_digest, clipboard_write_content_digest, clipboard_write_digest,
+    read_bounded_text, write_bounded_text, ClipboardAdapter, NativeAdapter, MAX_CLIPBOARD_BYTES,
     UNICODE_TEXT_FORMAT,
 };
 use cotra_provider_fs::ProviderError;
 use serde_json::Value;
 
-/// Dispatch the SG-000038 clipboard shapes. Returns `Ok(None)` for
-/// non-clipboard shapes and for denied clipboard shapes so the caller
-/// falls through to the STRONG gate and the legacy dispatchers.
+/// Dispatch the SG-000038/SG-000039 clipboard shapes. Returns `Ok(None)`
+/// for non-clipboard shapes and for denied clipboard shapes so the
+/// caller falls through to the STRONG gate and the legacy dispatchers.
 pub fn dispatch_clipboard(
     workspace: &Workspace,
     approval: &impl ApprovalBroker,
     request: &RequestEnvelope,
 ) -> Result<Option<Value>, ProviderError> {
+    if cotra_provider_clipboard::is_clipboard_write_shape(&request.capability, &request.operation) {
+        return write_with_approval(workspace, approval, request, &NativeAdapter::new()).map(Some);
+    }
     if !cotra_provider_clipboard::is_clipboard_read_shape(&request.capability, &request.operation) {
         return Ok(None);
     }
@@ -105,6 +114,74 @@ fn reject_clipboard_arguments(request: &RequestEnvelope) -> Result<(), ProviderE
     Ok(())
 }
 
+fn write_with_approval(
+    workspace: &Workspace,
+    approval: &impl ApprovalBroker,
+    request: &RequestEnvelope,
+    adapter: &impl ClipboardAdapter,
+) -> Result<Value, ProviderError> {
+    if request.target.is_some() {
+        return Err(ProviderError::new(
+            FailureCode::InvalidRequest,
+            "clipboard write shapes do not accept a target field",
+        ));
+    }
+    let arguments = request.arguments.as_object().ok_or_else(|| {
+        ProviderError::new(
+            FailureCode::InvalidRequest,
+            "clipboard arguments must be an object",
+        )
+    })?;
+    if arguments.len() != 1 || !arguments.contains_key("text") {
+        return Err(ProviderError::new(
+            FailureCode::InvalidRequest,
+            "clipboard/write accepts exactly the text argument",
+        ));
+    }
+    let text = arguments
+        .get("text")
+        .and_then(Value::as_str)
+        .ok_or_else(|| {
+            ProviderError::new(
+                FailureCode::InvalidRequest,
+                "clipboard/write requires arguments.text as a string",
+            )
+        })?;
+    // The approval summary carries the digest and bounds only, never the
+    // caller text, so secret-bearing text cannot leak through prompts.
+    let text_digest = clipboard_write_content_digest(text);
+    let byte_length = text.len();
+    let digest = clipboard_write_digest(&workspace.id, POLICY_REVISION, &text_digest, byte_length);
+    let prompt = ApprovalPrompt::new(
+        workspace.id.clone(),
+        POLICY_REVISION,
+        "write clipboard",
+        "clipboard".to_owned(),
+        format!(
+            "format={UNICODE_TEXT_FORMAT} byte_length={byte_length} max_bytes={MAX_CLIPBOARD_BYTES} content_digest={text_digest} action=write"
+        ),
+        digest.clone(),
+    );
+    let token = approval
+        .request_token(&prompt)
+        .map_err(|error| ProviderError::new(error.code, error.message))?;
+    approval
+        .consume(
+            &token,
+            &ConsumeExpectation::new(digest, workspace.id.clone(), POLICY_REVISION),
+            cotra_approval::now_ms(),
+        )
+        .map_err(|error| ProviderError::new(error.code, error.message))?;
+    // Placement happens only after approval, and the provider revalidates
+    // bounds and secrets. Placement synthesizes no input of any kind:
+    // write != paste by construction of the adapter contract.
+    let outcome = write_bounded_text(adapter, text, &workspace.id, POLICY_REVISION)
+        .map_err(|error| ProviderError::new(error.code, error.message))?;
+    let mut stamped = outcome.evidence;
+    stamped["approval_record"] = Value::String(token.record_id);
+    Ok(stamped)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -121,6 +198,7 @@ mod tests {
         bump_after_first_sequence: Cell<bool>,
         sequence_calls: Cell<usize>,
         reads: Cell<usize>,
+        writes: Cell<usize>,
     }
 
     impl FakeClipboard {
@@ -132,6 +210,7 @@ mod tests {
                 bump_after_first_sequence: Cell::new(false),
                 sequence_calls: Cell::new(0),
                 reads: Cell::new(0),
+                writes: Cell::new(0),
             }
         }
 
@@ -143,6 +222,7 @@ mod tests {
                 bump_after_first_sequence: Cell::new(false),
                 sequence_calls: Cell::new(0),
                 reads: Cell::new(0),
+                writes: Cell::new(0),
             }
         }
     }
@@ -170,6 +250,38 @@ mod tests {
                 .clone()
                 .ok_or_else(|| ClipboardError::new(FailureCode::TargetStale, "clipboard is empty"))
         }
+
+        fn write_unicode_text(&self, _text: &str) -> Result<u64, ClipboardError> {
+            self.writes.set(self.writes.get().saturating_add(1));
+            self.content.replace(Some(_text.to_owned()));
+            self.sequence.set(self.sequence.get().saturating_add(1));
+            Ok(self.sequence.get())
+        }
+    }
+
+    fn write_request(text: &str) -> RequestEnvelope {
+        RequestEnvelope {
+            version: cotra_contracts::INTERNAL_PROTOCOL_VERSION,
+            request_id: "clipboard-write-1".to_owned(),
+            client_session_id: "session-1".to_owned(),
+            workspace_id: "clipboard-dispatch-workspace".to_owned(),
+            capability: "clipboard".to_owned(),
+            operation: "write".to_owned(),
+            target: None,
+            arguments: serde_json::json!({"text": text}),
+        }
+    }
+
+    fn approved_write(
+        adapter: &FakeClipboard,
+        request: &RequestEnvelope,
+    ) -> Result<Value, ProviderError> {
+        write_with_approval(
+            &workspace(),
+            &FixedApprovalBroker(ApprovalDecision::Approved),
+            request,
+            adapter,
+        )
     }
 
     fn workspace() -> Workspace {
@@ -209,7 +321,6 @@ mod tests {
         let workspace = workspace();
         let approval = FixedApprovalBroker(ApprovalDecision::Approved);
         for (capability, operation) in [
-            ("clipboard", "write"),
             ("clipboard", "subscribe"),
             ("clipboard", "poll"),
             ("clipboard", "monitor"),
@@ -293,5 +404,125 @@ mod tests {
         let empty = FakeClipboard::empty();
         let error = approved_read(&empty, &read_request()).expect_err("empty clipboard must fail");
         assert!(matches!(error.code, FailureCode::TargetStale));
+    }
+
+    #[test]
+    fn approved_write_places_text_with_evidence_and_approval_record() {
+        let adapter = FakeClipboard::with_text(11, "old clipboard text");
+        let result = approved_write(&adapter, &write_request("quarterly report draft")).unwrap();
+        assert_eq!(result["action"], "write");
+        assert_eq!(result["format"], "unicode-text");
+        assert_eq!(result["byte_length"], 22);
+        assert_eq!(result["resulting_sequence"], 12);
+        assert!(result["approval_record"].is_string());
+        assert!(result["content_digest"].is_string());
+        for key in [
+            "text", "content", "password", "secret", "token", "paste", "input",
+        ] {
+            assert!(
+                result.get(key).is_none(),
+                "write evidence must not carry {key}"
+            );
+        }
+        assert_eq!(adapter.writes.get(), 1);
+    }
+
+    #[test]
+    fn denied_approval_places_nothing() {
+        let adapter = FakeClipboard::with_text(11, "old clipboard text");
+        let error = write_with_approval(
+            &workspace(),
+            &FixedApprovalBroker(ApprovalDecision::Denied),
+            &write_request("quarterly report draft"),
+            &adapter,
+        )
+        .expect_err("denied approval must fail");
+        assert!(matches!(
+            error.code,
+            FailureCode::ApprovalDenied | FailureCode::ApprovalUnavailable
+        ));
+        assert_eq!(adapter.writes.get(), 0);
+    }
+
+    #[test]
+    fn write_argument_shape_is_exact() {
+        let adapter = FakeClipboard::with_text(11, "old clipboard text");
+        let approval = FixedApprovalBroker(ApprovalDecision::Approved);
+        let mut missing = write_request("x");
+        missing.arguments = serde_json::json!({});
+        let error = write_with_approval(&workspace(), &approval, &missing, &adapter)
+            .expect_err("missing text must fail");
+        assert!(matches!(error.code, FailureCode::InvalidRequest));
+        let mut extra = write_request("x");
+        extra.arguments = serde_json::json!({"text": "x", "format": "text"});
+        let error = write_with_approval(&workspace(), &approval, &extra, &adapter)
+            .expect_err("extra fields must fail");
+        assert!(matches!(error.code, FailureCode::InvalidRequest));
+        let mut non_string = write_request("x");
+        non_string.arguments = serde_json::json!({"text": 42});
+        let error = write_with_approval(&workspace(), &approval, &non_string, &adapter)
+            .expect_err("non-string text must fail");
+        assert!(matches!(error.code, FailureCode::InvalidRequest));
+        let mut with_target = write_request("x");
+        with_target.target = Some("clipboard".to_owned());
+        let error = write_with_approval(&workspace(), &approval, &with_target, &adapter)
+            .expect_err("target must fail");
+        assert!(matches!(error.code, FailureCode::InvalidRequest));
+        assert_eq!(adapter.writes.get(), 0);
+    }
+
+    #[test]
+    fn write_denies_empty_oversized_and_secret_text() {
+        let adapter = FakeClipboard::with_text(11, "old clipboard text");
+        let error =
+            approved_write(&adapter, &write_request("")).expect_err("empty write must fail");
+        assert!(matches!(error.code, FailureCode::InvalidRequest));
+        let big = "a".repeat(cotra_provider_clipboard::MAX_CLIPBOARD_BYTES + 1);
+        let error =
+            approved_write(&adapter, &write_request(&big)).expect_err("oversized write must fail");
+        assert!(matches!(error.code, FailureCode::OutputLimit));
+        let error = approved_write(&adapter, &write_request("token=tok_live_999"))
+            .expect_err("secret write must fail");
+        assert!(matches!(error.code, FailureCode::CapabilityDenied));
+        assert_eq!(adapter.writes.get(), 0);
+    }
+
+    #[test]
+    fn write_never_authorizes_paste_or_input_authority() {
+        // Placement touches only the clipboard adapter: no UIA lease, no
+        // input execution, no keyboard, no SendInput, and no focus change
+        // exists anywhere on the write path. The evidence carries no
+        // input-capable material.
+        let adapter = FakeClipboard::with_text(11, "old clipboard text");
+        let result = approved_write(&adapter, &write_request("standup notes")).unwrap();
+        assert_eq!(result["action"], "write");
+        for key in [
+            "paste",
+            "input",
+            "keyboard",
+            "sendinput",
+            "click",
+            "focus",
+            "lease",
+            "coord_id",
+            "hwnd",
+        ] {
+            assert!(
+                result.get(key).is_none(),
+                "write result must not carry {key}"
+            );
+        }
+        assert_eq!(adapter.writes.get(), 1);
+        assert_eq!(adapter.reads.get(), 0);
+    }
+
+    #[test]
+    fn write_then_read_round_trip_needs_fresh_approvals() {
+        let adapter = FakeClipboard::with_text(11, "old clipboard text");
+        let placed = approved_write(&adapter, &write_request("standup notes")).unwrap();
+        assert_eq!(placed["resulting_sequence"], 12);
+        let sampled = approved_read(&adapter, &read_request()).unwrap();
+        assert_eq!(sampled["sequence"], 12);
+        assert_eq!(sampled["text"], "standup notes");
     }
 }
