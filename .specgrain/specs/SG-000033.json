@@ -2,7 +2,7 @@
   "id": "SG-000033",
   "title": "Bounded window-scoped screenshot capture with frame identity and stale-frame protection",
   "program": "COTRA-P10",
-  "state": "GRAIN",
+  "state": "CLOSED",
   "risk": "high",
   "created": "2026-09-29",
   "base": "a9310c176493e2a2c2f5f10c717ace4364d1eb47",
@@ -135,5 +135,25 @@
     "exact_head_ci": true,
     "native_network_qualification": false
   },
-  "done_when": "Window-scoped screenshot capture with server-derived process binding, typed window binding, server-allocated frame identity, bounded payload, fresh SOFT digest-bound approval, immediate stale-target revalidation, protected-surface exclusion, no coordinate authority, and no new visual-proposal, input-execution, clipboard, network, or elevation authority is specified."
+  "done_when": "Window-scoped screenshot capture with server-derived process binding, typed window binding, server-allocated frame identity, bounded payload, fresh SOFT digest-bound approval, immediate stale-target revalidation, protected-surface exclusion, no coordinate authority, and no new visual-proposal, input-execution, clipboard, network, or elevation authority is specified.",
+  "qualified_head": "d2805a4ac88e1be1b3938033c3d011bf655f3386",
+  "implementation_base": "26fd1ea7c0d011c02af59fa5e05e6d694c1da15e",
+  "implementation_merge": "558afc9077994ddb54b61f5442a86e92e6a570b7",
+  "pre_merge_ci": "36615074285",
+  "pre_merge_review_gates": "36615074238",
+  "post_merge_ci": "36679061251",
+  "canonical_evidence": {
+    "implementation_pr": 92,
+    "implementation_base": "26fd1ea7c0d011c02af59fa5e05e6d694c1da15e",
+    "qualified_head": "d2805a4ac88e1be1b3938033c3d011bf655f3386",
+    "pre_merge_ci": "36615074285",
+    "pre_merge_review_gates": "36615074238",
+    "merge_sha": "558afc9077994ddb54b61f5442a86e92e6a570b7",
+    "post_merge_ci": "36679061251",
+    "jev": "PASSED: 24/24 hunks, zero findings, zero blocking findings, pin 31f89602797fb7bea007f8a480bf368bf564954e, TypeSafe SDK 0.6.0",
+    "ocr": "PASSED: Open Code Review v1.12.9 exact-range delegation, 8 files total, 7 reviewable, 1 excluded and manually reviewed",
+    "security_review": "PASS on exact qualified head; capture binds server-derived process identity with PID, executable digest, creation generation, session, workspace, and policy revision and typed window identity with owning process, handle, window generation, session, desktop, workspace, and policy revision; scope is fixed to target-window with monitor, desktop, region, and caller-selected widening denied before adapter access; every capture mints a server-allocated typed frame identity with capture generation, geometry, payload digest, workspace, and policy revision binding and stale frames are never actionable; every capture carries fresh SOFT approval with exact digest binding over workspace, policy revision, process, window, generations, scope, and action material with one-shot consumption; PID reuse, restarts, destroyed and reused handles, wrong pairings, protected surfaces, workspace drift, policy drift, oversized and mismatched payloads, and caller-supplied identities fail closed without silent retargeting and without visual-proposal, coordinate, input-execution, clipboard, network, or elevation fallback; the native adapter proves real process identity on Windows and reports live capture as unavailable instead of fabricating pixels; no MCP screenshot tool exists; and retained observation, invoke, value, select, toggle, scroll, replay, class, trust, and P08 behavior is unchanged",
+    "unresolved_review_threads": 0,
+    "authority_boundary": "Only window-scoped uia.screenshot/capture on one exact typed window with fixed target-window scope is newly added with server-allocated typed frame identity, bounded RGBA8 payload, fresh SOFT digest-bound approval, and immediate stale-target revalidation. Structured UIA observation, invoke, value, select, toggle, and scroll remain closed under SG-000027 through SG-000032. Visual target proposals, coordinate proposals, input execution, input leases, monitor scope, desktop scope, caller-selected regions, keyboard, mouse, SendInput, focus, clipboard, network fetch, process spawn, injection, termination, elevation, and approval bypass remain absent, and existing file, process, Git, approval, presence, trust, browser, observation, and actuation behavior is unchanged."
+  }
 }
