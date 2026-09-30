@@ -1,0 +1,80 @@
+{
+  "id": "SG-000043",
+  "title": "Lifecycle runtime: supervision, tunnel setup, and diagnostics",
+  "program": "COTRA-P12",
+  "state": "GRAIN",
+  "risk": "high",
+  "created": "2026-10-01",
+  "base": "fdd1b06d4c3acc7846493cde8df8947d9ea2a672",
+  "dependencies": [
+    "SG-000042"
+  ],
+  "objective": "Deliver the lifecycle runtime defined in docs/canonical/P12_INSTALLER_LIFECYCLE_DESIGN.md section 6: the cotra-mcp-host stdio launcher, workspace configuration with policy-kernel admission, tunnel-client setup with owner-only key storage and file-reference delivery, a detached supervisor that binds the official tunnel client and every descendant to a kill-on-close Job Object assigned before the client runs, start, stop with verified termination, status and doctor derived only from observed state, redacted bounded logs, human-invoked local clients for the existing STRONG workspace-trust and emergency-revoke paths, and uninstall that stops a running instance first.",
+  "scope": {
+    "include": [
+      "cotra-mcp-host: resolves the install from its own location, refuses an inactive version, requires admitted workspaces, and runs the installed cotra-mcp app with the validated Node.js runtime, the matching cotrad, the configured workspaces, and the sanitized environment, never writing to stdout itself",
+      "state\\config.json schema cotra-config-v1 with workspaces and tunnel settings, unknown fields and unsupported schema versions failing closed, and atomic writes",
+      "cotra workspace add, remove, and list with the same protected-state admission as the policy kernel; workspace trust and untrust as local clients of the existing cotrad workspace.trust.grant and workspace.trust.revoke STRONG paths",
+      "cotra tunnel setup and show: tunnel id and client path validation, runtime key from a no-echo console prompt or a key file, stored in state\\secrets with the install root's owner-only ACL, restored on failed validation, validated through the closed cotra-tunnel TunnelConfig, and never printed, logged, or placed in argv or environment",
+      "cotra start: refuses avoidable elevation, verifies the install, requires runnable configuration, refuses a live verified supervisor, launches a detached supervisor from the active verified version without leaking the caller's standard handles, and reports running only when the supervisor and tunnel client identities are verified and the loopback health endpoint answers",
+      "supervisor: exclusive per-install stop event, kill-on-close Job Object, tunnel client launched suspended with the closed launch plan and assigned to the job before resume, identity-bound supervisor record, redacted bounded tunnel log, and on stop or client exit job termination with an observed job-empty result",
+      "cotra stop: identity-verified supervisor (pid, creation time, image), stop event, verified job-empty result, bounded fallback termination with observed exits, and stale-record handling that never touches a process it did not verify",
+      "cotra status and doctor: installed, configured, running, health, IPC (a read-only system.status request that cotrad audits like any request), approval-surface availability, state-file parse checks, recovery availability, and retained data, each reported as pass, warn, fail, or unknown from real inspection",
+      "cotra approvals and emergency-revoke as local clients of the existing cotrad approval.history.query and trust.revoke_emergency paths",
+      "environment normalization so OS execution variables survive the closed case-sensitive allowlist when a launcher exports them in different casing",
+      "uninstall stops a running instance first and aborts unless the stop succeeds",
+      "Windows-native qualification with the real cotra, cotra-mcp-host, cotrad, and Node.js binaries and a repository fixture standing in for the tunnel client"
+    ],
+    "exclude": [
+      "any MCP tool or agent-reachable capability; every new surface is a human-invoked local CLI",
+      "reimplementing, redistributing, or downloading the OpenAI tunnel client",
+      "new approval classes, weaker STRONG enforcement, or any change to cotrad trust, approval, or audit semantics",
+      "network access beyond the loopback-only health probe",
+      "update, rollback, recovery commands, and the release workflow, which belong to the update grain",
+      "service installation, scheduled tasks, autostart, and elevation"
+    ]
+  },
+  "authority_delta": {
+    "filesystem": "The human-invoked CLI writes configuration, the runtime key, run records, and logs only beneath %LOCALAPPDATA%\\Cotra. No agent filesystem authority is added.",
+    "process": "The human-invoked CLI starts and stops only its own supervisor, the configured tunnel client, and cotrad probes; stop terminates only identity-verified processes. No agent process authority is added.",
+    "network": "A loopback-only (127.0.0.1) HTTP GET to the health URL the tunnel client publishes. The tunnel client's own connectivity is unchanged and supervised, not reimplemented.",
+    "browser": "None.",
+    "ui_input": "None.",
+    "secrets": "The runtime key is written only to the owner-only secrets file and delivered by file reference; it never appears in argv, environment, logs, status, doctor, or JSON output, and tunnel-client output is redacted before logging.",
+    "approval": "None added. workspace trust, untrust, and emergency-revoke invoke the existing cotrad STRONG paths, so Windows Hello presence is still required and agents still cannot reach them.",
+    "privileged": "None. Avoidable elevation is refused at start; no service, task, or elevation is added."
+  },
+  "invariants": [
+    "no lifecycle surface is registered as an MCP tool",
+    "every tunnel-client descendant is in a kill-on-close job assigned before the client runs",
+    "running, stopped, and healthy are reported only from observed identities, job state, and health responses",
+    "stop never terminates a process whose pid, creation time, and image were not verified",
+    "the runtime key never appears in argv, environment, logs, or command output",
+    "trust grants and emergency revoke still require STRONG presence through cotrad",
+    "configuration and key changes are atomic and a failed tunnel setup leaves the previous configuration and key in place"
+  ],
+  "acceptance": [
+    {"id": "A1", "claim": "Tests prove configuration schema, id, tunnel-id, and key validation, policy-kernel workspace admission, and atomic round trips."},
+    {"id": "A2", "claim": "Tests prove cotra-mcp-host resolves only the active version and fails closed on inactive versions, foreign locations, and missing workspaces."},
+    {"id": "A3", "claim": "Windows-native tests prove job assignment before resume, job-empty confirmation, identity-based PID-reuse detection, and exclusive stop events."},
+    {"id": "A4", "claim": "Tests prove log redaction of key-like tokens and credential assignments, bounded log rotation, loopback-only health URL parsing, and unreachable-endpoint reporting."},
+    {"id": "A5", "claim": "Tests prove the child environment carries no secret-like variables and normalizes OS variable casing before the closed allowlist."},
+    {"id": "A6", "claim": "Tests prove doctor reports fail or unknown, never pass, for uninstalled roots, unavailable IPC, and corrupt state files."},
+    {"id": "A7", "claim": "A Windows-native test with the real cotra, cotra-mcp-host, cotrad, and Node.js binaries proves unconfigured start fails closed, protected-state workspaces are refused, tunnel setup, start reaching running with verified health, the tunnel-to-MCP-host-to-cotrad path answering, duplicate start refused, status, a healthy doctor with a passing IPC check, verified stop, restart, uninstall stopping first while retaining the key, purge, and that the runtime key appears in no output or log while a redaction canary is logged redacted."},
+    {"id": "A8", "claim": "All closed SG-000001 through SG-000042 regressions pass unchanged."},
+    {"id": "A9", "claim": "Exact-head Windows and Ubuntu Rust, Node, Governance, genuine TypeSafe Jev, Alibaba Open Code Review, exact-diff security review, manual review of excluded files, and zero unresolved blocking review threads all pass."}
+  ],
+  "successor_requirements": {
+    "p12_update": "The update grain adds update, rollback, failed-update recovery, the tag release workflow, and a CI job that packages a release and exercises the lifecycle from the packaged artifact.",
+    "owner_qualification": "Real ChatGPT connectivity through the official OpenAI tunnel requires the owner's OpenAI account and tunnel credentials and is recorded as owner-performed qualification, never simulated."
+  },
+  "review": {
+    "diffcipline": true,
+    "jev_semantic_review": true,
+    "alibaba_open_code_review": "required exact-range qualification where integrated",
+    "security_review": true,
+    "exact_head_ci": true,
+    "native_windows_qualification": true
+  },
+  "done_when": "The lifecycle runtime is specified: supervised, job-bound tunnel client launch; verified stop; observed status and doctor; secret-safe tunnel setup; human-invoked local trust and approval clients; and uninstall that stops first, with no agent-reachable authority."
+}

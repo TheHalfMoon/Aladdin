@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "snapshot_base": "eeeb8f8f34d55edcb820afa4c4fcad93fb912573",
+  "snapshot_base": "fdd1b06d4c3acc7846493cde8df8947d9ea2a672",
   "state_semantics": {
     "GRAIN": "Authorized or active work packet whose acceptance is not yet canonically proven.",
     "PROVEN": "Acceptance and required qualification are proven, but canonical closeout/governance is not yet complete.",
@@ -507,6 +507,17 @@
       "review_basis": "Exact-head genuine TypeSafe Jev 7/7 hunks with zero findings/blocking findings, Alibaba Open Code Review v1.12.9 exact-range delegation over 5 reviewable files with delegated rules applied, exact-diff manual security review, Windows/Ubuntu Rust Node Governance qualification, successful post-merge CI, and zero unresolved review threads.",
       "unresolved_review_threads": 0,
       "authority_boundary": "Workspace roots overlapping Cotra protected state (the state root and every state-path override) are refused at policy construction using resolved final paths. No capability, approval, provider, installer, lifecycle, or network authority is added."
+    },
+    "SG-000042": {
+      "implementation_pr": 121,
+      "implementation_base": "56508fc0093123843365ea4630f495ea178531bf",
+      "qualified_head": "1f7a670b7cbcf227289ad411f1eda6bce0f3bd05",
+      "pre_merge_ci": "36790791720",
+      "merge_sha": "fdd1b06d4c3acc7846493cde8df8947d9ea2a672",
+      "post_merge_ci": "36792459863",
+      "review_basis": "Exact-head genuine TypeSafe Jev 12/12 hunks with zero findings/blocking findings, Alibaba Open Code Review v1.12.9 exact-range delegation over 11 reviewable files with 1 excluded file (Cargo.lock) manually reviewed, exact-diff manual security review, Windows/Ubuntu Rust Node Governance qualification including Windows-native ACL, PATH, junction, and real-binary install tests, successful post-merge CI, and zero unresolved review threads.",
+      "unresolved_review_threads": 0,
+      "authority_boundary": "A human-invoked per-user install foundation is closed: verified manifest-based install under %LOCALAPPDATA%\\Cotra with an owner-only protected DACL, atomic version pointer, optional recorded user PATH entry, same-version repair, and retention-aware uninstall. No MCP tool, agent capability, network access, service, scheduled task, or elevation is added."
     }
   }
 }
