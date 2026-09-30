@@ -13,6 +13,7 @@ members = [
   "crates/cotra-provider-clipboard",
   "crates/cotra-provider-network",
   "crates/cotra-tunnel",
+  "crates/cotra-lifecycle",
   "crates/cotrad",
 ]
 
