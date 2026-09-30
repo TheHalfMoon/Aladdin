@@ -80,6 +80,44 @@ fn user_path_edits_are_idempotent_and_exact() {
         .status();
 }
 
+#[test]
+fn junction_inside_install_root_is_refused_before_acl_reset() {
+    let node = find_node_on_path().expect("Node.js is required on PATH for this qualification");
+    let release = release_with_real_cli();
+    let local = temp_dir("junction");
+    let root = local.join("Cotra");
+    let outside = temp_dir("junction-target");
+    fs::create_dir_all(root.join("state")).unwrap();
+    let link = root.join("state").join("escape");
+    let status = Command::new("cmd")
+        .args(["/C", "mklink", "/J"])
+        .arg(&link)
+        .arg(&outside)
+        .stdout(std::process::Stdio::null())
+        .status()
+        .unwrap();
+    assert!(status.success());
+    let before = fs::metadata(&outside).unwrap().permissions();
+    let refused = cotra(
+        &release.join("cotra.exe"),
+        &local,
+        &[
+            "install",
+            "--no-path",
+            "--node",
+            node.to_str().unwrap(),
+            "--json",
+        ],
+    );
+    assert_eq!(refused.status.code(), Some(7), "{:?}", refused);
+    assert!(!root.join("current.json").exists());
+    assert_eq!(fs::metadata(&outside).unwrap().permissions(), before);
+    let _ = fs::remove_dir(&link);
+    let _ = fs::remove_dir_all(local);
+    let _ = fs::remove_dir_all(outside);
+    let _ = fs::remove_dir_all(release);
+}
+
 /// Builds a release whose `cotra.exe` is the real CLI under test.
 fn release_with_real_cli() -> PathBuf {
     let dir = temp_dir("release");

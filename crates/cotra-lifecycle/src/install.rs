@@ -151,7 +151,7 @@ impl<'a> Installer<'a> {
             },
         )?;
 
-        self.platform.protect_tree(&self.layout.root)?;
+        self.protect_root()?;
         self.verify()?;
 
         Ok(InstallReport {
@@ -176,7 +176,7 @@ impl<'a> Installer<'a> {
         }
         fs::create_dir_all(&self.layout.root)
             .map_err(|error| LifecycleError::io("create install root", error))?;
-        self.platform.protect_tree(&self.layout.root)?;
+        self.protect_root()?;
         self.platform.verify_tree_acl(&self.layout.root)?;
         for dir in [
             self.layout.versions_dir(),
@@ -189,6 +189,14 @@ impl<'a> Installer<'a> {
                 .map_err(|error| LifecycleError::io(format!("create {}", dir.display()), error))?;
         }
         Ok(())
+    }
+
+    /// Applies the owner-only DACL to the install tree. The tree is walked
+    /// first and any link or reparse point fails closed, so the recursive ACL
+    /// reset can never be redirected outside the install root.
+    fn protect_root(&self) -> Result<(), LifecycleError> {
+        reject_links(&self.layout.root)?;
+        self.platform.protect_tree(&self.layout.root)
     }
 
     /// Copies the verified release into a staging directory, re-verifies the
@@ -399,6 +407,28 @@ impl<'a> Installer<'a> {
     }
 }
 
+fn reject_links(dir: &Path) -> Result<(), LifecycleError> {
+    let entries = fs::read_dir(dir)
+        .map_err(|error| LifecycleError::io(format!("read {}", dir.display()), error))?;
+    for entry in entries {
+        let entry =
+            entry.map_err(|error| LifecycleError::io(format!("read {}", dir.display()), error))?;
+        let path = entry.path();
+        let metadata = fs::symlink_metadata(&path)
+            .map_err(|error| LifecycleError::io(format!("inspect {}", path.display()), error))?;
+        if metadata.file_type().is_symlink() || manifest::is_reparse_point(&metadata) {
+            return Err(LifecycleError::state(format!(
+                "the Cotra install tree contains a link or reparse point and will not be modified: {}",
+                path.display()
+            )));
+        }
+        if metadata.is_dir() {
+            reject_links(&path)?;
+        }
+    }
+    Ok(())
+}
+
 fn remove_path(layout: &Layout, path: &Path) -> Result<(), LifecycleError> {
     layout.ensure_beneath_root(path)?;
     let metadata = match fs::symlink_metadata(path) {
@@ -591,6 +621,24 @@ mod tests {
             .unwrap_err();
         assert_eq!(error.kind, crate::ErrorKind::Conflict);
         assert!(root.join("versions").join("0.2.0").is_dir());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn link_inside_install_tree_blocks_acl_reset() {
+        let platform = FakePlatform::default();
+        let base = temp_dir("install-inner-link");
+        let root = base.join("Cotra");
+        let outside = base.join("outside");
+        fs::create_dir_all(root.join("state")).unwrap();
+        fs::create_dir_all(&outside).unwrap();
+        std::os::unix::fs::symlink(&outside, root.join("state").join("escape")).unwrap();
+        let installer = Installer::new(Layout::new(&root), &platform);
+        let error = installer
+            .install(&release_dir("0.2.0"), &options())
+            .unwrap_err();
+        assert!(error.message.contains("reparse point"), "{}", error.message);
+        assert!(platform.protected_roots().is_empty());
     }
 
     #[test]
