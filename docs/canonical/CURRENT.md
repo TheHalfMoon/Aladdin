@@ -1,11 +1,11 @@
 # Cotra Current Canonical Frontier
 
-Status: CLOSED_CANONICAL
+Status: ACTIVE_GRAIN
 Date: 2026-09-30
-Governance snapshot base: 743664c571694be08c1e17d8bc0ca42cd39b2c4b
+Governance snapshot base: 54702117efff7993080058c6087faf4df4a062b2
 Evidence ledger: `.specgrain/canonical-evidence.json`
 
-`Governance snapshot base` records the exact canonical parent from which this closeout snapshot was authored. It deliberately does not claim the eventual merge SHA of the commit containing this file.
+`Governance snapshot base` records the exact canonical parent from which this activation snapshot was authored. It deliberately does not claim the eventual merge SHA of the commit containing this file.
 
 ## SpecGrain state semantics
 
@@ -291,7 +291,7 @@ All P10 closeouts (SG-000033 recorded here, SG-000034 recorded here, SG-000035 r
 
 ## Successor frontier
 
-COTRA-P11 continues at this frontier. No successor grain beyond SG-000038 is authorized by this closeout. The P11 successors (bounded clipboard write and destination-scoped bounded network) must each be activated as narrow lawful grains before implementation.
+COTRA-P11 continues at this frontier. No successor grain beyond SG-000039 is authorized by this activation.
 
 ## Closed SG-000033 screenshot capture
 
@@ -331,9 +331,27 @@ SG-000038 proved that the read shape accepts no caller arguments with format, si
 
 ## Active grain
 
-No COTRA-P11 grain is active. SG-000038 was the sole active grain and is now `CLOSED` and canonical.
+SG-000039 - Bounded clipboard write with secret denial - is the sole active COTRA-P11 grain.
 
-The successor frontier is P11 clipboard-write and bounded-network work: explicit bounded writes and destination-scoped fetches bound to workspace, policy revision, approval, and evidence, without continuous surveillance, history collection, unrestricted networking, or secret emission. A missing or denied approval must never silently grant clipboard or network authority.
+This activation authorizes implementation and qualification of a single narrow bounded clipboard-write shape on top of the closed SG-000038 bounded clipboard-read registry, the closed COTRA-P10 vision registry, the closed COTRA-P09 structured-UIA registry, the SG-000018 replay-resistant foundation, SG-000019 class enforcement, SG-000020 trust and revoke records, and the closed COTRA-P08 registry: clipboard/write with one explicit bounded Unicode-text argument placing at most 65536 bytes of Unicode text only; server-derived write binding with text digest, byte length, fixed format, workspace, and policy revision; caller-text validation with binary and object formats denied; secret-pattern denial with credential, token, password, private-key, seed-phrase, session-secret, and Cotra-protected text fail-closed before any placement; fresh per-write SOFT approval with one-shot exact-digest binding including the text digest; one-shot write semantics with no watcher creation, background activity, subscription, polling, history, or standing sessions; sequence-advancing bounded secret-free evidence with explicit truncation reporting; explicit separation proving writes never authorize paste, input, keyboard, or desktop authority; and explicit denial of surveillance, binary transfer, network, and elevation, while deliberately keeping destination-scoped networking as successor work.
+
+Authorized target design:
+- clipboard/write bound to workspace and policy revision with text digest, byte length, and fixed format, failing closed on empty, oversized, unwritable, foreign, and policy-drifted content;
+- Unicode-text-only placement with binary, object, file-drop, and image formats denied with no hidden transfer;
+- secret-pattern denial across credential, token, key, seed, and Cotra-protected families with no secret bytes in results, evidence, prompts, logs, or MCP responses;
+- fresh SOFT approval with digest binding over the complete write binding set including the text digest and one-shot consumption;
+- one-shot per-approval writes with watcher, background, subscription, history, and standing-session attempts denied;
+- bounded evidence with format, size, digests, and resulting sequence only and no raw content retention;
+- proven separation showing writes never grant paste, input, keyboard, mouse, SendInput, or desktop authority;
+- deterministic unit and security tests for happy-path writes, empty and oversized text, exact size boundary, secret denial, missing and stale and reused and digest-mismatched approval, replayed writes, surveillance attempts, paste-authority denial, write-then-read round trips, policy drift, caller-supplied fields, and cross-workspace writes.
+
+## Active acceptance frontier
+
+SG-000039 must prove that writes place bounded Unicode text only, that secret-pattern text is denied before any placement, that every write carries fresh SOFT digest-bound approval including the text digest with one-shot consumption, that each approval authorizes at most one placement with no surveillance, that writes never authorize paste or input authority, that evidence carries only format, size, digests, and sequence, that the agent cannot reach writes through MCP tools, and that Windows-specific qualification proves placement gating without fabricating clipboard content.
+
+Clipboard surveillance, subscriptions, watchers, history, paste automation, binary transfer, generic network authority, persistent approval reuse, remote delegation, and elevation must remain absent, and STRONG enforcement, one-shot, expiry, and digest binding must not weaken.
+
+A P11 exit requires joint proof from bounded clipboard read plus bounded clipboard write plus destination-scoped network fetch that no continuous surveillance exists, destination policy and private-address tests pass, and secrets are never emitted. It must not expose unrestricted networking.
 
 ## Canonical public authority boundary retained
 
