@@ -1,0 +1,165 @@
+{
+  "id": "SG-000040",
+  "title": "Destination-scoped bounded HTTPS GET fetch",
+  "program": "COTRA-P11",
+  "state": "GRAIN",
+  "risk": "high",
+  "created": "2026-09-30",
+  "base": "633d0b32924e45669301994d90dc8ef40502e2e0",
+  "dependencies": [
+    "SG-000039"
+  ],
+  "objective": "Establish the third narrow COTRA-P11 network grain on top of the closed SG-000039 bounded clipboard-write registry, the closed SG-000038 bounded clipboard-read registry, the closed COTRA-P10 vision registry, the closed COTRA-P09 structured-UIA registry, the SG-000018 replay-resistant foundation, SG-000019 class enforcement, SG-000020 trust and revoke records, and the closed COTRA-P08 registry: a single explicit destination-scoped bounded HTTPS GET fetch with exact-origin binding, resolved-address validation against a public-only policy, double-resolution consistency, post-connection peer verification, manual per-hop redirect revalidation with exact-origin matching, request and response bounds, direct connections with no proxy, no ambient credentials, fresh SOFT approval digest binding, one-shot per-approval fetches, and bounded secret-free evidence.",
+  "scope": {
+    "include": [
+      "single new fetch shape network/fetch with explicit url argument only and fixed GET method, failing closed on missing, malformed, non-HTTPS, non-443, oversized, wrong-method, and wrong-port requests",
+      "exact URL parsing binding scheme, lowercase host, port 443, path, and query with userinfo, fragment-driven, username, password, and non-HTTPS scheme denial",
+      "resolved-address validation requiring at least one resolved address with every resolved address public: loopback, localhost aliases, unspecified, multicast, link-local, private IPv4, private IPv6 ULA, documentation, broadcast, CGNAT shared space, IPv4-mapped IPv6 private, and alternate numeric IP forms fail closed",
+      "double-resolution consistency binding the pre-approval address set into the approval digest and re-resolving after approval with set mismatch fail-closed as stale",
+      "post-connection peer verification requiring the actual connected peer address to be a member of the validated address set, closing the validation-to-connect rebinding window",
+      "manual redirect handling with automatic redirects disabled, Location revalidation per hop against the exact authorized origin, re-resolution and peer verification per hop, at most 5 hops, loop and scheme-downgrade denial",
+      "request bounds of GET method only, 2048-character URL limit, no request body, no caller headers, bounded timeouts for resolve, connect, send, and receive, and direct connections with no proxy",
+      "response bounds of 1048576-byte body limit with incremental enforcement, status-code classification with 2xx success and 3xx manual redirect handling, and 4xx/5xx typed failure without body exfiltration beyond the bound",
+      "fresh per-fetch SOFT approval with one-shot exact-digest binding over workspace, policy revision, capability, operation, method, scheme, host, port, path digest, address-set digest, and action material, with nonce, expiry, one-shot consumption, and stale-digest fail-closed",
+      "one-shot fetch semantics so each approval authorizes at most one destination fetch with no generic sockets, no CONNECT proxying, no WebSockets, no keep-alive reuse across approvals, and no standing network session of any kind",
+      "bounded fetch evidence carrying only scheme, host, port, path digest, status, byte length, body digest, hop count, workspace, and policy revision with explicit truncation reporting and no ambient credential material",
+      "no ambient credential attachment of any kind: fresh transport session per fetch with no cookie jar reuse, no OS credential use, no Cotra token use, and no authorization header injection",
+      "deterministic unit and security tests for happy-path public GET, localhost and alias denial, 127 octal/hex/integer forms, ::1, private IPv4 and ULA, link-local, multicast, unspecified, metadata address shapes, IPv4-mapped private, documentation ranges, DNS rebinding set-mismatch, peer mismatch, redirect to private, redirect widening, scheme downgrade, wrong port, too many redirects, redirect loops, oversized URL, oversized response, timeout classification, forbidden credential headers, missing approval, stale approval, reused approval, digest mismatch, replayed fetch, policy drift, caller-supplied method and header fields, cross-workspace fetches, and raw socket attempts",
+      "retention of all closed SG-000039 write behavior, all closed SG-000038 read behavior, all closed P10 vision behavior, all closed P09 structured-UIA behavior, SG-000018 one-shot and expiry and digest and history behavior, SG-000019 SOFT and STRONG class enforcement, SG-000020 trust and revoke behavior, and closed P08 registry behavior with no change outside network-fetch policy",
+      "Windows and Ubuntu exact-head qualification with honest limits: deterministic injected resolver and transport adapters prove destination, SSRF, rebinding, redirect, bound, and credential policy on every platform, the native adapter proves real HTTPS transport gating on Windows through the OS transport with OS certificate validation intact, live external connectivity is exercised only against explicitly documented endpoints or reported as unproven, and headless limits fail closed"
+    ],
+    "exclude": [
+      "HTTP methods beyond GET of any kind",
+      "URL schemes beyond https of any kind",
+      "ports beyond 443 of any kind",
+      "generic TCP sockets, UDP, raw sockets, and listener sockets of any kind",
+      "CONNECT proxying, proxy tunneling, and ambient proxy credential use of any kind",
+      "WebSockets, keep-alive reuse across approvals, and standing network sessions of any kind",
+      "automatic redirect following, cross-origin redirects, and redirect-chain widening of any kind",
+      "caller-supplied request headers, bodies, cookies, credentials, and authorization material of any kind",
+      "ambient cookie jars, OS credential attachment, Cotra token attachment, and browser credential reuse of any kind",
+      "private, loopback, link-local, metadata, multicast, and unspecified destination access of any kind",
+      "DNS rebinding tolerance, post-approval resolution widening, and peer-mismatch tolerance of any kind",
+      "unbounded response bodies, unbounded URL lengths, and unbounded redirect chains of any kind",
+      "clipboard reads and writes beyond their closed SG-000038 and SG-000039 shapes",
+      "P10 vision actuation beyond the closed SG-000033 through SG-000037 scopes",
+      "P09 UIA actuation beyond the closed SG-000027 through SG-000032 scopes",
+      "browser launch, attachment, navigation, download, and upload beyond the closed P08 registry",
+      "arbitrary process commands, process spawn, process injection, and process termination",
+      "raw Win32 command execution and PowerShell execution",
+      "password, credential, and Windows Hello material exposure",
+      "persistent approval reuse across fetches",
+      "approval delegation to remote or MCP callers",
+      "caller-supplied approval boolean and caller-supplied approval material",
+      "elevation, UAC bypass, service installation, privileged desktop access, and secure desktop input"
+    ]
+  },
+  "authority_delta": {
+    "filesystem": "No new filesystem authority. Network fetches touch no files and perform no file read or write; retention of remote content outside the bounded response and bounded evidence is denied.",
+    "process": "No new process launch, injection, or termination authority. The existing SG-000010 whoami-only spawn boundary is unchanged.",
+    "network": "One narrow destination-scoped HTTPS GET fetch is newly added: fixed GET method, https scheme, port 443, exact-origin binding, public-only resolved addresses with double-resolution consistency and post-connection peer verification, manual per-hop redirect revalidation with exact-origin matching and at most 5 hops, 2048-character URL bound, 1048576-byte response bound, bounded timeouts, direct connections with no proxy, fresh transport session per fetch with no cookie or credential reuse, fresh SOFT digest-bound approval, and one-shot per-approval fetches. No generic sockets, no CONNECT proxying, no WebSockets, no keep-alive reuse, no ambient credentials, and no other method, scheme, port, or destination authority is added.",
+    "browser": "None. The closed P08 structured-browser registry is unchanged, and no browser launch, attachment, navigation, download, or upload authority is added.",
+    "ui_input": "None. The closed P10 vision registry and SG-000038/SG-000039 clipboard registries are unchanged, and no screenshot, proposal, derivation, execution, lease, read, write, or input authority beyond the closed scopes is added.",
+    "secrets": "No password, credential, Windows Hello, cookie, token, session, private-key, or seed material is attached to requests or retained. Requests carry no caller headers, bodies, cookies, or authorization material, and prompts, records, history, logs, MCP responses, snapshots, and evidence packets carry only destination metadata, status, sizes, digests, and hop counts, never credential bytes.",
+    "approval": "One fresh per-fetch SOFT approval is required for network/fetch with exact digest binding over the complete fetch binding set including the resolved address-set digest, one-shot consumption, nonce, and expiry. No persistent reuse, no remote delegation, and no caller-supplied approval boolean is introduced.",
+    "privileged": "None. No elevation, UAC bypass, service installation, privileged desktop access, or secure desktop input is added."
+  },
+  "invariants": [
+    "network fetches use fixed GET method, https scheme, and port 443 with every other method, scheme, and port denied",
+    "network fetches bind scheme, lowercase host, port, path digest, and resolved address-set digest",
+    "every resolved address must be public with loopback, private, link-local, metadata, multicast, unspecified, mapped-private, and alternate-form addresses fail-closed",
+    "pre-approval and post-approval resolutions must agree as identical sets with mismatch fail-closed",
+    "the connected peer must be a member of the validated address set with mismatch fail-closed",
+    "redirects are followed manually with exact-origin matching, per-hop revalidation, at most 5 hops, and loop and downgrade denial",
+    "request URLs are bounded to 2048 characters with no body and no caller headers",
+    "response bodies are bounded to 1048576 bytes with incremental enforcement",
+    "every fetch carries fresh SOFT approval with exact digest binding and one-shot consumption authorizing at most one fetch",
+    "fresh transport sessions carry no cookies, credentials, tokens, or authorization material",
+    "fetch evidence carries only destination metadata, status, sizes, digests, and hop counts",
+    "generic sockets, proxying, WebSockets, and standing sessions remain absent",
+    "STRONG enforcement, one-shot, expiry, digest, workspace, and policy bindings are not weakened"
+  ],
+  "acceptance": [
+    {
+      "id": "A1",
+      "claim": "Tests prove network fetches use fixed GET over https to port 443 only, and that missing, malformed, non-HTTPS, non-443, oversized, wrong-method, userinfo-bearing, and wrong-port requests fail closed."
+    },
+    {
+      "id": "A2",
+      "claim": "Tests prove every resolved address must be public, and that loopback, localhost aliases, 127 alternate forms, ::1, private IPv4, IPv6 ULA, link-local, multicast, unspecified, metadata shapes, IPv4-mapped private addresses, documentation ranges, broadcast, and CGNAT shared space fail closed."
+    },
+    {
+      "id": "A3",
+      "claim": "Tests prove pre-approval and post-approval resolutions must agree as identical address sets, and that DNS-rebinding set mismatches fail closed as stale."
+    },
+    {
+      "id": "A4",
+      "claim": "Tests prove the connected peer must belong to the validated address set, and that peer mismatches fail closed even when resolution validated."
+    },
+    {
+      "id": "A5",
+      "claim": "Tests prove redirects are followed manually with exact-origin matching and per-hop revalidation, and that cross-origin redirects, redirects to private or local destinations, scheme downgrades, loops, and chains beyond 5 hops fail closed."
+    },
+    {
+      "id": "A6",
+      "claim": "Tests prove request bounds of 2048-character URLs with no body and no caller headers, bounded resolve, connect, send, and receive timeouts, and direct connections with no proxy."
+    },
+    {
+      "id": "A7",
+      "claim": "Tests prove response bounds of 1048576 bytes with incremental enforcement, 2xx success classification, manual 3xx handling, and typed 4xx/5xx failure without unbounded body retention."
+    },
+    {
+      "id": "A8",
+      "claim": "Tests prove every fetch requires fresh SOFT approval with exact digest binding over workspace, policy revision, method, scheme, host, port, path digest, address-set digest, and action material, and that missing, stale, reused, and digest-mismatched approvals fail closed with no caller-supplied approval boolean accepted."
+    },
+    {
+      "id": "A9",
+      "claim": "Tests prove each approval authorizes at most one fetch, and that generic socket, CONNECT proxy, WebSocket, keep-alive reuse, and standing-session attempts fail closed."
+    },
+    {
+      "id": "A10",
+      "claim": "Tests prove fresh transport sessions attach no cookies, OS credentials, Cotra tokens, or authorization headers, and that caller credential headers are rejected as malformed or denied."
+    },
+    {
+      "id": "A11",
+      "claim": "Tests prove fetch evidence carries only scheme, host, port, path digest, status, sizes, body digest, hop count, workspace, and policy revision with truncation enforcement and no credential or unbounded content retention."
+    },
+    {
+      "id": "A12",
+      "claim": "Tests prove the agent cannot reach fetches through MCP tools, child processes, approval forgery, trust forgery, or replayed prior approvals, and that no MCP network tool exists."
+    },
+    {
+      "id": "A13",
+      "claim": "Tests prove replay, expiry, digest mismatch, revision drift, trust-revision drift, cross-workspace, and double-consumption protections remain enforced for both approval classes."
+    },
+    {
+      "id": "A14",
+      "claim": "Tests prove all closed SG-000039 write regressions, all closed SG-000038 read regressions, all closed P10 vision regressions, all closed P09 structured-UIA regressions, P06 approval flows, SG-000018 through SG-000020 regressions, and the closed P08 registry behavior still pass with digests unchanged outside network-fetch labeling."
+    },
+    {
+      "id": "A15",
+      "claim": "Tests prove personal-profile-style widening, arbitrary DevTools or CDP, browser scripting, credential stores, standing sessions, input surveillance, clipboard surveillance, paste automation, and generic egress remain unreachable through fetches."
+    },
+    {
+      "id": "A16",
+      "claim": "Windows-specific qualification proves HTTPS transport gating against real OS transport behavior where required with OS certificate validation intact, live external connectivity is exercised only against explicitly documented endpoints or honestly recorded as unproven, and headless transport limits are recorded honestly with unavailable-path fail-closed."
+    },
+    {
+      "id": "A17",
+      "claim": "Exact-head Windows and Ubuntu Rust, Node, Governance, genuine TypeSafe Jev, Alibaba Open Code Review, exact-diff security review, manual review of excluded security-sensitive files, and zero unresolved blocking review threads all pass."
+    }
+  ],
+  "successor_requirements": {
+    "p11_exit": "COTRA-P11 exits when bounded clipboard read plus bounded clipboard write plus SG-000040 destination-scoped network fetch are jointly proven with no continuous surveillance, destination policy and private-address tests passing, and secrets never emitted.",
+    "p12_boundary": "Installer and lifecycle authority remain P12 work and are not granted by network fetches."
+  },
+  "review": {
+    "diffcipline": true,
+    "jev_semantic_review": true,
+    "alibaba_open_code_review": "required exact-range qualification where integrated",
+    "security_review": true,
+    "exact_head_ci": true,
+    "native_network_qualification": true
+  },
+  "done_when": "Destination-scoped bounded HTTPS GET fetch with exact-origin binding, public-only resolved addresses, double-resolution consistency, post-connection peer verification, manual per-hop redirect revalidation, request and response bounds, direct connections, no ambient credentials, fresh SOFT digest-bound approval, one-shot per-approval fetches, bounded secret-free evidence, and no generic socket, proxy, WebSocket, surveillance, or elevation authority is specified."
+}
