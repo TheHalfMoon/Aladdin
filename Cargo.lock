@@ -46,6 +46,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "cotra-lifecycle"
+version = "0.1.0"
+dependencies = [
+ "cotra-policy",
+ "serde",
+ "serde_json",
+ "sha2",
+ "windows-sys",
+]
+
+[[package]]
 name = "cotra-policy"
 version = "0.1.0"
 dependencies = [
