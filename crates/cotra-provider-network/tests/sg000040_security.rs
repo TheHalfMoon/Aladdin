@@ -22,11 +22,9 @@ impl SequenceResolver {
 
 impl DnsResolver for SequenceResolver {
     fn resolve(&self, _host: &str) -> Result<Vec<IpAddr>, NetworkError> {
-        self.answers
-            .lock()
-            .unwrap()
-            .pop_front()
-            .ok_or_else(|| NetworkError::new(FailureCode::ProviderUnavailable, "resolver exhausted"))
+        self.answers.lock().unwrap().pop_front().ok_or_else(|| {
+            NetworkError::new(FailureCode::ProviderUnavailable, "resolver exhausted")
+        })
     }
 }
 
@@ -48,11 +46,9 @@ impl Transport for SequenceTransport {
         _target: &cotra_provider_network::FetchTarget,
         _allowed: &[IpAddr],
     ) -> Result<TransportResponse, NetworkError> {
-        self.responses
-            .lock()
-            .unwrap()
-            .pop_front()
-            .ok_or_else(|| NetworkError::new(FailureCode::ProviderUnavailable, "transport exhausted"))?
+        self.responses.lock().unwrap().pop_front().ok_or_else(|| {
+            NetworkError::new(FailureCode::ProviderUnavailable, "transport exhausted")
+        })?
     }
 }
 
@@ -68,7 +64,11 @@ fn prepared(url: &str) -> PreparedFetch {
     }
 }
 
-fn response(status: u16, location: Option<&str>, body: &[u8]) -> Result<TransportResponse, NetworkError> {
+fn response(
+    status: u16,
+    location: Option<&str>,
+    body: &[u8],
+) -> Result<TransportResponse, NetworkError> {
     Ok(TransportResponse {
         status,
         peer: public(),
@@ -84,7 +84,10 @@ fn public_answers(count: usize) -> Vec<Vec<IpAddr>> {
 #[test]
 fn url_bound_is_exact_and_widened_authorities_fail_closed() {
     let prefix = "https://example.com/";
-    let exact = format!("{prefix}{}", "a".repeat(MAX_URL_CHARS - prefix.chars().count()));
+    let exact = format!(
+        "{prefix}{}",
+        "a".repeat(MAX_URL_CHARS - prefix.chars().count())
+    );
     assert_eq!(exact.chars().count(), MAX_URL_CHARS);
     assert!(parse_target(&exact).is_ok());
 
@@ -148,7 +151,8 @@ fn public_only_catalog_denies_special_ipv4_ipv6_and_mapped_private() {
 
 #[test]
 fn mixed_public_private_resolution_is_denied_before_transport() {
-    let error = normalize_public_set(vec![public(), "169.254.169.254".parse().unwrap()]).unwrap_err();
+    let error =
+        normalize_public_set(vec![public(), "169.254.169.254".parse().unwrap()]).unwrap_err();
     assert_eq!(error.code, FailureCode::CapabilityDenied);
 }
 
@@ -156,7 +160,8 @@ fn mixed_public_private_resolution_is_denied_before_transport() {
 fn post_approval_dns_drift_is_stale() {
     let resolver = SequenceResolver::new(vec![vec!["1.1.1.1".parse().unwrap()]]);
     let transport = SequenceTransport::new(vec![]);
-    let error = execute_prepared(&prepared("https://example.com/"), &resolver, &transport).unwrap_err();
+    let error =
+        execute_prepared(&prepared("https://example.com/"), &resolver, &transport).unwrap_err();
     assert_eq!(error.code, FailureCode::TargetStale);
 }
 
@@ -171,7 +176,12 @@ fn per_hop_dns_drift_is_stale_before_second_request() {
         response(302, Some("/next"), b""),
         response(200, None, b"must-not-run"),
     ]);
-    let error = execute_prepared(&prepared("https://example.com/start"), &resolver, &transport).unwrap_err();
+    let error = execute_prepared(
+        &prepared("https://example.com/start"),
+        &resolver,
+        &transport,
+    )
+    .unwrap_err();
     assert_eq!(error.code, FailureCode::TargetStale);
 }
 
@@ -184,7 +194,8 @@ fn peer_mismatch_is_stale_even_after_matching_resolution() {
         location: None,
         body: b"must-not-return".to_vec(),
     })]);
-    let error = execute_prepared(&prepared("https://example.com/"), &resolver, &transport).unwrap_err();
+    let error =
+        execute_prepared(&prepared("https://example.com/"), &resolver, &transport).unwrap_err();
     assert_eq!(error.code, FailureCode::TargetStale);
 }
 
@@ -197,9 +208,17 @@ fn redirect_widening_private_literal_and_scheme_downgrade_fail_closed() {
     ] {
         let resolver = SequenceResolver::new(public_answers(2));
         let transport = SequenceTransport::new(vec![response(302, Some(location), b"")]);
-        let error = execute_prepared(&prepared("https://example.com/start"), &resolver, &transport).unwrap_err();
+        let error = execute_prepared(
+            &prepared("https://example.com/start"),
+            &resolver,
+            &transport,
+        )
+        .unwrap_err();
         assert!(
-            matches!(error.code, FailureCode::CapabilityDenied | FailureCode::InvalidRequest),
+            matches!(
+                error.code,
+                FailureCode::CapabilityDenied | FailureCode::InvalidRequest
+            ),
             "unexpected code for {location}: {:?}",
             error.code
         );
@@ -210,7 +229,12 @@ fn redirect_widening_private_literal_and_scheme_downgrade_fail_closed() {
 fn redirect_loop_is_denied() {
     let resolver = SequenceResolver::new(public_answers(2));
     let transport = SequenceTransport::new(vec![response(302, Some("/start"), b"")]);
-    let error = execute_prepared(&prepared("https://example.com/start"), &resolver, &transport).unwrap_err();
+    let error = execute_prepared(
+        &prepared("https://example.com/start"),
+        &resolver,
+        &transport,
+    )
+    .unwrap_err();
     assert_eq!(error.code, FailureCode::CapabilityDenied);
 }
 
@@ -223,7 +247,12 @@ fn redirect_ceiling_is_exact() {
     responses.push(response(200, None, b"ok"));
     let resolver = SequenceResolver::new(public_answers(MAX_REDIRECTS + 2));
     let transport = SequenceTransport::new(responses);
-    let result = execute_prepared(&prepared("https://example.com/start"), &resolver, &transport).unwrap();
+    let result = execute_prepared(
+        &prepared("https://example.com/start"),
+        &resolver,
+        &transport,
+    )
+    .unwrap();
     assert_eq!(result.hop_count, MAX_REDIRECTS);
     assert_eq!(result.body, b"ok");
 
@@ -233,7 +262,12 @@ fn redirect_ceiling_is_exact() {
     }
     let resolver = SequenceResolver::new(public_answers(MAX_REDIRECTS + 2));
     let transport = SequenceTransport::new(responses);
-    let error = execute_prepared(&prepared("https://example.com/start"), &resolver, &transport).unwrap_err();
+    let error = execute_prepared(
+        &prepared("https://example.com/start"),
+        &resolver,
+        &transport,
+    )
+    .unwrap_err();
     assert_eq!(error.code, FailureCode::CapabilityDenied);
 }
 
@@ -241,12 +275,14 @@ fn redirect_ceiling_is_exact() {
 fn oversized_response_and_remote_error_body_never_escape() {
     let resolver = SequenceResolver::new(public_answers(2));
     let transport = SequenceTransport::new(vec![response(200, None, &vec![0; MAX_BODY_BYTES + 1])]);
-    let error = execute_prepared(&prepared("https://example.com/"), &resolver, &transport).unwrap_err();
+    let error =
+        execute_prepared(&prepared("https://example.com/"), &resolver, &transport).unwrap_err();
     assert_eq!(error.code, FailureCode::OutputLimit);
 
     let resolver = SequenceResolver::new(public_answers(2));
     let transport = SequenceTransport::new(vec![response(500, None, b"remote-secret-error-body")]);
-    let error = execute_prepared(&prepared("https://example.com/"), &resolver, &transport).unwrap_err();
+    let error =
+        execute_prepared(&prepared("https://example.com/"), &resolver, &transport).unwrap_err();
     assert_eq!(error.code, FailureCode::PostconditionFailed);
     assert!(!error.message.contains("remote-secret"));
 }
@@ -258,6 +294,7 @@ fn transport_timeout_classification_fails_closed() {
         FailureCode::ProviderUnavailable,
         "transport timeout",
     ))]);
-    let error = execute_prepared(&prepared("https://example.com/"), &resolver, &transport).unwrap_err();
+    let error =
+        execute_prepared(&prepared("https://example.com/"), &resolver, &transport).unwrap_err();
     assert_eq!(error.code, FailureCode::ProviderUnavailable);
 }
