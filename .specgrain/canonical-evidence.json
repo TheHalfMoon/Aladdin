@@ -463,6 +463,17 @@
       "review_basis": "Exact-head genuine TypeSafe Jev 28/28 hunks with zero findings/blocking findings, Alibaba Open Code Review v1.12.9 exact-range delegation over 8 files with 7 reviewable and 1 excluded file manually reviewed, exact-diff manual security review, Windows/Ubuntu Rust Node Governance qualification with real Windows process identity proof, successful post-merge CI, and zero unresolved review threads.",
       "unresolved_review_threads": 0,
       "authority_boundary": "No new actuating input authority is added. Only revocation is newly added through the monotonic interruption epoch bound into input leases and execution approval digests with immediate pre-execution interruption revalidation. Bounded execution remains closed under SG-000036, coordinate derivation remains closed under SG-000035, visual proposals remain closed under SG-000034, capture remains closed under SG-000033, and structured UIA remains closed under SG-000027 through SG-000032. Keyboard, drag, multi-click, wheel, touch, focus, raw SendInput, lease reuse, lease transfer, standing sessions, input-content surveillance, hooks, polling, monitor scope, desktop scope, clipboard, network fetch, process spawn, injection, termination, elevation, and approval bypass remain absent, and existing file, process, Git, approval, presence, trust, browser, observation, capture, proposal, derivation, and actuation behavior is unchanged."
+    },
+    "SG-000038": {
+      "implementation_pr": 108,
+      "implementation_base": "56894d6a30da7416d694d653730f02dd8da3dc47",
+      "qualified_head": "b5a049c5473ba12a77f92e8476df5fa33e03d00a",
+      "pre_merge_ci": "36733308971",
+      "merge_sha": "743664c571694be08c1e17d8bc0ca42cd39b2c4b",
+      "post_merge_ci": "36734083790",
+      "review_basis": "Exact-head genuine TypeSafe Jev 12/12 hunks with zero findings/blocking findings, Alibaba Open Code Review v1.12.9 exact-range delegation over 11 files with 9 reviewable and 2 excluded files manually reviewed, exact-diff manual security review, Windows/Ubuntu Rust Node Governance qualification with real Windows clipboard API gating proof, successful post-merge CI, and zero unresolved review threads.",
+      "unresolved_review_threads": 0,
+      "authority_boundary": "One explicit bounded clipboard/read sample is newly added with Unicode-text-only return, hard size bound, secret-pattern denial, sequence-bound SOFT approval, and bounded secret-free evidence. Clipboard write, subscriptions, polling, monitoring, history collection, and standing sessions remain absent with no MCP clipboard tool. Vision remains closed under SG-000033 through SG-000037, structured UIA remains closed under SG-000027 through SG-000032, and keyboard, drag, raw synthetic input, monitor scope, desktop scope, binary transfer, network fetch, process spawn, injection, termination, elevation, and approval bypass remain absent, and existing file, process, Git, approval, presence, trust, browser, observation, capture, proposal, derivation, execution, and interruption behavior is unchanged."
     }
   }
 }
