@@ -1,11 +1,11 @@
 # Cotra Current Canonical Frontier
 
-Status: CLOSED_CANONICAL
+Status: PROGRAM_EXIT_CANDIDATE
 Date: 2026-09-30
-Governance snapshot base: b88b2582fa1faa27619f890bf75c5a012317cbba
+Governance snapshot base: 9d89f83fa4059281ab13e664e5d9259a05295751
 Evidence ledger: `.specgrain/canonical-evidence.json`
 
-`Governance snapshot base` records the exact canonical parent from which this closeout snapshot was authored. It deliberately does not claim the eventual merge SHA of the commit containing this file.
+`Governance snapshot base` records the exact canonical parent from which this program-exit snapshot was authored. It deliberately does not claim the eventual merge SHA of the commit containing this file.
 
 ## SpecGrain state semantics
 
@@ -242,9 +242,60 @@ Authority separation - COMPLETE:
 
 All P09 closeouts (SG-000027 recorded here, SG-000028 recorded here, SG-000029 recorded here, SG-000030 PR `#83`, SG-000031 PR `#86`, SG-000032 PR `#89`) merged normally with zero unresolved blocking review threads and successful post-merge CI.
 
+## COTRA-P10 exit
+
+COTRA-P10 is exited at this frontier. Vision and coordinate fallback is closed under SG-000033 window-scoped screenshot capture, SG-000034 non-actuating visual target proposals, SG-000035 proposal-only coordinate derivation, SG-000036 bounded click-only execution with single-use input leases, and SG-000037 human-interruption epoch invalidation, with server-derived typed identity, stale-target and stale-epoch revalidation, approval digest binding, protected Cotra surface exclusion, and password and secret exclusion, without exposing unrestricted desktop input, input-content surveillance, or elevation authority.
+
+This program-exit snapshot records SG-000037 as merged and canonical. The `CLOSED` classification above becomes part of the canonical frontier only after this program-exit change itself merges and the resulting canonical main passes post-merge CI.
+
+Exit matrix (each criterion is COMPLETE with canonical evidence in `.specgrain/canonical-evidence.json` and the grain blocks above):
+
+Window-scoped screenshot capture - COMPLETE:
+- window-scoped `uia.screenshot/capture` on one exact typed window with fixed target-window scope, server-allocated typed frame identity, bounded RGBA8 payload, fresh SOFT digest-bound approval, and immediate stale-target revalidation via SG-000033 (activation PR `#91`, implementation PR `#92`, qualified head `d2805a4ac88e1be1b3938033c3d011bf655f3386`, CI `36615074285`, Review Gates `36615074238`, Jev `24/24`, OCR v1.12.9 `7 reviewable + 1 excluded/manually reviewed`, merge `558afc9077994ddb54b61f5442a86e92e6a570b7`, post-merge CI `36679061251`; governance closeout recorded here).
+
+Visual target proposals - COMPLETE:
+- non-actuating `uia.visual/propose` on one exact typed frame with a bounded inside-frame region, server-allocated typed proposal identity, fresh SOFT digest-bound approval, and immediate stale-frame revalidation via SG-000034 (activation PR `#94`, implementation PR `#95`, qualified head `7d47e2f04fd32bf404562cc6ee0d2b2647a65440`, CI `36681620437`, Review Gates `36681620405`, Jev `21/21`, OCR v1.12.9 `7 reviewable + 1 excluded/manually reviewed`, merge `7c2ba18a8aac8d021afcc9eeaeba314d8d8d027b`, post-merge CI `36682018314`; governance closeout recorded here).
+
+Coordinate derivation - COMPLETE:
+- proposal-only `uia.coordinates/propose` on one exact typed proposal with deterministic frame-relative derivation, server-allocated typed coordinate identity, fresh SOFT digest-bound approval, and immediate stale-proposal revalidation via SG-000035 (activation PR `#97`, implementation PR `#98`, qualified head `acbb8de01449eef7af725b4c234bda536c1a196a`, CI `36683838980`, Review Gates `36683838939`, Jev `22/22`, OCR v1.12.9 `7 reviewable + 1 excluded/manually reviewed`, merge `ac0d4efead77ab5c442340aacaa1c366b11161d1`, post-merge CI `36684218460`; governance closeout recorded here).
+
+Bounded execution - COMPLETE:
+- bounded `uia.input/execute` on one exact typed coordinate identity with click-only operation, explicit server-derived single-use input lease, fresh SOFT digest-bound approval including the lease, immediate stale-coordinate revalidation, and window confinement via SG-000036 (activation PR `#100`, implementation PR `#101`, qualified head `e18cd1bcf09bd7d7d3df4b70b0686f5aeec3fc60`, CI `36686795203`, Review Gates `36686795357`, Jev `24/24`, OCR v1.12.9 `7 reviewable + 1 excluded/manually reviewed`, merge `72e231997f28068c4bceefdffb7be33f0a771b7b`, post-merge CI `36693139425`; governance closeout PR `#102`).
+
+Human interruption - COMPLETE:
+- revocation-only human-interruption epoch invalidation bound into input leases and execution approval digests, with immediate pre-execution interruption revalidation, Cotra-synthetic exclusion with fail-closed ambiguity, no replay or continuation after override, and bounded secret-free interruption evidence via SG-000037 (activation PR `#103`, implementation PR `#104`, qualified head `f0444990990af2f5bbb55cce243131023fc8dbdb`, CI `36723813468`, Review Gates `36723813599`, Jev `28/28`, OCR v1.12.9 `7 reviewable + 1 excluded/manually reviewed`, merge `b88b2582fa1faa27619f890bf75c5a012317cbba`, post-merge CI `36724442466`; governance closeout PR `#105`).
+
+Provider ceiling - COMPLETE:
+- capture scope fixed to the exact target window with monitor scope, desktop scope, caller-selected regions, and oversized payloads denied via SG-000033 with the same implementation evidence above, retained through every successor with no scope widening;
+- proposals non-actuating with no coordinate or input authority via SG-000034 with the same implementation evidence above, retained through every successor with no actuation widening;
+- derivation proposal-only with no caller coordinates and no input execution via SG-000035 with the same implementation evidence above, retained through every successor with no execution widening;
+- execution click-only with no keyboard, drag, multi-click, raw synthetic input, lease reuse, monitor or desktop scope via SG-000036 with the same implementation evidence above, retained through SG-000037 with no actuation widening;
+- interruption revocation-only with no new actuating input authority via SG-000037 with the same implementation evidence above.
+
+Protected surfaces and redaction - COMPLETE:
+- protected Cotra approval surfaces excluded from capture, proposals, derivation, execution, and interruption handling via SG-000033 with the same implementation evidence above, retained through SG-000034, SG-000035, SG-000036, and SG-000037 with no protected-surface widening;
+- password and secret material excluded from capture payloads, proposal records, coordinate records, execution evidence, and interruption evidence via SG-000033 with the same implementation evidence above, retained through every successor with no secret leakage.
+
+Stale protection - COMPLETE:
+- stale frames never actionable with generation-drifted and policy-drifted frames fail-closed via SG-000033 with the same implementation evidence above;
+- stale proposals never actionable via SG-000034, stale coordinates never actionable via SG-000035, and stale leases never actionable via SG-000036 with the same implementation evidence above;
+- stale-epoch leases and stale-epoch approvals fail-closed after any material human override via SG-000037 with the same implementation evidence above.
+
+No silent fallback - COMPLETE:
+- structured UIA denials never become coordinate authority: no execution path consumes derived coordinates without fresh approval bound to the exact lease and epoch, caller-supplied coordinates and raw coordinate requests remain denied, and a missing or denied lease never becomes execution authority, proven jointly by SG-000033, SG-000034, SG-000035, SG-000036, and SG-000037 with the implementation evidence above.
+
+Authority separation - COMPLETE:
+- vision and coordinate authority remains separate from approval authority with fresh SOFT approval and digest binding for capture, proposals, derivation, execution, and interruption-epoch binding, STRONG enforcement retained, and no new keyboard, drag, clipboard, network, installer, elevation, debugging, scripting, credential, or delegation authority beyond the dedicated vision registry APIs recorded in the five grain authority boundaries above.
+
+All P10 closeouts (SG-000033 recorded here, SG-000034 recorded here, SG-000035 recorded here, SG-000036 PR `#102`, SG-000037 PR `#105`) merged normally with zero unresolved blocking review threads and successful post-merge CI.
+
 ## Successor frontier
 
-COTRA-P10 continues at this frontier. No successor grain beyond SG-000037 is authorized by this closeout. The P10 exit matrix must be rebuilt against the joint SG-000033 through SG-000037 evidence before any P10 exit governance unit is authorized.
+COTRA-P10 is exited at this frontier, so the next lawful unit must be derived from the canonical COTRA-P11 clipboard and bounded network plan. No successor grain beyond the P10 exit is authorized by this program-exit candidate.
+
+After this P10 exit merges and its post-merge CI succeeds, re-read the canonical architecture, delivery plan, threat model, evidence ledger, open governance records, and this `CURRENT.md` to derive the first lawful COTRA-P11 grain. Do not infer or pre-authorize the next SpecGrain identifier or exact clipboard or network design from numbering alone.
+
+A first P11 grain must build on the SG-000018 replay-resistant foundation, SG-000019 class enforcement, SG-000020 trust and revoke records, the closed P08 structured-browser registry, the closed P09 structured-UIA registry, and the closed P10 vision registry without weakening STRONG enforcement, one-shot, expiry, or digest binding. It must expose no continuous clipboard surveillance and no unrestricted networking.
 
 ## Closed SG-000033 screenshot capture
 
@@ -278,9 +329,9 @@ SG-000037 proved that the interruption epoch starts at zero and increments exact
 
 ## Active grain
 
-No COTRA-P10 grain is active. SG-000037 was the sole active grain and is now `CLOSED` and canonical.
+No COTRA-P10 grain is active. COTRA-P10 is exited at this frontier.
 
-The successor frontier is P10 exit work: the joint SG-000033 capture plus SG-000034 proposals plus SG-000035 coordinates plus SG-000036 execution plus SG-000037 interruption evidence must prove provider ceiling enforcement, protected-surface denial, stale-frame and stale-epoch tests passing, and no silent fallback from structured denial into coordinates, without weakening STRONG enforcement, one-shot, expiry, or digest binding, and without exposing unrestricted desktop input or elevation authority.
+No COTRA-P11 grain is active. The successor frontier is the first lawful COTRA-P11 grain itself.
 
 ## Canonical public authority boundary retained
 
