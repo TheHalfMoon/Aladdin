@@ -1,0 +1,136 @@
+{
+  "id": "SG-000035",
+  "title": "Proposal-only coordinate derivation bound to proposal identity",
+  "program": "COTRA-P10",
+  "state": "GRAIN",
+  "risk": "high",
+  "created": "2026-09-30",
+  "base": "01f61669168d5687d57ecf210de56e26fb0de41b",
+  "dependencies": [
+    "SG-000034"
+  ],
+  "objective": "Establish the third narrow COTRA-P10 vision grain on top of the closed SG-000034 visual proposal registry, the closed SG-000033 window-scoped capture registry, the closed COTRA-P09 structured-UIA registry, the SG-000018 replay-resistant foundation, SG-000019 class enforcement, SG-000020 trust and revoke records, and the closed COTRA-P08 registry: a single approved proposal-only coordinate derivation shape bound to one server-allocated typed proposal identity with arguments proposal_id and expected_proposal_generation only, with server-derived frame-relative coordinates computed deterministically from the exact bounded proposal region, server-allocated typed coordinate identity with derivation generation, workspace, and policy revision binding, fresh SOFT approval digest binding, immediate pre-derivation stale-proposal revalidation, protected Cotra surface exclusion, bounded derivation payload, and explicit denial of every input execution, input lease, raw coordinate request, monitor and desktop scope, clipboard, network, and elevation shape.",
+  "scope": {
+    "include": [
+      "single new derivation shape uia.coordinates/propose bound to one server-allocated typed proposal identity with arguments proposal_id and expected_proposal_generation only; callers supply no coordinates and no proposal is derived without a live bound proposal",
+      "server-derived proposal binding with proposal generation, owning frame, capture generation, owning window, owning process, bounded region, workspace scope, and policy revision, with replayed, foreign, generation-drifted, and policy-drifted proposals fail-closed before approval",
+      "deterministic frame-relative coordinate derivation from the exact bounded proposal region as evidence geometry only, with derivation bound to proposal generation, frame geometry, workspace scope, and policy revision",
+      "server-allocated typed coordinate identity binding owning proposal, derivation generation, coordinates, workspace scope, and policy revision, with replayed, foreign, and policy-drifted coordinate identities fail-closed and stale coordinates never actionable",
+      "bounded derivation payload with explicit coordinate bound, explicit payload limit, and explicit truncation reporting, with oversized derivations fail-closed and no silent coordinate widening that changes evidence semantics",
+      "fresh per-action SOFT approval with one-shot exact-digest binding over workspace, policy revision, proposal identity, proposal generation, frame identity, capture generation, owning window, window generation, derived coordinates, and action material, with nonce, expiry, one-shot consumption, and stale-digest fail-closed",
+      "immediate pre-derivation revalidation of proposal liveness, frame liveness, capture generation, owning window existence, owning process liveness, protected-surface status, workspace binding, and policy revision, with any drift denied without silent retargeting",
+      "protected Cotra approval and security surface exclusion so coordinates can never be derived for approval dialogs, STRONG presence surfaces, workspace trust controls, emergency revoke, or security-sensitive Cotra UI, failing closed on uncertainty, with redaction where derivation-adjacent metadata could leak protected material",
+      "explicit denial of input execution, input lease grants, raw coordinate requests, and silent escalation when the proposal is stale, protected, or unavailable, with no input authority granted by a missing or denied coordinate identity and no direct call from derivation into any input API",
+      "deterministic unit and security tests for happy-path derivation, stale proposal, stale frame, restarted owning process, PID reuse, stale window, wrong proposal and frame pairing, stale proposal generation, protected Cotra surface, missing approval, stale approval, reused approval, incorrect approval digest, policy drift, caller-supplied coordinates, caller-supplied coordinate id, raw coordinate requests, input execution requests, monitor and desktop scope requests, and elevation requests",
+      "retention of all closed SG-000034 proposal behavior, all closed SG-000033 capture behavior, all closed P09 structured-UIA behavior, SG-000018 one-shot and expiry and digest and history behavior, SG-000019 SOFT and STRONG class enforcement, SG-000020 trust and revoke behavior, and closed P08 registry behavior with no change outside coordinate derivation policy",
+      "Windows and Ubuntu exact-head qualification with Windows-specific derivation qualification where required"
+    ],
+    "exclude": [
+      "bounded input execution, mouse movement, clicking, dragging, keyboard injection, and SendInput of any kind",
+      "input leases, automation ownership, and human-interruption handling beyond retained approval-pending lease suspension",
+      "raw coordinate requests outside the bound proposal derivation shape",
+      "caller-supplied coordinates, caller-selected regions, and caller-selected geometry of any kind",
+      "monitor-region, full-monitor, and full-desktop coordinate spaces of any kind",
+      "derived coordinates for protected Cotra approval surfaces",
+      "input API calls from inside the derivation path of any kind",
+      "clipboard read and clipboard write",
+      "P09 UIA actuation beyond the closed SG-000027 through SG-000032 scopes",
+      "SG-000033 capture and SG-000034 proposals beyond their closed shapes",
+      "arbitrary process commands, process spawn, process injection, and process termination",
+      "raw Win32 command execution and PowerShell execution",
+      "password, credential, and Windows Hello material exposure",
+      "persistent approval reuse across operations",
+      "approval delegation to remote or MCP callers",
+      "caller-supplied approval boolean and caller-supplied approval material",
+      "generic network fetch and socket authority",
+      "elevation, UAC bypass, service installation, privileged desktop access, and secure desktop input"
+    ]
+  },
+  "authority_delta": {
+    "filesystem": "No new filesystem authority. Derivation reads bounded proposal and frame metadata already held by the SG-000034 and SG-000033 registries and performs no file read or write; retention of derivations outside bounded evidence is denied.",
+    "process": "No new process launch, injection, or termination authority. The existing read-only process identity is reused for binding only, and the existing SG-000010 whoami-only spawn boundary is unchanged.",
+    "network": "None. Coordinate derivation is strictly local with no egress, and no fetch, socket, or tunnel authority is added.",
+    "browser": "None. The closed P08 structured-browser registry is unchanged, and no browser launch, attachment, navigation, download, or upload authority is added.",
+    "ui_input": "One narrow proposal-only derivation shape is newly added: uia.coordinates/propose deriving evidence coordinates from one exact bound proposal region. No input execution, no input lease, no pointer, no keyboard, no synthetic-input, no raw coordinate request, no monitor scope, no desktop scope, and no other UIA pattern authority is added, and derivation never calls any input API.",
+    "secrets": "No password, credential, Windows Hello, cookie, token, or session material enters prompts, records, history, logs, MCP responses, snapshots, or evidence packets. Protected Cotra surfaces are never derivation targets, and derivation-adjacent metadata is redacted where it could leak protected material.",
+    "approval": "One fresh per-action SOFT approval is required for uia.coordinates/propose with exact digest binding over the complete derivation binding set, one-shot consumption, nonce, and expiry. No persistent reuse, no remote delegation, and no caller-supplied approval boolean is introduced.",
+    "privileged": "None. No elevation, UAC bypass, service installation, privileged desktop access, or secure desktop input is added."
+  },
+  "invariants": [
+    "derivation binds one exact server-derived proposal identity and never caller-provided coordinate claims",
+    "derivation binds exact proposal generation with stale, replaced, foreign, and policy-drifted proposals fail-closed",
+    "derived coordinates are deterministic evidence geometry from the exact bounded proposal region only",
+    "Every derivation mints a server-allocated typed coordinate identity with derivation generation",
+    "Stale coordinate identities are never actionable and replayed, foreign, and policy-drifted identities fail closed",
+    "Every derivation carries fresh SOFT approval with exact digest binding and one-shot consumption",
+    "Stale, replaced, reused, foreign, protected-surface, and policy-drifted targets fail closed without silent retargeting",
+    "Protected Cotra approval and security surfaces are never derivation targets",
+    "A missing or denied coordinate identity never becomes input authority and derivation never calls input APIs",
+    "Derivation payload is bounded with explicit truncation reporting and no silent semantic change",
+    "STRONG enforcement, one-shot, expiry, digest, workspace, and policy bindings are not weakened"
+  ],
+  "acceptance": [
+    {
+      "id": "A1",
+      "claim": "Tests prove derivations bind server-derived proposal identity with proposal generation, owning frame, capture generation, owning window, owning process, bounded region, workspace, and policy revision, and that forged proposals, PID reuse, stale processes, restarted processes, and wrong executable identity fail closed before approval."
+    },
+    {
+      "id": "A2",
+      "claim": "Tests prove every derivation deterministically computes frame-relative coordinates from the exact bounded proposal region and mints a server-allocated typed coordinate identity bound to the owning proposal, derivation generation, coordinates, workspace, and policy revision, and that replayed, foreign, generation-drifted, and policy-drifted identities fail closed as stale."
+    },
+    {
+      "id": "A3",
+      "claim": "Tests prove callers supply no coordinates of any kind, and that caller-supplied coordinates, caller-selected regions, raw coordinate requests, monitor scope, desktop scope, and protected Cotra surfaces are denied with no silent widening."
+    },
+    {
+      "id": "A4",
+      "claim": "Tests prove every derivation requires fresh SOFT approval with exact digest binding over workspace, policy revision, proposal, proposal generation, frame, capture generation, owning window, window generation, derived coordinates, and action material, and that missing, stale, reused, and digest-mismatched approvals fail closed with no caller-supplied approval boolean accepted."
+    },
+    {
+      "id": "A5",
+      "claim": "Tests prove immediate pre-derivation revalidation denies proposal drift, frame drift, window drift, process drift, generation drift, protected-surface drift, workspace drift, and policy-revision drift without silent retargeting and without input-execution, clipboard, network, or elevation fallback."
+    },
+    {
+      "id": "A6",
+      "claim": "Tests prove caller-supplied coordinate ids, coordinate fields, region fields, approval material, secret fields, and widening fields are rejected as malformed or denied, and that input execution, lease grant, clipboard, network, spawn, inject, terminate, and elevation shapes remain denied outside their closed scopes."
+    },
+    {
+      "id": "A7",
+      "claim": "Tests prove the agent cannot satisfy derivations through MCP tools, child processes, approval forgery, trust forgery, or replayed prior approvals, and cannot turn a coordinate identity into input authority."
+    },
+    {
+      "id": "A8",
+      "claim": "Tests prove replay, expiry, digest mismatch, revision drift, trust-revision drift, and double-consumption protections remain enforced for both approval classes."
+    },
+    {
+      "id": "A9",
+      "claim": "Tests prove all closed SG-000034 proposal regressions, all closed SG-000033 capture regressions, all closed P09 structured-UIA regressions, P06 approval flows, SG-000018 through SG-000020 regressions, and the closed P08 registry behavior still pass with digests unchanged outside derivation labeling."
+    },
+    {
+      "id": "A10",
+      "claim": "Tests prove personal-profile-style widening, arbitrary DevTools or CDP, browser scripting, credential stores, clipboard access, input execution beyond the closed derivation shape, and network egress remain unreachable through coordinate derivation."
+    },
+    {
+      "id": "A11",
+      "claim": "Windows-specific qualification proves structured derivation binding against real Windows process identity where required without fabricating interactive desktop evidence, and headless derivation limits are recorded honestly with unavailable-path fail-closed."
+    },
+    {
+      "id": "A12",
+      "claim": "Exact-head Windows and Ubuntu Rust, Node, Governance, genuine TypeSafe Jev, Alibaba Open Code Review, exact-diff security review, manual review of excluded security-sensitive files, and zero unresolved blocking review threads all pass."
+    }
+  ],
+  "successor_requirements": {
+    "p10_vision": "Bounded input execution with input leases and human interruption remain successor work and must build on coordinate identity without weakening STRONG enforcement, one-shot, expiry, or digest binding.",
+    "p10_exit": "COTRA-P10 exits when provider ceiling is enforced, protected surfaces are denied, stale-frame tests pass, and no silent fallback from structured denial into coordinates exists, which SG-000033 capture, SG-000034 proposals, SG-000035 coordinates, plus input-lease and interruption successors must jointly satisfy.",
+    "p11_boundary": "Clipboard and network authority remain P11 work and are not granted by coordinate derivation."
+  },
+  "review": {
+    "diffcipline": true,
+    "jev_semantic_review": true,
+    "alibaba_open_code_review": "required exact-range qualification where integrated",
+    "security_review": true,
+    "exact_head_ci": true,
+    "native_network_qualification": false
+  },
+  "done_when": "Proposal-only coordinate derivation with server-derived proposal binding, deterministic frame-relative coordinates, server-allocated coordinate identity, fresh SOFT digest-bound approval, immediate stale-proposal revalidation, protected-surface exclusion, no input authority, and no new capture, proposal, clipboard, network, or elevation authority is specified."
+}

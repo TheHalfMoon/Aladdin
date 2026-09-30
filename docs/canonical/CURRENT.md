@@ -1,11 +1,11 @@
 # Cotra Current Canonical Frontier
 
-Status: CLOSED_CANONICAL
+Status: ACTIVE_GRAIN
 Date: 2026-09-30
-Governance snapshot base: 7c2ba18a8aac8d021afcc9eeaeba314d8d8d027b
+Governance snapshot base: 01f61669168d5687d57ecf210de56e26fb0de41b
 Evidence ledger: `.specgrain/canonical-evidence.json`
 
-`Governance snapshot base` records the exact canonical parent from which this closeout snapshot was authored. It deliberately does not claim the eventual merge SHA of the commit containing this file.
+`Governance snapshot base` records the exact canonical parent from which this activation snapshot was authored. It deliberately does not claim the eventual merge SHA of the commit containing this file.
 
 ## SpecGrain state semantics
 
@@ -244,7 +244,7 @@ All P09 closeouts (SG-000027 recorded here, SG-000028 recorded here, SG-000029 r
 
 ## Successor frontier
 
-COTRA-P10 continues at this frontier. No successor grain beyond SG-000034 is authorized by this closeout. The P10 successors (coordinate proposals, bounded input execution with input leases, and human interruption) must each be activated as narrow lawful grains before implementation.
+COTRA-P10 continues at this frontier. No successor grain beyond SG-000035 is authorized by this activation.
 
 ## Closed SG-000033 screenshot capture
 
@@ -260,9 +260,26 @@ SG-000034 proved that no proposal shape accepts caller-supplied frame bytes, pro
 
 ## Active grain
 
-No COTRA-P10 grain is active. SG-000034 was the sole active grain and is now `CLOSED` and canonical.
+SG-000035 - Proposal-only coordinate derivation bound to proposal identity - is the sole active COTRA-P10 grain.
 
-The successor frontier is P10 coordinate work: coordinate proposals, bounded input execution with input leases, and human interruption, each bound to proposal identity without weakening STRONG enforcement, one-shot, expiry, or digest binding, and without exposing unrestricted desktop input or elevation authority. A missing or denied proposal must never silently grant coordinate authority.
+This activation authorizes implementation and qualification of a single narrow proposal-only derivation shape on top of the closed SG-000034 visual proposal registry, the closed SG-000033 window-scoped capture registry, the closed COTRA-P09 structured-UIA registry, the SG-000018 replay-resistant foundation, SG-000019 class enforcement, SG-000020 trust and revoke records, and the closed COTRA-P08 registry: uia.coordinates/propose bound to one server-allocated typed proposal identity with arguments proposal_id and expected_proposal_generation only, where callers supply no coordinates; server-derived proposal binding with proposal generation, owning frame, capture generation, owning window, owning process, bounded region, workspace, and policy revision; deterministic frame-relative coordinate derivation from the exact bounded proposal region as evidence geometry only; server-allocated typed coordinate identity with derivation generation, coordinates, workspace, and policy revision binding where stale coordinates are never actionable; bounded derivation payload with explicit truncation reporting and no silent coordinate widening; fresh per-action SOFT approval with one-shot exact-digest binding over workspace, policy revision, proposal, proposal generation, frame, capture generation, owning window, window generation, derived coordinates, and action material; immediate pre-derivation stale-proposal revalidation with no silent retargeting; protected Cotra approval-surface exclusion with redaction where derivation-adjacent metadata could leak protected material; and explicit denial of input execution, input leases, raw coordinate requests, caller-supplied coordinates, monitor scope, desktop scope, clipboard, network, and elevation, with no direct call from derivation into any input API, while deliberately keeping bounded input execution with input leases and human interruption as successor work.
+
+Authorized target design:
+- uia.coordinates/propose bound to one typed proposal with exact proposal generation, owning frame, capture generation, owning window, owning process, bounded region, workspace, and policy revision;
+- fresh SOFT approval with digest binding over the complete derivation binding set including derived coordinates and one-shot consumption;
+- immediate pre-derivation stale-proposal revalidation with TargetStale denial on any drift;
+- deterministic frame-relative coordinates from the exact bounded region plus a server-allocated typed coordinate identity with derivation generation, where stale coordinates are never actionable;
+- bounded payload with explicit truncation reporting and no silent coordinate widening;
+- protected Cotra approval-surface exclusion with no derivation path reaching presence or approval material;
+- caller-supplied coordinates, raw requests, widened-scope, and protected targets denied with no input authority granted by a missing or denied coordinate identity, and deterministic unit and security tests for happy-path derivation, stale proposal, stale frame, restarted process, PID reuse, stale window, wrong proposal and frame pairing, stale proposal generation, protected surface, missing and stale and reused and digest-mismatched approval, policy drift, caller-supplied coordinates and identities, raw coordinate requests, input execution requests, monitor and desktop scope requests, and elevation requests.
+
+## Active acceptance frontier
+
+SG-000035 must prove that derivations bind server-derived proposal identity and reject caller-provided claims, that coordinates are derived deterministically from the exact bounded region with callers supplying no coordinates, that every derivation mints a server-allocated typed coordinate identity with stale coordinates never actionable, that every derivation carries fresh SOFT digest-bound approval with one-shot consumption, that immediate pre-derivation revalidation fails closed on any drift without silent retargeting and without input-execution, clipboard, network, or elevation fallback, that derivation never calls any input API, that protected Cotra surfaces are excluded with redaction where required, that the agent cannot reach derivation through its own tool or input surface and cannot turn a coordinate identity into input authority, and that Windows-specific qualification proves structured binding without fabricating interactive desktop evidence.
+
+Input execution, input leases, raw coordinate requests, caller-supplied coordinates, monitor and desktop scopes, clipboard access, generic network authority, persistent approval reuse, remote delegation, and elevation must remain absent, and STRONG enforcement, one-shot, expiry, and digest binding must not weaken.
+
+A P10 exit requires joint proof from SG-000033 capture plus SG-000034 proposals plus SG-000035 coordinates plus input-lease and interruption successors that the provider ceiling is enforced, protected surfaces are denied, stale-frame tests pass, and no silent fallback from structured denial into coordinates exists. It must not expose unrestricted desktop input or elevation authority.
 
 ## Canonical public authority boundary retained
 
