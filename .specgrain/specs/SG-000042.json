@@ -2,7 +2,7 @@
   "id": "SG-000042",
   "title": "Per-user install foundation",
   "program": "COTRA-P12",
-  "state": "GRAIN",
+  "state": "CLOSED",
   "risk": "high",
   "created": "2026-10-01",
   "base": "eeeb8f8f34d55edcb820afa4c4fcad93fb912573",
@@ -105,5 +105,25 @@
     "exact_head_ci": true,
     "native_windows_qualification": true
   },
-  "done_when": "The per-user install foundation is specified: verified manifest-based install, protected per-user layout, atomic pointer, optional PATH entry, and retention-aware uninstall through a human-invoked CLI with no agent authority."
+  "done_when": "The per-user install foundation is specified: verified manifest-based install, protected per-user layout, atomic pointer, optional PATH entry, and retention-aware uninstall through a human-invoked CLI with no agent authority.",
+  "qualified_head": "1f7a670b7cbcf227289ad411f1eda6bce0f3bd05",
+  "implementation_base": "56508fc0093123843365ea4630f495ea178531bf",
+  "implementation_merge": "fdd1b06d4c3acc7846493cde8df8947d9ea2a672",
+  "pre_merge_ci": "36790791720",
+  "pre_merge_review_gates": "36790789211",
+  "post_merge_ci": "36792459863",
+  "canonical_evidence": {
+    "implementation_pr": 121,
+    "implementation_base": "56508fc0093123843365ea4630f495ea178531bf",
+    "qualified_head": "1f7a670b7cbcf227289ad411f1eda6bce0f3bd05",
+    "pre_merge_ci": "36790791720",
+    "pre_merge_review_gates": "36790789211",
+    "merge_sha": "fdd1b06d4c3acc7846493cde8df8947d9ea2a672",
+    "post_merge_ci": "36792459863",
+    "jev": "PASSED: genuine TypeSafe Jev exact-diff review covered 12/12 hunks with zero findings and zero blocking findings, pin 31f89602797fb7bea007f8a480bf368bf564954e",
+    "ocr": "PASSED: Alibaba Open Code Review v1.12.9 exact-range delegation over 12 changed files, 11 reviewable with delegated Rust rules applied and 1 excluded (Cargo.lock) manually reviewed",
+    "security_review": "PASS on exact qualified head: human-invoked CLI only, no MCP tool, network, service, or elevation; manifest verification rejects tampered, unlisted, missing-required, duplicate, unknown-field, hostile-path, link, and reparse-point releases before any copy; avoidable split-token elevation refused; owner-only protected DACL for the user and SYSTEM applied with TreeResetNamedSecurityInfoW only after the tree is proven free of links and reparse points, and verified by SDDL read-back that accepts only the user's full SID, its machine-rendered token, and SYSTEM; staged payload re-verified before activation; atomic pointer and records; removals guarded strictly beneath the install root; retained data kept unless --purge-data --yes. The first exact-head attempt failed Rust/Windows because the runner's built-in Administrator SID renders as LA in SDDL; the fix learns the rendered token by round-trip. An intermediate commit accidentally carried successor-grain files that were removed before the qualified head.",
+    "unresolved_review_threads": 0,
+    "authority_boundary": "A human-invoked per-user install foundation is closed: verified manifest-based install under %LOCALAPPDATA%\\Cotra with an owner-only protected DACL, atomic version pointer, optional recorded user PATH entry, same-version repair, and retention-aware uninstall. No MCP tool, agent capability, network access, service, scheduled task, or elevation is added."
+  }
 }
