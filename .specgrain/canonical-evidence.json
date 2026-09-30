@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "snapshot_base": "c2e63f3135eacd5d537afb5f093eb843e1fbb7ed",
+  "snapshot_base": "eeeb8f8f34d55edcb820afa4c4fcad93fb912573",
   "state_semantics": {
     "GRAIN": "Authorized or active work packet whose acceptance is not yet canonically proven.",
     "PROVEN": "Acceptance and required qualification are proven, but canonical closeout/governance is not yet complete.",
@@ -496,6 +496,17 @@
       "review_basis": "Exact-head genuine TypeSafe Jev 13/13 hunks with zero findings/blocking findings, Alibaba Open Code Review v1.12.9 exact-range delegation over 12 files with 9 reviewable and 3 excluded files manually reviewed, exact-diff manual security review, Windows/Ubuntu Rust Node Governance qualification including a real Windows WinHTTP HTTPS/TLS peer-pin test, successful post-merge CI, and zero unresolved review threads. One unrelated SG-000013 Windows timing flake on the first attempt passed on exact-head job rerun without any code change.",
       "unresolved_review_threads": 0,
       "authority_boundary": "One explicit bounded internal network/fetch HTTPS GET is closed with https/443-only destination policy, public-only resolution, exact address-set and connected-peer binding, manual same-origin redirects, bounded request/response/timeouts, direct no-proxy transport, no ambient credentials, fresh SOFT digest-bound one-shot approval, and bounded secret-free evidence. Generic sockets, CONNECT, WebSockets, alternate methods/schemes/ports, standing sessions, MCP network tools, elevation, and authority outside the closed P11 shapes remain absent."
+    },
+    "SG-000041": {
+      "implementation_pr": 119,
+      "implementation_base": "3680a043e3f115f8928f95db353fba71a9cd4f2a",
+      "qualified_head": "a640fb0631e1605e9cdea3a094c6b56d36c19b68",
+      "pre_merge_ci": "36787295127",
+      "merge_sha": "eeeb8f8f34d55edcb820afa4c4fcad93fb912573",
+      "post_merge_ci": "36788126452",
+      "review_basis": "Exact-head genuine TypeSafe Jev 7/7 hunks with zero findings/blocking findings, Alibaba Open Code Review v1.12.9 exact-range delegation over 5 reviewable files with delegated rules applied, exact-diff manual security review, Windows/Ubuntu Rust Node Governance qualification, successful post-merge CI, and zero unresolved review threads.",
+      "unresolved_review_threads": 0,
+      "authority_boundary": "Workspace roots overlapping Cotra protected state (the state root and every state-path override) are refused at policy construction using resolved final paths. No capability, approval, provider, installer, lifecycle, or network authority is added."
     }
   }
 }

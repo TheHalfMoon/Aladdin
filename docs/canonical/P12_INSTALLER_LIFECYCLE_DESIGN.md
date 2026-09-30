@@ -9,7 +9,7 @@ This document is the complete design review required before P12 implementation. 
 ## 1. Constraints
 
 - Zero founder cost: no paid certificates, CI, signing services, installer frameworks, or hosted infrastructure. GitHub Actions and GitHub Releases on the existing public repository are the only release infrastructure in scope.
-- Per-user install: no administrator privileges are required for install, start, stop, status, doctor, update, rollback, or uninstall. The installer refuses to run elevated so that no administrator-owned files land in the user's profile.
+- Per-user install: no administrator privileges are required for install, start, stop, status, doctor, update, rollback, or uninstall. The installer refuses avoidable elevation: a UAC split-token administrator who chose "Run as administrator" is refused so that no administrator-context files land in the user's profile. A system without a split token (UAC disabled, as on CI runners) cannot drop elevation; installation proceeds there and the residual is documented (amended by SG-000042).
 - No Windows service. Evidence: SOFT approval is delivered through an interactive `MessageBoxW` prompt and STRONG approval through Windows Hello in the user's interactive session (`cotra-approval`). A session-0 service cannot present either prompt, so a service install would break the approval boundary. A service model may only be introduced by a later governance change with hardening evidence.
 - Local first: the only network activity introduced by P12 is a loopback-only (`127.0.0.1`) probe of the health endpoint that the official tunnel client itself advertises. No update check, telemetry, or download is performed by Cotra (section 7).
 - Cotra does not reimplement the OpenAI Secure MCP Tunnel. It configures and supervises the official tunnel-client executable through the closed `cotra-tunnel` validation and launch-plan code.
@@ -58,7 +58,7 @@ Install root `R` = `%LOCALAPPDATA%\Cotra` (the existing Cotra state root, so one
 Prerequisites, validated fail-closed by `install` and reported by `doctor`:
 
 - Windows 10 build 17763 or later, or Windows 11;
-- a non-elevated process token;
+- no avoidable elevation (see section 1);
 - Node.js 20 or later at an absolute path (auto-detected from `PATH` or given with `--node`), verified by actually running `node --version`;
 - the official tunnel client is required only by `tunnel setup` and `start`, not by `install`.
 
@@ -70,7 +70,7 @@ A release directory contains `manifest.json` and the payload. The manifest recor
 
 `cotra install --source <dir>` (run from the extracted release):
 
-1. refuse elevation; validate prerequisites;
+1. refuse avoidable elevation; validate prerequisites;
 2. verify every payload file against the manifest before copying anything;
 3. create or re-protect `R` (section 4 ACL rules);
 4. copy into `R\versions\<version>.staging-<nonce>`, re-hash every copied file, then rename to `R\versions\<version>`;
@@ -96,7 +96,7 @@ Supervision chain: `cotra start` -> detached `cotra.exe supervise` -> official t
 
 `cotra status` (human and `--json`): installed, active and previous version, configured, running state with process identity verification, health URL presence, and update marker. `cotra doctor`: the full matrix below; exit code non-zero when any required check fails. Each check yields `pass`, `fail`, or `unknown` with one evidence line:
 
-- platform version and non-elevated token;
+- platform version and absence of avoidable elevation;
 - install integrity: pointer parses, version directory exists, every payload file matches the manifest;
 - version consistency: `R\bin\cotra.exe` matches the active version's `cotra.exe`;
 - ACL: protected DACL, only the user and `SYSTEM`;
@@ -113,7 +113,7 @@ Supervision chain: `cotra start` -> detached `cotra.exe supervise` -> official t
 
 `doctor` is read-only with respect to configuration, approvals, trust, and audit, and leaves no process running.
 
-Logs: the supervisor redirects tunnel-client output into `R\logs\tunnel.log` through a line redactor (key-like token patterns and the configured key file contents' digest are never written) with a size cap and one rotated file. Lifecycle transcripts record commands, versions, and outcomes only.
+Logs: the supervisor redirects tunnel-client output into `R\logs\tunnel.log` through a line redactor that replaces key-like token patterns and never reads or writes the runtime key file, with a size cap and one rotated file. Lifecycle transcripts record commands, versions, and outcomes only.
 
 ## 7. Update, rollback, and recovery
 

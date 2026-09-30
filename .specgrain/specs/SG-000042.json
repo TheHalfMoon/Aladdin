@@ -1,0 +1,109 @@
+{
+  "id": "SG-000042",
+  "title": "Per-user install foundation",
+  "program": "COTRA-P12",
+  "state": "GRAIN",
+  "risk": "high",
+  "created": "2026-10-01",
+  "base": "eeeb8f8f34d55edcb820afa4c4fcad93fb912573",
+  "dependencies": [
+    "SG-000041"
+  ],
+  "objective": "Deliver the per-user install foundation defined in docs/canonical/P12_INSTALLER_LIFECYCLE_DESIGN.md sections 3 through 5: a release manifest format with fail-closed verification, a packaging script that produces it, and a human-invoked `cotra` CLI with `install`, `uninstall`, and `version` that installs verified payloads under the protected Cotra state root with an owner-only protected DACL, an atomic version pointer, an optional user PATH entry, and uninstall that separates removable executable state from retained user data.",
+  "scope": {
+    "include": [
+      "a new cotra-lifecycle crate providing the `cotra` binary with install, uninstall, version, and help commands, human and --json output, and typed exit codes",
+      "release manifest schema cotra-release-manifest-v1 with version, configuration schema range, and per-file relative path, size, and SHA-256, rejecting unknown fields, duplicate case-insensitive paths, hostile paths (absolute, drive, UNC, stream, relative segments, reserved device names, forbidden characters, trailing dot or space, non-ASCII), missing required files, unlisted files, links, and reparse points",
+      "prerequisite validation that fails closed: Windows build 17763 or later, no avoidable elevation (a UAC split-token administrator running elevated is refused; systems without a split token cannot drop elevation and proceed), and Node.js 20 or later verified by actually running it",
+      "install under %LOCALAPPDATA%\\Cotra only: refuse a link or non-directory root, apply and read back an owner-only protected DACL granting only the current user and SYSTEM with descendants reset to inherit, stage into a per-install staging directory, re-verify the copy, activate as versions\\<version>, write current.json and install.json atomically, and replace bin\\cotra.exe by renaming any running copy aside",
+      "same-version reinstall repairs a tampered or missing payload; installing a different version over an existing install is refused as a conflict until the update grain",
+      "optional user PATH entry in HKCU\\Environment, added once, recorded, removed exactly on uninstall, with the environment-change broadcast",
+      "uninstall that refuses while a supervisor record exists, removes versions, bin, the pointer, the install record, run state, and the recorded PATH entry, relocates a running cotra.exe from the install root to the temp directory, retains and reports configuration, secrets, logs, and audit, approval, trust, and browser-profile history by default, and purges them only with --purge-data --yes",
+      "every destructive operation guarded to paths strictly beneath the install root",
+      "scripts/package-release.mjs producing a release directory and manifest from a release build",
+      "Windows-native tests on real ACLs, a real registry PATH value under an isolated test key, and the real `cotra` binary installing from a synthetic release into an isolated LOCALAPPDATA",
+      "a design-document amendment recording the avoidable-elevation rule"
+    ],
+    "exclude": [
+      "any MCP tool, agent capability, provider operation, or approval change",
+      "start, stop, status, doctor, supervisor, tunnel setup, workspace configuration, or cotra-mcp-host, which belong to the lifecycle runtime grain",
+      "update, rollback, recovery, and the release workflow, which belong to the update grain",
+      "network access of any kind",
+      "service installation, scheduled tasks, machine-wide installation, or requesting elevation",
+      "writes outside %LOCALAPPDATA%\\Cotra other than the recorded HKCU PATH value and the relocated running CLI in the temp directory"
+    ]
+  },
+  "authority_delta": {
+    "filesystem": "The human-invoked CLI writes only beneath %LOCALAPPDATA%\\Cotra (plus relocating its own running executable to the temp directory on uninstall). No agent filesystem authority is added; SG-000041 keeps the install root outside every admitted workspace.",
+    "process": "The CLI runs the configured Node.js executable with --version only. No agent process authority is added.",
+    "network": "None.",
+    "browser": "None.",
+    "ui_input": "None.",
+    "secrets": "No secret is read or written. Install and uninstall output contain paths and versions only.",
+    "approval": "None.",
+    "privileged": "None. No elevation is requested; avoidable elevation is refused; no service or scheduled task is created."
+  },
+  "invariants": [
+    "no payload file is copied before the whole release verifies, and no version is activated before its copy re-verifies",
+    "the version pointer references only verified versions and is replaced atomically",
+    "the install root carries a protected DACL granting only the current user and SYSTEM, verified by read-back, and ACL failures abort",
+    "destructive operations act only strictly beneath the install root",
+    "uninstall never removes retained user data without --purge-data --yes and never touches workspaces",
+    "the lifecycle CLI is not reachable from MCP and adds no agent capability"
+  ],
+  "acceptance": [
+    {
+      "id": "A1",
+      "claim": "Tests prove manifest verification rejects tampered, unlisted, missing-required, duplicate, unknown-field, wrong-schema, hostile-path, link, and reparse-point releases."
+    },
+    {
+      "id": "A2",
+      "claim": "Tests prove prerequisites fail closed on old Windows builds, avoidable elevation, missing Node.js, and Node.js older than 20, before any write."
+    },
+    {
+      "id": "A3",
+      "claim": "Tests prove install stages, re-verifies, activates, writes atomic records, and leaves no staging residue, and that a tampered release installs nothing."
+    },
+    {
+      "id": "A4",
+      "claim": "Windows-native tests prove the protected DACL is applied, foreign explicit entries on descendants are reset, and verification detects a foreign principal added afterwards."
+    },
+    {
+      "id": "A5",
+      "claim": "Windows-native tests prove the user PATH entry is added once and removed exactly under an isolated registry key."
+    },
+    {
+      "id": "A6",
+      "claim": "Tests prove same-version reinstall repairs a tampered payload and a different version is refused."
+    },
+    {
+      "id": "A7",
+      "claim": "Tests prove uninstall retains user data by default, purges only with confirmation, refuses while a supervisor record exists, and guards every removal to paths beneath the install root."
+    },
+    {
+      "id": "A8",
+      "claim": "A Windows-native test runs the real `cotra` binary to refuse a tampered release, install from an extracted release, run the installed CLI, repair, uninstall with retention, and purge."
+    },
+    {
+      "id": "A9",
+      "claim": "All closed SG-000001 through SG-000041 regressions pass unchanged."
+    },
+    {
+      "id": "A10",
+      "claim": "Exact-head Windows and Ubuntu Rust, Node, Governance, genuine TypeSafe Jev, Alibaba Open Code Review, exact-diff security review, manual review of excluded files, and zero unresolved blocking review threads all pass."
+    }
+  ],
+  "successor_requirements": {
+    "p12_lifecycle": "The lifecycle runtime grain adds cotra-mcp-host, tunnel setup, workspace configuration, start, stop, status, and doctor, and extends uninstall to stop a running instance with verified termination.",
+    "p12_update": "The update grain adds update, rollback, failed-update recovery, the release workflow, and a CI job that installs from a packaged artifact."
+  },
+  "review": {
+    "diffcipline": true,
+    "jev_semantic_review": true,
+    "alibaba_open_code_review": "required exact-range qualification where integrated",
+    "security_review": true,
+    "exact_head_ci": true,
+    "native_windows_qualification": true
+  },
+  "done_when": "The per-user install foundation is specified: verified manifest-based install, protected per-user layout, atomic pointer, optional PATH entry, and retention-aware uninstall through a human-invoked CLI with no agent authority."
+}
