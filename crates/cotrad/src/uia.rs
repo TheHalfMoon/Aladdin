@@ -1,4 +1,4 @@
-//! SG-000036 bounded coordinate execution dispatch.
+//! SG-000037 human-interruption invalidation dispatch.
 //!
 //! This module dispatches the five retained SG-000027 observation shapes,
 //! the retained SG-000028 `uia.element/invoke` shape, the retained
@@ -14,10 +14,17 @@
 //! scroll, capture, propose, coordinate derivation, and bounded
 //! execution each require fresh per-action SOFT approval with exact
 //! digest binding and immediate pre-action stale-target revalidation.
-//! Execution is click-only, confined to the exact owning window, and
-//! gated by an explicit single-use input lease that is consumed exactly
-//! once. Every other UIA-like shape returns `Ok(None)` so the caller
-//! fails closed through the STRONG gate or the legacy denial.
+//! Execution is click-only, confined to the exact owning window, gated
+//! by an explicit single-use input lease that is consumed exactly once,
+//! and bound to the SG-000037 monotonic human-interruption epoch: any
+//! material human interaction after the lease grant revokes the lease,
+//! the pre-interruption approval digest fails closed, interrupted actions
+//! are never replayed, and a retry needs a fresh lease and fresh
+//! approval. The interruption report path is reachable only through the
+//! local session broker, never through MCP requests, and Cotra synthetic
+//! execution never counts as human interruption. Every other UIA-like
+//! shape returns `Ok(None)` so the caller fails closed through the
+//! STRONG gate or the legacy denial.
 //!
 //! Identities are process-lifetime: a cotrad restart drops the registry,
 //! so pre-restart identities fail closed as unknown rather than retargeting.
@@ -511,7 +518,7 @@ fn execute_with_approval(
         "execute bounded click",
         coord_id.clone(),
         format!(
-            "coord={} derivation_generation={} window={} coordinates={},{} operation={} lease={} action=execute",
+            "coord={} derivation_generation={} window={} coordinates={},{} operation={} lease={} interruption_epoch={} action=execute",
             binding.coord_id,
             binding.derivation_generation,
             binding.window_id,
@@ -519,6 +526,7 @@ fn execute_with_approval(
             binding.y,
             binding.operation,
             binding.lease_id,
+            binding.interruption_epoch,
         ),
         digest.clone(),
     );

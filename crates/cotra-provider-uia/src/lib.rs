@@ -174,6 +174,16 @@ pub fn is_allowed_uia_shape(capability: &str, operation: &str) -> bool {
 /// sessions, keyboard, drag, monitor scope, desktop scope, clipboard,
 /// network, and elevation remain denied in every successor grain prior
 /// to their own successor authorization.
+///
+/// NOTE (SG-000037 successor): human-interruption epoch invalidation is
+/// lawfully authorized by the SG-000037 successor grain as revocation-only
+/// handling bound into input leases and execution approval digests. The
+/// frozen SG-000036 qualified head recorded leases without epoch binding;
+/// current-tree authority records the successor delta. No new actuating
+/// input shape is added: keyboard, drag, monitor scope, desktop scope,
+/// clipboard, network, and elevation remain denied in every successor
+/// grain prior to their own successor authorization. Human physical
+/// interaction always wins over Cotra automation.
 pub const DENIED_UIA_SHAPES: &[(&str, &str)] = &[
     ("uia.element", "click"),
     ("uia.element", "focus"),
@@ -391,6 +401,87 @@ pub const LEASE_TTL_MS: u64 = 60_000;
 /// bound fail closed after sweeping expired leases, so the registry
 /// cannot accumulate unbounded pending state.
 pub const MAX_LEASES: usize = 64;
+
+/// Schema label for bounded human-interruption evidence. Interruption
+/// evidence carries only the epoch, the bounded physical-source reason,
+/// the report timestamp, the workspace, and the policy revision. It never
+/// carries keystroke content, pointer paths, window content, credentials,
+/// or secret material.
+pub const INTERRUPT_SCHEMA: &str = "cotra-human-interruption-v1";
+
+/// Maximum human-interruption reason length in characters. Reasons are a
+/// fixed allowlist, so oversized values fail closed without truncation
+/// that changes revocation semantics.
+pub const MAX_INTERRUPT_REASON_CHARS: usize = 64;
+
+/// Bounded physical sources that may report human interruption. Only these
+/// reasons increment the interruption epoch. Cotra synthetic execution is
+/// never a reason: the registry never calls the report path for its own
+/// adapter actuation, so automation cannot revoke its own lease.
+pub const HUMAN_INTERRUPT_REASONS: &[&str] = &[
+    "human-keyboard",
+    "human-mouse-move",
+    "human-mouse-button",
+    "human-touch-pen",
+    "human-foreground-change",
+    "human-presence",
+    "emergency-stop",
+    "approval-pending-suspension",
+];
+
+/// Returns true when the interruption reason is one of the bounded
+/// physical sources. Empty, oversized, and unknown reasons fail closed.
+pub fn is_human_interrupt_reason(reason: &str) -> bool {
+    !reason.is_empty()
+        && reason.chars().count() <= MAX_INTERRUPT_REASON_CHARS
+        && HUMAN_INTERRUPT_REASONS.contains(&reason)
+}
+
+/// Origin of one observed input event for interruption classification.
+/// The registry distinguishes Cotra-generated synthetic input (which must
+/// never revoke its own lease), OS or other synthetic input, real human
+/// physical input, and unknown input (which fails closed toward
+/// interruption so ambiguous sensing never lets automation fight the user).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum InputOrigin {
+    CotraSynthetic,
+    OsSynthetic,
+    HumanPhysical,
+    Unknown,
+}
+
+/// Classify one observed input event. `is_cotra_own` marks actuation that
+/// Cotra itself just performed through the bounded execution adapter.
+/// `is_injected` carries the Windows injected-input flag
+/// (`LLKHF_INJECTED` / `LLMHF_INJECTED`): set for synthetic input from any
+/// source. `sensor_trusted` is false when the sensor could not determine
+/// injection provenance, in which case classification is `Unknown` and the
+/// caller must fail closed toward interruption.
+pub fn classify_input_event(
+    is_injected: bool,
+    is_cotra_own: bool,
+    sensor_trusted: bool,
+) -> InputOrigin {
+    if !sensor_trusted {
+        return InputOrigin::Unknown;
+    }
+    if is_cotra_own {
+        return InputOrigin::CotraSynthetic;
+    }
+    if is_injected {
+        return InputOrigin::OsSynthetic;
+    }
+    InputOrigin::HumanPhysical
+}
+
+/// Returns true when the classified origin must revoke live input leases.
+/// Cotra synthetic execution never interrupts itself. Every other origin,
+/// including ambiguous `Unknown`, revokes: the system never fights the
+/// user for control and never suppresses a genuine human override behind
+/// a forged synthetic-origin claim.
+pub fn should_interrupt_on_origin(origin: InputOrigin) -> bool {
+    !matches!(origin, InputOrigin::CotraSynthetic)
+}
 
 /// Derive deterministic frame-relative coordinates (region center,
 /// integer division) from one exact bounded region. Regions are
@@ -1004,11 +1095,14 @@ struct CoordinateRecord {
 /// One explicit single-use input lease. Leases are minted from a fully
 /// validated coordinate binding, bound into the approval digest, and
 /// consumed exactly once at execution. A lease binds its owning
-/// coordinate identity, click-only operation, expiry, workspace, and
-/// policy revision; replayed, expired, revoked, and foreign leases fail
-/// closed. Unapproved, unconsumed leases are inert: they expire quickly
-/// and are swept, and execution is reachable only through the
-/// approval-gated dispatch path.
+/// coordinate identity, click-only operation, the interruption epoch at
+/// grant time, expiry, workspace, and policy revision; replayed, expired,
+/// revoked, epoch-drifted, and foreign leases fail closed. Unapproved,
+/// unconsumed leases are inert: they expire quickly and are swept, and
+/// execution is reachable only through the approval-gated dispatch path.
+/// Any material human interaction after the grant increments the registry
+/// epoch, so this lease fails closed on the next execution and a retry
+/// needs a fresh lease bound to the new epoch.
 #[derive(Debug, Clone)]
 struct LeaseRecord {
     lease_id: String,
@@ -1022,6 +1116,7 @@ struct LeaseRecord {
     capture_generation: u64,
     proposal_generation: u64,
     derivation_generation: u64,
+    interruption_epoch: u64,
     x: u64,
     y: u64,
     hwnd: u64,
@@ -1035,6 +1130,13 @@ struct LeaseRecord {
 /// Server-side typed identity registry. Identities are allocated here and
 /// can never be named by callers; every observation revalidates the exact
 /// binding set and fails closed on drift.
+///
+/// The registry also holds the monotonic human-interruption epoch. The
+/// epoch starts at zero, increments exactly once per valid
+/// human-interruption report, and never decrements or resets. Every input
+/// lease records the epoch at grant time and every execution revalidates
+/// it, so material human interaction after a grant revokes the lease.
+/// Human physical interaction always wins over Cotra automation.
 #[derive(Debug, Default)]
 pub struct UiaRegistry {
     processes: HashMap<String, ProcessRecord>,
@@ -1044,6 +1146,7 @@ pub struct UiaRegistry {
     proposals: HashMap<String, ProposalRecord>,
     coordinates: HashMap<String, CoordinateRecord>,
     leases: HashMap<String, LeaseRecord>,
+    interruption_epoch: u64,
     window_counter: u64,
     tree_counter: u64,
     capture_counter: u64,
@@ -1088,6 +1191,75 @@ impl UiaRegistry {
     /// Test hook: read whether one lease is consumed.
     pub fn lease_consumed(&self, lease_id: &str) -> Option<bool> {
         self.leases.get(lease_id).map(|record| record.consumed)
+    }
+
+    /// Read the current monotonic human-interruption epoch. The epoch
+    /// starts at zero and increments exactly once per valid
+    /// human-interruption report. Leases record this value at grant time.
+    pub fn interruption_epoch(&self) -> u64 {
+        self.interruption_epoch
+    }
+
+    /// Test hook: read the interruption epoch bound into one lease.
+    pub fn lease_interruption_epoch(&self, lease_id: &str) -> Option<u64> {
+        self.leases
+            .get(lease_id)
+            .map(|record| record.interruption_epoch)
+    }
+
+    /// Report material human interaction and revoke live lease material.
+    /// Only the bounded physical-source reasons increment the epoch;
+    /// empty, oversized, and unknown reasons fail closed without mutating
+    /// the epoch. The epoch never decrements or resets, so leases granted
+    /// before this call fail closed on their next execution and a retry
+    /// needs a fresh lease bound to the new epoch. The returned evidence
+    /// carries only the epoch, reason, timestamp, workspace, and policy
+    /// revision with no input content and no secret material.
+    ///
+    /// Windows reality: the interactive session broker is the only lawful
+    /// caller. It derives reports from narrow user-presence signals (last
+    /// input timing with injected-input filtering so Cotra synthetic input
+    /// never counts as human, foreground and window interaction, and the
+    /// emergency-stop path) and never from keystroke or pointer-path
+    /// content. Headless contexts report no physical input instead of
+    /// fabricating it; deterministic epoch policy is proven through the
+    /// injected fake adapter on every platform.
+    pub fn report_human_interruption(
+        &mut self,
+        reason: &str,
+        workspace_id: &str,
+        policy_revision: &str,
+        now_ms: u64,
+    ) -> Result<Value, UiaError> {
+        if !is_human_interrupt_reason(reason) {
+            return Err(UiaError::new(
+                FailureCode::InvalidRequest,
+                "human-interruption reason is empty, oversized, or unknown and never revokes input authority",
+            ));
+        }
+        if workspace_id.is_empty() || workspace_id.chars().count() > MAX_STRING_CHARS {
+            return Err(UiaError::new(
+                FailureCode::InvalidRequest,
+                "human-interruption workspace is empty or too large",
+            ));
+        }
+        if policy_revision.is_empty() || policy_revision.chars().count() > MAX_STRING_CHARS {
+            return Err(UiaError::new(
+                FailureCode::InvalidRequest,
+                "human-interruption policy revision is empty or too large",
+            ));
+        }
+        self.interruption_epoch = self.interruption_epoch.saturating_add(1);
+        let result = json!({
+            "schema": INTERRUPT_SCHEMA,
+            "action": "human-interruption",
+            "interruption_epoch": self.interruption_epoch,
+            "reason": reason,
+            "reported_at_ms": now_ms,
+            "workspace_id": workspace_id,
+            "policy_revision": policy_revision,
+        });
+        enforce_response_bytes(&result)
     }
 
     /// Register or refresh one native process. A changed start generation
@@ -3548,7 +3720,10 @@ impl UiaRegistry {
     /// dispatch path consumes it exactly once: execution is unreachable
     /// without fresh approval bound to this exact lease. Expired leases
     /// are swept on every grant; grants beyond the live-lease bound fail
-    /// closed so no standing input session can accumulate.
+    /// closed so no standing input session can accumulate. The lease
+    /// records the current interruption epoch, so material human
+    /// interaction after this grant revokes the lease on its next
+    /// execution.
     pub fn grant_input_lease(
         &mut self,
         coord_id: &str,
@@ -3623,6 +3798,7 @@ impl UiaRegistry {
                 capture_generation: snapshot.capture_generation,
                 proposal_generation: snapshot.proposal_generation,
                 derivation_generation: snapshot.derivation_generation,
+                interruption_epoch: self.interruption_epoch,
                 x: snapshot.x,
                 y: snapshot.y,
                 hwnd: window.hwnd,
@@ -3644,6 +3820,7 @@ impl UiaRegistry {
             proposal_generation: snapshot.proposal_generation,
             coord_id: snapshot.coord_id,
             derivation_generation: snapshot.derivation_generation,
+            interruption_epoch: self.interruption_epoch,
             x: snapshot.x,
             y: snapshot.y,
             hwnd: window.hwnd,
@@ -3657,12 +3834,16 @@ impl UiaRegistry {
     /// after immediate pre-execution revalidation of the entire identity
     /// chain. Any drift fails closed without silent retargeting and
     /// without fallback to keyboard, drag, clipboard, network, or
-    /// elevation. Replayed, expired, revoked, and foreign leases fail
-    /// closed. Adapter failure does not consume the lease, but the
-    /// approval is already one-shot consumed by dispatch, so a retry
-    /// requires fresh approval. On success the lease is consumed exactly
-    /// once and the evidence carries only identities, generations,
-    /// coordinates, operation, lease, and approval record material.
+    /// elevation. Replayed, expired, revoked, epoch-drifted, and foreign
+    /// leases fail closed. A human-interruption report after the grant
+    /// increments the registry epoch, so the lease fails closed here and
+    /// a retry needs a fresh lease and fresh approval; interrupted actions
+    /// are never replayed and queued continuations never run. Adapter
+    /// failure does not consume the lease, but the approval is already
+    /// one-shot consumed by dispatch, so a retry requires fresh approval.
+    /// On success the lease is consumed exactly once and the evidence
+    /// carries only identities, generations, coordinates, operation,
+    /// lease, and approval record material.
     pub fn execute_input(
         &mut self,
         adapter: &impl UiaAdapter,
@@ -3706,6 +3887,12 @@ impl UiaRegistry {
             return Err(UiaError::new(
                 FailureCode::CapabilityDenied,
                 "bounded input execution actuates only the click operation",
+            ));
+        }
+        if lease.interruption_epoch != self.interruption_epoch {
+            return Err(UiaError::new(
+                FailureCode::TargetStale,
+                "human interruption revoked this input lease; automation must stop and a retry needs a fresh lease and fresh approval",
             ));
         }
         let snapshot = lease.clone();
@@ -3814,6 +4001,7 @@ impl UiaRegistry {
             "capture_generation": snapshot.capture_generation,
             "proposal_generation": snapshot.proposal_generation,
             "derivation_generation": snapshot.derivation_generation,
+            "interruption_epoch": snapshot.interruption_epoch,
             "x": snapshot.x,
             "y": snapshot.y,
             "operation": EXECUTE_OPERATION_CLICK,
@@ -4455,7 +4643,7 @@ pub fn coordinate_derivation_digest(
 /// computation and evidence. Callers never supply these values directly;
 /// they are resolved from the typed coordinate identity immediately
 /// before execution, including the explicit single-use lease minted from
-/// the validated binding.
+/// the validated binding and the interruption epoch at grant time.
 #[derive(Debug, Clone)]
 pub struct ExecuteBinding {
     pub process_id: String,
@@ -4468,6 +4656,7 @@ pub struct ExecuteBinding {
     pub proposal_generation: u64,
     pub coord_id: String,
     pub derivation_generation: u64,
+    pub interruption_epoch: u64,
     pub x: u64,
     pub y: u64,
     pub hwnd: u64,
@@ -4477,17 +4666,18 @@ pub struct ExecuteBinding {
 }
 
 /// Compute the exact approval digest for one bounded execution. The
-/// digest binds the derived coordinates, the click-only operation, and
-/// the explicit lease, and dispatch revalidates the same binding set
-/// and consumes the lease immediately, so any material drift or replay
-/// invalidates the approval.
+/// digest binds the derived coordinates, the click-only operation, the
+/// interruption epoch at grant time, and the explicit lease, and dispatch
+/// revalidates the same binding set and consumes the lease immediately,
+/// so any material drift, human interruption, or replay invalidates the
+/// approval.
 pub fn execute_approval_digest(
     workspace_id: &str,
     policy_revision: &str,
     binding: &ExecuteBinding,
 ) -> String {
     let material = format!(
-        "cotra-bounded-execution-v1|{workspace_id}|{policy_revision}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|execute",
+        "cotra-bounded-execution-v1|{workspace_id}|{policy_revision}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|execute",
         binding.coord_id,
         binding.derivation_generation,
         binding.proposal_id,
@@ -4496,6 +4686,7 @@ pub fn execute_approval_digest(
         binding.capture_generation,
         binding.window_id,
         binding.window_generation,
+        binding.interruption_epoch,
         binding.x,
         binding.y,
         binding.operation,
@@ -4579,3 +4770,5 @@ mod sg000034_tests;
 mod sg000035_tests;
 #[cfg(test)]
 mod sg000036_tests;
+#[cfg(test)]
+mod sg000037_tests;
