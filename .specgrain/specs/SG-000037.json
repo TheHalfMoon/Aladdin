@@ -2,7 +2,7 @@
   "id": "SG-000037",
   "title": "Human-interruption invalidation for bounded input leases",
   "program": "COTRA-P10",
-  "state": "GRAIN",
+  "state": "CLOSED",
   "risk": "high",
   "created": "2026-09-30",
   "base": "e3c2504602df89128370b5f746f4e988fa078a73",
@@ -138,5 +138,25 @@
     "exact_head_ci": true,
     "native_network_qualification": false
   },
-  "done_when": "Human-interruption invalidation with monotonic interruption epoch, lease epoch binding, approval digest epoch binding, immediate pre-execution interruption revalidation, Cotra-synthetic exclusion with fail-closed ambiguity, no replay or continuation after override, and no new actuating input, keyboard, drag, clipboard, network, or elevation authority is specified."
+  "done_when": "Human-interruption invalidation with monotonic interruption epoch, lease epoch binding, approval digest epoch binding, immediate pre-execution interruption revalidation, Cotra-synthetic exclusion with fail-closed ambiguity, no replay or continuation after override, and no new actuating input, keyboard, drag, clipboard, network, or elevation authority is specified.",
+  "qualified_head": "f0444990990af2f5bbb55cce243131023fc8dbdb",
+  "implementation_base": "7c9b939c9f84b0bc7aaa8233f7cceedffa7dba09",
+  "implementation_merge": "b88b2582fa1faa27619f890bf75c5a012317cbba",
+  "pre_merge_ci": "36723813468",
+  "pre_merge_review_gates": "36723813599",
+  "post_merge_ci": "36724442466",
+  "canonical_evidence": {
+    "implementation_pr": 104,
+    "implementation_base": "7c9b939c9f84b0bc7aaa8233f7cceedffa7dba09",
+    "qualified_head": "f0444990990af2f5bbb55cce243131023fc8dbdb",
+    "pre_merge_ci": "36723813468",
+    "pre_merge_review_gates": "36723813599",
+    "merge_sha": "b88b2582fa1faa27619f890bf75c5a012317cbba",
+    "post_merge_ci": "36724442466",
+    "jev": "PASSED: 28/28 hunks, zero findings, zero blocking findings, pin 31f89602797fb7bea007f8a480bf368bf564954e, TypeSafe SDK 0.6.0",
+    "ocr": "PASSED: Open Code Review v1.12.9 exact-range delegation, 8 files total, 7 reviewable, 1 excluded and manually reviewed",
+    "security_review": "PASS on exact qualified head; interruption epoch starts at zero and increments exactly once per valid bounded physical-source report with empty, oversized, and unknown reasons rejected without epoch mutation; every input lease binds the current epoch at grant time and every execution revalidates lease epoch immediately before actuation with epoch drift fail-closed as TargetStale; the bounded execution approval digest binds the epoch so pre-interruption approvals fail closed after override; Cotra synthetic execution never counts as interruption while OS synthetic, human physical, and unknown input revoke with forged-origin suppression resistance; interrupted actions are never replayed and queued, drag, and keystroke continuations never run without a fresh lease and fresh approval; caller-supplied epoch, lease, approval, secret, and widening fields are denied; protected Cotra surfaces and secrets remain excluded with no input-content surveillance, hooks, polling, clipboard, network, or elevation; and retained execution, derivation, proposal, capture, observation, invoke, value, select, toggle, scroll, replay, class, trust, and P08 behavior is unchanged",
+    "unresolved_review_threads": 0,
+    "authority_boundary": "No new actuating input authority is added. Only revocation is newly added through the monotonic interruption epoch bound into input leases and execution approval digests with immediate pre-execution interruption revalidation. Bounded execution remains closed under SG-000036, coordinate derivation remains closed under SG-000035, visual proposals remain closed under SG-000034, capture remains closed under SG-000033, and structured UIA remains closed under SG-000027 through SG-000032. Keyboard, drag, multi-click, wheel, touch, focus, raw SendInput, lease reuse, lease transfer, standing sessions, input-content surveillance, hooks, polling, monitor scope, desktop scope, clipboard, network fetch, process spawn, injection, termination, elevation, and approval bypass remain absent, and existing file, process, Git, approval, presence, trust, browser, observation, capture, proposal, derivation, and actuation behavior is unchanged."
+  }
 }
