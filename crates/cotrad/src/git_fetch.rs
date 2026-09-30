@@ -1,9 +1,7 @@
 #[path = "git_fetch_legacy.rs"]
 mod legacy;
 
-pub use legacy::{
-    provider_destination, system_resolver, FetchDestinationLookup, PolicyFetchLookup,
-};
+pub use legacy::{system_resolver, FetchDestinationLookup, PolicyFetchLookup};
 
 use cotra_approval::{now_ms, ApprovalBroker, ApprovalPrompt, ConsumeExpectation};
 use cotra_contracts::{FailureCode, RequestEnvelope};

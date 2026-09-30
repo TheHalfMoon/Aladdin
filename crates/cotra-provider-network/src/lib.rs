@@ -141,7 +141,7 @@ pub fn parse_target(url: &str) -> Result<FetchTarget, NetworkError> {
     let rest = url
         .strip_prefix("https://")
         .ok_or_else(|| invalid("network fetch URL must use lowercase https scheme"))?;
-    let authority_end = rest.find(|c| c == '/' || c == '?').unwrap_or(rest.len());
+    let authority_end = rest.find(['/', '?']).unwrap_or(rest.len());
     let authority = &rest[..authority_end];
     let suffix = &rest[authority_end..];
     if authority.is_empty() || authority.contains('@') {
@@ -442,10 +442,7 @@ fn native_get(
 }
 
 #[cfg(windows)]
-fn native_get(
-    target: &FetchTarget,
-    _allowed: &[IpAddr],
-) -> Result<TransportResponse, NetworkError> {
+fn native_get(target: &FetchTarget, allowed: &[IpAddr]) -> Result<TransportResponse, NetworkError> {
     use core::ffi::c_void;
     use std::mem::{size_of, zeroed};
     use std::ptr::{null, null_mut};
@@ -479,12 +476,12 @@ fn native_get(
         unavailable(format!("{context}: {}", std::io::Error::last_os_error()))
     }
     unsafe fn peer_from_storage(storage: &SOCKADDR_STORAGE) -> Result<IpAddr, NetworkError> {
-        if storage.ss_family == AF_INET as u16 {
+        if storage.ss_family == AF_INET {
             let sin = &*(storage as *const _ as *const SOCKADDR_IN);
             let raw = sin.sin_addr.S_un.S_addr;
             return Ok(IpAddr::V4(Ipv4Addr::from(raw.to_ne_bytes())));
         }
-        if storage.ss_family == AF_INET6 as u16 {
+        if storage.ss_family == AF_INET6 {
             let sin6 = &*(storage as *const _ as *const SOCKADDR_IN6);
             let bytes = sin6.sin6_addr.u.Byte;
             return Ok(IpAddr::V6(Ipv6Addr::from(bytes)));
@@ -550,6 +547,29 @@ fn native_get(
         return Err(winerr("WinHttpSetOption(disable features)"));
     }
 
+    // WINHTTP_OPTION_RESOLUTION_HOSTNAME (165) is set before sending so WinHTTP
+    // cannot perform a fresh model-unbound hostname resolution between validation and
+    // connection. The connect handle keeps the authorized DNS hostname for TLS identity.
+    const WINHTTP_OPTION_RESOLUTION_HOSTNAME_COTRA: u32 = 165;
+    let pinned_peer = *allowed
+        .first()
+        .ok_or_else(|| unavailable("validated destination address set is empty"))?;
+    if !is_public_address(&pinned_peer) {
+        return Err(denied("validated destination address is not public"));
+    }
+    let resolution_host = wide(&pinned_peer.to_string());
+    if unsafe {
+        WinHttpSetOption(
+            request.0,
+            WINHTTP_OPTION_RESOLUTION_HOSTNAME_COTRA,
+            resolution_host.as_ptr() as *mut c_void,
+            (resolution_host.len() * size_of::<u16>()) as u32,
+        )
+    } == 0
+    {
+        return Err(winerr("WinHttpSetOption(resolution hostname)"));
+    }
+
     if unsafe { WinHttpSendRequest(request.0, null(), 0, null_mut(), 0, 0, 0) } == 0 {
         return Err(winerr("WinHttpSendRequest"));
     }
@@ -572,6 +592,11 @@ fn native_get(
         return Err(winerr("WinHttpQueryOption(connection info)"));
     }
     let peer = unsafe { peer_from_storage(&connection.RemoteAddress)? };
+    if peer != pinned_peer {
+        return Err(stale(
+            "WinHTTP connected peer did not match the pinned validated address",
+        ));
+    }
 
     let mut status: u32 = 0;
     let mut status_size = size_of::<u32>() as u32;
@@ -857,6 +882,18 @@ mod tests {
         }]);
         let error = execute_prepared(&prepared, &resolver, &transport).unwrap_err();
         assert_eq!(error.code, FailureCode::OutputLimit);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_native_https_transport_pins_validated_peer() {
+        let target = parse_target("https://example.com/").unwrap();
+        let addresses = SystemResolver.resolve(&target.host).unwrap();
+        let expected_peer = addresses[0];
+        let response = native_get(&target, &addresses).unwrap();
+        assert_eq!(response.peer, expected_peer);
+        assert!((200..300).contains(&response.status));
+        assert!(response.body.len() <= MAX_BODY_BYTES);
     }
 
     #[test]

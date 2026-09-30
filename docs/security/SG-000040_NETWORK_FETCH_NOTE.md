@@ -8,7 +8,7 @@ SG-000040 adds one explicit internal `network/fetch` operation only. The request
 
 The provider canonicalizes the HTTPS destination, requires a dotted DNS hostname, rejects userinfo, fragments, literal/numeric addresses, alternate ports, unsafe labels, and URLs longer than 2048 characters. Every DNS answer must be public. Loopback, private, link-local, multicast, unspecified, documentation/special-use, CGNAT, mapped-private, and other non-public address classes fail closed.
 
-The pre-approval address set is sorted, deduplicated, and bound into the approval digest. After approval the hostname is resolved again and an address-set mismatch returns `TARGET_STALE`. Every request also revalidates the current set, and the native transport reports the actual connected peer. A peer outside the validated set returns `TARGET_STALE`.
+The pre-approval address set is sorted, deduplicated, and bound into the approval digest. After approval the hostname is resolved again and an address-set mismatch returns `TARGET_STALE`. Every request also revalidates the current set. Before sending any bytes, the Windows transport pins WinHTTP DNS resolution to one address from that validated set while retaining the authorized hostname for TLS certificate identity. After the response, the actual connected peer must exactly match the pinned address; a mismatch returns `TARGET_STALE`.
 
 ## Redirects
 
@@ -28,4 +28,4 @@ SG-000040 is an internal cotrad capability only. No MCP network tool is register
 
 ## Qualification limits
 
-Deterministic resolver and transport adapters cover SSRF, rebinding, peer mismatch, redirects, and bounds without public Internet dependence. The Windows adapter uses WinHTTP with OS certificate validation. External connectivity is not claimed unless an explicitly documented qualification run proves it. Headless/unavailable native paths fail closed rather than fabricating network success.
+Deterministic resolver and transport adapters cover SSRF, rebinding, peer mismatch, redirects, and bounds without public Internet dependence. The Windows adapter uses WinHTTP with OS certificate validation and an exact-peer pre-send resolution pin. Windows CI includes one explicit live transport probe against `https://example.com/`; that probe is qualification evidence only when the exact-head Windows test passes. Headless/unavailable native paths fail closed rather than fabricating network success.
