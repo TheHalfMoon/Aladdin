@@ -1,11 +1,11 @@
 # Cotra Current Canonical Frontier
 
-Status: CLOSED_CANONICAL
+Status: ACTIVE_GRAIN
 Date: 2026-09-30
-Governance snapshot base: 2f06ac43e2130f8003209d6dddaf84debb04317f
+Governance snapshot base: 633d0b32924e45669301994d90dc8ef40502e2e0
 Evidence ledger: `.specgrain/canonical-evidence.json`
 
-`Governance snapshot base` records the exact canonical parent from which this closeout snapshot was authored. It deliberately does not claim the eventual merge SHA of the commit containing this file.
+`Governance snapshot base` records the exact canonical parent from which this activation snapshot was authored. It deliberately does not claim the eventual merge SHA of the commit containing this file.
 
 ## SpecGrain state semantics
 
@@ -291,7 +291,7 @@ All P10 closeouts (SG-000033 recorded here, SG-000034 recorded here, SG-000035 r
 
 ## Successor frontier
 
-COTRA-P11 continues at this frontier. No successor grain beyond SG-000039 is authorized by this closeout. The P11 successor (destination-scoped bounded network) must be activated as a narrow lawful grain before implementation.
+COTRA-P11 continues at this frontier. No successor grain beyond SG-000040 is authorized by this activation.
 
 ## Closed SG-000033 screenshot capture
 
@@ -337,9 +337,29 @@ SG-000039 proved that the write shape accepts exactly one explicit `text` argume
 
 ## Active grain
 
-No COTRA-P11 grain is active. SG-000039 was the sole active grain and is now `CLOSED` and canonical.
+SG-000040 - Destination-scoped bounded HTTPS GET fetch - is the sole active COTRA-P11 grain.
 
-The successor frontier is P11 bounded-network work: destination-scoped fetches bound to scheme, host, port, resolved address, bounds, redirect policy, workspace, policy revision, approval, and evidence, without generic networking, SSRF exposure, rebinding windows, redirect widening, or secret emission. A missing or denied approval must never silently grant network authority.
+This activation authorizes implementation and qualification of a single narrow destination-scoped fetch shape on top of the closed SG-000039 bounded clipboard-write registry, the closed SG-000038 bounded clipboard-read registry, the closed COTRA-P10 vision registry, the closed COTRA-P09 structured-UIA registry, the SG-000018 replay-resistant foundation, SG-000019 class enforcement, SG-000020 trust and revoke records, and the closed COTRA-P08 registry: network/fetch with one explicit url argument and fixed GET method over https to port 443 only; exact URL parsing with userinfo, non-HTTPS, non-443, oversized, and wrong-method requests denied; public-only resolved-address validation with loopback, private, link-local, metadata, multicast, unspecified, mapped-private, and alternate-form addresses fail-closed; double-resolution consistency binding the pre-approval address set with post-approval mismatch fail-closed; post-connection peer verification closing the validation-to-connect window; manual per-hop redirect revalidation with exact-origin matching, at most 5 hops, and loop and downgrade denial; request bounds of 2048-character URLs with no body and no caller headers plus bounded timeouts and direct connections with no proxy; response bounds of 1048576 bytes with incremental enforcement; fresh per-fetch SOFT approval with one-shot exact-digest binding; one-shot fetch semantics with no generic sockets, proxying, WebSockets, reuse, or standing sessions; fresh transport sessions with no cookies, credentials, tokens, or authorization material; bounded secret-free evidence; and explicit denial of other methods, schemes, ports, ambient credentials, and elevation, while completing the P11 capability set for a joint exit afterward.
+
+Authorized target design:
+- network/fetch bound to workspace and policy revision with scheme, lowercase host, port, path digest, and resolved address-set digest, failing closed on malformed, non-HTTPS, non-443, oversized, userinfo, foreign, and policy-drifted requests;
+- fixed GET method with POST, PUT, DELETE, PATCH, HEAD, OPTIONS, and every other method denied;
+- public-only resolution with the full dangerous-address catalog denied;
+- identical-set double resolution with rebinding mismatches fail-closed as stale;
+- peer membership in the validated set with mismatches fail-closed;
+- manual redirects with exact-origin per-hop matches, re-resolution, peer verification, 5-hop bound, loop and downgrade denial;
+- fresh SOFT approval with digest binding over the complete fetch binding set and one-shot consumption;
+- one-shot per-approval fetches with socket, proxy, WebSocket, reuse, and standing-session attempts denied;
+- bounded evidence with destination metadata, status, sizes, digests, and hop counts only;
+- deterministic unit and security tests for public GET, the full SSRF catalog including alternate 127 forms and mapped addresses, rebinding mismatches, peer mismatches, redirect attacks, bound violations, credential-header denial, approval attacks, replayed fetches, policy drift, caller-supplied fields, and raw socket attempts.
+
+## Active acceptance frontier
+
+SG-000040 must prove that fetches use fixed GET over https to port 443 only, that every resolved address is public, that double resolution agrees with peer membership enforced, that redirects are manual with exact-origin per-hop matches, that request and response bounds hold with direct connections and no ambient credentials, that every fetch carries fresh SOFT digest-bound approval with one-shot consumption, that each approval authorizes at most one fetch, that the agent cannot reach fetches through MCP tools, and that Windows-specific qualification proves HTTPS transport gating with OS certificate validation intact.
+
+Other methods, schemes, ports, generic sockets, proxying, WebSockets, reuse, standing sessions, ambient credentials, persistent approval reuse, remote delegation, and elevation must remain absent, and STRONG enforcement, one-shot, expiry, and digest binding must not weaken.
+
+A P11 exit requires joint proof from bounded clipboard read plus bounded clipboard write plus SG-000040 destination-scoped fetch that no continuous surveillance exists, destination policy and private-address tests pass, and secrets are never emitted. It must not expose unrestricted networking.
 
 ## Canonical public authority boundary retained
 
