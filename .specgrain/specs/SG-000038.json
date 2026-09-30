@@ -2,7 +2,7 @@
   "id": "SG-000038",
   "title": "Bounded clipboard read with secret denial",
   "program": "COTRA-P11",
-  "state": "GRAIN",
+  "state": "CLOSED",
   "risk": "high",
   "created": "2026-09-30",
   "base": "b9d8a4a479eb7db26ea4f232371dd7c75372a671",
@@ -129,5 +129,25 @@
     "exact_head_ci": true,
     "native_network_qualification": false
   },
-  "done_when": "Bounded clipboard read with Unicode-text-only return, hard size bound, independent type verification, secret-pattern denial, fresh SOFT digest-bound approval, one-shot per-approval reads, bounded secret-free evidence, and no clipboard write, surveillance, history, binary, network, or elevation authority is specified."
+  "done_when": "Bounded clipboard read with Unicode-text-only return, hard size bound, independent type verification, secret-pattern denial, fresh SOFT digest-bound approval, one-shot per-approval reads, bounded secret-free evidence, and no clipboard write, surveillance, history, binary, network, or elevation authority is specified.",
+  "qualified_head": "b5a049c5473ba12a77f92e8476df5fa33e03d00a",
+  "implementation_base": "56894d6a30da7416d694d653730f02dd8da3dc47",
+  "implementation_merge": "743664c571694be08c1e17d8bc0ca42cd39b2c4b",
+  "pre_merge_ci": "36733308971",
+  "pre_merge_review_gates": "36733308973",
+  "post_merge_ci": "36734083790",
+  "canonical_evidence": {
+    "implementation_pr": 108,
+    "implementation_base": "56894d6a30da7416d694d653730f02dd8da3dc47",
+    "qualified_head": "b5a049c5473ba12a77f92e8476df5fa33e03d00a",
+    "pre_merge_ci": "36733308971",
+    "pre_merge_review_gates": "36733308973",
+    "merge_sha": "743664c571694be08c1e17d8bc0ca42cd39b2c4b",
+    "post_merge_ci": "36734083790",
+    "jev": "PASSED: 12/12 hunks, zero findings, zero blocking findings, pin 31f89602797fb7bea007f8a480bf368bf564954e, TypeSafe SDK 0.6.0",
+    "ocr": "PASSED: Open Code Review v1.12.9 exact-range delegation, 11 files total, 9 reviewable, 2 excluded and manually reviewed",
+    "security_review": "PASS on exact qualified head; single clipboard/read shape with zero caller arguments and server-derived format, size, sequence, and content; Unicode-text-only return with binary and object formats denied; 65536-byte hard bound with exact-boundary tests; deterministic secret-pattern denial across credential, token, key, seed, and Cotra-protected families with denial before any return and no secret bytes in results, evidence, prompts, logs, or MCP responses; clipboard-sequence state binding observed before approval without moving content and revalidated after approval with drift fail-closed; fresh SOFT approval with digest binding and one-shot consumption authorizing at most one sample; bounded secret-free evidence with no raw content retention; clipboard write, subscribe, poll, monitor, history, watch, network, spawn, and elevation shapes denied with no MCP clipboard tool; and retained P10 vision, P09 UIA, replay, class, trust, and P08 behavior unchanged",
+    "unresolved_review_threads": 0,
+    "authority_boundary": "One explicit bounded clipboard/read sample is newly added with Unicode-text-only return, hard size bound, secret-pattern denial, sequence-bound SOFT approval, and bounded secret-free evidence. Clipboard write, subscriptions, polling, monitoring, history collection, and standing sessions remain absent with no MCP clipboard tool. Vision remains closed under SG-000033 through SG-000037, structured UIA remains closed under SG-000027 through SG-000032, and keyboard, drag, raw synthetic input, monitor scope, desktop scope, binary transfer, network fetch, process spawn, injection, termination, elevation, and approval bypass remain absent, and existing file, process, Git, approval, presence, trust, browser, observation, capture, proposal, derivation, execution, and interruption behavior is unchanged."
+  }
 }
