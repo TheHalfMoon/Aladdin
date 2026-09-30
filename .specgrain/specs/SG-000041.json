@@ -2,7 +2,7 @@
   "id": "SG-000041",
   "title": "Protected Cotra state isolation from trusted workspaces",
   "program": "COTRA-P12",
-  "state": "GRAIN",
+  "state": "CLOSED",
   "risk": "high",
   "created": "2026-10-01",
   "base": "b69c5ba7cf9b4a6c2009e301ccc1eda97f934353",
@@ -91,5 +91,25 @@
     "security_review": true,
     "exact_head_ci": true
   },
-  "done_when": "Protected Cotra state isolation from trusted workspaces is specified: overlapping workspace roots are refused at policy construction using resolved final paths, with no capability, approval, or provider authority added."
+  "done_when": "Protected Cotra state isolation from trusted workspaces is specified: overlapping workspace roots are refused at policy construction using resolved final paths, with no capability, approval, or provider authority added.",
+  "qualified_head": "a640fb0631e1605e9cdea3a094c6b56d36c19b68",
+  "implementation_base": "3680a043e3f115f8928f95db353fba71a9cd4f2a",
+  "implementation_merge": "eeeb8f8f34d55edcb820afa4c4fcad93fb912573",
+  "pre_merge_ci": "36787295127",
+  "pre_merge_review_gates": "36787295263",
+  "post_merge_ci": "36788126452",
+  "canonical_evidence": {
+    "implementation_pr": 119,
+    "implementation_base": "3680a043e3f115f8928f95db353fba71a9cd4f2a",
+    "qualified_head": "a640fb0631e1605e9cdea3a094c6b56d36c19b68",
+    "pre_merge_ci": "36787295127",
+    "pre_merge_review_gates": "36787295263",
+    "merge_sha": "eeeb8f8f34d55edcb820afa4c4fcad93fb912573",
+    "post_merge_ci": "36788126452",
+    "jev": "PASSED: genuine TypeSafe Jev exact-diff review covered 7/7 hunks with zero findings and zero blocking findings, pin 31f89602797fb7bea007f8a480bf368bf564954e",
+    "ocr": "PASSED: Alibaba Open Code Review v1.12.9 exact-range delegation over 5 changed files, 5 reviewable and 0 excluded, delegated Rust rules applied in manual review",
+    "security_review": "PASS on exact qualified head: every PolicyEngine constructor reaches the guarded base constructor; protected roots are the LOCALAPPDATA\\Cotra state root (or temp fallback) plus the audit, trust, approval-history, and browser-state overrides, resolved through the nearest existing canonical ancestor; workspace roots that equal, contain, or lie within a protected root are refused with WorkspaceDenied; comparison is component-wise and case-insensitive on Windows; parent and current-directory components fail closed, including verbatim-path components that Rust parses as normal names; reparse points inside accepted workspaces that target protected state remain denied by final-path containment; narrowing only.",
+    "unresolved_review_threads": 0,
+    "authority_boundary": "Workspace admission is narrowed so no admitted workspace overlaps Cotra protected state. No capability, MCP tool, provider operation, approval class, installer, lifecycle, or network authority is added."
+  }
 }
