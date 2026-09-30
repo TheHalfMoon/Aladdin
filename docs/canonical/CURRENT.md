@@ -1,11 +1,11 @@
 # Cotra Current Canonical Frontier
 
-Status: PROGRAM_EXIT_CANDIDATE
+Status: ACTIVE_GRAIN
 Date: 2026-10-01
-Governance snapshot base: c2e63f3135eacd5d537afb5f093eb843e1fbb7ed
+Governance snapshot base: b69c5ba7cf9b4a6c2009e301ccc1eda97f934353
 Evidence ledger: `.specgrain/canonical-evidence.json`
 
-`Governance snapshot base` records the exact canonical parent from which this program-exit snapshot was authored. It deliberately does not claim the eventual merge SHA of the commit containing this file.
+`Governance snapshot base` records the exact canonical parent from which this activation snapshot was authored. It deliberately does not claim the eventual merge SHA of the commit containing this file.
 
 ## SpecGrain state semantics
 
@@ -293,7 +293,7 @@ All P10 closeouts (SG-000033 recorded here, SG-000034 recorded here, SG-000035 r
 
 COTRA-P11 is exited at this frontier. Clipboard and bounded network is closed under SG-000038 bounded clipboard read, SG-000039 bounded clipboard write, and SG-000040 destination-scoped HTTPS GET fetch, with explicit bounded reads and writes, no continuous clipboard surveillance, no paste or input authority from placement, https/443-only destination policy, public-only resolution, exact address-set and peer binding, manual same-origin redirects, fresh SOFT digest-bound one-shot approvals, bounded secret-free evidence, and no generic socket, CONNECT-proxy, WebSocket, standing-session, MCP network, or elevation authority.
 
-This program-exit snapshot records SG-000038, SG-000039, and SG-000040 as merged and canonical. The `CLOSED` classification above becomes part of the canonical frontier only after this program-exit change itself merges and the resulting canonical main passes post-merge CI.
+The COTRA-P11 program-exit PR `#117` qualified on exact head `3ca9a5479071ab57333a24c2b193651cc5a2ee66` with CI `36779625836` SUCCESS, Review Gates `36779625803` SUCCESS, genuine TypeSafe Jev `5/5` hunks with zero findings and zero blocking findings, Alibaba Open Code Review v1.12.9 exact-range delegation (`1 reviewable + 1 excluded/manually reviewed`), and zero review threads. It merged normally as canonical main `b69c5ba7cf9b4a6c2009e301ccc1eda97f934353`; post-merge CI `36785474877` completed SUCCESS across Governance, Node/Ubuntu, Node/Windows, Rust/Ubuntu, and Rust/Windows. COTRA-P11 is therefore exited canonically.
 
 Exit matrix (each criterion is COMPLETE with canonical evidence in `.specgrain/canonical-evidence.json` and the grain blocks above):
 
@@ -340,11 +340,7 @@ All P11 closeouts (SG-000038 PR `#109`, SG-000039 PR `#112`, SG-000040 PR `#116`
 
 ## Successor frontier
 
-COTRA-P11 is exited at this frontier, so the next lawful unit must be derived from the canonical COTRA-P12 installer and lifecycle plan. No successor grain beyond the P11 exit is authorized by this program-exit candidate.
-
-After this P11 exit merges and its post-merge CI succeeds, re-read the canonical architecture, delivery plan, threat model, evidence ledger, open governance records, and this `CURRENT.md` to derive the first lawful COTRA-P12 grain. Do not infer or pre-authorize the next SpecGrain identifier or the exact installer, lifecycle, or tunnel-supervision design from numbering alone.
-
-A first P12 grain must build on the SG-000018 replay-resistant foundation, SG-000019 class enforcement, SG-000020 trust and revoke records, the closed P11 clipboard and bounded-network registry, and the existing `cotra-tunnel` supervisor without weakening STRONG enforcement, one-shot, expiry, or digest binding. It must expose no installer, update, or lifecycle authority that weakens the existing capability boundaries, must prefer a per-user install unless platform evidence requires otherwise, must never fabricate health or installer state, must fail closed on missing prerequisites, must keep tunnel and runtime credentials out of logs, model-visible output, child environments, and support bundles, and must not reimplement the OpenAI Secure MCP Tunnel.
+COTRA-P12 continues at this frontier. No successor grain beyond SG-000041 is authorized by this activation.
 
 ## Closed SG-000033 screenshot capture
 
@@ -396,13 +392,22 @@ SG-000040 proved the exact URL and destination ceilings; full dangerous-address 
 
 ## Active grain
 
-No COTRA-P11 grain is active. COTRA-P11 is exited at this frontier.
+SG-000041 - Protected Cotra state isolation from trusted workspaces - is the sole active COTRA-P12 grain.
 
-No COTRA-P12 grain is active. The successor frontier is the first lawful COTRA-P12 grain itself.
+The COTRA-P12 design review is recorded in `docs/canonical/P12_INSTALLER_LIFECYCLE_DESIGN.md`. It found that the policy kernel admits any existing directory as a workspace root, so a trusted workspace that contains the Cotra state root (for example the user profile or a drive root) lets workspace-scoped filesystem, Git, and scoped browser upload and download providers reach trust records, approval history, audit records, and the browser profile. Because the P12 installer will place configuration, binaries, and the tunnel runtime key under the same root, this pre-existing gap is a release blocker and is repaired first, before any installer code.
 
-## Successor frontier
+This activation authorizes implementation and qualification of workspace admission hardening only:
+- protected Cotra state roots computed from the same defaults and overrides as the audit, trust, approval, and browser state code;
+- protected roots resolved to final paths, failing closed on parent-directory components or unresolvable paths;
+- refusal at policy construction of any workspace whose resolved root equals, contains, or is contained by a protected root, with a typed workspace denial;
+- component-wise comparison, case-insensitive on Windows, never string-prefix security;
+- regression tests for overlapping, overridden, sibling, prefix-sharing, case-variant, and reparse-point cases.
 
-The first lawful COTRA-P12 grain may be derived only after this P11 exit merges and its post-merge CI succeeds. It must deliver a secure Windows-first installation path that prefers a per-user install unless platform evidence requires otherwise, tunnel-client setup supervision without reimplementing the OpenAI Secure MCP Tunnel, `cotra start`, `cotra stop`, `cotra status`, and `cotra doctor` lifecycle management with real state inspection and no fabricated health, explicit retained-data choices, clean upgrade and uninstall, and recovery from failed updates, with tunnel and runtime credentials excluded from logs, model-visible output, child environments, and support bundles. No COTRA-P12 grain is authorized by this program-exit candidate.
+## Active acceptance frontier
+
+SG-000041 must prove that no admitted workspace overlaps protected Cotra state, that the protected-root computation matches the existing state-path defaults and overrides, that sibling and prefix-sharing roots remain accepted, that reparse points inside accepted workspaces that target protected state remain denied, and that every closed SG-000001 through SG-000040 regression passes unchanged.
+
+No capability, MCP tool, provider operation, approval class, installer, lifecycle, update, or tunnel-setup authority is added by SG-000041. Successor P12 grains (per-user install foundation; lifecycle runtime with tunnel setup, start, stop, status, and doctor; update, rollback, and recovery with the release workflow; and the P12 exit packet) follow the design document and require their own activation packets.
 
 ## Canonical public authority boundary retained
 
@@ -492,7 +497,7 @@ Still denied or absent outside the closed COTRA-P07 scope, the closed COTRA-P08 
 - caller-selected download destinations, absolute destinations, and destinations outside the approved workspace root;
 - download persistence of cookies, credentials, tokens, session material, or personal browser state.
 
-COTRA-P07 through COTRA-P11 are exited at this frontier. COTRA-P12 remains unauthorized until this P11 exit merges and its post-merge CI succeeds. Raw credentials must never be accepted merely because Git or a network transport can consume them.
+COTRA-P07 through COTRA-P11 are exited at this frontier. COTRA-P12 is active only through SG-000041 workspace admission hardening; no installer, lifecycle, update, or tunnel-setup authority is granted yet. Raw credentials must never be accepted merely because Git or a network transport can consume them.
 
 Windows public `process.spawn` remains positively restricted to the exact SG-000010-qualified `%SystemRoot%\System32\whoami.exe` target.
 
