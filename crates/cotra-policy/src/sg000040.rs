@@ -60,22 +60,23 @@ impl PolicyEngine {
     pub fn authorize(&self, request: &RequestEnvelope) -> Result<PolicyDecision, PolicyError> {
         if cotra_provider_network::is_network_fetch_shape(&request.capability, &request.operation) {
             self.validate_network_fetch(request)?;
-            let workspace = self.legacy.workspace(&request.workspace_id).ok_or_else(|| {
-                policy_error(
-                    FailureCode::WorkspaceDenied,
-                    "requested workspace is not configured",
-                )
-            })?;
+            let workspace = self
+                .legacy
+                .workspace(&request.workspace_id)
+                .ok_or_else(|| {
+                    policy_error(
+                        FailureCode::WorkspaceDenied,
+                        "requested workspace is not configured",
+                    )
+                })?;
             return Ok(PolicyDecision {
                 workspace: workspace.clone(),
                 policy_revision: POLICY_REVISION,
             });
         }
 
-        if cotra_provider_network::is_denied_network_shape(
-            &request.capability,
-            &request.operation,
-        ) {
+        if cotra_provider_network::is_denied_network_shape(&request.capability, &request.operation)
+        {
             return Err(policy_error(
                 FailureCode::CapabilityDenied,
                 format!(
@@ -123,12 +124,15 @@ impl PolicyEngine {
                 "network/fetch accepts exactly one caller field: url",
             ));
         }
-        let url = arguments.get("url").and_then(|value| value.as_str()).ok_or_else(|| {
-            policy_error(
-                FailureCode::InvalidRequest,
-                "network/fetch requires string arguments.url",
-            )
-        })?;
+        let url = arguments
+            .get("url")
+            .and_then(|value| value.as_str())
+            .ok_or_else(|| {
+                policy_error(
+                    FailureCode::InvalidRequest,
+                    "network/fetch requires string arguments.url",
+                )
+            })?;
         cotra_provider_network::parse_target(url)
             .map_err(|error| policy_error(error.code, error.message))?;
         Ok(())
@@ -187,10 +191,7 @@ mod tests {
             .authorize(&request(json!({"url": "https://example.com/data?q=1"})))
             .unwrap();
         assert_eq!(decision.policy_revision, POLICY_REVISION);
-        assert_eq!(
-            approval_class_for("network", "fetch"),
-            ApprovalClass::Soft
-        );
+        assert_eq!(approval_class_for("network", "fetch"), ApprovalClass::Soft);
 
         for args in [
             json!({}),
@@ -228,9 +229,10 @@ mod tests {
             "https://localhost/",
         ] {
             let error = policy.authorize(&request(json!({"url": url}))).unwrap_err();
-            assert!(
-                matches!(error.code, FailureCode::InvalidRequest | FailureCode::CapabilityDenied)
-            );
+            assert!(matches!(
+                error.code,
+                FailureCode::InvalidRequest | FailureCode::CapabilityDenied
+            ));
         }
     }
 }

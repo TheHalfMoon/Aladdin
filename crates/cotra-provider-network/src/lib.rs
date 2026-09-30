@@ -16,7 +16,10 @@ pub struct NetworkError {
 
 impl NetworkError {
     pub fn new(code: FailureCode, message: impl Into<String>) -> Self {
-        Self { code, message: message.into() }
+        Self {
+            code,
+            message: message.into(),
+        }
     }
 }
 
@@ -85,20 +88,30 @@ impl DnsResolver for SystemResolver {
         let candidates = (host, 443)
             .to_socket_addrs()
             .map_err(|error| unavailable(format!("resolve destination hostname: {error}")))?;
-        let addresses = candidates.map(|candidate| candidate.ip()).collect::<Vec<_>>();
+        let addresses = candidates
+            .map(|candidate| candidate.ip())
+            .collect::<Vec<_>>();
         normalize_public_set(addresses)
     }
 }
 
 pub trait Transport {
-    fn get(&self, target: &FetchTarget, allowed: &[IpAddr]) -> Result<TransportResponse, NetworkError>;
+    fn get(
+        &self,
+        target: &FetchTarget,
+        allowed: &[IpAddr],
+    ) -> Result<TransportResponse, NetworkError>;
 }
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct SystemTransport;
 
 impl Transport for SystemTransport {
-    fn get(&self, target: &FetchTarget, allowed: &[IpAddr]) -> Result<TransportResponse, NetworkError> {
+    fn get(
+        &self,
+        target: &FetchTarget,
+        allowed: &[IpAddr],
+    ) -> Result<TransportResponse, NetworkError> {
         native_get(target, allowed)
     }
 }
@@ -113,10 +126,14 @@ pub fn is_denied_network_shape(capability: &str, operation: &str) -> bool {
 
 pub fn parse_target(url: &str) -> Result<FetchTarget, NetworkError> {
     if url.is_empty() || url.chars().count() > MAX_URL_CHARS {
-        return Err(invalid("network fetch URL must contain 1..=2048 characters"));
+        return Err(invalid(
+            "network fetch URL must contain 1..=2048 characters",
+        ));
     }
     if url.chars().any(|c| c.is_control() || c.is_whitespace()) || url.contains('\\') {
-        return Err(invalid("network fetch URL contains unsafe whitespace, control data, or backslash"));
+        return Err(invalid(
+            "network fetch URL contains unsafe whitespace, control data, or backslash",
+        ));
     }
     if url.contains('#') {
         return Err(invalid("network fetch URL fragments are denied"));
@@ -128,13 +145,20 @@ pub fn parse_target(url: &str) -> Result<FetchTarget, NetworkError> {
     let authority = &rest[..authority_end];
     let suffix = &rest[authority_end..];
     if authority.is_empty() || authority.contains('@') {
-        return Err(invalid("network fetch URL must contain a hostname and no userinfo"));
+        return Err(invalid(
+            "network fetch URL must contain a hostname and no userinfo",
+        ));
     }
     let (host_raw, port) = if let Some((host, port_text)) = authority.rsplit_once(':') {
-        if host.contains(':') || port_text.is_empty() || !port_text.bytes().all(|b| b.is_ascii_digit()) {
+        if host.contains(':')
+            || port_text.is_empty()
+            || !port_text.bytes().all(|b| b.is_ascii_digit())
+        {
             return Err(invalid("network fetch URL authority or port is invalid"));
         }
-        let parsed = port_text.parse::<u16>().map_err(|_| invalid("network fetch URL port is invalid"))?;
+        let parsed = port_text
+            .parse::<u16>()
+            .map_err(|_| invalid("network fetch URL port is invalid"))?;
         if parsed != 443 {
             return Err(invalid("network fetch URL must use port 443 only"));
         }
@@ -167,18 +191,37 @@ pub fn parse_target(url: &str) -> Result<FetchTarget, NetworkError> {
 }
 
 fn validate_dns_hostname(host: &str) -> Result<(), NetworkError> {
-    if host.is_empty() || host.len() > 253 || host.starts_with('.') || host.ends_with('.') ||
-        host.starts_with('-') || host.ends_with('-') || host.contains("..") || host.contains('%') {
+    if host.is_empty()
+        || host.len() > 253
+        || host.starts_with('.')
+        || host.ends_with('.')
+        || host.starts_with('-')
+        || host.ends_with('-')
+        || host.contains("..")
+        || host.contains('%')
+    {
         return Err(invalid("network fetch hostname is malformed"));
     }
-    if host.parse::<IpAddr>().is_ok() || !host.contains('.') ||
-        !host.bytes().any(|b| b.is_ascii_alphabetic()) {
-        return Err(invalid("network fetch hostname must be a dotted DNS name, not a literal or numeric form"));
+    if host.parse::<IpAddr>().is_ok()
+        || !host.contains('.')
+        || !host.bytes().any(|b| b.is_ascii_alphabetic())
+    {
+        return Err(invalid(
+            "network fetch hostname must be a dotted DNS name, not a literal or numeric form",
+        ));
     }
     for label in host.split('.') {
-        if label.is_empty() || label.len() > 63 || label.starts_with('-') || label.ends_with('-') ||
-            !label.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-') {
-            return Err(invalid("network fetch hostname contains an unsafe DNS label"));
+        if label.is_empty()
+            || label.len() > 63
+            || label.starts_with('-')
+            || label.ends_with('-')
+            || !label
+                .bytes()
+                .all(|b| b.is_ascii_alphanumeric() || b == b'-')
+        {
+            return Err(invalid(
+                "network fetch hostname contains an unsafe DNS label",
+            ));
         }
     }
     if host.eq_ignore_ascii_case("localhost") || host.to_ascii_lowercase().ends_with(".localhost") {
@@ -191,7 +234,11 @@ pub fn prepare(url: &str, resolver: &impl DnsResolver) -> Result<PreparedFetch, 
     let target = parse_target(url)?;
     let addresses = normalize_public_set(resolver.resolve(&target.host)?)?;
     let address_set_digest = address_set_digest(&addresses);
-    Ok(PreparedFetch { target, addresses, address_set_digest })
+    Ok(PreparedFetch {
+        target,
+        addresses,
+        address_set_digest,
+    })
 }
 
 pub fn normalize_public_set(mut addresses: Vec<IpAddr>) -> Result<Vec<IpAddr>, NetworkError> {
@@ -201,7 +248,9 @@ pub fn normalize_public_set(mut addresses: Vec<IpAddr>) -> Result<Vec<IpAddr>, N
     addresses.sort_by_key(|address| address.to_string());
     addresses.dedup();
     if addresses.iter().any(|address| !is_public_address(address)) {
-        return Err(denied("destination resolution contains a non-public address"));
+        return Err(denied(
+            "destination resolution contains a non-public address",
+        ));
     }
     Ok(addresses)
 }
@@ -215,19 +264,25 @@ pub fn is_public_address(address: &IpAddr) -> bool {
 
 fn is_public_ipv4(value: &Ipv4Addr) -> bool {
     let octets = value.octets();
-    if value.is_loopback() || value.is_unspecified() || value.is_multicast() ||
-       value.is_link_local() || value.is_private() || value.is_broadcast() ||
-       value.is_documentation() {
+    if value.is_loopback()
+        || value.is_unspecified()
+        || value.is_multicast()
+        || value.is_link_local()
+        || value.is_private()
+        || value.is_broadcast()
+        || value.is_documentation()
+    {
         return false;
     }
-    if octets[0] == 0 ||
-       (octets[0] == 100 && (octets[1] & 0b1100_0000) == 64) ||
-       (octets[0] == 192 && octets[1] == 0 && (octets[2] == 0 || octets[2] == 2)) ||
-       (octets[0] == 192 && octets[1] == 88 && octets[2] == 99) ||
-       (octets[0] == 198 && (octets[1] == 18 || octets[1] == 19)) ||
-       (octets[0] == 198 && octets[1] == 51 && octets[2] == 100) ||
-       (octets[0] == 203 && octets[1] == 0 && octets[2] == 113) ||
-       octets[0] >= 240 {
+    if octets[0] == 0
+        || (octets[0] == 100 && (octets[1] & 0b1100_0000) == 64)
+        || (octets[0] == 192 && octets[1] == 0 && (octets[2] == 0 || octets[2] == 2))
+        || (octets[0] == 192 && octets[1] == 88 && octets[2] == 99)
+        || (octets[0] == 198 && (octets[1] == 18 || octets[1] == 19))
+        || (octets[0] == 198 && octets[1] == 51 && octets[2] == 100)
+        || (octets[0] == 203 && octets[1] == 0 && octets[2] == 113)
+        || octets[0] >= 240
+    {
         return false;
     }
     true
@@ -238,14 +293,15 @@ fn is_public_ipv6(value: &Ipv6Addr) -> bool {
         return false;
     }
     let segments = value.segments();
-    if (segments[0] & 0xffc0) == 0xfe80 ||
-       (segments[0] & 0xfe00) == 0xfc00 ||
-       (segments[0] == 0x2001 && segments[1] == 0x0db8) ||
-       (segments[0] == 0x2001 && segments[1] == 0x0002) ||
-       (segments[0] == 0x2001 && segments[1] == 0x0001) ||
-       segments[0] == 0x2002 ||
-       (segments[0] == 0x0064 && (segments[1] & 0xffc0) == 0xff00) ||
-       (value.octets()[0] == 0 && value.octets()[1] == 0) {
+    if (segments[0] & 0xffc0) == 0xfe80
+        || (segments[0] & 0xfe00) == 0xfc00
+        || (segments[0] == 0x2001 && segments[1] == 0x0db8)
+        || (segments[0] == 0x2001 && segments[1] == 0x0002)
+        || (segments[0] == 0x2001 && segments[1] == 0x0001)
+        || segments[0] == 0x2002
+        || (segments[0] == 0x0064 && (segments[1] & 0xffc0) == 0xff00)
+        || (value.octets()[0] == 0 && value.octets()[1] == 0)
+    {
         return false;
     }
     if let Some(mapped) = value.to_ipv4_mapped() {
@@ -258,7 +314,10 @@ fn is_public_ipv6(value: &Ipv6Addr) -> bool {
 }
 
 pub fn address_set_digest(addresses: &[IpAddr]) -> String {
-    let mut normalized = addresses.iter().map(ToString::to_string).collect::<Vec<_>>();
+    let mut normalized = addresses
+        .iter()
+        .map(ToString::to_string)
+        .collect::<Vec<_>>();
     normalized.sort();
     digest_bytes(normalized.join("\n").as_bytes())
 }
@@ -285,10 +344,15 @@ pub fn execute_prepared(
         }
         let response = transport.get(&current, &current_set)?;
         if !current_set.contains(&response.peer) {
-            return Err(stale("connected peer is not a member of the validated address set"));
+            return Err(stale(
+                "connected peer is not a member of the validated address set",
+            ));
         }
         if response.body.len() > MAX_BODY_BYTES {
-            return Err(NetworkError::new(FailureCode::OutputLimit, "network response exceeded 1048576-byte bound"));
+            return Err(NetworkError::new(
+                FailureCode::OutputLimit,
+                "network response exceeded 1048576-byte bound",
+            ));
         }
         if (200..300).contains(&response.status) {
             return Ok(FetchResult {
@@ -304,12 +368,16 @@ pub fn execute_prepared(
                 return Err(denied("network redirect chain exceeded 5 hops"));
             }
             let location = response.location.as_deref().ok_or_else(|| {
-                NetworkError::new(FailureCode::PostconditionFailed, "redirect response omitted Location")
+                NetworkError::new(
+                    FailureCode::PostconditionFailed,
+                    "redirect response omitted Location",
+                )
             })?;
             let next = redirect_target(&current, location)?;
-            if next.scheme != prepared.target.scheme ||
-               next.host != prepared.target.host ||
-               next.port != prepared.target.port {
+            if next.scheme != prepared.target.scheme
+                || next.host != prepared.target.host
+                || next.port != prepared.target.port
+            {
                 return Err(denied("cross-origin or scheme-widening redirect is denied"));
             }
             if !visited.insert(next.canonical_url.clone()) {
@@ -364,23 +432,31 @@ fn hex_lower(bytes: &[u8]) -> String {
 }
 
 #[cfg(not(windows))]
-fn native_get(_target: &FetchTarget, _allowed: &[IpAddr]) -> Result<TransportResponse, NetworkError> {
-    Err(unavailable("native SG-000040 transport is available only on Windows"))
+fn native_get(
+    _target: &FetchTarget,
+    _allowed: &[IpAddr],
+) -> Result<TransportResponse, NetworkError> {
+    Err(unavailable(
+        "native SG-000040 transport is available only on Windows",
+    ))
 }
 
 #[cfg(windows)]
-fn native_get(target: &FetchTarget, _allowed: &[IpAddr]) -> Result<TransportResponse, NetworkError> {
+fn native_get(
+    target: &FetchTarget,
+    _allowed: &[IpAddr],
+) -> Result<TransportResponse, NetworkError> {
     use core::ffi::c_void;
     use std::mem::{size_of, zeroed};
     use std::ptr::{null, null_mut};
     use windows_sys::Win32::Networking::WinHttp::{
-        WinHttpCloseHandle, WinHttpConnect, WinHttpOpen, WinHttpOpenRequest, WinHttpQueryDataAvailable,
-        WinHttpQueryHeaders, WinHttpQueryOption, WinHttpReadData, WinHttpReceiveResponse,
-        WinHttpSendRequest, WinHttpSetOption, WinHttpSetTimeouts, WINHTTP_ACCESS_TYPE_NO_PROXY,
-        WINHTTP_CONNECTION_INFO, WINHTTP_DISABLE_AUTHENTICATION, WINHTTP_DISABLE_COOKIES,
-        WINHTTP_DISABLE_KEEP_ALIVE, WINHTTP_DISABLE_REDIRECTS, WINHTTP_FLAG_SECURE,
-        WINHTTP_OPTION_CONNECTION_INFO, WINHTTP_OPTION_DISABLE_FEATURE, WINHTTP_QUERY_FLAG_NUMBER,
-        WINHTTP_QUERY_LOCATION, WINHTTP_QUERY_STATUS_CODE,
+        WinHttpCloseHandle, WinHttpConnect, WinHttpOpen, WinHttpOpenRequest,
+        WinHttpQueryDataAvailable, WinHttpQueryHeaders, WinHttpQueryOption, WinHttpReadData,
+        WinHttpReceiveResponse, WinHttpSendRequest, WinHttpSetOption, WinHttpSetTimeouts,
+        WINHTTP_ACCESS_TYPE_NO_PROXY, WINHTTP_CONNECTION_INFO, WINHTTP_DISABLE_AUTHENTICATION,
+        WINHTTP_DISABLE_COOKIES, WINHTTP_DISABLE_KEEP_ALIVE, WINHTTP_DISABLE_REDIRECTS,
+        WINHTTP_FLAG_SECURE, WINHTTP_OPTION_CONNECTION_INFO, WINHTTP_OPTION_DISABLE_FEATURE,
+        WINHTTP_QUERY_FLAG_NUMBER, WINHTTP_QUERY_LOCATION, WINHTTP_QUERY_STATUS_CODE,
     };
     use windows_sys::Win32::Networking::WinSock::{
         AF_INET, AF_INET6, SOCKADDR_IN, SOCKADDR_IN6, SOCKADDR_STORAGE,
@@ -390,7 +466,9 @@ fn native_get(target: &FetchTarget, _allowed: &[IpAddr]) -> Result<TransportResp
     impl Drop for Handle {
         fn drop(&mut self) {
             if !self.0.is_null() {
-                unsafe { WinHttpCloseHandle(self.0); }
+                unsafe {
+                    WinHttpCloseHandle(self.0);
+                }
             }
         }
     }
@@ -411,21 +489,33 @@ fn native_get(target: &FetchTarget, _allowed: &[IpAddr]) -> Result<TransportResp
             let bytes = sin6.sin6_addr.u.Byte;
             return Ok(IpAddr::V6(Ipv6Addr::from(bytes)));
         }
-        Err(unavailable("WinHTTP returned an unsupported peer address family"))
+        Err(unavailable(
+            "WinHTTP returned an unsupported peer address family",
+        ))
     }
 
     let agent = wide("Cotra/SG-000040");
     let session = Handle(unsafe {
-        WinHttpOpen(agent.as_ptr(), WINHTTP_ACCESS_TYPE_NO_PROXY, null(), null(), 0)
+        WinHttpOpen(
+            agent.as_ptr(),
+            WINHTTP_ACCESS_TYPE_NO_PROXY,
+            null(),
+            null(),
+            0,
+        )
     });
-    if session.0.is_null() { return Err(winerr("WinHttpOpen")); }
+    if session.0.is_null() {
+        return Err(winerr("WinHttpOpen"));
+    }
     if unsafe { WinHttpSetTimeouts(session.0, 5_000, 5_000, 5_000, 10_000) } == 0 {
         return Err(winerr("WinHttpSetTimeouts"));
     }
 
     let host = wide(&target.host);
     let connect = Handle(unsafe { WinHttpConnect(session.0, host.as_ptr(), 443, 0) });
-    if connect.0.is_null() { return Err(winerr("WinHttpConnect")); }
+    if connect.0.is_null() {
+        return Err(winerr("WinHttpConnect"));
+    }
 
     let method = wide("GET");
     let path = wide(&target.path_and_query);
@@ -440,7 +530,9 @@ fn native_get(target: &FetchTarget, _allowed: &[IpAddr]) -> Result<TransportResp
             WINHTTP_FLAG_SECURE,
         )
     });
-    if request.0.is_null() { return Err(winerr("WinHttpOpenRequest")); }
+    if request.0.is_null() {
+        return Err(winerr("WinHttpOpenRequest"));
+    }
 
     let disabled: u32 = WINHTTP_DISABLE_COOKIES
         | WINHTTP_DISABLE_AUTHENTICATION
@@ -453,7 +545,8 @@ fn native_get(target: &FetchTarget, _allowed: &[IpAddr]) -> Result<TransportResp
             &disabled as *const _ as *mut c_void,
             size_of::<u32>() as u32,
         )
-    } == 0 {
+    } == 0
+    {
         return Err(winerr("WinHttpSetOption(disable features)"));
     }
 
@@ -474,7 +567,8 @@ fn native_get(target: &FetchTarget, _allowed: &[IpAddr]) -> Result<TransportResp
             &mut connection as *mut _ as *mut c_void,
             &mut connection_size,
         )
-    } == 0 {
+    } == 0
+    {
         return Err(winerr("WinHttpQueryOption(connection info)"));
     }
     let peer = unsafe { peer_from_storage(&connection.RemoteAddress)? };
@@ -490,7 +584,8 @@ fn native_get(target: &FetchTarget, _allowed: &[IpAddr]) -> Result<TransportResp
             &mut status_size,
             null_mut(),
         )
-    } == 0 {
+    } == 0
+    {
         return Err(winerr("WinHttpQueryHeaders(status)"));
     }
 
@@ -524,9 +619,14 @@ fn native_get(target: &FetchTarget, _allowed: &[IpAddr]) -> Result<TransportResp
         if unsafe { WinHttpQueryDataAvailable(request.0, &mut available) } == 0 {
             return Err(winerr("WinHttpQueryDataAvailable"));
         }
-        if available == 0 { break; }
+        if available == 0 {
+            break;
+        }
         if body.len().saturating_add(available as usize) > MAX_BODY_BYTES {
-            return Err(NetworkError::new(FailureCode::OutputLimit, "network response exceeded 1048576-byte bound"));
+            return Err(NetworkError::new(
+                FailureCode::OutputLimit,
+                "network response exceeded 1048576-byte bound",
+            ));
         }
         let start = body.len();
         body.resize(start + available as usize, 0);
@@ -538,14 +638,22 @@ fn native_get(target: &FetchTarget, _allowed: &[IpAddr]) -> Result<TransportResp
                 available,
                 &mut read,
             )
-        } == 0 {
+        } == 0
+        {
             return Err(winerr("WinHttpReadData"));
         }
         body.truncate(start + read as usize);
-        if read == 0 { break; }
+        if read == 0 {
+            break;
+        }
     }
 
-    Ok(TransportResponse { status: status as u16, peer, location, body })
+    Ok(TransportResponse {
+        status: status as u16,
+        peer,
+        location,
+        body,
+    })
 }
 
 #[cfg(test)]
@@ -559,12 +667,17 @@ mod tests {
     }
     impl SequenceResolver {
         fn new(answers: Vec<Vec<IpAddr>>) -> Self {
-            Self { answers: Mutex::new(answers.into()) }
+            Self {
+                answers: Mutex::new(answers.into()),
+            }
         }
     }
     impl DnsResolver for SequenceResolver {
         fn resolve(&self, _host: &str) -> Result<Vec<IpAddr>, NetworkError> {
-            self.answers.lock().unwrap().pop_front()
+            self.answers
+                .lock()
+                .unwrap()
+                .pop_front()
                 .ok_or_else(|| unavailable("no resolver answer"))
         }
     }
@@ -574,17 +687,28 @@ mod tests {
     }
     impl FakeTransport {
         fn new(responses: Vec<TransportResponse>) -> Self {
-            Self { responses: Mutex::new(responses.into()) }
+            Self {
+                responses: Mutex::new(responses.into()),
+            }
         }
     }
     impl Transport for FakeTransport {
-        fn get(&self, _target: &FetchTarget, _allowed: &[IpAddr]) -> Result<TransportResponse, NetworkError> {
-            self.responses.lock().unwrap().pop_front()
+        fn get(
+            &self,
+            _target: &FetchTarget,
+            _allowed: &[IpAddr],
+        ) -> Result<TransportResponse, NetworkError> {
+            self.responses
+                .lock()
+                .unwrap()
+                .pop_front()
                 .ok_or_else(|| unavailable("no transport response"))
         }
     }
 
-    fn public() -> IpAddr { "8.8.8.8".parse().unwrap() }
+    fn public() -> IpAddr {
+        "8.8.8.8".parse().unwrap()
+    }
 
     #[test]
     fn parser_enforces_https_get_destination_ceiling() {
@@ -607,9 +731,22 @@ mod tests {
     #[test]
     fn dangerous_address_catalog_is_denied() {
         for value in [
-            "127.0.0.1", "10.0.0.1", "172.16.0.1", "192.168.1.1", "169.254.1.1",
-            "100.64.0.1", "192.0.2.1", "198.51.100.1", "203.0.113.1", "0.0.0.0",
-            "::1", "::", "fc00::1", "fe80::1", "2001:db8::1", "::ffff:127.0.0.1",
+            "127.0.0.1",
+            "10.0.0.1",
+            "172.16.0.1",
+            "192.168.1.1",
+            "169.254.1.1",
+            "100.64.0.1",
+            "192.0.2.1",
+            "198.51.100.1",
+            "203.0.113.1",
+            "0.0.0.0",
+            "::1",
+            "::",
+            "fc00::1",
+            "fe80::1",
+            "2001:db8::1",
+            "::ffff:127.0.0.1",
         ] {
             let ip: IpAddr = value.parse().unwrap();
             assert!(!is_public_address(&ip), "{value}");
@@ -625,10 +762,8 @@ mod tests {
 
     #[test]
     fn post_approval_rebinding_fails_stale() {
-        let resolver = SequenceResolver::new(vec![
-            vec![public()],
-            vec!["1.1.1.1".parse().unwrap()],
-        ]);
+        let resolver =
+            SequenceResolver::new(vec![vec![public()], vec!["1.1.1.1".parse().unwrap()]]);
         let prepared = PreparedFetch {
             target: parse_target("https://example.com/").unwrap(),
             addresses: vec![public()],
@@ -679,9 +814,7 @@ mod tests {
 
     #[test]
     fn redirect_is_same_origin_only_and_bounded() {
-        let resolver = SequenceResolver::new(vec![
-            vec![public()], vec![public()], vec![public()],
-        ]);
+        let resolver = SequenceResolver::new(vec![vec![public()], vec![public()], vec![public()]]);
         let prepared = PreparedFetch {
             target: parse_target("https://example.com/start").unwrap(),
             addresses: vec![public()],
@@ -689,12 +822,16 @@ mod tests {
         };
         let transport = FakeTransport::new(vec![
             TransportResponse {
-                status: 302, peer: public(),
-                location: Some("/next".into()), body: Vec::new(),
+                status: 302,
+                peer: public(),
+                location: Some("/next".into()),
+                body: Vec::new(),
             },
             TransportResponse {
-                status: 200, peer: public(),
-                location: None, body: b"done".to_vec(),
+                status: 200,
+                peer: public(),
+                location: None,
+                body: b"done".to_vec(),
             },
         ]);
         let result = execute_prepared(&prepared, &resolver, &transport).unwrap();
@@ -713,7 +850,9 @@ mod tests {
             address_set_digest: address_set_digest(&[public()]),
         };
         let transport = FakeTransport::new(vec![TransportResponse {
-            status: 200, peer: public(), location: None,
+            status: 200,
+            peer: public(),
+            location: None,
             body: vec![0; MAX_BODY_BYTES + 1],
         }]);
         let error = execute_prepared(&prepared, &resolver, &transport).unwrap_err();
@@ -729,7 +868,9 @@ mod tests {
             address_set_digest: address_set_digest(&[public()]),
         };
         let transport = FakeTransport::new(vec![TransportResponse {
-            status: 500, peer: public(), location: None,
+            status: 500,
+            peer: public(),
+            location: None,
             body: b"secret remote error".to_vec(),
         }]);
         let error = execute_prepared(&prepared, &resolver, &transport).unwrap_err();

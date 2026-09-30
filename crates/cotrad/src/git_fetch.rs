@@ -98,7 +98,9 @@ fn network_digest(
     digest_field(&mut hasher, prepared.address_set_digest.as_bytes());
     digest_field(
         &mut hasher,
-        cotra_provider_network::MAX_BODY_BYTES.to_string().as_bytes(),
+        cotra_provider_network::MAX_BODY_BYTES
+            .to_string()
+            .as_bytes(),
     );
     digest_field(
         &mut hasher,
@@ -156,11 +158,9 @@ mod network_tests {
 
     impl DnsResolver for Resolver {
         fn resolve(&self, _host: &str) -> Result<Vec<IpAddr>, NetworkError> {
-            self.answers
-                .lock()
-                .unwrap()
-                .pop_front()
-                .ok_or_else(|| NetworkError::new(FailureCode::ProviderUnavailable, "resolver exhausted"))
+            self.answers.lock().unwrap().pop_front().ok_or_else(|| {
+                NetworkError::new(FailureCode::ProviderUnavailable, "resolver exhausted")
+            })
         }
     }
 
@@ -172,11 +172,9 @@ mod network_tests {
             _target: &cotra_provider_network::FetchTarget,
             _allowed: &[IpAddr],
         ) -> Result<TransportResponse, NetworkError> {
-            self.0
-                .lock()
-                .unwrap()
-                .take()
-                .ok_or_else(|| NetworkError::new(FailureCode::ProviderUnavailable, "transport exhausted"))
+            self.0.lock().unwrap().take().ok_or_else(|| {
+                NetworkError::new(FailureCode::ProviderUnavailable, "transport exhausted")
+            })
         }
     }
 
