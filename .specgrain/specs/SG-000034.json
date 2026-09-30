@@ -2,7 +2,7 @@
   "id": "SG-000034",
   "title": "Non-actuating visual target proposals bound to frame identity",
   "program": "COTRA-P10",
-  "state": "GRAIN",
+  "state": "CLOSED",
   "risk": "high",
   "created": "2026-09-30",
   "base": "12ee3a81801ff82ecaf97455707a02ac13854eec",
@@ -130,5 +130,25 @@
     "exact_head_ci": true,
     "native_network_qualification": false
   },
-  "done_when": "Non-actuating visual target proposals with server-derived frame binding, server-allocated proposal identity, bounded regions, fresh SOFT digest-bound approval, immediate stale-frame revalidation, protected-surface exclusion, no coordinate or input authority, and no new capture, clipboard, network, or elevation authority is specified."
+  "done_when": "Non-actuating visual target proposals with server-derived frame binding, server-allocated proposal identity, bounded regions, fresh SOFT digest-bound approval, immediate stale-frame revalidation, protected-surface exclusion, no coordinate or input authority, and no new capture, clipboard, network, or elevation authority is specified.",
+  "qualified_head": "7d47e2f04fd32bf404562cc6ee0d2b2647a65440",
+  "implementation_base": "48c3f15b0ffa34dd156a2ca7d731ae1807f3b5c3",
+  "implementation_merge": "7c2ba18a8aac8d021afcc9eeaeba314d8d8d027b",
+  "pre_merge_ci": "36681620437",
+  "pre_merge_review_gates": "36681620405",
+  "post_merge_ci": "36682018314",
+  "canonical_evidence": {
+    "implementation_pr": 95,
+    "implementation_base": "48c3f15b0ffa34dd156a2ca7d731ae1807f3b5c3",
+    "qualified_head": "7d47e2f04fd32bf404562cc6ee0d2b2647a65440",
+    "pre_merge_ci": "36681620437",
+    "pre_merge_review_gates": "36681620405",
+    "merge_sha": "7c2ba18a8aac8d021afcc9eeaeba314d8d8d027b",
+    "post_merge_ci": "36682018314",
+    "jev": "PASSED: 21/21 hunks, zero findings, zero blocking findings, pin 31f89602797fb7bea007f8a480bf368bf564954e, TypeSafe SDK 0.6.0",
+    "ocr": "PASSED: Open Code Review v1.12.9 exact-range delegation, 8 files total, 7 reviewable, 1 excluded and manually reviewed",
+    "security_review": "PASS on exact qualified head; proposals bind server-derived frame identity with capture generation, owning window, owning process, geometry, workspace, and policy revision; regions are bounded inside the exact frame geometry with empty, oversized, frame-external, and overflowing regions denied; every proposal mints a server-allocated typed proposal identity with proposal generation, bounded region, workspace, and policy revision binding and stale proposals are never actionable; every proposal carries fresh SOFT approval with exact digest binding over workspace, policy revision, frame, capture generation, window, process, generations, region, and action material with one-shot consumption; replayed frames, generation drift, replaced windows, superseded processes, wrong pairings, protected surfaces, workspace drift, policy drift, and caller-supplied identities fail closed without silent retargeting and without coordinate, input-execution, clipboard, network, or elevation fallback; proposals are pure registry computations minting no pixels; no MCP visual tool exists; and retained capture, observation, invoke, value, select, toggle, scroll, replay, class, trust, and P08 behavior is unchanged",
+    "unresolved_review_threads": 0,
+    "authority_boundary": "Only non-actuating uia.visual/propose on one exact typed frame with a bounded inside-frame region is newly added with server-allocated typed proposal identity, fresh SOFT digest-bound approval, and immediate stale-frame revalidation. Window-scoped capture remains closed under SG-000033 and structured UIA remains closed under SG-000027 through SG-000032. Coordinate proposals, coordinate derivation, input execution, input leases, monitor scope, desktop scope, keyboard, mouse, SendInput, focus, clipboard, network fetch, process spawn, injection, termination, elevation, and approval bypass remain absent, and existing file, process, Git, approval, presence, trust, browser, observation, capture, and actuation behavior is unchanged."
+  }
 }

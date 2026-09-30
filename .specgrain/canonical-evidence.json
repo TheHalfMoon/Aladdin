@@ -419,6 +419,17 @@
       "review_basis": "Exact-head genuine TypeSafe Jev 24/24 hunks with zero findings/blocking findings, Alibaba Open Code Review v1.12.9 exact-range delegation over 8 files with 7 reviewable and 1 excluded file manually reviewed, exact-diff manual security review, Windows/Ubuntu Rust Node Governance qualification with real Windows process identity proof, successful post-merge CI, and zero unresolved review threads.",
       "unresolved_review_threads": 0,
       "authority_boundary": "Only window-scoped uia.screenshot/capture on one exact typed window with fixed target-window scope is newly added with server-allocated typed frame identity, bounded RGBA8 payload, fresh SOFT digest-bound approval, and immediate stale-target revalidation. Structured UIA observation, invoke, value, select, toggle, and scroll remain closed under SG-000027 through SG-000032. Visual target proposals, coordinate proposals, input execution, input leases, monitor scope, desktop scope, caller-selected regions, keyboard, mouse, SendInput, focus, clipboard, network fetch, process spawn, injection, termination, elevation, and approval bypass remain absent, and existing file, process, Git, approval, presence, trust, browser, observation, and actuation behavior is unchanged."
+    },
+    "SG-000034": {
+      "implementation_pr": 95,
+      "implementation_base": "48c3f15b0ffa34dd156a2ca7d731ae1807f3b5c3",
+      "qualified_head": "7d47e2f04fd32bf404562cc6ee0d2b2647a65440",
+      "pre_merge_ci": "36681620437",
+      "merge_sha": "7c2ba18a8aac8d021afcc9eeaeba314d8d8d027b",
+      "post_merge_ci": "36682018314",
+      "review_basis": "Exact-head genuine TypeSafe Jev 21/21 hunks with zero findings/blocking findings, Alibaba Open Code Review v1.12.9 exact-range delegation over 8 files with 7 reviewable and 1 excluded file manually reviewed, exact-diff manual security review, Windows/Ubuntu Rust Node Governance qualification with real Windows process identity proof, successful post-merge CI, and zero unresolved review threads.",
+      "unresolved_review_threads": 0,
+      "authority_boundary": "Only non-actuating uia.visual/propose on one exact typed frame with a bounded inside-frame region is newly added with server-allocated typed proposal identity, fresh SOFT digest-bound approval, and immediate stale-frame revalidation. Window-scoped capture remains closed under SG-000033 and structured UIA remains closed under SG-000027 through SG-000032. Coordinate proposals, coordinate derivation, input execution, input leases, monitor scope, desktop scope, keyboard, mouse, SendInput, focus, clipboard, network fetch, process spawn, injection, termination, elevation, and approval bypass remain absent, and existing file, process, Git, approval, presence, trust, browser, observation, capture, and actuation behavior is unchanged."
     }
   }
 }
