@@ -49,10 +49,12 @@ pub const SELECT_SCHEMA: &str = "cotra-uia-select-v1";
 pub const TOGGLE_SCHEMA: &str = "cotra-uia-toggle-v1";
 pub const SCROLL_SCHEMA: &str = "cotra-uia-scroll-v1";
 pub const CAPTURE_SCHEMA: &str = "cotra-screenshot-capture-v1";
+pub const VISUAL_SCHEMA: &str = "cotra-visual-proposal-v1";
 pub const PROCESS_ID_PREFIX: &str = "uia-proc-";
 pub const WINDOW_ID_PREFIX: &str = "uia-win-";
 pub const ELEMENT_ID_PREFIX: &str = "uia-el-";
 pub const FRAME_ID_PREFIX: &str = "uia-frame-";
+pub const PROPOSAL_ID_PREFIX: &str = "uia-prop-";
 pub const POLICY_REVISION: &str = "sg-000027-v1";
 pub const INVOKE_POLICY_REVISION: &str = "sg-000028-v1";
 
@@ -290,6 +292,28 @@ pub fn is_capture_shape(capability: &str, operation: &str) -> bool {
     matches!((capability, operation), ("uia.screenshot", "capture"))
 }
 
+/// The single SG-000034 non-actuating vision shape. Capture remains
+/// authorized through its own predicate; visual target proposals are
+/// authorized separately so frozen policy meanings are preserved while
+/// current-tree authority records the successor delta. A proposal never
+/// grants coordinate derivation, input execution, monitor scope, or
+/// desktop scope.
+pub fn is_visual_propose_shape(capability: &str, operation: &str) -> bool {
+    matches!((capability, operation), ("uia.visual", "propose"))
+}
+
+/// A bounded pixel region inside one exact frame. Regions are evidence
+/// geometry for successor coordinate grains, never screen input
+/// coordinates: no execution path consumes a region without a successor
+/// grain authorizing it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct VisualRegion {
+    pub x: u64,
+    pub y: u64,
+    pub width: u64,
+    pub height: u64,
+}
+
 /// The only capture scope SG-000033 authorizes: the exact target window.
 /// Monitor scope, desktop scope, caller-selected regions, and arbitrary
 /// rectangles fail closed.
@@ -314,6 +338,10 @@ pub const CAPTURE_PIXEL_FORMAT: &str = "rgba8";
 
 pub fn is_well_formed_frame_id(value: &str) -> bool {
     is_well_formed_typed_id(value, FRAME_ID_PREFIX)
+}
+
+pub fn is_well_formed_proposal_id(value: &str) -> bool {
+    is_well_formed_typed_id(value, PROPOSAL_ID_PREFIX)
 }
 
 /// SHA-256 hex digest of one requested value, used in approval digests and
@@ -406,6 +434,16 @@ fn allocate_frame_id(window_id: &str, capture_generation: u64) -> String {
         "{FRAME_ID_PREFIX}{}",
         digest_hex(
             &format!("{CAPTURE_SCHEMA}|frame|{window_id}|{capture_generation}"),
+            ID_HEX_CHARS
+        )
+    )
+}
+
+fn allocate_proposal_id(frame_id: &str, proposal_generation: u64) -> String {
+    format!(
+        "{PROPOSAL_ID_PREFIX}{}",
+        digest_hex(
+            &format!("{VISUAL_SCHEMA}|proposal|{frame_id}|{proposal_generation}"),
             ID_HEX_CHARS
         )
     )
@@ -783,6 +821,30 @@ struct FrameRecord {
     policy_revision: String,
 }
 
+/// One server-allocated visual target proposal. Proposals are evidence
+/// for successor coordinate grains and are never themselves
+/// coordinate-derivation or input-execution authority. A proposal binds
+/// its owning frame, proposal generation, bounded region, workspace, and
+/// policy revision; replayed, foreign, and policy-drifted proposals fail
+/// closed as stale and stale proposals are never actionable.
+#[derive(Debug, Clone)]
+struct ProposalRecord {
+    proposal_id: String,
+    frame_id: String,
+    window_id: String,
+    process_id: String,
+    process_generation: u64,
+    window_generation: u64,
+    capture_generation: u64,
+    proposal_generation: u64,
+    region_x: u64,
+    region_y: u64,
+    region_width: u64,
+    region_height: u64,
+    workspace_id: String,
+    policy_revision: String,
+}
+
 /// Server-side typed identity registry. Identities are allocated here and
 /// can never be named by callers; every observation revalidates the exact
 /// binding set and fails closed on drift.
@@ -792,9 +854,11 @@ pub struct UiaRegistry {
     windows: HashMap<String, WindowRecord>,
     elements: HashMap<String, ElementRecord>,
     frames: HashMap<String, FrameRecord>,
+    proposals: HashMap<String, ProposalRecord>,
     window_counter: u64,
     tree_counter: u64,
     capture_counter: u64,
+    proposal_counter: u64,
 }
 
 impl UiaRegistry {
@@ -816,6 +880,10 @@ impl UiaRegistry {
 
     pub fn frame_count(&self) -> usize {
         self.frames.len()
+    }
+
+    pub fn proposal_count(&self) -> usize {
+        self.proposals.len()
     }
 
     /// Register or refresh one native process. A changed start generation
@@ -2622,6 +2690,330 @@ impl UiaRegistry {
         })
     }
 
+    /// Resolve the current proposal binding for approval digest
+    /// computation. This performs the same fail-closed revalidation as
+    /// `propose_visual_target` but mints no proposal identity, so dispatch
+    /// can bind approval before proposing and then revalidate again
+    /// immediately before minting.
+    pub fn proposal_binding(
+        &self,
+        frame_id: &str,
+        expected_capture_generation: u64,
+        region: VisualRegion,
+        workspace_id: &str,
+        policy_revision: &str,
+    ) -> Result<ProposalBinding, UiaError> {
+        self.require_proposal_target(
+            frame_id,
+            expected_capture_generation,
+            region,
+            workspace_id,
+            policy_revision,
+        )
+    }
+
+    /// Mint one non-actuating visual target proposal against a live frame
+    /// after immediate pre-proposal revalidation. Any drift fails closed
+    /// without silent retargeting and without fallback to coordinate
+    /// derivation, input execution, clipboard, network, or elevation. The
+    /// region must lie inside the exact frame geometry; oversized,
+    /// frame-external, and empty regions fail closed with no silent
+    /// expansion. On success a server-allocated typed proposal identity is
+    /// minted with a fresh proposal generation; the proposal is evidence
+    /// for successor coordinate grains and never grants coordinate or
+    /// input authority.
+    pub fn propose_visual_target(
+        &mut self,
+        frame_id: &str,
+        expected_capture_generation: u64,
+        region: VisualRegion,
+        workspace_id: &str,
+        policy_revision: &str,
+    ) -> Result<Value, UiaError> {
+        let binding = self.require_proposal_target(
+            frame_id,
+            expected_capture_generation,
+            region,
+            workspace_id,
+            policy_revision,
+        )?;
+        self.proposal_counter += 1;
+        let proposal_generation = self.proposal_counter;
+        let proposal_id = allocate_proposal_id(&binding.frame_id, proposal_generation);
+        self.proposals.insert(
+            proposal_id.clone(),
+            ProposalRecord {
+                proposal_id: proposal_id.clone(),
+                frame_id: binding.frame_id.clone(),
+                window_id: binding.window_id.clone(),
+                process_id: binding.process_id.clone(),
+                process_generation: binding.process_generation,
+                window_generation: binding.window_generation,
+                capture_generation: binding.capture_generation,
+                proposal_generation,
+                region_x: region.x,
+                region_y: region.y,
+                region_width: region.width,
+                region_height: region.height,
+                workspace_id: workspace_id.to_owned(),
+                policy_revision: policy_revision.to_owned(),
+            },
+        );
+        let result = json!({
+            "schema": VISUAL_SCHEMA,
+            "action": "propose",
+            "proposal_id": proposal_id,
+            "frame_id": binding.frame_id,
+            "window_id": binding.window_id,
+            "process_id": binding.process_id,
+            "process_generation": binding.process_generation,
+            "window_generation": binding.window_generation,
+            "capture_generation": binding.capture_generation,
+            "proposal_generation": proposal_generation,
+            "region": {
+                "x": region.x,
+                "y": region.y,
+                "width": region.width,
+                "height": region.height,
+            },
+            "frame_width": binding.frame_width,
+            "frame_height": binding.frame_height,
+            "truncated": false,
+            "workspace_id": workspace_id,
+            "policy_revision": policy_revision,
+        });
+        enforce_response_bytes(&result)
+    }
+
+    /// Describe one server-allocated proposal without granting any
+    /// execution authority. Successor coordinate grains validate proposals
+    /// through this read-only check; replayed, foreign,
+    /// generation-drifted, and policy-drifted proposals fail closed as
+    /// stale. A missing or denied proposal is never actionable and never
+    /// becomes coordinate authority.
+    pub fn describe_proposal(
+        &self,
+        proposal_id: &str,
+        expected_proposal_generation: u64,
+        workspace_id: &str,
+        policy_revision: &str,
+    ) -> Result<Value, UiaError> {
+        if !is_well_formed_proposal_id(proposal_id) {
+            return Err(UiaError::new(
+                FailureCode::InvalidRequest,
+                "visual proposal identity is malformed",
+            ));
+        }
+        let record = self.proposals.get(proposal_id).ok_or_else(|| {
+            UiaError::new(
+                FailureCode::TargetStale,
+                "visual proposal identity is unknown or stale and is never actionable",
+            )
+        })?;
+        if record.workspace_id != workspace_id {
+            return Err(UiaError::new(
+                FailureCode::TargetStale,
+                "visual proposal identity belongs to another workspace",
+            ));
+        }
+        if record.policy_revision != policy_revision {
+            return Err(UiaError::new(
+                FailureCode::TargetStale,
+                "visual proposal identity was issued under another policy revision",
+            ));
+        }
+        if record.proposal_generation != expected_proposal_generation {
+            return Err(UiaError::new(
+                FailureCode::TargetStale,
+                "visual proposal generation drifted; the proposal is stale and never actionable",
+            ));
+        }
+        let frame = self.frames.get(&record.frame_id).ok_or_else(|| {
+            UiaError::new(
+                FailureCode::TargetStale,
+                "visual proposal lost its owning frame",
+            )
+        })?;
+        if frame.capture_generation != record.capture_generation {
+            return Err(UiaError::new(
+                FailureCode::TargetStale,
+                "visual proposal owning frame drifted; the proposal is stale and never actionable",
+            ));
+        }
+        let window = self.windows.get(&record.window_id).ok_or_else(|| {
+            UiaError::new(
+                FailureCode::TargetStale,
+                "visual proposal lost its owning window",
+            )
+        })?;
+        if window.window_generation != record.window_generation {
+            return Err(UiaError::new(
+                FailureCode::TargetStale,
+                "visual proposal owning window drifted; the proposal is stale and never actionable",
+            ));
+        }
+        let process = self.processes.get(&record.process_id).ok_or_else(|| {
+            UiaError::new(
+                FailureCode::TargetStale,
+                "visual proposal lost its owning process",
+            )
+        })?;
+        if process.superseded || process.process_generation != record.process_generation {
+            return Err(UiaError::new(
+                FailureCode::TargetStale,
+                "visual proposal owning process drifted; the proposal is stale and never actionable",
+            ));
+        }
+        Ok(json!({
+            "schema": VISUAL_SCHEMA,
+            "proposal_id": record.proposal_id,
+            "frame_id": record.frame_id,
+            "window_id": record.window_id,
+            "process_id": record.process_id,
+            "process_generation": record.process_generation,
+            "window_generation": record.window_generation,
+            "capture_generation": record.capture_generation,
+            "proposal_generation": record.proposal_generation,
+            "region": {
+                "x": record.region_x,
+                "y": record.region_y,
+                "width": record.region_width,
+                "height": record.region_height,
+            },
+            "workspace_id": record.workspace_id,
+            "policy_revision": record.policy_revision,
+        }))
+    }
+
+    fn require_proposal_target(
+        &self,
+        frame_id: &str,
+        expected_capture_generation: u64,
+        region: VisualRegion,
+        workspace_id: &str,
+        policy_revision: &str,
+    ) -> Result<ProposalBinding, UiaError> {
+        if !is_well_formed_frame_id(frame_id) {
+            return Err(UiaError::new(
+                FailureCode::InvalidRequest,
+                "screenshot frame identity is malformed",
+            ));
+        }
+        if region.width == 0 || region.height == 0 {
+            return Err(UiaError::new(
+                FailureCode::InvalidRequest,
+                "visual proposal region is empty",
+            ));
+        }
+        let frame = self.frames.get(frame_id).ok_or_else(|| {
+            UiaError::new(
+                FailureCode::TargetStale,
+                "screenshot frame identity is unknown or stale and is never actionable",
+            )
+        })?;
+        if frame.workspace_id != workspace_id {
+            return Err(UiaError::new(
+                FailureCode::TargetStale,
+                "screenshot frame identity belongs to another workspace",
+            ));
+        }
+        if frame.policy_revision != policy_revision {
+            return Err(UiaError::new(
+                FailureCode::TargetStale,
+                "screenshot frame identity was issued under another policy revision",
+            ));
+        }
+        if frame.capture_generation != expected_capture_generation {
+            return Err(UiaError::new(
+                FailureCode::TargetStale,
+                "screenshot frame generation drifted; the frame is stale and never actionable",
+            ));
+        }
+        let right = region.x.checked_add(region.width).ok_or_else(|| {
+            UiaError::new(
+                FailureCode::InvalidRequest,
+                "visual proposal region overflows its bounds",
+            )
+        })?;
+        let bottom = region.y.checked_add(region.height).ok_or_else(|| {
+            UiaError::new(
+                FailureCode::InvalidRequest,
+                "visual proposal region overflows its bounds",
+            )
+        })?;
+        if right > u64::from(frame.width) || bottom > u64::from(frame.height) {
+            return Err(UiaError::new(
+                FailureCode::InvalidRequest,
+                "visual proposal region exceeds the exact frame geometry",
+            ));
+        }
+        let window = self.windows.get(&frame.window_id).ok_or_else(|| {
+            UiaError::new(
+                FailureCode::TargetStale,
+                "visual proposal target lost its owning window",
+            )
+        })?;
+        if window.workspace_id != workspace_id {
+            return Err(UiaError::new(
+                FailureCode::TargetStale,
+                "visual proposal target window belongs to another workspace",
+            ));
+        }
+        if window.policy_revision != policy_revision {
+            return Err(UiaError::new(
+                FailureCode::TargetStale,
+                "visual proposal target window was issued under another policy revision",
+            ));
+        }
+        if window.window_generation != frame.window_generation {
+            return Err(UiaError::new(
+                FailureCode::TargetStale,
+                "visual proposal owning window drifted; the frame is stale and never actionable",
+            ));
+        }
+        if is_protected_window(&window.title, &window.class) {
+            return Err(UiaError::new(
+                FailureCode::CapabilityDenied,
+                "visual target proposal on a protected Cotra surface is denied",
+            ));
+        }
+        let process = self.processes.get(&frame.process_id).ok_or_else(|| {
+            UiaError::new(
+                FailureCode::TargetStale,
+                "visual proposal target lost its owning process",
+            )
+        })?;
+        if process.superseded || process.process_generation != frame.process_generation {
+            return Err(UiaError::new(
+                FailureCode::TargetStale,
+                "visual proposal owning process drifted; the frame is stale and never actionable",
+            ));
+        }
+        if process.workspace_id != workspace_id {
+            return Err(UiaError::new(
+                FailureCode::TargetStale,
+                "visual proposal target process belongs to another workspace",
+            ));
+        }
+        if process.policy_revision != policy_revision {
+            return Err(UiaError::new(
+                FailureCode::TargetStale,
+                "visual proposal target process was issued under another policy revision",
+            ));
+        }
+        Ok(ProposalBinding {
+            process_id: process.process_id.clone(),
+            process_generation: process.process_generation,
+            window_id: window.window_id.clone(),
+            window_generation: window.window_generation,
+            frame_id: frame.frame_id.clone(),
+            capture_generation: frame.capture_generation,
+            region,
+            frame_width: frame.width,
+            frame_height: frame.height,
+        })
+    }
+
     fn require_value_target(
         &self,
         element_id: &str,
@@ -3158,6 +3550,49 @@ pub fn capture_approval_digest(
     digest_hex(&material, 64)
 }
 
+/// Server-resolved proposal binding used for approval digest computation
+/// and evidence. Callers never supply these values directly; they are
+/// resolved from the typed frame identity immediately before proposal,
+/// except for the bounded region, which is validated against the exact
+/// frame geometry and then bound into the approval digest.
+#[derive(Debug, Clone)]
+pub struct ProposalBinding {
+    pub process_id: String,
+    pub process_generation: u64,
+    pub window_id: String,
+    pub window_generation: u64,
+    pub frame_id: String,
+    pub capture_generation: u64,
+    pub region: VisualRegion,
+    pub frame_width: u32,
+    pub frame_height: u32,
+}
+
+/// Compute the exact approval digest for one visual target proposal. The
+/// digest binds the bounded region, and dispatch revalidates the same
+/// binding set immediately before minting so any material drift
+/// invalidates the approval.
+pub fn visual_proposal_digest(
+    workspace_id: &str,
+    policy_revision: &str,
+    binding: &ProposalBinding,
+) -> String {
+    let material = format!(
+        "cotra-visual-proposal-v1|{workspace_id}|{policy_revision}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|propose",
+        binding.frame_id,
+        binding.capture_generation,
+        binding.window_id,
+        binding.window_generation,
+        binding.process_id,
+        binding.process_generation,
+        binding.region.x,
+        binding.region.y,
+        binding.region.width,
+        binding.region.height,
+    );
+    digest_hex(&material, 64)
+}
+
 fn render_element(record: &ElementRecord) -> Value {
     json!({
         "schema": UIA_SCHEMA,
@@ -3227,3 +3662,5 @@ mod sg000031_tests;
 mod sg000032_tests;
 #[cfg(test)]
 mod sg000033_tests;
+#[cfg(test)]
+mod sg000034_tests;
