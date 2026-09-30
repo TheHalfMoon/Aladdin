@@ -1,0 +1,42 @@
+name: SG-000040 Test Formatter
+
+on:
+  push:
+    branches:
+      - feat/sg-000040-network-fetch
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sg000040-test-formatter
+  cancel-in-progress: false
+
+jobs:
+  format-and-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: feat/sg-000040-network-fetch
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87
+        with:
+          toolchain: stable
+          components: rustfmt, clippy
+      - name: Format and verify test hardening
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo fmt --all
+          cargo clippy --workspace --all-targets -- -D warnings
+          cargo test --workspace --all-targets
+          git diff --check
+          git rm .github/workflows/sg000040-format-tests.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --exit-code && { echo "No formatter changes produced"; exit 1; } || true
+          git commit -m "test: format SG-000040 security coverage"
+          git push origin HEAD:feat/sg-000040-network-fetch
