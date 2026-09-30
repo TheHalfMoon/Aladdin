@@ -1,0 +1,175 @@
+name: SG-000040 Security Repair
+
+on:
+  push:
+    branches:
+      - feat/sg-000040-network-fetch
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sg000040-security-repair
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    name: Pin validated peer before send and self-remove
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: feat/sg-000040-network-fetch
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87
+        with:
+          toolchain: stable
+          components: rustfmt, clippy
+      - name: Apply exact SG-000040 security repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('crates/cotra-provider-network/src/lib.rs')
+          text = path.read_text()
+
+          replacements = [
+              (
+                  "let authority_end = rest.find(|c| c == '/' || c == '?').unwrap_or(rest.len());",
+                  "let authority_end = rest.find(['/', '?']).unwrap_or(rest.len());",
+              ),
+              (
+                  "fn native_get(\n    target: &FetchTarget,\n    _allowed: &[IpAddr],\n) -> Result<TransportResponse, NetworkError> {\n    use core::ffi::c_void;",
+                  "fn native_get(\n    target: &FetchTarget,\n    allowed: &[IpAddr],\n) -> Result<TransportResponse, NetworkError> {\n    use core::ffi::c_void;",
+              ),
+              ("storage.ss_family == AF_INET as u16", "storage.ss_family == AF_INET"),
+              ("storage.ss_family == AF_INET6 as u16", "storage.ss_family == AF_INET6"),
+          ]
+          for old, new in replacements:
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'expected exactly one occurrence, found {count}: {old!r}')
+              text = text.replace(old, new, 1)
+
+          needle = '''    if unsafe {
+              WinHttpSetOption(
+                  request.0,
+                  WINHTTP_OPTION_DISABLE_FEATURE,
+                  &disabled as *const _ as *mut c_void,
+                  size_of::<u32>() as u32,
+              )
+          } == 0
+          {
+              return Err(winerr("WinHttpSetOption(disable features)"));
+          }
+
+          if unsafe { WinHttpSendRequest(request.0, null(), 0, null_mut(), 0, 0, 0) } == 0 {
+          '''
+          replacement = '''    if unsafe {
+              WinHttpSetOption(
+                  request.0,
+                  WINHTTP_OPTION_DISABLE_FEATURE,
+                  &disabled as *const _ as *mut c_void,
+                  size_of::<u32>() as u32,
+              )
+          } == 0
+          {
+              return Err(winerr("WinHttpSetOption(disable features)"));
+          }
+
+          // WINHTTP_OPTION_RESOLUTION_HOSTNAME (165) is a request option available on
+          // Windows 10 21H1+. Pin resolution to one already-validated public address
+          // before any request bytes are sent. The logical hostname on the connect
+          // handle remains unchanged so TLS certificate validation stays bound to it.
+          const WINHTTP_OPTION_RESOLUTION_HOSTNAME_COTRA: u32 = 165;
+          let pinned_peer = *allowed
+              .first()
+              .ok_or_else(|| unavailable("validated destination address set is empty"))?;
+          if !is_public_address(&pinned_peer) {
+              return Err(denied("validated destination address is not public"));
+          }
+          let resolution_host = wide(&pinned_peer.to_string());
+          if unsafe {
+              WinHttpSetOption(
+                  request.0,
+                  WINHTTP_OPTION_RESOLUTION_HOSTNAME_COTRA,
+                  resolution_host.as_ptr() as *mut c_void,
+                  (resolution_host.len() * size_of::<u16>()) as u32,
+              )
+          } == 0
+          {
+              return Err(winerr("WinHttpSetOption(resolution hostname)"));
+          }
+
+          if unsafe { WinHttpSendRequest(request.0, null(), 0, null_mut(), 0, 0, 0) } == 0 {
+          '''
+          if text.count(needle) != 1:
+              raise SystemExit('failed to locate WinHttpSetOption/send boundary exactly once')
+          text = text.replace(needle, replacement, 1)
+
+          needle = '''    let peer = unsafe { peer_from_storage(&connection.RemoteAddress)? };
+
+              let mut status: u32 = 0;
+          '''
+          replacement = '''    let peer = unsafe { peer_from_storage(&connection.RemoteAddress)? };
+          if peer != pinned_peer {
+              return Err(stale(
+                  "WinHTTP connected peer did not match the pinned validated address",
+              ));
+          }
+
+              let mut status: u32 = 0;
+          '''
+          if text.count(needle) != 1:
+              raise SystemExit('failed to locate connected-peer verification boundary exactly once')
+          text = text.replace(needle, replacement, 1)
+
+          marker = '''    #[test]
+              fn error_status_never_returns_body() {
+          '''
+          if text.count(marker) != 1:
+              raise SystemExit('failed to locate final deterministic test marker exactly once')
+
+          windows_test = '''    #[cfg(windows)]
+              #[test]
+              fn windows_native_https_transport_pins_validated_peer() {
+                  let target = parse_target("https://example.com/").unwrap();
+                  let addresses = SystemResolver.resolve(&target.host).unwrap();
+                  let expected_peer = addresses[0];
+                  let response = native_get(&target, &addresses).unwrap();
+                  assert_eq!(response.peer, expected_peer);
+                  assert!((200..300).contains(&response.status));
+                  assert!(response.body.len() <= MAX_BODY_BYTES);
+              }
+
+          '''
+          text = text.replace(marker, windows_test + marker, 1)
+          path.write_text(text)
+
+          note = Path('docs/security/SG-000040_NETWORK_FETCH_NOTE.md')
+          note_text = note.read_text()
+          old = 'Every request also revalidates the current set, and the native transport reports the actual connected peer. A peer outside the validated set returns `TARGET_STALE`.'
+          new = 'Every request also revalidates the current set. Before sending any bytes, the Windows transport pins WinHTTP DNS resolution to one address from that validated set while retaining the authorized hostname for TLS certificate identity. After the response, the actual connected peer must exactly match the pinned address; a mismatch returns `TARGET_STALE`.'
+          if note_text.count(old) != 1:
+              raise SystemExit('failed to locate destination-binding security note text exactly once')
+          note_text = note_text.replace(old, new, 1)
+          old = 'Deterministic resolver and transport adapters cover SSRF, rebinding, peer mismatch, redirects, and bounds without public Internet dependence. The Windows adapter uses WinHTTP with OS certificate validation. External connectivity is not claimed unless an explicitly documented qualification run proves it. Headless/unavailable native paths fail closed rather than fabricating network success.'
+          new = 'Deterministic resolver and transport adapters cover SSRF, rebinding, peer mismatch, redirects, and bounds without public Internet dependence. The Windows adapter uses WinHTTP with OS certificate validation and an exact-peer pre-send resolution pin. Windows CI includes one explicit live transport probe against `https://example.com/`; that probe is qualification evidence only when the exact-head Windows test passes. Headless/unavailable native paths fail closed rather than fabricating network success.'
+          if note_text.count(old) != 1:
+              raise SystemExit('failed to locate qualification-limits security note text exactly once')
+          note.write_text(note_text.replace(old, new, 1))
+          PY
+          cargo fmt --all
+          cargo clippy --workspace --all-targets -- -D warnings
+          cargo test --workspace --all-targets
+          git diff --check
+          git rm .github/workflows/sg000040-security-repair.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --exit-code && { echo "No repair changes produced"; exit 1; } || true
+          git commit -m "fix: pin SG-000040 WinHTTP peer before send"
+          git push origin HEAD:feat/sg-000040-network-fetch
