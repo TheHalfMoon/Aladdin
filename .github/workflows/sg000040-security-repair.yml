@@ -107,6 +107,16 @@ jobs:
           text = text.replace(marker, windows_test + marker, 1)
           path.write_text(text)
 
+          git_fetch = Path('crates/cotrad/src/git_fetch.rs')
+          git_fetch_text = git_fetch.read_text()
+          old = '''pub use legacy::{
+              provider_destination, system_resolver, FetchDestinationLookup, PolicyFetchLookup,
+          };'''
+          new = '''pub use legacy::{system_resolver, FetchDestinationLookup, PolicyFetchLookup};'''
+          if git_fetch_text.count(old) != 1:
+              raise SystemExit('failed to locate unused legacy re-export exactly once')
+          git_fetch.write_text(git_fetch_text.replace(old, new, 1))
+
           note = Path('docs/security/SG-000040_NETWORK_FETCH_NOTE.md')
           note_text = note.read_text()
           old = 'Every request also revalidates the current set, and the native transport reports the actual connected peer. A peer outside the validated set returns `TARGET_STALE`.'
