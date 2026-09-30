@@ -1,11 +1,11 @@
 # Cotra Current Canonical Frontier
 
-Status: PROGRAM_EXIT_CANDIDATE
+Status: ACTIVE_GRAIN
 Date: 2026-09-30
-Governance snapshot base: 9d89f83fa4059281ab13e664e5d9259a05295751
+Governance snapshot base: b9d8a4a479eb7db26ea4f232371dd7c75372a671
 Evidence ledger: `.specgrain/canonical-evidence.json`
 
-`Governance snapshot base` records the exact canonical parent from which this program-exit snapshot was authored. It deliberately does not claim the eventual merge SHA of the commit containing this file.
+`Governance snapshot base` records the exact canonical parent from which this activation snapshot was authored. It deliberately does not claim the eventual merge SHA of the commit containing this file.
 
 ## SpecGrain state semantics
 
@@ -291,11 +291,7 @@ All P10 closeouts (SG-000033 recorded here, SG-000034 recorded here, SG-000035 r
 
 ## Successor frontier
 
-COTRA-P10 is exited at this frontier, so the next lawful unit must be derived from the canonical COTRA-P11 clipboard and bounded network plan. No successor grain beyond the P10 exit is authorized by this program-exit candidate.
-
-After this P10 exit merges and its post-merge CI succeeds, re-read the canonical architecture, delivery plan, threat model, evidence ledger, open governance records, and this `CURRENT.md` to derive the first lawful COTRA-P11 grain. Do not infer or pre-authorize the next SpecGrain identifier or exact clipboard or network design from numbering alone.
-
-A first P11 grain must build on the SG-000018 replay-resistant foundation, SG-000019 class enforcement, SG-000020 trust and revoke records, the closed P08 structured-browser registry, the closed P09 structured-UIA registry, and the closed P10 vision registry without weakening STRONG enforcement, one-shot, expiry, or digest binding. It must expose no continuous clipboard surveillance and no unrestricted networking.
+COTRA-P11 continues at this frontier. No successor grain beyond SG-000038 is authorized by this activation.
 
 ## Closed SG-000033 screenshot capture
 
@@ -329,9 +325,26 @@ SG-000037 proved that the interruption epoch starts at zero and increments exact
 
 ## Active grain
 
-No COTRA-P10 grain is active. COTRA-P10 is exited at this frontier.
+SG-000038 - Bounded clipboard read with secret denial - is the sole active COTRA-P11 grain.
 
-No COTRA-P11 grain is active. The successor frontier is the first lawful COTRA-P11 grain itself.
+This activation authorizes implementation and qualification of a single narrow bounded clipboard-read shape on top of the closed COTRA-P10 vision registry, the closed COTRA-P09 structured-UIA registry, the SG-000018 replay-resistant foundation, SG-000019 class enforcement, SG-000020 trust and revoke records, and the closed COTRA-P08 registry: clipboard/read with no caller arguments returning at most 65536 bytes of Unicode text only; server-derived content binding with detected format, byte length, content digest, workspace, and policy revision; independent content-type verification with binary and object formats denied; secret-pattern denial with credential, token, password, private-key, seed-phrase, and session-secret content fail-closed before any return; fresh per-read SOFT approval with one-shot exact-digest binding; one-shot read semantics with no polling, subscription, monitoring, history, or standing sessions; bounded secret-free evidence with explicit truncation reporting; and explicit denial of clipboard write, surveillance, binary transfer, network, and elevation, while deliberately keeping clipboard write as successor work.
+
+Authorized target design:
+- clipboard/read bound to workspace and policy revision with detected format, byte length, and content digest, failing closed on empty, non-text, oversized, unreadable, foreign, and policy-drifted content;
+- Unicode-text-only return with bitmap, file-drop, audio, shell-object, and other binary formats denied with no hidden transfer;
+- secret-pattern denial across credential and key families with no secret bytes in results, evidence, prompts, logs, or MCP responses;
+- fresh SOFT approval with digest binding over the complete read binding set and one-shot consumption;
+- one-shot per-approval reads with polling, subscription, history, and standing-session attempts denied;
+- bounded evidence with format, size, and digests only and no raw content retention;
+- deterministic unit and security tests for happy-path reads, empty and non-text and oversized content, binary rejection, secret denial, missing and stale and reused and digest-mismatched approval, replayed reads, surveillance attempts, write denial, policy drift, caller-supplied fields, and cross-workspace reads.
+
+## Active acceptance frontier
+
+SG-000038 must prove that reads return bounded Unicode text only, that secret-pattern content is denied before any return, that every read carries fresh SOFT digest-bound approval with one-shot consumption, that each approval authorizes at most one sample with no surveillance, that evidence carries only format, size, and digests, that the agent cannot reach reads through MCP tools, and that Windows-specific qualification proves access gating without fabricating clipboard content.
+
+Clipboard write, continuous surveillance, subscriptions, history, binary transfer, generic network authority, persistent approval reuse, remote delegation, and elevation must remain absent, and STRONG enforcement, one-shot, expiry, and digest binding must not weaken.
+
+A P11 exit requires joint proof from bounded clipboard read plus clipboard write plus destination-scoped network fetch that no continuous surveillance exists, destination policy and private-address tests pass, and secrets are never emitted. It must not expose unrestricted networking.
 
 ## Canonical public authority boundary retained
 
