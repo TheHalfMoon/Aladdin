@@ -51,12 +51,14 @@ pub const SCROLL_SCHEMA: &str = "cotra-uia-scroll-v1";
 pub const CAPTURE_SCHEMA: &str = "cotra-screenshot-capture-v1";
 pub const VISUAL_SCHEMA: &str = "cotra-visual-proposal-v1";
 pub const COORD_SCHEMA: &str = "cotra-coordinate-derivation-v1";
+pub const EXECUTE_SCHEMA: &str = "cotra-bounded-execution-v1";
 pub const PROCESS_ID_PREFIX: &str = "uia-proc-";
 pub const WINDOW_ID_PREFIX: &str = "uia-win-";
 pub const ELEMENT_ID_PREFIX: &str = "uia-el-";
 pub const FRAME_ID_PREFIX: &str = "uia-frame-";
 pub const PROPOSAL_ID_PREFIX: &str = "uia-prop-";
 pub const COORD_ID_PREFIX: &str = "uia-coord-";
+pub const LEASE_ID_PREFIX: &str = "uia-lease-";
 pub const POLICY_REVISION: &str = "sg-000027-v1";
 pub const INVOKE_POLICY_REVISION: &str = "sg-000028-v1";
 
@@ -160,6 +162,18 @@ pub fn is_allowed_uia_shape(capability: &str, operation: &str) -> bool {
 /// focus, keyboard, mouse, clipboard, network, and elevation remain
 /// denied in every successor grain prior to their own successor
 /// authorization.
+///
+/// NOTE (SG-000036 successor): `uia.input/execute` is lawfully
+/// authorized by the SG-000036 successor grain as a single bounded
+/// click-only execution shape under an explicit single-use input lease
+/// and is therefore reachable as current-tree authority outside this
+/// denied set. The frozen SG-000027 qualified head recorded
+/// `uia.input/keyboard`, `uia.input/mouse`, and `uia.input/sendinput`
+/// as denied; those raw synthetic-input shapes remain in this denied
+/// set and remain denied in every successor grain. Standing input
+/// sessions, keyboard, drag, monitor scope, desktop scope, clipboard,
+/// network, and elevation remain denied in every successor grain prior
+/// to their own successor authorization.
 pub const DENIED_UIA_SHAPES: &[(&str, &str)] = &[
     ("uia.element", "click"),
     ("uia.element", "focus"),
@@ -348,6 +362,36 @@ pub fn is_coordinate_propose_shape(capability: &str, operation: &str) -> bool {
     matches!((capability, operation), ("uia.coordinates", "propose"))
 }
 
+/// The single SG-000036 bounded execution shape. Coordinate derivation
+/// remains authorized through its own predicate; bounded execution is
+/// authorized separately so frozen policy meanings are preserved while
+/// current-tree authority records the successor delta. Execution is
+/// click-only, confined to the exact owning window, and gated by an
+/// explicit single-use input lease plus fresh approval.
+pub fn is_input_execute_shape(capability: &str, operation: &str) -> bool {
+    matches!((capability, operation), ("uia.input", "execute"))
+}
+
+/// The only input operation SG-000036 authorizes: a single click
+/// confined to the exact owning window of one exact bound coordinate
+/// identity. Keyboard, drag, multi-click, wheel, touch, focus, and raw
+/// synthetic input fail closed.
+pub const EXECUTE_OPERATION_CLICK: &str = "click";
+
+pub fn is_execute_operation(operation: &str) -> bool {
+    operation == EXECUTE_OPERATION_CLICK
+}
+
+/// Lifetime of one explicit input lease in milliseconds. Leases expire
+/// quickly so an unconsumed lease cannot become a standing input
+/// session; expired leases fail closed.
+pub const LEASE_TTL_MS: u64 = 60_000;
+
+/// Maximum live input leases held by the registry. Grants beyond the
+/// bound fail closed after sweeping expired leases, so the registry
+/// cannot accumulate unbounded pending state.
+pub const MAX_LEASES: usize = 64;
+
 /// Derive deterministic frame-relative coordinates (region center,
 /// integer division) from one exact bounded region. Regions are
 /// pre-validated inside the exact frame geometry, so the derived center
@@ -391,6 +435,10 @@ pub fn is_well_formed_proposal_id(value: &str) -> bool {
 
 pub fn is_well_formed_coord_id(value: &str) -> bool {
     is_well_formed_typed_id(value, COORD_ID_PREFIX)
+}
+
+pub fn is_well_formed_lease_id(value: &str) -> bool {
+    is_well_formed_typed_id(value, LEASE_ID_PREFIX)
 }
 
 /// SHA-256 hex digest of one requested value, used in approval digests and
@@ -503,6 +551,16 @@ fn allocate_coord_id(proposal_id: &str, derivation_generation: u64) -> String {
         "{COORD_ID_PREFIX}{}",
         digest_hex(
             &format!("{COORD_SCHEMA}|coordinate|{proposal_id}|{derivation_generation}"),
+            ID_HEX_CHARS
+        )
+    )
+}
+
+fn allocate_lease_id(coord_id: &str, lease_sequence: u64) -> String {
+    format!(
+        "{LEASE_ID_PREFIX}{}",
+        digest_hex(
+            &format!("{EXECUTE_SCHEMA}|lease|{coord_id}|{lease_sequence}"),
             ID_HEX_CHARS
         )
     )
@@ -684,6 +742,21 @@ pub trait UiaAdapter {
         Err(UiaError::new(
             FailureCode::ProviderUnavailable,
             "window-scoped screenshot capture requires an interactive session broker and is unavailable in this context",
+        ))
+    }
+    /// Perform one bounded click confined to the exact owning window at
+    /// the given frame-relative coordinates. The registry revalidates
+    /// every binding and consumes an explicit single-use input lease
+    /// before calling this method, so adapters must actuate the bound
+    /// window only and must never widen to other windows, monitors, or
+    /// the desktop, and must never synthesize keyboard, drag, or raw
+    /// input. The default implementation fails closed as unavailable,
+    /// which the native adapter uses until an interactive session broker
+    /// exists.
+    fn execute_click(&self, _hwnd: u64, _x: u64, _y: u64) -> Result<(), UiaError> {
+        Err(UiaError::new(
+            FailureCode::ProviderUnavailable,
+            "bounded input execution requires an interactive session broker and is unavailable in this context",
         ))
     }
 }
@@ -928,6 +1001,37 @@ struct CoordinateRecord {
     policy_revision: String,
 }
 
+/// One explicit single-use input lease. Leases are minted from a fully
+/// validated coordinate binding, bound into the approval digest, and
+/// consumed exactly once at execution. A lease binds its owning
+/// coordinate identity, click-only operation, expiry, workspace, and
+/// policy revision; replayed, expired, revoked, and foreign leases fail
+/// closed. Unapproved, unconsumed leases are inert: they expire quickly
+/// and are swept, and execution is reachable only through the
+/// approval-gated dispatch path.
+#[derive(Debug, Clone)]
+struct LeaseRecord {
+    lease_id: String,
+    coord_id: String,
+    proposal_id: String,
+    frame_id: String,
+    window_id: String,
+    process_id: String,
+    process_generation: u64,
+    window_generation: u64,
+    capture_generation: u64,
+    proposal_generation: u64,
+    derivation_generation: u64,
+    x: u64,
+    y: u64,
+    hwnd: u64,
+    operation: String,
+    expires_at_ms: u64,
+    consumed: bool,
+    workspace_id: String,
+    policy_revision: String,
+}
+
 /// Server-side typed identity registry. Identities are allocated here and
 /// can never be named by callers; every observation revalidates the exact
 /// binding set and fails closed on drift.
@@ -939,11 +1043,13 @@ pub struct UiaRegistry {
     frames: HashMap<String, FrameRecord>,
     proposals: HashMap<String, ProposalRecord>,
     coordinates: HashMap<String, CoordinateRecord>,
+    leases: HashMap<String, LeaseRecord>,
     window_counter: u64,
     tree_counter: u64,
     capture_counter: u64,
     proposal_counter: u64,
     derivation_counter: u64,
+    lease_counter: u64,
 }
 
 impl UiaRegistry {
@@ -973,6 +1079,15 @@ impl UiaRegistry {
 
     pub fn coordinate_count(&self) -> usize {
         self.coordinates.len()
+    }
+
+    pub fn lease_count(&self) -> usize {
+        self.leases.len()
+    }
+
+    /// Test hook: read whether one lease is consumed.
+    pub fn lease_consumed(&self, lease_id: &str) -> Option<bool> {
+        self.leases.get(lease_id).map(|record| record.consumed)
     }
 
     /// Register or refresh one native process. A changed start generation
@@ -3428,6 +3543,291 @@ impl UiaRegistry {
         })
     }
 
+    /// Mint one explicit single-use input lease from a fully validated
+    /// coordinate binding. The lease is inert until the approval-gated
+    /// dispatch path consumes it exactly once: execution is unreachable
+    /// without fresh approval bound to this exact lease. Expired leases
+    /// are swept on every grant; grants beyond the live-lease bound fail
+    /// closed so no standing input session can accumulate.
+    pub fn grant_input_lease(
+        &mut self,
+        coord_id: &str,
+        expected_derivation_generation: u64,
+        operation: &str,
+        workspace_id: &str,
+        policy_revision: &str,
+        now_ms: u64,
+    ) -> Result<ExecuteBinding, UiaError> {
+        if !is_execute_operation(operation) {
+            return Err(UiaError::new(
+                FailureCode::CapabilityDenied,
+                "bounded input execution actuates only the click operation",
+            ));
+        }
+        let coordinate = self.coordinates.get(coord_id).ok_or_else(|| {
+            UiaError::new(
+                FailureCode::TargetStale,
+                "derived coordinate identity is unknown or stale and is never actionable",
+            )
+        })?;
+        if coordinate.derivation_generation != expected_derivation_generation {
+            return Err(UiaError::new(
+                FailureCode::TargetStale,
+                "derived coordinate generation drifted; the coordinates are stale and never actionable",
+            ));
+        }
+        let snapshot = coordinate.clone();
+        let derivation = self.require_derivation_target(
+            &snapshot.proposal_id,
+            snapshot.proposal_generation,
+            workspace_id,
+            policy_revision,
+        )?;
+        if derivation.frame_id != snapshot.frame_id
+            || derivation.x != snapshot.x
+            || derivation.y != snapshot.y
+        {
+            return Err(UiaError::new(
+                FailureCode::TargetStale,
+                "input lease coordinate binding drifted; the lease is revoked",
+            ));
+        }
+        self.sweep_expired_leases(now_ms);
+        let live = self.leases.values().filter(|lease| !lease.consumed).count();
+        if live >= MAX_LEASES {
+            return Err(UiaError::new(
+                FailureCode::OutputLimit,
+                "input lease bound reached; no standing input session is permitted",
+            ));
+        }
+        let window = self.windows.get(&derivation.window_id).ok_or_else(|| {
+            UiaError::new(
+                FailureCode::TargetStale,
+                "bounded execution lost its owning window",
+            )
+        })?;
+        self.lease_counter += 1;
+        let lease_id = allocate_lease_id(&snapshot.coord_id, self.lease_counter);
+        let expires_at_ms = now_ms.saturating_add(LEASE_TTL_MS);
+        self.leases.insert(
+            lease_id.clone(),
+            LeaseRecord {
+                lease_id: lease_id.clone(),
+                coord_id: snapshot.coord_id.clone(),
+                proposal_id: snapshot.proposal_id.clone(),
+                frame_id: snapshot.frame_id.clone(),
+                window_id: snapshot.window_id.clone(),
+                process_id: snapshot.process_id.clone(),
+                process_generation: snapshot.process_generation,
+                window_generation: snapshot.window_generation,
+                capture_generation: snapshot.capture_generation,
+                proposal_generation: snapshot.proposal_generation,
+                derivation_generation: snapshot.derivation_generation,
+                x: snapshot.x,
+                y: snapshot.y,
+                hwnd: window.hwnd,
+                operation: EXECUTE_OPERATION_CLICK.to_owned(),
+                expires_at_ms,
+                consumed: false,
+                workspace_id: workspace_id.to_owned(),
+                policy_revision: policy_revision.to_owned(),
+            },
+        );
+        Ok(ExecuteBinding {
+            process_id: snapshot.process_id,
+            process_generation: snapshot.process_generation,
+            window_id: snapshot.window_id,
+            window_generation: snapshot.window_generation,
+            frame_id: snapshot.frame_id,
+            capture_generation: snapshot.capture_generation,
+            proposal_id: snapshot.proposal_id,
+            proposal_generation: snapshot.proposal_generation,
+            coord_id: snapshot.coord_id,
+            derivation_generation: snapshot.derivation_generation,
+            x: snapshot.x,
+            y: snapshot.y,
+            hwnd: window.hwnd,
+            operation: EXECUTE_OPERATION_CLICK.to_owned(),
+            lease_id,
+            lease_expires_at_ms: expires_at_ms,
+        })
+    }
+
+    /// Execute one bounded click under an explicit single-use input lease
+    /// after immediate pre-execution revalidation of the entire identity
+    /// chain. Any drift fails closed without silent retargeting and
+    /// without fallback to keyboard, drag, clipboard, network, or
+    /// elevation. Replayed, expired, revoked, and foreign leases fail
+    /// closed. Adapter failure does not consume the lease, but the
+    /// approval is already one-shot consumed by dispatch, so a retry
+    /// requires fresh approval. On success the lease is consumed exactly
+    /// once and the evidence carries only identities, generations,
+    /// coordinates, operation, lease, and approval record material.
+    pub fn execute_input(
+        &mut self,
+        adapter: &impl UiaAdapter,
+        lease_id: &str,
+        workspace_id: &str,
+        policy_revision: &str,
+        now_ms: u64,
+    ) -> Result<Value, UiaError> {
+        if !is_well_formed_lease_id(lease_id) {
+            return Err(UiaError::new(
+                FailureCode::InvalidRequest,
+                "input lease identity is malformed",
+            ));
+        }
+        self.sweep_expired_leases(now_ms);
+        let lease = self.leases.get(lease_id).ok_or_else(|| {
+            UiaError::new(
+                FailureCode::TargetStale,
+                "input lease is unknown, consumed, or expired and is never reusable",
+            )
+        })?;
+        if lease.workspace_id != workspace_id {
+            return Err(UiaError::new(
+                FailureCode::TargetStale,
+                "input lease belongs to another workspace",
+            ));
+        }
+        if lease.policy_revision != policy_revision {
+            return Err(UiaError::new(
+                FailureCode::TargetStale,
+                "input lease was issued under another policy revision",
+            ));
+        }
+        if now_ms > lease.expires_at_ms {
+            return Err(UiaError::new(
+                FailureCode::TargetStale,
+                "input lease expired before execution",
+            ));
+        }
+        if lease.operation != EXECUTE_OPERATION_CLICK {
+            return Err(UiaError::new(
+                FailureCode::CapabilityDenied,
+                "bounded input execution actuates only the click operation",
+            ));
+        }
+        let snapshot = lease.clone();
+        let coordinate = self.coordinates.get(&snapshot.coord_id).ok_or_else(|| {
+            UiaError::new(
+                FailureCode::TargetStale,
+                "input lease lost its owning coordinate identity",
+            )
+        })?;
+        if coordinate.derivation_generation != snapshot.derivation_generation
+            || coordinate.proposal_id != snapshot.proposal_id
+        {
+            return Err(UiaError::new(
+                FailureCode::TargetStale,
+                "input lease coordinate identity drifted; the lease is revoked",
+            ));
+        }
+        let proposal = self.proposals.get(&snapshot.proposal_id).ok_or_else(|| {
+            UiaError::new(
+                FailureCode::TargetStale,
+                "input lease lost its owning proposal",
+            )
+        })?;
+        if proposal.proposal_generation != snapshot.proposal_generation {
+            return Err(UiaError::new(
+                FailureCode::TargetStale,
+                "input lease owning proposal drifted; the lease is revoked",
+            ));
+        }
+        let frame = self.frames.get(&snapshot.frame_id).ok_or_else(|| {
+            UiaError::new(
+                FailureCode::TargetStale,
+                "input lease lost its owning frame",
+            )
+        })?;
+        if frame.capture_generation != snapshot.capture_generation {
+            return Err(UiaError::new(
+                FailureCode::TargetStale,
+                "input lease owning frame drifted; the lease is revoked",
+            ));
+        }
+        let window = self.windows.get(&snapshot.window_id).ok_or_else(|| {
+            UiaError::new(
+                FailureCode::TargetStale,
+                "input lease lost its owning window",
+            )
+        })?;
+        if window.window_generation != snapshot.window_generation || window.hwnd != snapshot.hwnd {
+            return Err(UiaError::new(
+                FailureCode::TargetStale,
+                "input lease owning window drifted; the lease is revoked",
+            ));
+        }
+        if is_protected_window(&window.title, &window.class) {
+            return Err(UiaError::new(
+                FailureCode::CapabilityDenied,
+                "bounded input execution on a protected Cotra surface is denied",
+            ));
+        }
+        let process = self.processes.get(&snapshot.process_id).ok_or_else(|| {
+            UiaError::new(
+                FailureCode::TargetStale,
+                "input lease lost its owning process",
+            )
+        })?;
+        if process.superseded || process.process_generation != snapshot.process_generation {
+            return Err(UiaError::new(
+                FailureCode::TargetStale,
+                "input lease owning process drifted; the lease is revoked",
+            ));
+        }
+        if process.workspace_id != workspace_id {
+            return Err(UiaError::new(
+                FailureCode::TargetStale,
+                "input lease target process belongs to another workspace",
+            ));
+        }
+        if process.policy_revision != policy_revision {
+            return Err(UiaError::new(
+                FailureCode::TargetStale,
+                "input lease target process was issued under another policy revision",
+            ));
+        }
+        adapter
+            .execute_click(snapshot.hwnd, snapshot.x, snapshot.y)
+            .map_err(|error| {
+                UiaError::new(
+                    error.code,
+                    format!("bounded input execution failed: {}", error.message),
+                )
+            })?;
+        if let Some(stored) = self.leases.get_mut(lease_id) {
+            stored.consumed = true;
+        }
+        let result = json!({
+            "schema": EXECUTE_SCHEMA,
+            "action": "execute",
+            "lease_id": snapshot.lease_id,
+            "coord_id": snapshot.coord_id,
+            "proposal_id": snapshot.proposal_id,
+            "frame_id": snapshot.frame_id,
+            "window_id": snapshot.window_id,
+            "process_id": snapshot.process_id,
+            "process_generation": snapshot.process_generation,
+            "window_generation": snapshot.window_generation,
+            "capture_generation": snapshot.capture_generation,
+            "proposal_generation": snapshot.proposal_generation,
+            "derivation_generation": snapshot.derivation_generation,
+            "x": snapshot.x,
+            "y": snapshot.y,
+            "operation": EXECUTE_OPERATION_CLICK,
+            "workspace_id": workspace_id,
+            "policy_revision": policy_revision,
+        });
+        enforce_response_bytes(&result)
+    }
+
+    fn sweep_expired_leases(&mut self, now_ms: u64) {
+        self.leases
+            .retain(|_, lease| !lease.consumed && lease.expires_at_ms >= now_ms);
+    }
+
     fn require_value_target(
         &self,
         element_id: &str,
@@ -4051,6 +4451,59 @@ pub fn coordinate_derivation_digest(
     digest_hex(&material, 64)
 }
 
+/// Server-resolved execution binding used for approval digest
+/// computation and evidence. Callers never supply these values directly;
+/// they are resolved from the typed coordinate identity immediately
+/// before execution, including the explicit single-use lease minted from
+/// the validated binding.
+#[derive(Debug, Clone)]
+pub struct ExecuteBinding {
+    pub process_id: String,
+    pub process_generation: u64,
+    pub window_id: String,
+    pub window_generation: u64,
+    pub frame_id: String,
+    pub capture_generation: u64,
+    pub proposal_id: String,
+    pub proposal_generation: u64,
+    pub coord_id: String,
+    pub derivation_generation: u64,
+    pub x: u64,
+    pub y: u64,
+    pub hwnd: u64,
+    pub operation: String,
+    pub lease_id: String,
+    pub lease_expires_at_ms: u64,
+}
+
+/// Compute the exact approval digest for one bounded execution. The
+/// digest binds the derived coordinates, the click-only operation, and
+/// the explicit lease, and dispatch revalidates the same binding set
+/// and consumes the lease immediately, so any material drift or replay
+/// invalidates the approval.
+pub fn execute_approval_digest(
+    workspace_id: &str,
+    policy_revision: &str,
+    binding: &ExecuteBinding,
+) -> String {
+    let material = format!(
+        "cotra-bounded-execution-v1|{workspace_id}|{policy_revision}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|execute",
+        binding.coord_id,
+        binding.derivation_generation,
+        binding.proposal_id,
+        binding.proposal_generation,
+        binding.frame_id,
+        binding.capture_generation,
+        binding.window_id,
+        binding.window_generation,
+        binding.x,
+        binding.y,
+        binding.operation,
+        binding.lease_id,
+    );
+    digest_hex(&material, 64)
+}
+
 fn render_element(record: &ElementRecord) -> Value {
     json!({
         "schema": UIA_SCHEMA,
@@ -4124,3 +4577,5 @@ mod sg000033_tests;
 mod sg000034_tests;
 #[cfg(test)]
 mod sg000035_tests;
+#[cfg(test)]
+mod sg000036_tests;
