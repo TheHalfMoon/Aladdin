@@ -1,11 +1,11 @@
 # Cotra Current Canonical Frontier
 
-Status: CLOSED_CANONICAL
+Status: ACTIVE_GRAIN
 Date: 2026-09-30
-Governance snapshot base: ac0d4efead77ab5c442340aacaa1c366b11161d1
+Governance snapshot base: f2b71ef166621af7f5745bef9419a80ab66a8236
 Evidence ledger: `.specgrain/canonical-evidence.json`
 
-`Governance snapshot base` records the exact canonical parent from which this closeout snapshot was authored. It deliberately does not claim the eventual merge SHA of the commit containing this file.
+`Governance snapshot base` records the exact canonical parent from which this activation snapshot was authored. It deliberately does not claim the eventual merge SHA of the commit containing this file.
 
 ## SpecGrain state semantics
 
@@ -244,7 +244,7 @@ All P09 closeouts (SG-000027 recorded here, SG-000028 recorded here, SG-000029 r
 
 ## Successor frontier
 
-COTRA-P10 continues at this frontier. No successor grain beyond SG-000035 is authorized by this closeout. The P10 successors (bounded input execution with input leases and human interruption) must each be activated as narrow lawful grains before implementation.
+COTRA-P10 continues at this frontier. No successor grain beyond SG-000036 is authorized by this activation.
 
 ## Closed SG-000033 screenshot capture
 
@@ -266,9 +266,27 @@ SG-000035 proved that no derivation shape accepts caller-supplied coordinates, c
 
 ## Active grain
 
-No COTRA-P10 grain is active. SG-000035 was the sole active grain and is now `CLOSED` and canonical.
+SG-000036 - Bounded coordinate execution with single-use input lease - is the sole active COTRA-P10 grain.
 
-The successor frontier is P10 input work: bounded input execution with input leases and human interruption, each bound to coordinate identity without weakening STRONG enforcement, one-shot, expiry, or digest binding, and without exposing unrestricted desktop input or elevation authority. A missing or denied coordinate identity must never silently grant input authority.
+This activation authorizes implementation and qualification of a single narrow bounded execution shape on top of the closed SG-000035 coordinate registry, the closed SG-000034 visual proposal registry, the closed SG-000033 window-scoped capture registry, the closed COTRA-P09 structured-UIA registry, the SG-000018 replay-resistant foundation, SG-000019 class enforcement, SG-000020 trust and revoke records, and the closed COTRA-P08 registry: uia.input/execute bound to one server-allocated typed coordinate identity with arguments coord_id, expected_derivation_generation, and operation only, where operation is fixed to click; server-derived coordinate binding with derivation generation, owning proposal, proposal generation, owning frame, capture generation, owning window, owning process, coordinates, workspace, and policy revision; an explicit server-derived single-use input lease bound to the exact coordinate binding, operation, workspace, and policy revision, minted from the validated binding, bound into the approval digest, consumed exactly once, and never transferable; window-confined execution against the exact owning window handle only; fresh per-execution SOFT approval with one-shot exact-digest binding over workspace, policy revision, coordinate identity, derivation generation, proposal, frame, window, process, generations, coordinates, operation, lease, and action material; immediate pre-execution stale-coordinate revalidation with no silent retargeting; protected Cotra approval-surface exclusion with execution confined to the exact owning window; bounded execution evidence with explicit truncation reporting; and explicit denial of keyboard, drag, multi-click, raw synthetic input, lease reuse, lease transfer, monitor and desktop scope, clipboard, network, and elevation, while deliberately keeping human interruption as successor work.
+
+Authorized target design:
+- uia.input/execute bound to one typed coordinate identity with exact derivation generation, owning proposal, frame, window, process, coordinates, workspace, and policy revision;
+- operation fixed to click with every other operation denied;
+- explicit single-use input lease minted from the validated binding and bound into the approval digest, consumed exactly once with replayed, expired, revoked, and foreign leases fail-closed;
+- fresh SOFT approval with digest binding over the complete execution binding set including the lease and one-shot consumption;
+- immediate pre-execution stale-coordinate revalidation with TargetStale denial on any drift;
+- window-confined execution with no monitor or desktop widening;
+- protected Cotra approval-surface exclusion with no execution path reaching presence or approval material;
+- caller-supplied coordinates, HWNDs, lease fields, and widened-scope targets denied with no execution authority granted by a missing or denied lease, and deterministic unit and security tests for happy-path click execution, stale coordinate identity, stale proposal, stale frame, restarted process, PID reuse, stale window, reused HWND, wrong pairings, stale derivation generation, protected surface, missing and stale and reused and digest-mismatched approval, replayed and expired and foreign leases, wrong operation, policy drift, caller-supplied fields, keyboard and drag requests, clipboard, network, and elevation requests.
+
+## Active acceptance frontier
+
+SG-000036 must prove that executions bind server-derived coordinate identity and reject caller-provided claims, that operation is fixed to click, that every execution carries an explicit single-use lease consumed exactly once, that every execution carries fresh SOFT digest-bound approval including the lease with one-shot consumption, that execution is confined to the exact owning window, that immediate pre-execution revalidation fails closed on any drift without silent retargeting and without keyboard, drag, clipboard, network, or elevation fallback, that protected Cotra surfaces are excluded, that the agent cannot reach execution through its own tool or input surface, and that Windows-specific qualification proves structured binding without fabricating interactive desktop evidence.
+
+Keyboard, drag, multi-click, raw synthetic input, lease reuse, monitor and desktop scopes, clipboard access, generic network authority, persistent approval reuse, remote delegation, and elevation must remain absent, and STRONG enforcement, one-shot, expiry, and digest binding must not weaken.
+
+A P10 exit requires joint proof from SG-000033 capture plus SG-000034 proposals plus SG-000035 coordinates plus SG-000036 execution plus interruption successors that the provider ceiling is enforced, protected surfaces are denied, stale-frame tests pass, and no silent fallback from structured denial into coordinates exists. It must not expose unrestricted desktop input or elevation authority.
 
 ## Canonical public authority boundary retained
 
