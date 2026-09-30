@@ -2,10 +2,10 @@
 
 Status: ACTIVE_GRAIN
 Date: 2026-10-01
-Governance snapshot base: b69c5ba7cf9b4a6c2009e301ccc1eda97f934353
+Governance snapshot base: eeeb8f8f34d55edcb820afa4c4fcad93fb912573
 Evidence ledger: `.specgrain/canonical-evidence.json`
 
-`Governance snapshot base` records the exact canonical parent from which this activation snapshot was authored. It deliberately does not claim the eventual merge SHA of the commit containing this file.
+`Governance snapshot base` records the exact canonical implementation merge from which this closeout-and-activation snapshot was authored. It deliberately does not claim the eventual merge SHA of the commit containing this file.
 
 ## SpecGrain state semantics
 
@@ -340,7 +340,7 @@ All P11 closeouts (SG-000038 PR `#109`, SG-000039 PR `#112`, SG-000040 PR `#116`
 
 ## Successor frontier
 
-COTRA-P12 continues at this frontier. No successor grain beyond SG-000041 is authorized by this activation.
+COTRA-P12 continues at this frontier. No successor grain beyond SG-000042 is authorized by this activation.
 
 ## Closed SG-000033 screenshot capture
 
@@ -390,24 +390,30 @@ SG-000040 closed canonically: activation PR `#113` (activation base `633d0b32924
 
 SG-000040 proved the exact URL and destination ceilings; full dangerous-address denial across private, loopback, link-local, multicast, unspecified, documentation, CGNAT, mapped-private, and reserved IPv4/IPv6 classes; post-approval and per-hop DNS drift failure as stale; exact connected-peer enforcement; manual redirect loop, cross-origin, private-target, scheme-downgrade, and over-five-hop denial; exact 2048-character URL and 1048576-byte response bounds; typed remote HTTP failures without response-body leakage; direct no-proxy transport with cookies, authentication, automatic redirects, keep-alive, caller headers, request bodies, and ambient credentials absent; inherited replay, expiry, digest, workspace, policy, one-shot, and approval-class enforcement; no MCP network exposure; and real Windows WinHTTP HTTPS/TLS transport against `https://example.com/` with the validated peer pinned before send and verified after response. The first exact-head Windows run had only transient unrelated SG-000013 PowerShell timing failures; the exact same qualified head was rerun without code changes and the entire Windows Rust suite passed.
 
+## Closed SG-000041 protected state isolation
+
+SG-000041 closed canonically: activation PR `#118` (activation base `b69c5ba7cf9b4a6c2009e301ccc1eda97f934353`, activation head `6cb92941f2995ac327343e43056ccae7198735d5`, CI `36786571245`, Review Gates `36786571338`, genuine TypeSafe Jev `7/7` hunks with zero findings, Alibaba Open Code Review v1.12.9 `1 reviewable + 2 excluded/manually reviewed`, merge `3680a043e3f115f8928f95db353fba71a9cd4f2a`, post-merge CI `36787257488`), implementation PR `#119` (qualified head `a640fb0631e1605e9cdea3a094c6b56d36c19b68`, CI `36787295127`, Review Gates `36787295263`, genuine TypeSafe Jev `7/7` hunks with zero findings and zero blocking findings, Alibaba Open Code Review v1.12.9 `5 reviewable + 0 excluded`, merge `eeeb8f8f34d55edcb820afa4c4fcad93fb912573`, post-merge CI `36788126452`), exact-diff manual security review, and zero unresolved review threads.
+
+SG-000041 proved that the policy kernel refuses, at construction and before serving any request, every workspace whose canonical root equals, contains, or lies within a protected Cotra state root: the `%LOCALAPPDATA%\Cotra` state root (or the temp fallback) and every configured audit, trust, approval-history, and browser-state override, each resolved through its nearest existing canonical ancestor. Comparison is component-wise and case-insensitive on Windows; parent and current-directory components fail closed, including verbatim-path components; sibling and prefix-sharing roots remain accepted; reparse points inside accepted workspaces that target protected state remain denied by final-path containment; and the protected roots provably cover the trust, audit, approval-history, and browser-profile defaults. Workspace admission is narrowed only; no capability, approval, provider, or network authority is added.
+
 ## Active grain
 
-SG-000041 - Protected Cotra state isolation from trusted workspaces - is the sole active COTRA-P12 grain.
+SG-000042 - Per-user install foundation - is the sole active COTRA-P12 grain.
 
-The COTRA-P12 design review is recorded in `docs/canonical/P12_INSTALLER_LIFECYCLE_DESIGN.md`. It found that the policy kernel admits any existing directory as a workspace root, so a trusted workspace that contains the Cotra state root (for example the user profile or a drive root) lets workspace-scoped filesystem, Git, and scoped browser upload and download providers reach trust records, approval history, audit records, and the browser profile. Because the P12 installer will place configuration, binaries, and the tunnel runtime key under the same root, this pre-existing gap is a release blocker and is repaired first, before any installer code.
-
-This activation authorizes implementation and qualification of workspace admission hardening only:
-- protected Cotra state roots computed from the same defaults and overrides as the audit, trust, approval, and browser state code;
-- protected roots resolved to final paths, failing closed on parent-directory components or unresolvable paths;
-- refusal at policy construction of any workspace whose resolved root equals, contains, or is contained by a protected root, with a typed workspace denial;
-- component-wise comparison, case-insensitive on Windows, never string-prefix security;
-- regression tests for overlapping, overridden, sibling, prefix-sharing, case-variant, and reparse-point cases.
+This activation authorizes implementation and qualification of the human-invoked `cotra` CLI install foundation defined in `docs/canonical/P12_INSTALLER_LIFECYCLE_DESIGN.md` sections 3 through 5:
+- the `cotra-release-manifest-v1` release manifest with fail-closed verification of every payload file, hostile path, unlisted file, link, and reparse point, and a packaging script that produces it;
+- prerequisite validation for Windows build 17763 or later, no avoidable elevation, and Node.js 20 or later verified by running it;
+- install under `%LOCALAPPDATA%\Cotra` only with an owner-only protected DACL verified by read-back, staged and re-verified payloads, an atomic version pointer, and replacement of `bin\cotra.exe`;
+- an optional user `PATH` entry recorded and removed exactly;
+- same-version repair, refusal of a different version until the update grain;
+- uninstall that retains configuration, secrets, logs, and history by default, purges them only with `--purge-data --yes`, and refuses while a supervisor record exists;
+- Windows-native qualification on real ACLs, a real registry value under an isolated key, and the real CLI.
 
 ## Active acceptance frontier
 
-SG-000041 must prove that no admitted workspace overlaps protected Cotra state, that the protected-root computation matches the existing state-path defaults and overrides, that sibling and prefix-sharing roots remain accepted, that reparse points inside accepted workspaces that target protected state remain denied, and that every closed SG-000001 through SG-000040 regression passes unchanged.
+SG-000042 must prove manifest and prerequisite fail-closed behavior, verified staging and atomic activation, protected ACL application and detection of foreign principals, exact PATH handling, repair and version-conflict behavior, retention-aware uninstall with guarded removals, and a real-binary install/repair/uninstall/purge flow on Windows, with every closed SG-000001 through SG-000041 regression passing unchanged.
 
-No capability, MCP tool, provider operation, approval class, installer, lifecycle, update, or tunnel-setup authority is added by SG-000041. Successor P12 grains (per-user install foundation; lifecycle runtime with tunnel setup, start, stop, status, and doctor; update, rollback, and recovery with the release workflow; and the P12 exit packet) follow the design document and require their own activation packets.
+No MCP tool, agent capability, approval change, network access, service, scheduled task, or elevation is added by SG-000042. Lifecycle runtime (start, stop, status, doctor, tunnel setup, workspace configuration, `cotra-mcp-host`), update and recovery, and the P12 exit packet remain successor work requiring their own activation packets.
 
 ## Canonical public authority boundary retained
 
@@ -497,7 +503,7 @@ Still denied or absent outside the closed COTRA-P07 scope, the closed COTRA-P08 
 - caller-selected download destinations, absolute destinations, and destinations outside the approved workspace root;
 - download persistence of cookies, credentials, tokens, session material, or personal browser state.
 
-COTRA-P07 through COTRA-P11 are exited at this frontier. COTRA-P12 is active only through SG-000041 workspace admission hardening; no installer, lifecycle, update, or tunnel-setup authority is granted yet. Raw credentials must never be accepted merely because Git or a network transport can consume them.
+COTRA-P07 through COTRA-P11 are exited at this frontier. COTRA-P12 is active through SG-000042, which adds only the human-invoked per-user install foundation; no lifecycle runtime, update, or tunnel-setup authority is granted yet, and SG-000041 keeps Cotra protected state outside every admitted workspace. Raw credentials must never be accepted merely because Git or a network transport can consume them.
 
 Windows public `process.spawn` remains positively restricted to the exact SG-000010-qualified `%SystemRoot%\System32\whoami.exe` target.
 
