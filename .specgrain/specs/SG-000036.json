@@ -2,7 +2,7 @@
   "id": "SG-000036",
   "title": "Bounded coordinate execution with single-use input lease",
   "program": "COTRA-P10",
-  "state": "GRAIN",
+  "state": "CLOSED",
   "risk": "high",
   "created": "2026-09-30",
   "base": "f2b71ef166621af7f5745bef9419a80ab66a8236",
@@ -136,5 +136,25 @@
     "exact_head_ci": true,
     "native_network_qualification": false
   },
-  "done_when": "Bounded coordinate execution with server-derived coordinate binding, click-only operation, explicit single-use input lease, fresh SOFT digest-bound approval, immediate stale-coordinate revalidation, window confinement, protected-surface exclusion, no lease reuse, and no new keyboard, drag, clipboard, network, or elevation authority is specified."
+  "done_when": "Bounded coordinate execution with server-derived coordinate binding, click-only operation, explicit single-use input lease, fresh SOFT digest-bound approval, immediate stale-coordinate revalidation, window confinement, protected-surface exclusion, no lease reuse, and no new keyboard, drag, clipboard, network, or elevation authority is specified.",
+  "qualified_head": "e18cd1bcf09bd7d7d3df4b70b0686f5aeec3fc60",
+  "implementation_base": "643fd08029bde895ab4513eb1a98a9d4544734f8",
+  "implementation_merge": "72e231997f28068c4bceefdffb7be33f0a771b7b",
+  "pre_merge_ci": "36686795203",
+  "pre_merge_review_gates": "36686795357",
+  "post_merge_ci": "36693139425",
+  "canonical_evidence": {
+    "implementation_pr": 101,
+    "implementation_base": "643fd08029bde895ab4513eb1a98a9d4544734f8",
+    "qualified_head": "e18cd1bcf09bd7d7d3df4b70b0686f5aeec3fc60",
+    "pre_merge_ci": "36686795203",
+    "pre_merge_review_gates": "36686795357",
+    "merge_sha": "72e231997f28068c4bceefdffb7be33f0a771b7b",
+    "post_merge_ci": "36693139425",
+    "jev": "PASSED: 24/24 hunks, zero findings, zero blocking findings, pin 31f89602797fb7bea007f8a480bf368bf564954e, TypeSafe SDK 0.6.0",
+    "ocr": "PASSED: Open Code Review v1.12.9 exact-range delegation, 8 files total, 7 reviewable, 1 excluded and manually reviewed",
+    "security_review": "PASS on exact qualified head; execution binds one server-derived coordinate identity with derivation generation, owning proposal, frame, window, process, coordinates, workspace, and policy revision; operation is fixed to click with keyboard, drag, multi-click, wheel, touch, focus, and raw SendInput denied; every execution carries an explicit server-derived single-use input lease bound to the exact coordinate binding and operation with 60s TTL, 64 live-lease bound, sweep, exactly-once consumption, and replayed, expired, revoked, and foreign leases fail-closed; every execution carries fresh SOFT approval with exact digest binding over workspace, policy revision, coordinate, derivation generation, proposal, frame, window, process, generations, coordinates, operation, lease, and action material with one-shot consumption; immediate pre-execution revalidation denies coordinate, proposal, frame, window, HWND ownership, process, generation, protected-surface, workspace, and policy drift without silent retargeting and without keyboard, drag, clipboard, network, or elevation fallback; execution is confined to the exact owning window with HWND ownership revalidated immediately before the adapter call; protected Cotra surfaces are excluded with re-check on the owning window; adapter failure does not consume the lease while approval is already one-shot consumed so retry needs fresh approval; evidence carries only identities, generations, coordinates, operation, lease, and approval record with truncation enforcement; no MCP execution tool exists; and retained derivation, proposal, capture, observation, invoke, value, select, toggle, scroll, replay, class, trust, and P08 behavior is unchanged",
+    "unresolved_review_threads": 0,
+    "authority_boundary": "Only bounded uia.input/execute on one exact typed coordinate identity with click-only operation is newly added with an explicit server-derived single-use input lease, fresh SOFT digest-bound approval including the lease, immediate stale-coordinate revalidation, and window confinement. Coordinate derivation remains closed under SG-000035, visual proposals remain closed under SG-000034, capture remains closed under SG-000033, and structured UIA remains closed under SG-000027 through SG-000032. Keyboard, drag, multi-click, wheel, touch, focus, raw SendInput, lease reuse, lease transfer, standing sessions, monitor scope, desktop scope, clipboard, network fetch, process spawn, injection, termination, elevation, and approval bypass remain absent, and existing file, process, Git, approval, presence, trust, browser, observation, capture, proposal, derivation, and actuation behavior is unchanged."
+  }
 }
