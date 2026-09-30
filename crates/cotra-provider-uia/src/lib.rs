@@ -50,11 +50,13 @@ pub const TOGGLE_SCHEMA: &str = "cotra-uia-toggle-v1";
 pub const SCROLL_SCHEMA: &str = "cotra-uia-scroll-v1";
 pub const CAPTURE_SCHEMA: &str = "cotra-screenshot-capture-v1";
 pub const VISUAL_SCHEMA: &str = "cotra-visual-proposal-v1";
+pub const COORD_SCHEMA: &str = "cotra-coordinate-derivation-v1";
 pub const PROCESS_ID_PREFIX: &str = "uia-proc-";
 pub const WINDOW_ID_PREFIX: &str = "uia-win-";
 pub const ELEMENT_ID_PREFIX: &str = "uia-el-";
 pub const FRAME_ID_PREFIX: &str = "uia-frame-";
 pub const PROPOSAL_ID_PREFIX: &str = "uia-prop-";
+pub const COORD_ID_PREFIX: &str = "uia-coord-";
 pub const POLICY_REVISION: &str = "sg-000027-v1";
 pub const INVOKE_POLICY_REVISION: &str = "sg-000028-v1";
 
@@ -147,6 +149,17 @@ pub fn is_allowed_uia_shape(capability: &str, operation: &str) -> bool {
 /// execution, monitor scope, desktop scope, focus, keyboard, mouse,
 /// clipboard, network, and elevation remain denied in every successor
 /// grain prior to their own successor authorization.
+///
+/// NOTE (SG-000035 successor): `uia.coordinates/propose` is lawfully
+/// authorized by the SG-000035 successor grain as a single proposal-only
+/// coordinate derivation shape and is therefore reachable as current-tree
+/// authority outside this denied set. The frozen SG-000027 qualified head
+/// recorded `uia.coordinates/request` as denied; that raw request shape
+/// remains in this denied set and remains denied in every successor
+/// grain. Input execution, input leases, monitor scope, desktop scope,
+/// focus, keyboard, mouse, clipboard, network, and elevation remain
+/// denied in every successor grain prior to their own successor
+/// authorization.
 pub const DENIED_UIA_SHAPES: &[(&str, &str)] = &[
     ("uia.element", "click"),
     ("uia.element", "focus"),
@@ -314,6 +327,38 @@ pub struct VisualRegion {
     pub height: u64,
 }
 
+/// Frame-relative coordinates derived deterministically from one exact
+/// bounded proposal region. Derived coordinates are evidence geometry
+/// for the successor input grain, never input authority: no execution
+/// path consumes derived coordinates without a successor grain
+/// authorizing it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DerivedCoordinate {
+    pub x: u64,
+    pub y: u64,
+}
+
+/// The single SG-000035 proposal-only derivation shape. Visual proposals
+/// remain authorized through their own predicate; coordinate derivation
+/// is authorized separately so frozen policy meanings are preserved
+/// while current-tree authority records the successor delta. Derivation
+/// never calls any input API and never grants input execution, input
+/// leases, monitor scope, or desktop scope.
+pub fn is_coordinate_propose_shape(capability: &str, operation: &str) -> bool {
+    matches!((capability, operation), ("uia.coordinates", "propose"))
+}
+
+/// Derive deterministic frame-relative coordinates (region center,
+/// integer division) from one exact bounded region. Regions are
+/// pre-validated inside the exact frame geometry, so the derived center
+/// always lies inside the frame.
+pub fn derive_region_center(region: VisualRegion) -> DerivedCoordinate {
+    DerivedCoordinate {
+        x: region.x + region.width / 2,
+        y: region.y + region.height / 2,
+    }
+}
+
 /// The only capture scope SG-000033 authorizes: the exact target window.
 /// Monitor scope, desktop scope, caller-selected regions, and arbitrary
 /// rectangles fail closed.
@@ -342,6 +387,10 @@ pub fn is_well_formed_frame_id(value: &str) -> bool {
 
 pub fn is_well_formed_proposal_id(value: &str) -> bool {
     is_well_formed_typed_id(value, PROPOSAL_ID_PREFIX)
+}
+
+pub fn is_well_formed_coord_id(value: &str) -> bool {
+    is_well_formed_typed_id(value, COORD_ID_PREFIX)
 }
 
 /// SHA-256 hex digest of one requested value, used in approval digests and
@@ -444,6 +493,16 @@ fn allocate_proposal_id(frame_id: &str, proposal_generation: u64) -> String {
         "{PROPOSAL_ID_PREFIX}{}",
         digest_hex(
             &format!("{VISUAL_SCHEMA}|proposal|{frame_id}|{proposal_generation}"),
+            ID_HEX_CHARS
+        )
+    )
+}
+
+fn allocate_coord_id(proposal_id: &str, derivation_generation: u64) -> String {
+    format!(
+        "{COORD_ID_PREFIX}{}",
+        digest_hex(
+            &format!("{COORD_SCHEMA}|coordinate|{proposal_id}|{derivation_generation}"),
             ID_HEX_CHARS
         )
     )
@@ -845,6 +904,30 @@ struct ProposalRecord {
     policy_revision: String,
 }
 
+/// One server-allocated derived coordinate identity. Derived coordinates
+/// are evidence for the successor input grain and are never themselves
+/// input-execution authority. An identity binds its owning proposal,
+/// derivation generation, coordinates, workspace, and policy revision;
+/// replayed, foreign, and policy-drifted identities fail closed as stale
+/// and stale coordinates are never actionable.
+#[derive(Debug, Clone)]
+struct CoordinateRecord {
+    coord_id: String,
+    proposal_id: String,
+    frame_id: String,
+    window_id: String,
+    process_id: String,
+    process_generation: u64,
+    window_generation: u64,
+    capture_generation: u64,
+    proposal_generation: u64,
+    derivation_generation: u64,
+    x: u64,
+    y: u64,
+    workspace_id: String,
+    policy_revision: String,
+}
+
 /// Server-side typed identity registry. Identities are allocated here and
 /// can never be named by callers; every observation revalidates the exact
 /// binding set and fails closed on drift.
@@ -855,10 +938,12 @@ pub struct UiaRegistry {
     elements: HashMap<String, ElementRecord>,
     frames: HashMap<String, FrameRecord>,
     proposals: HashMap<String, ProposalRecord>,
+    coordinates: HashMap<String, CoordinateRecord>,
     window_counter: u64,
     tree_counter: u64,
     capture_counter: u64,
     proposal_counter: u64,
+    derivation_counter: u64,
 }
 
 impl UiaRegistry {
@@ -884,6 +969,10 @@ impl UiaRegistry {
 
     pub fn proposal_count(&self) -> usize {
         self.proposals.len()
+    }
+
+    pub fn coordinate_count(&self) -> usize {
+        self.coordinates.len()
     }
 
     /// Register or refresh one native process. A changed start generation
@@ -3014,6 +3103,331 @@ impl UiaRegistry {
         })
     }
 
+    /// Resolve the current derivation binding for approval digest
+    /// computation. This performs the same fail-closed revalidation as
+    /// `derive_coordinates` but mints no coordinate identity, so dispatch
+    /// can bind approval before derivation and then revalidate again
+    /// immediately before minting.
+    pub fn derivation_binding(
+        &self,
+        proposal_id: &str,
+        expected_proposal_generation: u64,
+        workspace_id: &str,
+        policy_revision: &str,
+    ) -> Result<DerivationBinding, UiaError> {
+        self.require_derivation_target(
+            proposal_id,
+            expected_proposal_generation,
+            workspace_id,
+            policy_revision,
+        )
+    }
+
+    /// Derive deterministic frame-relative coordinates from one live
+    /// proposal after immediate pre-derivation revalidation. Any drift
+    /// fails closed without silent retargeting and without fallback to
+    /// raw coordinate requests, input execution, clipboard, network, or
+    /// elevation. Callers supply no coordinates: the coordinates are
+    /// computed from the exact bounded proposal region. Derivation never
+    /// calls any input API. On success a server-allocated typed
+    /// coordinate identity is minted with a fresh derivation generation;
+    /// the identity is evidence for the successor input grain and never
+    /// grants input authority.
+    pub fn derive_coordinates(
+        &mut self,
+        proposal_id: &str,
+        expected_proposal_generation: u64,
+        workspace_id: &str,
+        policy_revision: &str,
+    ) -> Result<Value, UiaError> {
+        let binding = self.require_derivation_target(
+            proposal_id,
+            expected_proposal_generation,
+            workspace_id,
+            policy_revision,
+        )?;
+        self.derivation_counter += 1;
+        let derivation_generation = self.derivation_counter;
+        let coord_id = allocate_coord_id(&binding.proposal_id, derivation_generation);
+        self.coordinates.insert(
+            coord_id.clone(),
+            CoordinateRecord {
+                coord_id: coord_id.clone(),
+                proposal_id: binding.proposal_id.clone(),
+                frame_id: binding.frame_id.clone(),
+                window_id: binding.window_id.clone(),
+                process_id: binding.process_id.clone(),
+                process_generation: binding.process_generation,
+                window_generation: binding.window_generation,
+                capture_generation: binding.capture_generation,
+                proposal_generation: binding.proposal_generation,
+                derivation_generation,
+                x: binding.x,
+                y: binding.y,
+                workspace_id: workspace_id.to_owned(),
+                policy_revision: policy_revision.to_owned(),
+            },
+        );
+        let result = json!({
+            "schema": COORD_SCHEMA,
+            "action": "propose",
+            "coord_id": coord_id,
+            "proposal_id": binding.proposal_id,
+            "frame_id": binding.frame_id,
+            "window_id": binding.window_id,
+            "process_id": binding.process_id,
+            "process_generation": binding.process_generation,
+            "window_generation": binding.window_generation,
+            "capture_generation": binding.capture_generation,
+            "proposal_generation": binding.proposal_generation,
+            "derivation_generation": derivation_generation,
+            "x": binding.x,
+            "y": binding.y,
+            "frame_width": binding.frame_width,
+            "frame_height": binding.frame_height,
+            "truncated": false,
+            "workspace_id": workspace_id,
+            "policy_revision": policy_revision,
+        });
+        enforce_response_bytes(&result)
+    }
+
+    /// Describe one server-allocated coordinate identity without granting
+    /// any execution authority. The successor input grain validates
+    /// coordinate identities through this read-only check; replayed,
+    /// foreign, generation-drifted, and policy-drifted identities fail
+    /// closed as stale. A missing or denied coordinate identity is never
+    /// actionable and never becomes input authority.
+    pub fn describe_coordinates(
+        &self,
+        coord_id: &str,
+        expected_derivation_generation: u64,
+        workspace_id: &str,
+        policy_revision: &str,
+    ) -> Result<Value, UiaError> {
+        if !is_well_formed_coord_id(coord_id) {
+            return Err(UiaError::new(
+                FailureCode::InvalidRequest,
+                "derived coordinate identity is malformed",
+            ));
+        }
+        let record = self.coordinates.get(coord_id).ok_or_else(|| {
+            UiaError::new(
+                FailureCode::TargetStale,
+                "derived coordinate identity is unknown or stale and is never actionable",
+            )
+        })?;
+        if record.workspace_id != workspace_id {
+            return Err(UiaError::new(
+                FailureCode::TargetStale,
+                "derived coordinate identity belongs to another workspace",
+            ));
+        }
+        if record.policy_revision != policy_revision {
+            return Err(UiaError::new(
+                FailureCode::TargetStale,
+                "derived coordinate identity was issued under another policy revision",
+            ));
+        }
+        if record.derivation_generation != expected_derivation_generation {
+            return Err(UiaError::new(
+                FailureCode::TargetStale,
+                "derived coordinate generation drifted; the coordinates are stale and never actionable",
+            ));
+        }
+        let proposal = self.proposals.get(&record.proposal_id).ok_or_else(|| {
+            UiaError::new(
+                FailureCode::TargetStale,
+                "derived coordinates lost their owning proposal",
+            )
+        })?;
+        if proposal.proposal_generation != record.proposal_generation {
+            return Err(UiaError::new(
+                FailureCode::TargetStale,
+                "derived coordinates owning proposal drifted; the coordinates are stale and never actionable",
+            ));
+        }
+        let frame = self.frames.get(&record.frame_id).ok_or_else(|| {
+            UiaError::new(
+                FailureCode::TargetStale,
+                "derived coordinates lost their owning frame",
+            )
+        })?;
+        if frame.capture_generation != record.capture_generation {
+            return Err(UiaError::new(
+                FailureCode::TargetStale,
+                "derived coordinates owning frame drifted; the coordinates are stale and never actionable",
+            ));
+        }
+        let window = self.windows.get(&record.window_id).ok_or_else(|| {
+            UiaError::new(
+                FailureCode::TargetStale,
+                "derived coordinates lost their owning window",
+            )
+        })?;
+        if window.window_generation != record.window_generation {
+            return Err(UiaError::new(
+                FailureCode::TargetStale,
+                "derived coordinates owning window drifted; the coordinates are stale and never actionable",
+            ));
+        }
+        let process = self.processes.get(&record.process_id).ok_or_else(|| {
+            UiaError::new(
+                FailureCode::TargetStale,
+                "derived coordinates lost their owning process",
+            )
+        })?;
+        if process.superseded || process.process_generation != record.process_generation {
+            return Err(UiaError::new(
+                FailureCode::TargetStale,
+                "derived coordinates owning process drifted; the coordinates are stale and never actionable",
+            ));
+        }
+        Ok(json!({
+            "schema": COORD_SCHEMA,
+            "coord_id": record.coord_id,
+            "proposal_id": record.proposal_id,
+            "frame_id": record.frame_id,
+            "window_id": record.window_id,
+            "process_id": record.process_id,
+            "process_generation": record.process_generation,
+            "window_generation": record.window_generation,
+            "capture_generation": record.capture_generation,
+            "proposal_generation": record.proposal_generation,
+            "derivation_generation": record.derivation_generation,
+            "x": record.x,
+            "y": record.y,
+            "workspace_id": record.workspace_id,
+            "policy_revision": record.policy_revision,
+        }))
+    }
+
+    fn require_derivation_target(
+        &self,
+        proposal_id: &str,
+        expected_proposal_generation: u64,
+        workspace_id: &str,
+        policy_revision: &str,
+    ) -> Result<DerivationBinding, UiaError> {
+        if !is_well_formed_proposal_id(proposal_id) {
+            return Err(UiaError::new(
+                FailureCode::InvalidRequest,
+                "visual proposal identity is malformed",
+            ));
+        }
+        let proposal = self.proposals.get(proposal_id).ok_or_else(|| {
+            UiaError::new(
+                FailureCode::TargetStale,
+                "visual proposal identity is unknown or stale and is never actionable",
+            )
+        })?;
+        if proposal.workspace_id != workspace_id {
+            return Err(UiaError::new(
+                FailureCode::TargetStale,
+                "visual proposal identity belongs to another workspace",
+            ));
+        }
+        if proposal.policy_revision != policy_revision {
+            return Err(UiaError::new(
+                FailureCode::TargetStale,
+                "visual proposal identity was issued under another policy revision",
+            ));
+        }
+        if proposal.proposal_generation != expected_proposal_generation {
+            return Err(UiaError::new(
+                FailureCode::TargetStale,
+                "visual proposal generation drifted; the proposal is stale and never actionable",
+            ));
+        }
+        let frame = self.frames.get(&proposal.frame_id).ok_or_else(|| {
+            UiaError::new(
+                FailureCode::TargetStale,
+                "coordinate derivation lost its owning frame",
+            )
+        })?;
+        if frame.capture_generation != proposal.capture_generation {
+            return Err(UiaError::new(
+                FailureCode::TargetStale,
+                "coordinate derivation owning frame drifted; the proposal is stale and never actionable",
+            ));
+        }
+        let window = self.windows.get(&proposal.window_id).ok_or_else(|| {
+            UiaError::new(
+                FailureCode::TargetStale,
+                "coordinate derivation lost its owning window",
+            )
+        })?;
+        if window.workspace_id != workspace_id {
+            return Err(UiaError::new(
+                FailureCode::TargetStale,
+                "coordinate derivation target window belongs to another workspace",
+            ));
+        }
+        if window.policy_revision != policy_revision {
+            return Err(UiaError::new(
+                FailureCode::TargetStale,
+                "coordinate derivation target window was issued under another policy revision",
+            ));
+        }
+        if window.window_generation != proposal.window_generation {
+            return Err(UiaError::new(
+                FailureCode::TargetStale,
+                "coordinate derivation owning window drifted; the proposal is stale and never actionable",
+            ));
+        }
+        if is_protected_window(&window.title, &window.class) {
+            return Err(UiaError::new(
+                FailureCode::CapabilityDenied,
+                "coordinate derivation for a protected Cotra surface is denied",
+            ));
+        }
+        let process = self.processes.get(&proposal.process_id).ok_or_else(|| {
+            UiaError::new(
+                FailureCode::TargetStale,
+                "coordinate derivation lost its owning process",
+            )
+        })?;
+        if process.superseded || process.process_generation != proposal.process_generation {
+            return Err(UiaError::new(
+                FailureCode::TargetStale,
+                "coordinate derivation owning process drifted; the proposal is stale and never actionable",
+            ));
+        }
+        if process.workspace_id != workspace_id {
+            return Err(UiaError::new(
+                FailureCode::TargetStale,
+                "coordinate derivation target process belongs to another workspace",
+            ));
+        }
+        if process.policy_revision != policy_revision {
+            return Err(UiaError::new(
+                FailureCode::TargetStale,
+                "coordinate derivation target process was issued under another policy revision",
+            ));
+        }
+        let region = VisualRegion {
+            x: proposal.region_x,
+            y: proposal.region_y,
+            width: proposal.region_width,
+            height: proposal.region_height,
+        };
+        let derived = derive_region_center(region);
+        Ok(DerivationBinding {
+            process_id: process.process_id.clone(),
+            process_generation: process.process_generation,
+            window_id: window.window_id.clone(),
+            window_generation: window.window_generation,
+            frame_id: frame.frame_id.clone(),
+            capture_generation: frame.capture_generation,
+            proposal_id: proposal.proposal_id.clone(),
+            proposal_generation: proposal.proposal_generation,
+            x: derived.x,
+            y: derived.y,
+            frame_width: frame.width,
+            frame_height: frame.height,
+        })
+    }
+
     fn require_value_target(
         &self,
         element_id: &str,
@@ -3593,6 +4007,50 @@ pub fn visual_proposal_digest(
     digest_hex(&material, 64)
 }
 
+/// Server-resolved derivation binding used for approval digest
+/// computation and evidence. Callers never supply these values directly;
+/// they are resolved from the typed proposal identity immediately before
+/// derivation, including the deterministically derived coordinates, which
+/// are bound into the approval digest.
+#[derive(Debug, Clone)]
+pub struct DerivationBinding {
+    pub process_id: String,
+    pub process_generation: u64,
+    pub window_id: String,
+    pub window_generation: u64,
+    pub frame_id: String,
+    pub capture_generation: u64,
+    pub proposal_id: String,
+    pub proposal_generation: u64,
+    pub x: u64,
+    pub y: u64,
+    pub frame_width: u32,
+    pub frame_height: u32,
+}
+
+/// Compute the exact approval digest for one coordinate derivation. The
+/// digest binds the derived coordinates, and dispatch revalidates the
+/// same binding set immediately before minting so any material drift
+/// invalidates the approval.
+pub fn coordinate_derivation_digest(
+    workspace_id: &str,
+    policy_revision: &str,
+    binding: &DerivationBinding,
+) -> String {
+    let material = format!(
+        "cotra-coordinate-derivation-v1|{workspace_id}|{policy_revision}|{}|{}|{}|{}|{}|{}|{}|{}|derive",
+        binding.proposal_id,
+        binding.proposal_generation,
+        binding.frame_id,
+        binding.capture_generation,
+        binding.window_id,
+        binding.window_generation,
+        binding.x,
+        binding.y,
+    );
+    digest_hex(&material, 64)
+}
+
 fn render_element(record: &ElementRecord) -> Value {
     json!({
         "schema": UIA_SCHEMA,
@@ -3664,3 +4122,5 @@ mod sg000032_tests;
 mod sg000033_tests;
 #[cfg(test)]
 mod sg000034_tests;
+#[cfg(test)]
+mod sg000035_tests;

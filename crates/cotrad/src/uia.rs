@@ -1,21 +1,22 @@
-//! SG-000034 non-actuating visual target proposal dispatch.
+//! SG-000035 proposal-only coordinate derivation dispatch.
 //!
 //! This module dispatches the five retained SG-000027 observation shapes,
 //! the retained SG-000028 `uia.element/invoke` shape, the retained
 //! SG-000029 `uia.element/set_value` shape, the retained SG-000030
 //! `uia.element/select` shape, the retained SG-000031 `uia.element/toggle`
 //! shape, the retained SG-000032 `uia.element/scroll` shape, the retained
-//! SG-000033 `uia.screenshot/capture` shape, plus the single SG-000034
-//! non-actuating vision shape `uia.visual/propose` against a
-//! process-lifetime typed identity registry backed by the native adapter.
-//! Observation remains read-only with no approval. Invoke, set_value,
-//! select, toggle, scroll, capture, and propose each require fresh
-//! per-action SOFT approval with exact digest binding and immediate
-//! pre-action stale-target revalidation. Proposals mint server-allocated
-//! typed proposal identities that are evidence only and never grant
-//! coordinate or input authority. Every other UIA-like shape returns
-//! `Ok(None)` so the caller fails closed through the STRONG gate or the
-//! legacy denial.
+//! SG-000033 `uia.screenshot/capture` shape, the retained SG-000034
+//! `uia.visual/propose` shape, plus the single SG-000035 proposal-only
+//! derivation shape `uia.coordinates/propose` against a process-lifetime
+//! typed identity registry backed by the native adapter. Observation
+//! remains read-only with no approval. Invoke, set_value, select,
+//! toggle, scroll, capture, propose, and coordinate derivation each
+//! require fresh per-action SOFT approval with exact digest binding and
+//! immediate pre-action stale-target revalidation. Derivation mints
+//! server-allocated typed coordinate identities that are evidence only
+//! and never grant input authority; derivation never calls any input
+//! API. Every other UIA-like shape returns `Ok(None)` so the caller
+//! fails closed through the STRONG gate or the legacy denial.
 //!
 //! Identities are process-lifetime: a cotrad restart drops the registry,
 //! so pre-restart identities fail closed as unknown rather than retargeting.
@@ -25,9 +26,9 @@ use cotra_contracts::{FailureCode, RequestEnvelope};
 use cotra_policy::{Workspace, POLICY_REVISION};
 use cotra_provider_fs::ProviderError;
 use cotra_provider_uia::{
-    capture_approval_digest, invoke_approval_digest, scroll_approval_digest,
-    select_approval_digest, toggle_approval_digest, value_approval_digest, visual_proposal_digest,
-    NativeAdapter, UiaRegistry, VisualRegion,
+    capture_approval_digest, coordinate_derivation_digest, invoke_approval_digest,
+    scroll_approval_digest, select_approval_digest, toggle_approval_digest, value_approval_digest,
+    visual_proposal_digest, NativeAdapter, UiaRegistry, VisualRegion,
 };
 use serde_json::Value;
 use std::sync::{Mutex, OnceLock};
@@ -43,7 +44,7 @@ fn locked_registry() -> Result<std::sync::MutexGuard<'static, UiaRegistry>, Prov
         .map_err(|_| ProviderError::new(FailureCode::InternalError, "uia registry is unavailable"))
 }
 
-/// Dispatch the SG-000034 UIA shapes. Returns `Ok(None)` for non-UIA shapes
+/// Dispatch the SG-000035 UIA shapes. Returns `Ok(None)` for non-UIA shapes
 /// so the caller falls through to the browser, trust, Git, and legacy
 /// dispatchers.
 pub fn dispatch_uia(
@@ -51,6 +52,9 @@ pub fn dispatch_uia(
     approval: &impl ApprovalBroker,
     request: &RequestEnvelope,
 ) -> Result<Option<Value>, ProviderError> {
+    if cotra_provider_uia::is_coordinate_propose_shape(&request.capability, &request.operation) {
+        return derive_with_approval(workspace, approval, request).map(Some);
+    }
     if cotra_provider_uia::is_visual_propose_shape(&request.capability, &request.operation) {
         return propose_with_approval(workspace, approval, request).map(Some);
     }
@@ -444,6 +448,77 @@ fn select_with_approval(
             &expected_control_type,
             expected_selected,
             selected,
+            &workspace.id,
+            POLICY_REVISION,
+        )
+        .map_err(|error| ProviderError::new(error.code, error.message))?;
+    let mut stamped = evidence;
+    stamped["approval_record"] = Value::String(token.record_id);
+    Ok(stamped)
+}
+
+fn derive_with_approval(
+    workspace: &Workspace,
+    approval: &impl ApprovalBroker,
+    request: &RequestEnvelope,
+) -> Result<Value, ProviderError> {
+    if request.target.is_some() {
+        return Err(ProviderError::new(
+            FailureCode::InvalidRequest,
+            "uia coordinate derivation shapes do not accept a target field",
+        ));
+    }
+    reject_uia_arguments(request, &["proposal_id", "expected_proposal_generation"])?;
+    let proposal_id = required_string(request, "proposal_id")?;
+    if !cotra_provider_uia::is_well_formed_proposal_id(&proposal_id) {
+        return Err(ProviderError::new(
+            FailureCode::InvalidRequest,
+            "uia coordinate derivation proposal_id is malformed",
+        ));
+    }
+    let expected_proposal_generation = required_u64(request, "expected_proposal_generation")?;
+    let binding = {
+        let guard = locked_registry()?;
+        guard
+            .derivation_binding(
+                &proposal_id,
+                expected_proposal_generation,
+                &workspace.id,
+                POLICY_REVISION,
+            )
+            .map_err(|error| ProviderError::new(error.code, error.message))?
+    };
+    let digest = coordinate_derivation_digest(&workspace.id, POLICY_REVISION, &binding);
+    let prompt = ApprovalPrompt::new(
+        workspace.id.clone(),
+        POLICY_REVISION,
+        "derive proposal coordinates",
+        proposal_id.clone(),
+        format!(
+            "proposal={} proposal_generation={} frame={} coordinates={},{} action=derive",
+            binding.proposal_id,
+            binding.proposal_generation,
+            binding.frame_id,
+            binding.x,
+            binding.y,
+        ),
+        digest.clone(),
+    );
+    let token = approval
+        .request_token(&prompt)
+        .map_err(|error| ProviderError::new(error.code, error.message))?;
+    approval
+        .consume(
+            &token,
+            &ConsumeExpectation::new(digest, workspace.id.clone(), POLICY_REVISION),
+            cotra_approval::now_ms(),
+        )
+        .map_err(|error| ProviderError::new(error.code, error.message))?;
+    let mut guard = locked_registry()?;
+    let evidence = guard
+        .derive_coordinates(
+            &proposal_id,
+            expected_proposal_generation,
             &workspace.id,
             POLICY_REVISION,
         )
