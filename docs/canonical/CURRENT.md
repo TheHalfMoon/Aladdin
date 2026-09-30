@@ -1,11 +1,11 @@
 # Cotra Current Canonical Frontier
 
-Status: CLOSED_CANONICAL
+Status: ACTIVE_GRAIN
 Date: 2026-09-30
-Governance snapshot base: 72e231997f28068c4bceefdffb7be33f0a771b7b
+Governance snapshot base: e3c2504602df89128370b5f746f4e988fa078a73
 Evidence ledger: `.specgrain/canonical-evidence.json`
 
-`Governance snapshot base` records the exact canonical parent from which this closeout snapshot was authored. It deliberately does not claim the eventual merge SHA of the commit containing this file.
+`Governance snapshot base` records the exact canonical parent from which this activation snapshot was authored. It deliberately does not claim the eventual merge SHA of the commit containing this file.
 
 ## SpecGrain state semantics
 
@@ -244,7 +244,7 @@ All P09 closeouts (SG-000027 recorded here, SG-000028 recorded here, SG-000029 r
 
 ## Successor frontier
 
-COTRA-P10 continues at this frontier. No successor grain beyond SG-000036 is authorized by this closeout. The P10 successors (human interruption) must each be activated as narrow lawful grains before implementation.
+COTRA-P10 continues at this frontier. No successor grain beyond SG-000037 is authorized by this activation.
 
 ## Closed SG-000033 screenshot capture
 
@@ -272,9 +272,26 @@ SG-000036 proved that no execution shape accepts caller-supplied coordinates, wi
 
 ## Active grain
 
-No COTRA-P10 grain is active. SG-000036 was the sole active grain and is now `CLOSED` and canonical.
+SG-000037 - Human-interruption invalidation for bounded input leases - is the sole active COTRA-P10 grain.
 
-The successor frontier is P10 human-interruption work: interruption handling bound to execution records without weakening STRONG enforcement, one-shot, expiry, or digest binding, and without exposing unrestricted desktop input or elevation authority. A missing or denied lease must never silently grant input authority.
+This activation authorizes implementation and qualification of narrow human-interruption handling on top of the closed SG-000036 bounded execution registry, the closed SG-000035 coordinate registry, the closed SG-000034 visual proposal registry, the closed SG-000033 window-scoped capture registry, the closed COTRA-P09 structured-UIA registry, the SG-000018 replay-resistant foundation, SG-000019 class enforcement, SG-000020 trust and revoke records, and the closed COTRA-P08 registry: a monotonic interruption epoch starting at zero and incremented only by an explicit human-interruption report with bounded physical-source reasons; lease epoch binding so every input lease carries the current epoch and every execution revalidates lease epoch immediately before actuation with epoch drift fail-closed; approval digest epoch binding so pre-interruption approvals fail closed after override; input-origin classification where Cotra synthetic never interrupts itself and unknown input fails closed toward interruption; no replay, no queued continuation, and no drag or keystroke continuation after override; protected Cotra surface retention with no emergency-stop suppression; bounded secret-free interruption evidence; and explicit denial of new actuating input, keyboard, drag, input surveillance, hooks, polling, monitor and desktop scope, clipboard, network, and elevation, while retaining all closed execution, derivation, proposal, capture, UIA, approval, presence, trust, and browser behavior.
+
+Authorized target design:
+- interruption epoch monotonic with bounded reasons human-keyboard, human-mouse-move, human-mouse-button, human-touch-pen, human-foreground-change, human-presence, emergency-stop, and approval-pending-suspension, with empty, oversized, and unknown reasons rejected without epoch mutation;
+- lease epoch binding with exactly-once consumption retained and replayed, expired, revoked, foreign, and epoch-drifted leases fail-closed;
+- fresh SOFT approval digest binding extended to include the interruption epoch with one-shot consumption and stale-epoch fail-closed;
+- immediate pre-execution interruption revalidation with TargetStale denial on any epoch drift without silent retargeting;
+- origin classification distinguishing Cotra synthetic, OS or other synthetic, human physical, and unknown input with fail-closed ambiguity and forged-origin suppression resistance;
+- bounded interruption evidence with epoch, reason, timestamp, workspace, and policy revision only and no input-content or secret material;
+- deterministic unit and security tests for mouse movement, click, key, and foreground change during live leases, stale and replayed leases and approvals after interruption, queued operations, forged reasons, forged synthetic claims, Cotra self-non-interruption, ambiguous fail-closed, cross-workspace and cross-session binding, and policy drift.
+
+## Active acceptance frontier
+
+SG-000037 must prove that the epoch starts at zero and increments only on valid reports, that every lease binds the current epoch, that human interaction revokes live leases with replayed leases and approvals fail-closed, that the approval digest binds the epoch, that Cotra synthetic never interrupts itself while unknown input fails closed, that interrupted actions never replay and queued operations never continue, that the agent cannot forge or suppress interruption through MCP tools or replayed material, and that Windows-specific qualification proves epoch binding without fabricating interactive desktop evidence.
+
+New actuating input, keyboard, drag, input-content surveillance, hooks, polling loops, monitor and desktop scopes, clipboard access, generic network authority, persistent approval reuse, remote delegation, and elevation must remain absent, and STRONG enforcement, one-shot, expiry, and digest binding must not weaken.
+
+A P10 exit requires joint proof from SG-000033 capture plus SG-000034 proposals plus SG-000035 coordinates plus SG-000036 execution plus SG-000037 interruption that the provider ceiling is enforced, protected surfaces are denied, stale-frame and stale-epoch tests pass, and no silent fallback from structured denial into coordinates exists. It must not expose unrestricted desktop input or elevation authority.
 
 ## Canonical public authority boundary retained
 

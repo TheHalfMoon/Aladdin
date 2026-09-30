@@ -1,0 +1,142 @@
+{
+  "id": "SG-000037",
+  "title": "Human-interruption invalidation for bounded input leases",
+  "program": "COTRA-P10",
+  "state": "GRAIN",
+  "risk": "high",
+  "created": "2026-09-30",
+  "base": "e3c2504602df89128370b5f746f4e988fa078a73",
+  "dependencies": [
+    "SG-000036"
+  ],
+  "objective": "Establish the fifth narrow COTRA-P10 vision grain on top of the closed SG-000036 bounded execution registry, the closed SG-000035 coordinate registry, the closed SG-000034 visual proposal registry, the closed SG-000033 window-scoped capture registry, the closed COTRA-P09 structured-UIA registry, the SG-000018 replay-resistant foundation, SG-000019 class enforcement, SG-000020 trust and revoke records, and the closed COTRA-P08 registry: human-interruption handling bound to the explicit single-use input lease through a monotonic interruption epoch, where any material human physical interaction revokes live lease material so old leases, pending approvals bound to old epochs, and queued continuations fail closed, Cotra synthetic input never counts as human interruption, ambiguous classification fails closed toward interruption, and no new actuating input, keyboard, drag, monitor or desktop scope, clipboard, network, or elevation authority is added.",
+  "scope": {
+    "include": [
+      "monotonic interruption epoch held by the UIA registry starting at zero, incremented only by an explicit human-interruption report, never decremented or reset, and bound into every input lease at grant time",
+      "explicit human-interruption report shape accepting only a bounded physical-source reason of human-keyboard, human-mouse-move, human-mouse-button, human-touch-pen, human-foreground-change, human-presence, emergency-stop, or approval-pending-suspension, returning bounded typed interruption evidence with the new epoch and rejecting empty, oversized, and unknown reasons without mutating the epoch",
+      "input-origin classification distinguishing Cotra synthetic execution from OS or other synthetic input, real human physical input, and unknown input, where Cotra synthetic never interrupts itself, human physical always interrupts, and unknown or ambiguous input fails closed toward interruption",
+      "lease epoch binding so every input lease minted after this grain carries the current interruption epoch, every execution revalidates lease epoch against the live registry epoch immediately before actuation, and any epoch drift fails closed as TargetStale with the lease revoked and never retried without a fresh lease",
+      "approval epoch binding so the bounded execution approval digest includes the interruption epoch, and any approval minted before a material human override fails closed after the override with fresh proposal, approval, and lease required before automation resumes",
+      "immediate pre-execution interruption revalidation with no silent retargeting, no replay of the interrupted action, no continuation of queued operations, and no drag-sequence or keystroke continuation after a human override",
+      "protected Cotra surface retention so interruption handling never exposes approval dialogs, STRONG presence surfaces, trust controls, emergency revoke, or security-sensitive Cotra UI as automation targets, and never suppresses the emergency stop",
+      "bounded interruption evidence carrying only the epoch, reason, timestamp, workspace, and policy revision material with explicit truncation reporting and no keystroke, pointer-path, window-content, credential, or secret material",
+      "deterministic unit and security tests for human mouse movement during a live lease, physical click during an agent sequence, physical key during an agent sequence, human foreground change, stale lease after interruption, replayed pre-interruption lease, replayed pre-interruption approval, queued operation after interruption, new action without fresh validation, forged interruption reason, forged synthetic-origin claim, Cotra synthetic correctly not interrupting itself, ambiguous input failing closed, cross-workspace interruption, cross-session input binding, and policy-revision drift",
+      "retention of all closed SG-000036 execution behavior, all closed SG-000035 derivation behavior, all closed SG-000034 proposal behavior, all closed SG-000033 capture behavior, all closed P09 structured-UIA behavior, SG-000018 one-shot and expiry and digest and history behavior, SG-000019 SOFT and STRONG class enforcement, SG-000020 trust and revoke behavior, and closed P08 registry behavior with no change outside interruption-epoch policy",
+      "Windows and Ubuntu exact-head qualification with honest headless limits: deterministic injected adapters prove epoch policy on every platform, the native adapter proves real process identity on Windows, live desktop interaction is reported as unavailable instead of fabricated, and the canonical Windows mechanism of last-input timing with injected-input filtering is documented as the interactive-broker source for the report shape"
+    ],
+    "exclude": [
+      "new actuating input shapes of any kind beyond the closed SG-000036 click-only uia.input/execute",
+      "keyboard injection, text entry, key combinations, and hotkeys of any kind",
+      "dragging, multi-click, double-click, wheel, touch actuation, gestures, and focus changes of any kind",
+      "raw SendInput, raw mouse input, and raw synthetic input outside the closed click shape",
+      "lease minting widening, lease reuse, lease transfer, lease persistence across operations, and standing input sessions of any kind",
+      "keystroke content capture, pointer-path recording, screen-content capture beyond the closed window-scoped shape, and continuous input surveillance of any kind",
+      "low-level hook installation, global hook persistence, scheduled polling loops, and background input logging of any kind",
+      "execution against caller-selected windows, monitors, or desktops of any kind",
+      "execution on protected Cotra approval surfaces of any kind",
+      "suppression, delay, or bypass of the emergency stop or approval-pending lease suspension of any kind",
+      "clipboard read and clipboard write",
+      "P09 UIA actuation beyond the closed SG-000027 through SG-000032 scopes",
+      "SG-000033 capture, SG-000034 proposals, and SG-000035 derivation beyond their closed shapes",
+      "arbitrary process commands, process spawn, process injection, and process termination",
+      "raw Win32 command execution and PowerShell execution",
+      "password, credential, and Windows Hello material exposure",
+      "persistent approval reuse across operations or across interruption boundaries",
+      "approval delegation to remote or MCP callers",
+      "caller-supplied approval boolean and caller-supplied approval material",
+      "generic network fetch and socket authority",
+      "elevation, UAC bypass, service installation, privileged desktop access, and secure desktop input"
+    ]
+  },
+  "authority_delta": {
+    "filesystem": "No new filesystem authority. Interruption handling reads bounded lease metadata already held by the SG-000036 registry and performs no file read or write; retention of interruption records outside bounded evidence is denied.",
+    "process": "No new process launch, injection, or termination authority. The existing read-only process identity is reused for binding only, and the existing SG-000010 whoami-only spawn boundary is unchanged.",
+    "network": "None. Interruption handling is strictly local with no egress, and no fetch, socket, or tunnel authority is added.",
+    "browser": "None. The closed P08 structured-browser registry is unchanged, and no browser launch, attachment, navigation, download, or upload authority is added.",
+    "ui_input": "No new actuating input authority is added. The only change is revocation: a monotonic interruption epoch invalidates live single-use input leases, pending execution approvals bound to old epochs, and queued continuations after material human interaction. Cotra synthetic execution never counts as human interruption. No keyboard, no drag, no multi-click, no wheel, no touch actuation, no focus change, no raw synthetic input, no monitor scope, no desktop scope, and no other UIA pattern authority is added.",
+    "secrets": "No password, credential, Windows Hello, cookie, token, or session material enters prompts, records, history, logs, MCP responses, snapshots, or evidence packets. Interruption evidence carries only epoch, bounded reason, timestamp, workspace, and policy revision. Protected Cotra surfaces are never execution targets.",
+    "approval": "No new approval-minting authority is introduced. The existing per-execution SOFT approval digest is extended to bind the interruption epoch, so pre-interruption approvals fail closed after a human override. No persistent reuse, no remote delegation, and no caller-supplied approval boolean is introduced.",
+    "privileged": "None. No elevation, UAC bypass, service installation, privileged desktop access, or secure desktop input is added."
+  },
+  "invariants": [
+    "human physical interaction always wins over Cotra automation and the system never fights the user for control",
+    "the interruption epoch is monotonic and never decrements, resets, or wraps to revalidate an old lease",
+    "every input lease binds the exact interruption epoch at grant time with stale-epoch leases fail-closed",
+    "every execution revalidates lease epoch against the live registry epoch immediately before actuation",
+    "every execution approval digest binds the interruption epoch with pre-interruption approvals fail-closed after override",
+    "Cotra synthetic execution never counts as human interruption and never revokes its own lease",
+    "unknown or ambiguous input classification fails closed toward interruption",
+    "interrupted actions are never replayed, queued continuations never run, and drag or keystroke sequences never continue after override without a fresh lease and fresh approval",
+    "a missing, denied, expired, consumed, or epoch-drifted lease never becomes execution authority",
+    "interruption evidence carries no input content, no pointer path, and no secret material",
+    "STRONG enforcement, one-shot, expiry, digest, workspace, and policy bindings are not weakened"
+  ],
+  "acceptance": [
+    {
+      "id": "A1",
+      "claim": "Tests prove the interruption epoch starts at zero, increments exactly once per valid human-interruption report with bounded reasons only, never decrements or resets, and that empty, oversized, and unknown reasons are rejected without mutating the epoch."
+    },
+    {
+      "id": "A2",
+      "claim": "Tests prove every input lease granted after this grain binds the current interruption epoch, and that leases granted before an interruption carry the old epoch and fail closed on the next execution with no silent retargeting."
+    },
+    {
+      "id": "A3",
+      "claim": "Tests prove human mouse movement, physical click, physical key, and foreground change during a live lease each revoke the lease, and that replayed pre-interruption leases, replayed pre-interruption approvals, and queued operations after interruption all fail closed with fresh validation and fresh approval required."
+    },
+    {
+      "id": "A4",
+      "claim": "Tests prove the bounded execution approval digest binds the interruption epoch, and that missing, stale-epoch, reused, and digest-mismatched approvals fail closed with no caller-supplied approval boolean accepted."
+    },
+    {
+      "id": "A5",
+      "claim": "Tests prove Cotra synthetic execution never counts as human interruption, OS or other synthetic input does not grant authority, ambiguous or unknown input fails closed toward interruption, and forged synthetic-origin claims cannot suppress a genuine human override."
+    },
+    {
+      "id": "A6",
+      "claim": "Tests prove interruption handling never replays the interrupted action, never continues queued operations or drag and keystroke sequences, never reclaims mouse position against the user, and never refocuses windows against the user."
+    },
+    {
+      "id": "A7",
+      "claim": "Tests prove caller-supplied epoch fields, lease fields, approval material, secret fields, and widening fields are rejected as malformed or denied, and that keyboard, drag, clipboard, network, spawn, inject, terminate, and elevation shapes remain denied outside their closed scopes."
+    },
+    {
+      "id": "A8",
+      "claim": "Tests prove the agent cannot reach interruption reporting or execution through MCP tools, child processes, approval forgery, trust forgery, lease forgery, epoch forgery, or replayed prior approvals and leases, and cannot suppress the emergency stop."
+    },
+    {
+      "id": "A9",
+      "claim": "Tests prove replay, expiry, digest mismatch, revision drift, trust-revision drift, cross-workspace, cross-session, and double-consumption protections remain enforced for both approval classes and for interruption-epoch binding."
+    },
+    {
+      "id": "A10",
+      "claim": "Tests prove all closed SG-000036 execution regressions, all closed SG-000035 derivation regressions, all closed SG-000034 proposal regressions, all closed SG-000033 capture regressions, all closed P09 structured-UIA regressions, P06 approval flows, SG-000018 through SG-000020 regressions, and the closed P08 registry behavior still pass with digests unchanged outside interruption-epoch labeling."
+    },
+    {
+      "id": "A11",
+      "claim": "Tests prove personal-profile-style widening, arbitrary DevTools or CDP, browser scripting, credential stores, clipboard access, standing input sessions beyond the single-use lease, input-content surveillance, and network egress remain unreachable through interruption handling."
+    },
+    {
+      "id": "A12",
+      "claim": "Windows-specific qualification proves interruption-epoch binding against real Windows process identity where required without fabricating interactive desktop evidence, and headless interruption-detection limits are recorded honestly with unavailable-path fail-closed."
+    },
+    {
+      "id": "A13",
+      "claim": "Exact-head Windows and Ubuntu Rust, Node, Governance, genuine TypeSafe Jev, Alibaba Open Code Review, exact-diff security review, manual review of excluded security-sensitive files, and zero unresolved blocking review threads all pass."
+    }
+  ],
+  "successor_requirements": {
+    "p10_vision": "After human interruption closes, COTRA-P10 exits when the joint SG-000033 capture plus SG-000034 proposals plus SG-000035 coordinates plus SG-000036 execution plus SG-000037 interruption proof shows provider ceiling enforced, protected surfaces denied, stale-frame and stale-epoch tests passing, and no silent fallback from structured denial into coordinates, without weakening STRONG enforcement, one-shot, expiry, or digest binding.",
+    "p10_exit": "COTRA-P10 exits when provider ceiling is enforced, protected surfaces are denied, stale-frame and stale-epoch tests pass, and no silent fallback from structured denial into coordinates exists, which SG-000033 capture, SG-000034 proposals, SG-000035 coordinates, SG-000036 execution, plus SG-000037 interruption must jointly satisfy.",
+    "p11_boundary": "Clipboard and network authority remain P11 work and are not granted by interruption handling."
+  },
+  "review": {
+    "diffcipline": true,
+    "jev_semantic_review": true,
+    "alibaba_open_code_review": "required exact-range qualification where integrated",
+    "security_review": true,
+    "exact_head_ci": true,
+    "native_network_qualification": false
+  },
+  "done_when": "Human-interruption invalidation with monotonic interruption epoch, lease epoch binding, approval digest epoch binding, immediate pre-execution interruption revalidation, Cotra-synthetic exclusion with fail-closed ambiguity, no replay or continuation after override, and no new actuating input, keyboard, drag, clipboard, network, or elevation authority is specified."
+}
