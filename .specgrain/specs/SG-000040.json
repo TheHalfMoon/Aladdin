@@ -2,7 +2,7 @@
   "id": "SG-000040",
   "title": "Destination-scoped bounded HTTPS GET fetch",
   "program": "COTRA-P11",
-  "state": "GRAIN",
+  "state": "CLOSED",
   "risk": "high",
   "created": "2026-09-30",
   "base": "633d0b32924e45669301994d90dc8ef40502e2e0",
@@ -161,5 +161,25 @@
     "exact_head_ci": true,
     "native_network_qualification": true
   },
-  "done_when": "Destination-scoped bounded HTTPS GET fetch with exact-origin binding, public-only resolved addresses, double-resolution consistency, post-connection peer verification, manual per-hop redirect revalidation, request and response bounds, direct connections, no ambient credentials, fresh SOFT digest-bound approval, one-shot per-approval fetches, bounded secret-free evidence, and no generic socket, proxy, WebSocket, surveillance, or elevation authority is specified."
+  "done_when": "Destination-scoped bounded HTTPS GET fetch with exact-origin binding, public-only resolved addresses, double-resolution consistency, post-connection peer verification, manual per-hop redirect revalidation, request and response bounds, direct connections, no ambient credentials, fresh SOFT digest-bound approval, one-shot per-approval fetches, bounded secret-free evidence, and no generic socket, proxy, WebSocket, surveillance, or elevation authority is specified.",
+  "qualified_head": "75862656012dd626445d10ac7686846bda67a98e",
+  "implementation_base": "ffaad8ad0d1ee189c7a41dc058ef6f7165e41e28",
+  "implementation_merge": "0133e500802e9c9b8e6181df3c73614c67bb06e2",
+  "pre_merge_ci": "36767820258",
+  "pre_merge_review_gates": "36767815559",
+  "post_merge_ci": "36769671042",
+  "canonical_evidence": {
+    "implementation_pr": 114,
+    "implementation_base": "ffaad8ad0d1ee189c7a41dc058ef6f7165e41e28",
+    "qualified_head": "75862656012dd626445d10ac7686846bda67a98e",
+    "pre_merge_ci": "36767820258",
+    "pre_merge_review_gates": "36767815559",
+    "merge_sha": "0133e500802e9c9b8e6181df3c73614c67bb06e2",
+    "post_merge_ci": "36769671042",
+    "jev": "PASSED: genuine TypeSafe Jev exact-diff review covered 13/13 hunks with zero findings and zero blocking findings, pin 31f89602797fb7bea007f8a480bf368bf564954e, TypeSafe SDK 0.6.0",
+    "ocr": "PASSED: Alibaba Open Code Review v1.12.9 exact-range delegation over 12 changed files, 9 reviewable and 3 excluded files manually reviewed",
+    "security_review": "PASS on exact qualified head: one internal network/fetch shape only; fixed HTTPS GET to port 443; exact bounded URL and dotted-DNS-hostname validation; public-only IPv4/IPv6 resolution with dangerous special-use ranges denied; exact post-approval and per-hop address-set consistency; pre-send WinHTTP resolution pin to one validated public address with original hostname retained for TLS identity and post-response exact connected-peer verification; manual exact-origin redirects with loop, downgrade, private-target, and >5-hop denial; direct/no-proxy fresh transport with cookies, authentication, keep-alive, caller headers, request bodies, and ambient credentials disabled; 1048576-byte incremental response ceiling and typed remote-error failure without body leakage; fresh SOFT exact-digest approval and inherited nonce, expiry, one-shot, workspace, policy, replay, and class enforcement; real Windows https://example.com/ qualification passed with OS certificate validation and peer pinning; no MCP network tool; generic sockets, CONNECT, WebSockets, standing sessions, filesystem/process/UI/elevation widening remain absent. The first Windows exact-head attempt exposed only transient unrelated SG-000013 PowerShell timing failures; the same exact head was rerun without code changes and the complete Windows Rust job, including all SG-000040 tests and the SG-000013 regressions, passed.",
+    "unresolved_review_threads": 0,
+    "authority_boundary": "One explicit bounded internal network/fetch HTTPS GET is newly closed: https only, port 443, public-only DNS, exact address-set and peer binding, manual same-origin redirects, bounded timeouts and 1 MiB response, no proxy or ambient credentials, fresh SOFT digest-bound one-shot approval, and bounded secret-free evidence. No MCP network surface, generic TCP/UDP/raw sockets, listeners, CONNECT proxying, WebSockets, other HTTP methods/schemes/ports, standing sessions, filesystem/process/browser/UI authority, elevation, or approval bypass is added; SG-000038 clipboard read and SG-000039 clipboard write remain unchanged."
+  }
 }
