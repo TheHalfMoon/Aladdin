@@ -292,22 +292,27 @@ fn is_public_ipv6(value: &Ipv6Addr) -> bool {
     if value.is_loopback() || value.is_unspecified() || value.is_multicast() {
         return false;
     }
-    let segments = value.segments();
-    if (segments[0] & 0xffc0) == 0xfe80
-        || (segments[0] & 0xfe00) == 0xfc00
-        || (segments[0] == 0x2001 && segments[1] == 0x0db8)
-        || (segments[0] == 0x2001 && segments[1] == 0x0002)
-        || (segments[0] == 0x2001 && segments[1] == 0x0001)
-        || segments[0] == 0x2002
-        || (segments[0] == 0x0064 && (segments[1] & 0xffc0) == 0xff00)
-        || (value.octets()[0] == 0 && value.octets()[1] == 0)
-    {
-        return false;
-    }
     if let Some(mapped) = value.to_ipv4_mapped() {
         return is_public_ipv4(&mapped);
     }
     if value.to_ipv4().is_some() {
+        return false;
+    }
+
+    let segments = value.segments();
+    // IANA currently allocates native IPv6 global unicast from 2000::/3.
+    // Everything outside that allocation ceiling fails closed. Within it,
+    // deny special-purpose and reserved blocks relevant to this authority.
+    if (segments[0] & 0xe000) != 0x2000 {
+        return false;
+    }
+    if (segments[0] == 0x2001 && segments[1] == 0x0000)
+        || (segments[0] == 0x2001 && segments[1] == 0x0001)
+        || (segments[0] == 0x2001 && segments[1] == 0x0002)
+        || (segments[0] == 0x2001 && segments[1] == 0x0db8)
+        || segments[0] == 0x2002
+        || (segments[0] & 0xff00) == 0x3f00
+    {
         return false;
     }
     true
@@ -771,12 +776,20 @@ mod tests {
             "fc00::1",
             "fe80::1",
             "2001:db8::1",
+            "fec0::1",
+            "64:ff9b:1::1",
+            "100::1",
+            "100:0:0:1::1",
+            "3fff::1",
+            "5f00::1",
+            "4000::1",
             "::ffff:127.0.0.1",
         ] {
             let ip: IpAddr = value.parse().unwrap();
             assert!(!is_public_address(&ip), "{value}");
         }
         assert!(is_public_address(&public()));
+        assert!(is_public_address(&"2001:4860:4860::8888".parse().unwrap()));
     }
 
     #[test]
