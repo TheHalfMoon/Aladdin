@@ -1,0 +1,456 @@
+//! SG-000038 bounded clipboard-read provider.
+//!
+//! This crate implements the narrow P11 clipboard-read authority
+//! authorized by the SG-000038 SpecGrain: one explicit `clipboard/read`
+//! shape returning Unicode text only, with a hard 65536-byte bound,
+//! independent content-type verification, deterministic secret-pattern
+//! denial, clipboard-sequence binding, and bounded secret-free evidence.
+//!
+//! The request represents a single bounded point-in-time sample. It never
+//! becomes persistent observation authority: clipboard write,
+//! subscriptions, polling, monitoring, history collection, and standing
+//! sessions have no function here and must fail closed in the policy and
+//! dispatch layers. Network authority does not exist in this crate.
+//!
+//! Secret model: secret-pattern clipboard content is denied before any
+//! return path and never enters results, evidence, prompts, logs, or MCP
+//! responses. Detection is deterministic pattern matching over documented
+//! credential, token, key, seed, and Cotra-protected families. It is not
+//! claimed to be perfect: novel exfiltration shapes outside the
+//! documented families are a stated limitation, and the fail-closed
+//! direction (deny on match, never leak on match) is the guarantee.
+//!
+//! Windows reality: the native adapter reads Unicode text through the
+//! real Win32 clipboard APIs (`OpenClipboard`, `GetClipboardData` with
+//! `CF_UNICODETEXT`, `GlobalLock`) and binds the real clipboard sequence
+//! number (`GetClipboardSequenceNumber`) without reading content, so
+//! pre-approval and post-approval sequence drift fails closed. A locked,
+//! empty, non-text, or otherwise unreadable clipboard fails closed with
+//! a typed error instead of fabricated content. Deterministic read,
+//! bound, denial, and secret policy is proven through the injected fake
+//! adapter on every platform. These limits are recorded honestly and must
+//! not be read as interactive clipboard evidence beyond what the tests
+//! and the native gating test genuinely prove.
+
+use cotra_contracts::FailureCode;
+use serde_json::{json, Value};
+use sha2::{Digest, Sha256};
+
+/// Schema label for bounded clipboard-read results and evidence.
+pub const CLIPBOARD_SCHEMA: &str = "cotra-clipboard-read-v1";
+
+/// The only clipboard content format SG-000038 authorizes: plain Unicode
+/// text. Bitmap, file-drop, audio, shell-object, HTML/RTF objects, and
+/// every other binary or object format is denied with no hidden transfer.
+pub const UNICODE_TEXT_FORMAT: &str = "unicode-text";
+
+/// Hard maximum clipboard-read payload in bytes of UTF-8 text. Oversized
+/// content fails closed with no silent truncation that changes read
+/// semantics.
+pub const MAX_CLIPBOARD_BYTES: usize = 65536;
+
+/// Maximum workspace/policy string length accepted by the read path.
+/// Oversized scope strings fail closed as malformed.
+pub const MAX_SCOPE_CHARS: usize = 256;
+
+/// The single SG-000038 read shape. Every other clipboard-like shape must
+/// fail closed.
+pub fn is_clipboard_read_shape(capability: &str, operation: &str) -> bool {
+    matches!((capability, operation), ("clipboard", "read"))
+}
+
+/// Typed denial catalog for clipboard shapes that remain unauthorized.
+/// Write, subscription, polling, monitoring, history, and watch shapes
+/// are denied here so policy can map them to the STRONG gate and dispatch
+/// can fail closed without reaching the provider.
+pub const DENIED_CLIPBOARD_SHAPES: &[(&str, &str)] = &[
+    ("clipboard", "write"),
+    ("clipboard", "subscribe"),
+    ("clipboard", "poll"),
+    ("clipboard", "monitor"),
+    ("clipboard", "history"),
+    ("clipboard", "watch"),
+];
+
+pub fn is_denied_clipboard_shape(capability: &str, operation: &str) -> bool {
+    DENIED_CLIPBOARD_SHAPES
+        .iter()
+        .any(|(denied_capability, denied_operation)| {
+            *denied_capability == capability && *denied_operation == operation
+        })
+}
+
+#[derive(Debug, Clone)]
+pub struct ClipboardError {
+    pub code: FailureCode,
+    pub message: String,
+}
+
+impl ClipboardError {
+    pub fn new(code: FailureCode, message: impl Into<String>) -> Self {
+        Self {
+            code,
+            message: message.into(),
+        }
+    }
+}
+
+fn digest_hex(material: &str, chars: usize) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(material.as_bytes());
+    let digest = hasher.finalize();
+    let hex: String = digest.iter().map(|byte| format!("{byte:02x}")).collect();
+    hex.chars().take(chars).collect()
+}
+
+/// SHA-256 hex digest of one clipboard-read payload, used in evidence so
+/// payload comparisons never require moving raw text through logs or
+/// metadata paths. Secret-denied content never reaches this function
+/// because denial happens before digest binding.
+pub fn clipboard_content_digest(text: &str) -> String {
+    digest_hex(&format!("{CLIPBOARD_SCHEMA}|payload|{text}"), 64)
+}
+
+/// Compute the exact approval digest for one bounded clipboard read. The
+/// digest binds the workspace, the policy revision, the clipboard
+/// sequence observed immediately before approval, the fixed Unicode-text
+/// format bound, and the fixed size bound. Content itself is unknown
+/// before the read, so it cannot be pre-bound; instead the sequence
+/// binds the clipboard state, and dispatch revalidates the same sequence
+/// immediately after approval, so any material clipboard change in
+/// between fails closed.
+pub fn clipboard_read_digest(workspace_id: &str, policy_revision: &str, sequence: u64) -> String {
+    let material = format!(
+        "{CLIPBOARD_SCHEMA}|{workspace_id}|{policy_revision}|{sequence}|{UNICODE_TEXT_FORMAT}|{MAX_CLIPBOARD_BYTES}|read"
+    );
+    digest_hex(&material, 64)
+}
+
+/// Substrings that mark clipboard text as secret-bearing. Matching is
+/// ASCII case-insensitive over the full text. A match denies the read
+/// before any return path; the matched material is never quoted in the
+/// denial message, the evidence, or any log.
+const SECRET_MARKERS: &[&str] = &[
+    "-----begin",
+    "private_key",
+    "privatekey",
+    "private-key",
+    "password=",
+    "password:",
+    "passwd=",
+    "passwd:",
+    "pwd=",
+    "pwd:",
+    "api_key",
+    "apikey",
+    "api-key",
+    "api_secret",
+    "app_secret",
+    "client_secret",
+    "connectionstring",
+    "connection string",
+    "bearer ",
+    "token=",
+    "token:",
+    "auth_token",
+    "access_token",
+    "refresh_token",
+    "id_token",
+    "session_token",
+    "aws_access",
+    "aws_secret",
+    "akia",
+    "ghp_",
+    "gho_",
+    "ghu_",
+    "ghs_",
+    "ghr_",
+    "github_token",
+    "xoxp-",
+    "xoxb-",
+    "xoxa-",
+    "xoxo-",
+    "sk-live-",
+    "sk-test-",
+    "secret=",
+    "secret:",
+    "credentials=",
+    "credentials:",
+    "mnemonic",
+    "seed phrase",
+    "seed-phrase",
+    "recovery phrase",
+    "recovery-phrase",
+    "recovery code",
+    "recovery-code",
+    "cotra-approval",
+    "cotra-trust",
+    "cotra-emergency",
+    "cotra-secret",
+];
+
+/// Returns true when clipboard text matches a documented secret family.
+/// Matching is conservative: a match always denies, and bare everyday
+/// words such as `password` or `token` without a credential shape do not
+/// match, which is a documented detection limitation rather than a leak
+/// path, because matched content is denied and unmatched content is
+/// returned only through the explicit approved read.
+pub fn contains_secret_material(text: &str) -> bool {
+    let haystack = text.to_ascii_lowercase();
+    if SECRET_MARKERS
+        .iter()
+        .any(|marker| haystack.contains(marker))
+    {
+        return true;
+    }
+    has_sk_style_token(&haystack)
+}
+
+/// Detects `sk-` style tokens: the literal `sk-` followed by at least
+/// eight ASCII alphanumeric characters. Short or non-alphanumeric
+/// suffixes do not match.
+fn has_sk_style_token(haystack: &str) -> bool {
+    let bytes = haystack.as_bytes();
+    let mut index = 0;
+    while index + 3 < bytes.len() {
+        if &bytes[index..index + 3] == b"sk-" {
+            let tail: &[u8] = &bytes[index + 3..];
+            let run = tail
+                .iter()
+                .take_while(|byte| byte.is_ascii_alphanumeric())
+                .count();
+            if run >= 8 {
+                return true;
+            }
+        }
+        index += 1;
+    }
+    false
+}
+
+/// The adapter boundary. Policy logic, bounds, secret denial, sequence
+/// binding, and evidence live in [`read_bounded_text`], so adapters stay
+/// small and deterministic tests never need a live desktop. Adapters
+/// report raw clipboard facts only and never decide authorization.
+pub trait ClipboardAdapter {
+    /// Return the current clipboard sequence number without reading
+    /// content. The sequence binds clipboard state into the approval
+    /// digest so post-approval drift fails closed.
+    fn sequence_number(&self) -> Result<u64, ClipboardError>;
+    /// Return the current clipboard content as Unicode text without
+    /// validation. Bounds, format, and secret policy live in
+    /// [`read_bounded_text`], not in adapters.
+    fn read_unicode_text(&self) -> Result<String, ClipboardError>;
+}
+
+/// One bounded clipboard-read outcome: secret-free evidence plus the
+/// bounded text. The text travels only in the approved response, never
+/// in logs or metadata paths.
+#[derive(Debug, Clone)]
+pub struct ReadOutcome {
+    pub evidence: Value,
+    pub text: String,
+}
+
+/// Perform one bounded clipboard read with sequence binding. When
+/// `expected_sequence` is present, the live sequence must match it or
+/// the read fails closed as stale: clipboard content changed between
+/// approval and actuation, so the approval no longer describes current
+/// state. Empty, oversized, and secret-bearing content fails closed.
+/// Evidence carries only format, sequence, size, digest, workspace, and
+/// policy revision with no raw content retention.
+pub fn read_bounded_text(
+    adapter: &impl ClipboardAdapter,
+    expected_sequence: Option<u64>,
+    workspace_id: &str,
+    policy_revision: &str,
+) -> Result<ReadOutcome, ClipboardError> {
+    if workspace_id.is_empty() || workspace_id.chars().count() > MAX_SCOPE_CHARS {
+        return Err(ClipboardError::new(
+            FailureCode::InvalidRequest,
+            "clipboard read workspace is empty or too large",
+        ));
+    }
+    if policy_revision.is_empty() || policy_revision.chars().count() > MAX_SCOPE_CHARS {
+        return Err(ClipboardError::new(
+            FailureCode::InvalidRequest,
+            "clipboard read policy revision is empty or too large",
+        ));
+    }
+    let sequence = adapter.sequence_number()?;
+    if let Some(expected) = expected_sequence {
+        if expected != sequence {
+            return Err(ClipboardError::new(
+                FailureCode::TargetStale,
+                "clipboard content changed after approval; the approval no longer describes current clipboard state",
+            ));
+        }
+    }
+    let text = adapter.read_unicode_text()?;
+    if text.is_empty() {
+        return Err(ClipboardError::new(
+            FailureCode::TargetStale,
+            "clipboard is empty; there is no readable text",
+        ));
+    }
+    let byte_length = text.len();
+    if byte_length > MAX_CLIPBOARD_BYTES {
+        return Err(ClipboardError::new(
+            FailureCode::OutputLimit,
+            "clipboard content exceeds the bounded read size",
+        ));
+    }
+    if contains_secret_material(&text) {
+        return Err(ClipboardError::new(
+            FailureCode::CapabilityDenied,
+            "clipboard holds secret material which bounded reads never return",
+        ));
+    }
+    let evidence = json!({
+        "schema": CLIPBOARD_SCHEMA,
+        "action": "read",
+        "format": UNICODE_TEXT_FORMAT,
+        "sequence": sequence,
+        "byte_length": byte_length,
+        "content_digest": clipboard_content_digest(&text),
+        "workspace_id": workspace_id,
+        "policy_revision": policy_revision,
+    });
+    Ok(ReadOutcome { evidence, text })
+}
+
+/// The native adapter. On Windows it queries the real clipboard sequence
+/// number and reads real Unicode text through the Win32 clipboard APIs.
+/// A locked, empty, non-text, oversized, or otherwise unreadable
+/// clipboard fails closed with a typed error instead of fabricated
+/// content. Outside Windows every call fails closed as unavailable.
+pub struct NativeAdapter;
+
+impl NativeAdapter {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Default for NativeAdapter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ClipboardAdapter for NativeAdapter {
+    fn sequence_number(&self) -> Result<u64, ClipboardError> {
+        native_sequence_number()
+    }
+
+    fn read_unicode_text(&self) -> Result<String, ClipboardError> {
+        native_read_unicode_text()
+    }
+}
+
+#[cfg(windows)]
+fn native_sequence_number() -> Result<u64, ClipboardError> {
+    // GetClipboardSequenceNumber needs no clipboard ownership and moves
+    // no content, so it is safe to call for state binding.
+    let sequence = unsafe { windows::Win32::System::DataExchange::GetClipboardSequenceNumber() };
+    Ok(sequence as u64)
+}
+
+#[cfg(not(windows))]
+fn native_sequence_number() -> Result<u64, ClipboardError> {
+    Err(ClipboardError::new(
+        FailureCode::ProviderUnavailable,
+        "clipboard sequence state requires Windows clipboard APIs and is unavailable in this context",
+    ))
+}
+
+#[cfg(windows)]
+fn native_read_unicode_text() -> Result<String, ClipboardError> {
+    use windows::Win32::Foundation::{HGLOBAL, HWND};
+    use windows::Win32::System::DataExchange::{
+        CloseClipboard, GetClipboardData, IsClipboardFormatAvailable, OpenClipboard,
+    };
+    use windows::Win32::System::Memory::{GlobalLock, GlobalSize, GlobalUnlock};
+
+    /// Win32 `CF_UNICODETEXT` clipboard format identifier (winuser.h).
+    /// Kept as a local constant because the generated bindings expose it
+    /// under an unrelated Ole module; the value is stable Win32 ABI.
+    const CF_UNICODETEXT: u32 = 13;
+
+    struct ClipboardGuard;
+    impl Drop for ClipboardGuard {
+        fn drop(&mut self) {
+            unsafe {
+                let _ = CloseClipboard();
+            }
+        }
+    }
+
+    unsafe {
+        OpenClipboard(HWND(std::ptr::null_mut())).map_err(|_| {
+            ClipboardError::new(
+                FailureCode::ProviderUnavailable,
+                "clipboard is locked by another owner and cannot be sampled now",
+            )
+        })?;
+        let _guard = ClipboardGuard;
+        IsClipboardFormatAvailable(CF_UNICODETEXT).map_err(|_| {
+            ClipboardError::new(
+                FailureCode::CapabilityDenied,
+                "clipboard holds no Unicode text; bounded reads never transfer binary or object formats",
+            )
+        })?;
+        let handle = GetClipboardData(CF_UNICODETEXT).map_err(|_| {
+            ClipboardError::new(
+                FailureCode::ProviderUnavailable,
+                "clipboard Unicode text is unreadable in this session",
+            )
+        })?;
+        let global = HGLOBAL(handle.0);
+        let byte_size = GlobalSize(global);
+        if byte_size == 0 {
+            return Err(ClipboardError::new(
+                FailureCode::TargetStale,
+                "clipboard is empty; there is no readable text",
+            ));
+        }
+        // Bound the kernel-reported size before touching the mapping so a
+        // pathological global object cannot drive an unbounded copy.
+        if byte_size > MAX_CLIPBOARD_BYTES.saturating_add(2) {
+            return Err(ClipboardError::new(
+                FailureCode::OutputLimit,
+                "clipboard content exceeds the bounded read size",
+            ));
+        }
+        let locked = GlobalLock(global);
+        if locked.is_null() {
+            return Err(ClipboardError::new(
+                FailureCode::ProviderUnavailable,
+                "clipboard Unicode text is unreadable in this session",
+            ));
+        }
+        let units = byte_size / 2;
+        let raw: &[u16] = std::slice::from_raw_parts(locked as *const u16, units);
+        let end = raw.iter().position(|unit| *unit == 0).unwrap_or(units);
+        let text = String::from_utf16(&raw[..end]).map_err(|_| {
+            let _ = GlobalUnlock(global);
+            ClipboardError::new(
+                FailureCode::ProviderUnavailable,
+                "clipboard Unicode text is unreadable in this session",
+            )
+        })?;
+        let _ = GlobalUnlock(global);
+        Ok(text)
+    }
+}
+
+#[cfg(not(windows))]
+fn native_read_unicode_text() -> Result<String, ClipboardError> {
+    Err(ClipboardError::new(
+        FailureCode::ProviderUnavailable,
+        "clipboard reads require Windows clipboard APIs and are unavailable in this context",
+    ))
+}
+
+#[cfg(test)]
+mod tests;
