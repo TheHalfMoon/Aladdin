@@ -452,6 +452,17 @@
       "review_basis": "Exact-head genuine TypeSafe Jev 24/24 hunks with zero findings/blocking findings, Alibaba Open Code Review v1.12.9 exact-range delegation over 8 files with 7 reviewable and 1 excluded file manually reviewed, exact-diff manual security review, Windows/Ubuntu Rust Node Governance qualification with real Windows process identity proof, successful post-merge CI, and zero unresolved review threads.",
       "unresolved_review_threads": 0,
       "authority_boundary": "Only bounded uia.input/execute on one exact typed coordinate identity with click-only operation is newly added with an explicit server-derived single-use input lease, fresh SOFT digest-bound approval including the lease, immediate stale-coordinate revalidation, and window confinement. Coordinate derivation remains closed under SG-000035, visual proposals remain closed under SG-000034, capture remains closed under SG-000033, and structured UIA remains closed under SG-000027 through SG-000032. Keyboard, drag, multi-click, wheel, touch, focus, raw SendInput, lease reuse, lease transfer, standing sessions, monitor scope, desktop scope, clipboard, network fetch, process spawn, injection, termination, elevation, and approval bypass remain absent, and existing file, process, Git, approval, presence, trust, browser, observation, capture, proposal, derivation, and actuation behavior is unchanged."
+    },
+    "SG-000037": {
+      "implementation_pr": 104,
+      "implementation_base": "7c9b939c9f84b0bc7aaa8233f7cceedffa7dba09",
+      "qualified_head": "f0444990990af2f5bbb55cce243131023fc8dbdb",
+      "pre_merge_ci": "36723813468",
+      "merge_sha": "b88b2582fa1faa27619f890bf75c5a012317cbba",
+      "post_merge_ci": "36724442466",
+      "review_basis": "Exact-head genuine TypeSafe Jev 28/28 hunks with zero findings/blocking findings, Alibaba Open Code Review v1.12.9 exact-range delegation over 8 files with 7 reviewable and 1 excluded file manually reviewed, exact-diff manual security review, Windows/Ubuntu Rust Node Governance qualification with real Windows process identity proof, successful post-merge CI, and zero unresolved review threads.",
+      "unresolved_review_threads": 0,
+      "authority_boundary": "No new actuating input authority is added. Only revocation is newly added through the monotonic interruption epoch bound into input leases and execution approval digests with immediate pre-execution interruption revalidation. Bounded execution remains closed under SG-000036, coordinate derivation remains closed under SG-000035, visual proposals remain closed under SG-000034, capture remains closed under SG-000033, and structured UIA remains closed under SG-000027 through SG-000032. Keyboard, drag, multi-click, wheel, touch, focus, raw SendInput, lease reuse, lease transfer, standing sessions, input-content surveillance, hooks, polling, monitor scope, desktop scope, clipboard, network fetch, process spawn, injection, termination, elevation, and approval bypass remain absent, and existing file, process, Git, approval, presence, trust, browser, observation, capture, proposal, derivation, and actuation behavior is unchanged."
     }
   }
 }
