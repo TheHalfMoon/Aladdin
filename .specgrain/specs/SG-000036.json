@@ -1,0 +1,140 @@
+{
+  "id": "SG-000036",
+  "title": "Bounded coordinate execution with single-use input lease",
+  "program": "COTRA-P10",
+  "state": "GRAIN",
+  "risk": "high",
+  "created": "2026-09-30",
+  "base": "f2b71ef166621af7f5745bef9419a80ab66a8236",
+  "dependencies": [
+    "SG-000035"
+  ],
+  "objective": "Establish the fourth narrow COTRA-P10 vision grain on top of the closed SG-000035 coordinate registry, the closed SG-000034 visual proposal registry, the closed SG-000033 window-scoped capture registry, the closed COTRA-P09 structured-UIA registry, the SG-000018 replay-resistant foundation, SG-000019 class enforcement, SG-000020 trust and revoke records, and the closed COTRA-P08 registry: a single approved bounded input execution shape bound to one server-allocated typed coordinate identity with arguments coord_id, expected_derivation_generation, and operation only, where operation is fixed to click, with an explicit server-derived single-use input lease bound to the exact coordinate binding, fresh SOFT approval digest binding including the lease, immediate pre-execution stale-coordinate revalidation, protected Cotra surface exclusion with window confinement, bounded execution evidence, and explicit denial of every keyboard, drag, multi-click, raw synthetic input, lease reuse, monitor and desktop scope, clipboard, network, and elevation shape.",
+  "scope": {
+    "include": [
+      "single new execution shape uia.input/execute bound to one server-allocated typed coordinate identity with arguments coord_id, expected_derivation_generation, and operation only; operation is fixed to click and no keyboard, drag, double-click, wheel, touch, focus, or raw SendInput operation is accepted",
+      "server-derived coordinate binding with derivation generation, owning proposal, proposal generation, owning frame, capture generation, owning window, owning process, coordinates, workspace scope, and policy revision, with replayed, foreign, generation-drifted, and policy-drifted identities fail-closed before approval",
+      "explicit server-derived single-use input lease bound to the exact coordinate binding, operation, workspace scope, and policy revision, where the lease is minted from the validated binding, bound into the approval digest, consumed exactly once at execution, and never transferable, with replayed, expired, revoked, and foreign leases fail-closed",
+      "window-confined execution against the exact owning window handle only, with immediate pre-execution revalidation of coordinate liveness, proposal liveness, frame liveness, window existence, HWND ownership, process liveness, protected-surface status, workspace binding, and policy revision, with any drift denied without silent retargeting",
+      "fresh per-execution SOFT approval with one-shot exact-digest binding over workspace, policy revision, coordinate identity, derivation generation, proposal, frame, window, process, generations, coordinates, operation, lease, and action material, with nonce, expiry, one-shot consumption, and stale-digest fail-closed",
+      "protected Cotra approval and security surface exclusion so execution can never target approval dialogs, STRONG presence surfaces, workspace trust controls, emergency revoke, or security-sensitive Cotra UI, with execution confined to the exact owning window and failing closed on uncertainty",
+      "bounded execution evidence carrying only identities, generations, coordinates, operation, lease, and approval record, with explicit truncation reporting",
+      "explicit denial of keyboard injection, dragging, multi-click, wheel, touch, focus changes, raw SendInput, lease reuse, lease transfer, and silent escalation when the coordinate identity is stale, protected, or unavailable, with no execution authority granted by a missing or denied lease",
+      "deterministic unit and security tests for happy-path click execution, stale coordinate identity, stale proposal, stale frame, restarted owning process, PID reuse, stale window, reused HWND, wrong pairings, stale derivation generation, protected Cotra surface, missing approval, stale approval, reused approval, incorrect approval digest, replayed lease, expired lease, foreign lease, wrong operation, policy drift, caller-supplied coordinates, caller-supplied lease fields, keyboard and drag requests, clipboard, network, and elevation requests",
+      "retention of all closed SG-000035 derivation behavior, all closed SG-000034 proposal behavior, all closed SG-000033 capture behavior, all closed P09 structured-UIA behavior, SG-000018 one-shot and expiry and digest and history behavior, SG-000019 SOFT and STRONG class enforcement, SG-000020 trust and revoke behavior, and closed P08 registry behavior with no change outside bounded execution policy",
+      "Windows and Ubuntu exact-head qualification with Windows-specific execution qualification where required"
+    ],
+    "exclude": [
+      "keyboard injection, text entry, key combinations, and hotkeys of any kind",
+      "dragging, multi-click, double-click, wheel, touch, gestures, and focus changes of any kind",
+      "raw SendInput, raw mouse input, and raw synthetic input outside the bound click shape",
+      "operations beyond click of any kind",
+      "lease reuse, lease transfer, lease persistence across operations, and standing input sessions of any kind",
+      "execution against caller-selected windows, monitors, or desktops of any kind",
+      "execution on protected Cotra approval surfaces of any kind",
+      "human-interruption handling beyond retained approval-pending lease suspension",
+      "clipboard read and clipboard write",
+      "P09 UIA actuation beyond the closed SG-000027 through SG-000032 scopes",
+      "SG-000033 capture, SG-000034 proposals, and SG-000035 derivation beyond their closed shapes",
+      "arbitrary process commands, process spawn, process injection, and process termination",
+      "raw Win32 command execution and PowerShell execution",
+      "password, credential, and Windows Hello material exposure",
+      "persistent approval reuse across operations",
+      "approval delegation to remote or MCP callers",
+      "caller-supplied approval boolean and caller-supplied approval material",
+      "generic network fetch and socket authority",
+      "elevation, UAC bypass, service installation, privileged desktop access, and secure desktop input"
+    ]
+  },
+  "authority_delta": {
+    "filesystem": "No new filesystem authority. Execution reads bounded coordinate metadata already held by the SG-000035 registry and performs no file read or write; retention of executions outside bounded evidence is denied.",
+    "process": "No new process launch, injection, or termination authority. The existing read-only process identity is reused for binding only, and the existing SG-000010 whoami-only spawn boundary is unchanged.",
+    "network": "None. Bounded execution is strictly local with no egress, and no fetch, socket, or tunnel authority is added.",
+    "browser": "None. The closed P08 structured-browser registry is unchanged, and no browser launch, attachment, navigation, download, or upload authority is added.",
+    "ui_input": "One narrow bounded execution shape is newly added: uia.input/execute performing a single click confined to the exact owning window of one exact bound coordinate identity under an explicit single-use input lease. No keyboard, no drag, no multi-click, no wheel, no touch, no focus change, no raw synthetic input, no lease reuse, no monitor scope, no desktop scope, and no other UIA pattern authority is added.",
+    "secrets": "No password, credential, Windows Hello, cookie, token, or session material enters prompts, records, history, logs, MCP responses, snapshots, or evidence packets. Protected Cotra surfaces are never execution targets.",
+    "approval": "One fresh per-execution SOFT approval is required for uia.input/execute with exact digest binding over the complete execution binding set including the lease, one-shot consumption, nonce, and expiry. No persistent reuse, no remote delegation, and no caller-supplied approval boolean is introduced.",
+    "privileged": "None. No elevation, UAC bypass, service installation, privileged desktop access, or secure desktop input is added."
+  },
+  "invariants": [
+    "execution binds one exact server-derived coordinate identity and never caller-provided coordinate claims",
+    "execution binds exact derivation generation with stale, replaced, foreign, and policy-drifted identities fail-closed",
+    "operation is fixed to click with every other operation denied",
+    "Every execution carries an explicit server-derived single-use input lease bound to the exact coordinate binding",
+    "Leases are consumed exactly once and replayed, expired, revoked, and foreign leases fail closed",
+    "Every execution carries fresh SOFT approval with exact digest binding including the lease and one-shot consumption",
+    "Execution is confined to the exact owning window with no monitor or desktop widening",
+    "Stale, replaced, reused, foreign, protected-surface, and policy-drifted targets fail closed without silent retargeting",
+    "Protected Cotra approval and security surfaces are never execution targets",
+    "A missing or denied lease never becomes execution authority",
+    "STRONG enforcement, one-shot, expiry, digest, workspace, and policy bindings are not weakened"
+  ],
+  "acceptance": [
+    {
+      "id": "A1",
+      "claim": "Tests prove executions bind server-derived coordinate identity with derivation generation, owning proposal, proposal generation, owning frame, capture generation, owning window, owning process, coordinates, workspace, and policy revision, and that forged identities, PID reuse, stale processes, restarted processes, reused HWNDs, and wrong executable identity fail closed before approval."
+    },
+    {
+      "id": "A2",
+      "claim": "Tests prove operation is fixed to click, and that keyboard, drag, multi-click, wheel, touch, focus, raw SendInput, empty, and unknown operations are denied."
+    },
+    {
+      "id": "A3",
+      "claim": "Tests prove every execution carries an explicit server-derived single-use input lease bound to the exact coordinate binding and operation, and that replayed, expired, revoked, foreign, and caller-supplied leases fail closed with exactly-once consumption."
+    },
+    {
+      "id": "A4",
+      "claim": "Tests prove every execution requires fresh SOFT approval with exact digest binding over workspace, policy revision, coordinate identity, derivation generation, proposal, frame, window, process, generations, coordinates, operation, lease, and action material, and that missing, stale, reused, and digest-mismatched approvals fail closed with no caller-supplied approval boolean accepted."
+    },
+    {
+      "id": "A5",
+      "claim": "Tests prove immediate pre-execution revalidation denies coordinate drift, proposal drift, frame drift, window drift, HWND ownership drift, process drift, generation drift, protected-surface drift, workspace drift, and policy-revision drift without silent retargeting and without keyboard, drag, clipboard, network, or elevation fallback."
+    },
+    {
+      "id": "A6",
+      "claim": "Tests prove execution is confined to the exact owning window, and that caller-selected windows, monitors, desktops, and protected Cotra surfaces are denied."
+    },
+    {
+      "id": "A7",
+      "claim": "Tests prove caller-supplied coordinates, HWNDs, lease fields, approval material, secret fields, and widening fields are rejected as malformed or denied, and that keyboard, drag, clipboard, network, spawn, inject, terminate, and elevation shapes remain denied outside their closed scopes."
+    },
+    {
+      "id": "A8",
+      "claim": "Tests prove the agent cannot satisfy execution through MCP tools, child processes, approval forgery, trust forgery, lease forgery, or replayed prior approvals and leases."
+    },
+    {
+      "id": "A9",
+      "claim": "Tests prove replay, expiry, digest mismatch, revision drift, trust-revision drift, and double-consumption protections remain enforced for both approval classes."
+    },
+    {
+      "id": "A10",
+      "claim": "Tests prove all closed SG-000035 derivation regressions, all closed SG-000034 proposal regressions, all closed SG-000033 capture regressions, all closed P09 structured-UIA regressions, P06 approval flows, SG-000018 through SG-000020 regressions, and the closed P08 registry behavior still pass with digests unchanged outside execution labeling."
+    },
+    {
+      "id": "A11",
+      "claim": "Tests prove personal-profile-style widening, arbitrary DevTools or CDP, browser scripting, credential stores, clipboard access, standing input sessions beyond the single-use lease, and network egress remain unreachable through bounded execution."
+    },
+    {
+      "id": "A12",
+      "claim": "Windows-specific qualification proves structured execution binding against real Windows process identity where required without fabricating interactive desktop evidence, and headless execution limits are recorded honestly with unavailable-path fail-closed."
+    },
+    {
+      "id": "A13",
+      "claim": "Exact-head Windows and Ubuntu Rust, Node, Governance, genuine TypeSafe Jev, Alibaba Open Code Review, exact-diff security review, manual review of excluded security-sensitive files, and zero unresolved blocking review threads all pass."
+    }
+  ],
+  "successor_requirements": {
+    "p10_vision": "Human interruption remains successor work and must build on execution records without weakening STRONG enforcement, one-shot, expiry, or digest binding.",
+    "p10_exit": "COTRA-P10 exits when provider ceiling is enforced, protected surfaces are denied, stale-frame tests pass, and no silent fallback from structured denial into coordinates exists, which SG-000033 capture, SG-000034 proposals, SG-000035 coordinates, SG-000036 execution, plus interruption successors must jointly satisfy.",
+    "p11_boundary": "Clipboard and network authority remain P11 work and are not granted by bounded execution."
+  },
+  "review": {
+    "diffcipline": true,
+    "jev_semantic_review": true,
+    "alibaba_open_code_review": "required exact-range qualification where integrated",
+    "security_review": true,
+    "exact_head_ci": true,
+    "native_network_qualification": false
+  },
+  "done_when": "Bounded coordinate execution with server-derived coordinate binding, click-only operation, explicit single-use input lease, fresh SOFT digest-bound approval, immediate stale-coordinate revalidation, window confinement, protected-surface exclusion, no lease reuse, and no new keyboard, drag, clipboard, network, or elevation authority is specified."
+}
