@@ -28,7 +28,7 @@ import { fileURLToPath } from "node:url";
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const MANIFEST_SCHEMA = "cotra-release-manifest-v1";
 const CONFIG_SCHEMA = { min: 1, max: 1 };
-const BINARIES = ["cotra.exe", "cotrad.exe"];
+const BINARIES = ["cotra.exe", "cotra-mcp-host.exe", "cotrad.exe"];
 
 function fail(message) {
   console.error(`package-release: ${message}`);

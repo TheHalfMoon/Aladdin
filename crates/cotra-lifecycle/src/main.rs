@@ -8,32 +8,61 @@ use std::path::PathBuf;
 const HELP: &str = "\
 Cotra - Computer Orchestration & Trusted Runtime Access
 
-Usage:
-  cotra install [--source <release-dir>] [--node <node.exe>] [--no-path] [--json]
-      Install or repair the per-user Cotra install under %LOCALAPPDATA%\\Cotra.
-      The release directory defaults to the directory containing this cotra.exe.
-      Every payload file is verified against manifest.json before anything is copied.
-      Administrator rights are not required and elevated prompts are refused.
-
-  cotra uninstall [--purge-data --yes] [--json]
-      Remove Cotra binaries, the version pointer, and the PATH entry.
-      Configuration, secrets, logs, and audit/approval/trust history are kept
-      unless --purge-data --yes is given. Workspaces are never touched.
-
-  cotra version [--json]
+Install and maintenance:
+  cotra install [--source <release-dir>] [--node <node.exe>] [--no-path]
+      Install or repair the per-user install under %LOCALAPPDATA%\\Cotra. The release
+      directory defaults to the directory containing this cotra.exe. Every payload
+      file is verified against manifest.json before anything is copied. Administrator
+      rights are not required; an elevated \"Run as administrator\" prompt is refused.
+  cotra uninstall [--purge-data --yes]
+      Stop Cotra, then remove binaries, the version pointer, and the PATH entry.
+      Configuration, secrets, logs, and audit/approval/trust history are kept unless
+      --purge-data --yes is given. Workspaces are never touched.
+  cotra version
       Show this CLI version and the installed and previous versions.
 
-  cotra help
-      Show this help.
+Configuration:
+  cotra workspace add <id> <directory>    Add a workspace the agent may use.
+  cotra workspace remove <id>             Remove a workspace from configuration.
+  cotra workspace list                    List workspaces and their trust state.
+  cotra workspace trust <id>              Grant workspace trust (Windows Hello).
+  cotra workspace untrust <id>            Revoke workspace trust (Windows Hello).
+  cotra tunnel setup --client <tunnel-client.exe> --tunnel-id <tunnel_...> [--key-file <path>]
+      Configure the official OpenAI tunnel client. Without --key-file the runtime key
+      is read from a hidden console prompt. The key is stored owner-only and passed to
+      the tunnel client by file reference; it is never printed or logged.
+  cotra tunnel show                       Show the tunnel configuration (never the key).
+
+Runtime:
+  cotra start [--wait <seconds>]          Start the supervised tunnel client.
+  cotra stop [--wait <seconds>]           Stop it and verify termination.
+  cotra status                            Show install, configuration, and runtime state.
+  cotra doctor                            Run diagnostics; exits non-zero on failures.
+
+Approvals:
+  cotra approvals [--limit <n>]           Show recent approval decisions.
+  cotra emergency-revoke                  Invalidate all pending approvals (Windows Hello).
+
+Every command accepts --json for machine-readable output.
 ";
 
-struct Args {
+mod commands;
+
+pub(crate) struct Args {
     command: String,
     rest: Vec<String>,
 }
 
 impl Args {
-    fn flag(&mut self, name: &str) -> bool {
+    /// Takes the next argument that is not an option.
+    pub(crate) fn positional(&mut self, what: &str) -> Result<String, LifecycleError> {
+        match self.rest.iter().position(|arg| !arg.starts_with("--")) {
+            Some(index) => Ok(self.rest.remove(index)),
+            None => Err(LifecycleError::usage(format!("missing {what}"))),
+        }
+    }
+
+    pub(crate) fn flag(&mut self, name: &str) -> bool {
         match self.rest.iter().position(|arg| arg == name) {
             Some(index) => {
                 self.rest.remove(index);
@@ -43,7 +72,7 @@ impl Args {
         }
     }
 
-    fn value(&mut self, name: &str) -> Result<Option<String>, LifecycleError> {
+    pub(crate) fn value(&mut self, name: &str) -> Result<Option<String>, LifecycleError> {
         match self.rest.iter().position(|arg| arg == name) {
             Some(index) if index + 1 < self.rest.len() => {
                 let value = self.rest.remove(index + 1);
@@ -55,7 +84,7 @@ impl Args {
         }
     }
 
-    fn finish(&self) -> Result<(), LifecycleError> {
+    pub(crate) fn finish(&self) -> Result<(), LifecycleError> {
         match self.rest.first() {
             Some(extra) => Err(LifecycleError::usage(format!(
                 "unexpected argument {extra:?}; run `cotra help`"
@@ -72,6 +101,16 @@ fn main() {
         command,
         rest: raw.collect(),
     };
+    if args.command == "supervise" {
+        let code = match Layout::for_current_user() {
+            Ok(layout) => cotra_lifecycle::lifecycle::supervise(&layout),
+            Err(error) => {
+                eprintln!("cotra supervise: {}", error.message);
+                2
+            }
+        };
+        std::process::exit(code);
+    }
     let json_output = args.flag("--json");
     match run(&mut args) {
         Ok(output) => {
@@ -98,9 +137,9 @@ fn main() {
     }
 }
 
-struct Output {
-    human: String,
-    json: serde_json::Value,
+pub(crate) struct Output {
+    pub(crate) human: String,
+    pub(crate) json: serde_json::Value,
 }
 
 fn run(args: &mut Args) -> Result<Output, LifecycleError> {
@@ -115,6 +154,14 @@ fn run(args: &mut Args) -> Result<Output, LifecycleError> {
         "install" => install(args),
         "uninstall" => uninstall(args),
         "version" | "--version" => version(args),
+        "workspace" => commands::workspace(args),
+        "tunnel" => commands::tunnel(args),
+        "start" => commands::start(args),
+        "stop" => commands::stop(args),
+        "status" => commands::status(args),
+        "doctor" => commands::doctor(args),
+        "approvals" => commands::approvals(args),
+        "emergency-revoke" => commands::emergency_revoke(args),
         other => Err(LifecycleError::usage(format!(
             "unknown command {other:?}; run `cotra help`"
         ))),
@@ -186,10 +233,22 @@ fn uninstall(args: &mut Args) -> Result<Output, LifecycleError> {
             "--purge-data permanently deletes configuration, secrets, logs, and history; add --yes to confirm",
         ));
     }
+    let layout = Layout::for_current_user()?;
+    let mut human = String::new();
+    if layout.supervisor_record().exists() {
+        let stopped = cotra_lifecycle::lifecycle::stop(&layout, std::time::Duration::from_secs(20))
+            .map_err(|error| {
+                LifecycleError::conflict(format!(
+                    "Cotra could not be stopped, so nothing was uninstalled: {}",
+                    error.message
+                ))
+            })?;
+        human.push_str(&format!("Stopped Cotra first: {}.\n", stopped.detail));
+    }
     let platform = host_platform();
-    let installer = Installer::new(Layout::for_current_user()?, platform.as_ref());
+    let installer = Installer::new(layout, platform.as_ref());
     let report = installer.uninstall(&UninstallOptions { purge_data })?;
-    let mut human = String::from("Cotra uninstalled.\n");
+    human.push_str("Cotra uninstalled.\n");
     for (label, paths) in [
         ("Removed", &report.removed),
         ("Kept (user data)", &report.retained),

@@ -49,7 +49,9 @@ dependencies = [
 name = "cotra-lifecycle"
 version = "0.1.0"
 dependencies = [
+ "cotra-approval",
  "cotra-policy",
+ "cotra-tunnel",
  "serde",
  "serde_json",
  "sha2",

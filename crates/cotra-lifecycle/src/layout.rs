@@ -67,6 +67,30 @@ impl Layout {
     pub fn supervisor_record(&self) -> PathBuf {
         self.run_dir().join("supervisor.json")
     }
+    pub fn stop_result(&self) -> PathBuf {
+        self.run_dir().join("stop-result.json")
+    }
+    pub fn last_exit(&self) -> PathBuf {
+        self.run_dir().join("last-exit.json")
+    }
+    pub fn health_url_file(&self) -> PathBuf {
+        self.run_dir().join("tunnel-health.url")
+    }
+    pub fn config_file(&self) -> PathBuf {
+        self.state_dir().join("config.json")
+    }
+    pub fn secrets_dir(&self) -> PathBuf {
+        self.state_dir().join("secrets")
+    }
+    pub fn runtime_key_file(&self) -> PathBuf {
+        self.secrets_dir().join("tunnel-runtime-key")
+    }
+    pub fn tunnel_log(&self) -> PathBuf {
+        self.logs_dir().join("tunnel.log")
+    }
+    pub fn supervisor_log(&self) -> PathBuf {
+        self.logs_dir().join("supervisor.log")
+    }
 
     /// User-owned data that uninstall retains unless purging is requested.
     pub fn retained_data(&self) -> Vec<PathBuf> {
