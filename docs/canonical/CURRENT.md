@@ -1,11 +1,11 @@
 # Cotra Current Canonical Frontier
 
-Status: ACTIVE_GRAIN
-Date: 2026-09-29
-Governance snapshot base: a9310c176493e2a2c2f5f10c717ace4364d1eb47
+Status: CLOSED_CANONICAL
+Date: 2026-09-30
+Governance snapshot base: 558afc9077994ddb54b61f5442a86e92e6a570b7
 Evidence ledger: `.specgrain/canonical-evidence.json`
 
-`Governance snapshot base` records the exact canonical parent from which this activation snapshot was authored. It deliberately does not claim the eventual merge SHA of the commit containing this file.
+`Governance snapshot base` records the exact canonical parent from which this closeout snapshot was authored. It deliberately does not claim the eventual merge SHA of the commit containing this file.
 
 ## SpecGrain state semantics
 
@@ -244,30 +244,19 @@ All P09 closeouts (SG-000027 recorded here, SG-000028 recorded here, SG-000029 r
 
 ## Successor frontier
 
-COTRA-P10 begins at this frontier. No successor grain beyond SG-000033 is authorized by this activation.
+COTRA-P10 continues at this frontier. No successor grain beyond SG-000033 is authorized by this closeout. The P10 vision successors (visual target proposals, coordinate proposals, bounded input execution with input leases, and human interruption) must each be activated as narrow lawful grains before implementation.
+
+## Closed SG-000033 screenshot capture
+
+SG-000033 closed canonically: activation PR `#91` (activation base `a9310c176493e2a2c2f5f10c717ace4364d1eb47`, activation head `18a47a2b06e21d83f8ef067a27ad007015a3bd88`, CI `36610551395`, Review Gates `36610551879`, Jev `3/3`, OCR v1.12.9 `1 reviewable + 1 excluded/manually reviewed`, merge `26fd1ea7c0d011c02af59fa5e05e6d694c1da15e`, post-merge CI `36610949821`), implementation PR `#92` (qualified head `d2805a4ac88e1be1b3938033c3d011bf655f3386`, CI `36615074285`, Review Gates `36615074238`, Jev `24/24` with zero findings and zero blocking findings, OCR v1.12.9 `7 reviewable + 1 excluded/manually reviewed`, merge `558afc9077994ddb54b61f5442a86e92e6a570b7`, post-merge CI `36679061251`), and governance closeout recorded here, all with zero unresolved review threads. The canonical SG-000033 authority adds only window-scoped `uia.screenshot/capture` on one exact typed window with fixed target-window scope against the process-lifetime typed identity registry, with server-allocated typed frame identity, bounded RGBA8 payload, fresh SOFT digest-bound approval, and immediate stale-target revalidation, and with no visual target proposal, coordinate proposal, input execution, input lease, monitor scope, desktop scope, clipboard, network, or elevation authority.
+
+SG-000033 proved that no capture shape accepts caller-supplied PID, window handle, frame identity, scope widening, geometry, approval material, secret, or fallback fields, so callers can only present one server-allocated typed window plus expected window generation and the fixed target-window scope; that capture binds server-derived process identity with PID, executable digest, creation generation, session, workspace, and policy revision and typed window identity with owning process, handle, window generation, session, desktop, workspace, and policy revision with PID reuse, restarts, destroyed and reused handles, and wrong pairings fail-closed; that every capture mints a server-allocated typed frame identity bound to the exact window, capture generation, geometry, payload digest, workspace, and policy revision with replayed, foreign, generation-drifted, and policy-drifted frames fail-closed as stale and stale frames never actionable; that capture scope is fixed to the target window with monitor scope, desktop scope, caller-selected regions, oversized payloads, geometry mismatches, and protected Cotra surfaces denied with no silent widening and no silent downscaling; that every capture carries fresh SOFT approval with exact digest binding over workspace, policy revision, process, window, generations, scope, and action material with one-shot consumption and stale-digest fail-closed; that immediate pre-capture revalidation denies process drift, window drift, generation drift, protected-surface drift, workspace drift, and policy-revision drift without silent retargeting and without visual-proposal, coordinate, input-execution, clipboard, network, or elevation fallback; that successful capture never advances the window tree generation because capture is read-only; that the native adapter proves real process identity against Windows APIs on Windows while reporting live capture as unavailable instead of fabricating pixels; and that the agent cannot reach capture through its own tool or input surface and cannot turn a frame into coordinate authority.
 
 ## Active grain
 
-SG-000033 - Bounded window-scoped screenshot capture with frame identity and stale-frame protection - is the sole active COTRA-P10 grain.
+No COTRA-P10 grain is active. SG-000033 was the sole active grain and is now `CLOSED` and canonical.
 
-This activation authorizes implementation and qualification of a single narrow read-only vision shape on top of the closed COTRA-P09 structured-UIA registry, the SG-000018 replay-resistant foundation, SG-000019 class enforcement, SG-000020 trust and revoke records, and the closed COTRA-P08 registry: screenshot.capture bound to one server-allocated typed window identity with arguments window_id, expected_window_generation, and scope only, where scope is fixed to target-window; server-derived process identity with PID reuse and restart denial; typed window identity with destroyed, replaced, and reused-handle denial; server-allocated typed frame identity with capture generation, geometry, workspace, and policy revision binding; bounded capture payload with explicit truncation reporting; fresh per-action SOFT approval with one-shot exact-digest binding over workspace, policy revision, process, window, generations, capture scope, and action material; immediate pre-capture revalidation with no silent retargeting; protected Cotra approval-surface exclusion with redaction where capture-adjacent metadata could leak protected material; and explicit denial of visual target proposals, coordinate proposals, input execution, input leases, monitor scope, desktop scope, caller-selected regions, clipboard, network, and elevation, while deliberately keeping visual proposals, coordinate proposals, bounded input execution, and human interruption as successor work.
-
-Authorized target design:
-- screenshot.capture bound to one typed window with exact process pairing, window generation, session and desktop identity, fixed target-window scope, workspace, and policy revision;
-- fresh SOFT approval with digest binding over the complete capture binding set and one-shot consumption;
-- immediate pre-capture stale-target revalidation with TargetStale denial on any drift;
-- server-allocated typed frame identity with capture generation and geometry, where stale frames are never actionable;
-- bounded payload with explicit truncation reporting and no silent semantic change;
-- protected Cotra approval-surface exclusion with no capture path reaching presence or approval material;
-- password, secret, protected-surface, oversized, and widened-scope targets denied with no coordinate authority granted by a missing or denied frame, and deterministic unit and security tests for happy-path capture, stale process, restarted process, PID reuse, stale and reused HWND, wrong process and window pairing, stale window generation, protected surface, missing and stale and reused and digest-mismatched approval, policy drift, oversized payload, caller-supplied identities, caller-selected scope, monitor and desktop scope requests, coordinate and input execution requests, visual proposal shapes, and elevation requests.
-
-## Active acceptance frontier
-
-SG-000033 must prove that capture binds server-derived process and typed window identity and rejects caller-provided claims, that scope is fixed to the target window with monitor and desktop widening denied, that every capture mints a server-allocated typed frame identity with stale frames never actionable, that every capture carries fresh SOFT digest-bound approval with one-shot consumption, that immediate pre-capture revalidation fails closed on any drift without silent retargeting and without visual-proposal, coordinate, input-execution, clipboard, network, or elevation fallback, that protected Cotra surfaces are excluded with redaction where required, that the agent cannot reach capture through its own tool or input surface and cannot turn a frame into coordinate authority, and that Windows-specific qualification proves structured binding without fabricating interactive desktop evidence.
-
-Visual proposals, coordinate proposals, input execution, input leases, monitor and desktop scopes, clipboard access, generic network authority, persistent approval reuse, remote delegation, and elevation must remain absent, and STRONG enforcement, one-shot, expiry, and digest binding must not weaken.
-
-A P10 exit requires joint proof from SG-000033 capture plus visual, coordinate, input-lease, and interruption successors that the provider ceiling is enforced, protected surfaces are denied, stale-frame tests pass, and no silent fallback from structured denial into coordinates exists. It must not expose unrestricted desktop input or elevation authority.
+The successor frontier is P10 vision work: visual target proposals, coordinate proposals, bounded input execution with input leases, and human interruption, each bound to frame identity without weakening STRONG enforcement, one-shot, expiry, or digest binding, and without exposing unrestricted desktop input or elevation authority. A missing or denied frame must never silently grant coordinate authority.
 
 ## Canonical public authority boundary retained
 
@@ -306,6 +295,8 @@ Existing SG-000030 structured UIA select remains subject to its exact server-der
 Existing SG-000031 structured UIA toggle remains subject to its exact server-derived process binding, typed window and element binding, expected tree generation, expected CheckBox and RadioButton control type, required Toggle pattern support, required enabled state, expected plus requested toggle binding with no blind inversion, workspace and policy revision, fresh per-action SOFT digest-bound approval including expected and requested toggle with one-shot consumption, immediate pre-actuation stale-target revalidation with generation-bump invalidation, protected Cotra surface exclusion, password and secret target denial, and Invoke, click, Space, Enter, keyboard, mouse, SendInput, coordinate, select, value, scroll, focus, screenshot, clipboard, network-egress, and elevation denial.
 
 Existing SG-000032 structured UIA scroll remains subject to its exact server-derived process binding, typed window and element binding, expected tree generation, expected ScrollBar, Pane, List, and Tree control type, required Scroll pattern support, required enabled state, expected scroll-position binding, bounded direction limited to up, down, left, and right, bounded amount between 1 and 100 with no repeat loops, workspace and policy revision, fresh per-action SOFT digest-bound approval including expected scroll position, requested direction, and requested amount with one-shot consumption, immediate pre-actuation stale-target revalidation with generation-bump invalidation, protected Cotra surface exclusion, password and secret target denial, and wheel, touch, keyboard paging, mouse, SendInput, coordinate, invoke, value, select, toggle, focus, screenshot, clipboard, network-egress, and elevation denial.
+
+Existing SG-000033 window-scoped screenshot capture remains subject to its exact server-derived process binding, typed window binding, expected window generation, fixed target-window scope, workspace and policy revision, server-allocated typed frame identity with capture generation, geometry, payload digest, workspace, and policy revision binding where stale frames are never actionable, bounded RGBA8 payload with explicit truncation reporting and no silent downscaling, fresh per-action SOFT digest-bound approval including capture scope with one-shot consumption, immediate pre-capture stale-target revalidation without generation-bump invalidation because capture is read-only, protected Cotra surface exclusion, password and secret material exclusion, and visual target proposal, coordinate proposal, input execution, input lease, monitor scope, desktop scope, caller-selected region, keyboard, mouse, SendInput, coordinate, invoke, value, select, toggle, scroll, focus, clipboard, network-egress, and elevation denial.
 
 Still denied or absent outside the closed COTRA-P07 scope, the closed COTRA-P08 scope, and the closed COTRA-P09 scope:
 - public `powershell.run`;
