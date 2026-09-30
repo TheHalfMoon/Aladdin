@@ -774,4 +774,50 @@ mod tests {
         let _ = fs::remove_dir_all(root);
         let _ = fs::remove_dir_all(outside);
     }
+
+    #[cfg(unix)]
+    fn link_directory(target: &Path, link: &Path) {
+        std::os::unix::fs::symlink(target, link).expect("create directory symlink");
+    }
+
+    #[cfg(windows)]
+    fn link_directory(target: &Path, link: &Path) {
+        let status = std::process::Command::new("cmd")
+            .args(["/C", "mklink", "/J"])
+            .arg(link)
+            .arg(target)
+            .stdout(std::process::Stdio::null())
+            .status()
+            .expect("run mklink");
+        assert!(status.success(), "create directory junction");
+    }
+
+    #[test]
+    fn sg000041_reparse_point_into_protected_state_is_denied_for_read_and_write() {
+        let root = temp_root("sg41-workspace");
+        let protected = temp_root("sg41-protected");
+        fs::write(protected.join("trust.jsonl"), "protected").unwrap();
+        link_directory(&protected, &root.join("state"));
+        let provider = FsProvider::new(&root).unwrap();
+
+        let read = provider.read_text("state/trust.jsonl").unwrap_err();
+        assert_eq!(read.code, FailureCode::PathEscape);
+        let write = provider
+            .preview_write("state/trust.jsonl", "forged")
+            .unwrap_err();
+        assert_eq!(write.code, FailureCode::PathEscape);
+        let create = provider
+            .write_text("state/new.jsonl", "forged", None, true)
+            .unwrap_err();
+        assert_eq!(create.code, FailureCode::PathEscape);
+        assert_eq!(
+            fs::read_to_string(protected.join("trust.jsonl")).unwrap(),
+            "protected"
+        );
+        assert!(!protected.join("new.jsonl").exists());
+
+        let _ = fs::remove_dir(root.join("state"));
+        let _ = fs::remove_dir_all(root);
+        let _ = fs::remove_dir_all(protected);
+    }
 }

@@ -1,3 +1,4 @@
+pub mod protected_state;
 #[path = "sg000039.rs"]
 mod sg000039_legacy;
 
