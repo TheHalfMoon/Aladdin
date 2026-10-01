@@ -2,78 +2,114 @@
 
 **Computer Orchestration & Trusted Runtime Access**
 
-Cotra is an open-source, local-first MCP gateway for securely connecting ChatGPT and other authorized MCP clients to a Windows computer without exposing a general-purpose remote-control endpoint to the public internet.
+Cotra is an open-source, local-first MCP gateway that lets ChatGPT work with an explicitly trusted folder on your Windows computer through a small set of bounded tools, with local approval for anything that changes your computer. It connects through the OpenAI Secure MCP Tunnel, so no inbound port is opened on your machine.
 
-## Status
+Cotra is not a remote shell, a remote desktop, or a "run anything" agent.
 
-Bootstrap / architecture planning.
+## What ChatGPT can do through Cotra
 
-No privileged automation implementation is considered production-ready yet.
+Exactly these 20 tools are exposed over MCP:
 
-## Product goal
+| Area | Tools | Approval |
+|---|---|---|
+| Status | `system_status`, `workspace_get` | none (read-only) |
+| Files in a trusted workspace | `fs_stat`, `fs_list`, `fs_read`, `fs_search` | none (read-only, bounded) |
+| File writes | `fs_write_preview`, `fs_write` | local approval for each write, bound to the exact content and current file hash |
+| Git (local) | `git_status`, `git_diff`, `git_log` | none (read-only) |
+| Git (local changes) | `git_branch_create`, `git_stage`, `git_unstage`, `git_commit` | local approval, bound to the exact repository state |
+| Git (network) | `git_fetch_preview`, `git_fetch`, `git_push_preview`, `git_push` | local approval; see limitations |
+| Processes | `process_spawn` | local approval; see limitations |
 
-Cotra should provide a safer, more capable alternative to unrestricted desktop-command MCP servers by separating:
+Everything else is denied. Cotra also contains capabilities that are deliberately **not** exposed to ChatGPT in this release (browser automation, Windows UI Automation, screenshots and coordinate input, clipboard, and destination-scoped HTTPS fetch); they cannot be reached over MCP.
 
-- MCP transport and client compatibility
-- local policy and approval authority
-- filesystem and process capabilities
-- Git workflows
-- browser automation
-- Windows application and UI automation
-- audit and evidence
-- secrets and network egress
+### Current limitations
 
-## Core principles
+- `process_spawn` on Windows is restricted to `whoami.exe`, run in an isolated AppContainer.
+- `git_fetch` and `git_push` require destination policies that `cotra` does not configure yet, so they fail closed in an installed Cotra.
+- Release binaries are not code-signed (there is no paid certificate under the project's zero-cost rule). Windows SmartScreen may warn; verify the archive with `SHA256SUMS.txt` and the GitHub build-provenance attestation.
+- Cotra runs only while you are signed in, because approvals appear on your desktop.
 
-1. **Local-first.** Privileged operations execute on the user's computer.
-2. **Private by default.** Prefer outbound-only connectivity such as OpenAI Secure MCP Tunnel rather than public inbound ports.
-3. **Least authority.** Expose bounded capabilities instead of a universal `run_anything` primitive.
-4. **Structured before visual.** Prefer typed APIs, filesystem APIs, process APIs, Git, browser DOM/accessibility, and Windows UI Automation before coordinate-based control.
-5. **Human approval for consequential actions.** The agent must not be able to approve its own protected action.
-6. **Workspace isolation.** File, process, browser, and Git actions are bound to explicit workspace/session identities.
-7. **Evidence before success.** A tool result must distinguish requested, started, completed, verified, failed, cancelled, and indeterminate outcomes.
-8. **Auditable.** Security-sensitive operations produce structured local audit records with secret redaction.
-9. **Zero founder-funded runtime infrastructure.** The default architecture should not require Cotra to operate paid hosted infrastructure.
-10. **Windows first, portable contracts.** Windows is the first-class host target while the capability contracts remain portable enough for future adapters.
+## How approvals work
 
-## Intended capability families
+- **SOFT approval** — a Cotra dialog appears on your desktop describing the exact action (for example, the file and content hash). Approve or deny it yourself. Each approval is used once, expires quickly, and is bound to that exact action, workspace, and policy.
+- **STRONG approval** — Windows Hello (PIN, fingerprint, or face) for trust changes and emergency revoke.
+- ChatGPT cannot approve its own actions: approvals come only from the local broker, and Cotra's own windows are excluded from automation.
+- `cotra approvals` lists recent decisions; `cotra emergency-revoke` invalidates every pending approval.
 
-- system and workspace observation
-- file read/search/write
-- PowerShell and process execution
-- Git inspection and mutation
-- application/window observation
-- Windows UI Automation
-- screenshots and visual fallback
-- browser automation
-- clipboard access
-- bounded network access
-- local approvals
-- local audit and evidence
+## Requirements
 
-## Non-goals
+- Windows 10 version 1809 (build 17763) or later, or Windows 11, x64.
+- Node.js 20 or later.
+- The official OpenAI tunnel client executable, and a Secure MCP Tunnel id (`tunnel_…`) and runtime key from OpenAI for your ChatGPT workspace. Follow OpenAI's documentation to create them; Cotra does not create, download, or redistribute them.
+- No administrator rights. Do not use "Run as administrator".
 
-Cotra is not intended to be:
+## Install
 
-- an unauthenticated remote shell
-- a public desktop-control endpoint
-- a credential exfiltration bridge
-- an agent that can silently approve its own protected actions
-- a replacement for operating-system security boundaries
+1. Download `cotra-<version>-windows-x64.zip` and `SHA256SUMS.txt` from the project's GitHub Releases page (release automation only prepares drafts; a release appears there once the maintainer publishes it) and verify the hash:
+   `Get-FileHash .\cotra-<version>-windows-x64.zip -Algorithm SHA256`
+   Optionally verify provenance: `gh attestation verify .\cotra-<version>-windows-x64.zip --repo TheHalfMoon/Cotra`.
+2. Extract the archive and run, from the extracted folder:
+   `.\cotra.exe install`
+   Every file is checked against `manifest.json` before anything is copied. Cotra installs to `%LOCALAPPDATA%\Cotra`, readable only by you (and Windows itself), and adds `%LOCALAPPDATA%\Cotra\bin` to your user PATH (`--no-path` to skip). Open a new terminal afterwards.
 
-## Governance
+## Configure
 
-Architecture, source provenance, security controls, and implementation slices are planned before privileged implementation begins. Work is intended to use bounded SpecGrain work packets, exact-diff review discipline, independent review, and explicit evidence gates.
+1. Add a workspace (a folder ChatGPT may use):
+   `cotra workspace add myproject C:\path\to\project`
+   Folders that contain Cotra's own data (for example your whole user profile) are refused.
+2. Optionally grant workspace trust with Windows Hello: `cotra workspace trust myproject`.
+3. Configure the tunnel:
+   `cotra tunnel setup --client C:\path\to\tunnel-client.exe --tunnel-id tunnel_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx`
+   You are prompted for the runtime key without echo (or pass `--key-file <path>`). The key is stored only in Cotra's protected folder, passed to the tunnel client by file reference, and never printed or logged.
 
+## Connect ChatGPT
 
+1. `cotra start` — starts the official tunnel client under Cotra's supervisor. It reports `running` only when the tunnel client is alive and its local health endpoint answers.
+2. In ChatGPT, connect to your Secure MCP Tunnel as described in OpenAI's documentation. ChatGPT then sees the 20 tools above.
 
-## Planning documents
+## Everyday commands
 
-- [Canonical architecture and delivery plan](docs/canonical/ARCHITECTURE_AND_DELIVERY_PLAN.md)
-- [Current canonical frontier](docs/canonical/CURRENT.md)
-- [Threat model](docs/security/THREAT_MODEL.md)
-- [Source ledger](docs/research/SOURCE_LEDGER.md)
+| Command | Purpose |
+|---|---|
+| `cotra status` | Installed version, configuration, and whether the runtime is running |
+| `cotra doctor` | Full diagnostics; exits non-zero if any check fails (`--json` for details) |
+| `cotra stop` | Stops the tunnel client and everything it started, and confirms they exited |
+| `cotra workspace list` | Workspaces and their trust state |
+| `cotra tunnel show` | Tunnel configuration (never the key) |
+| `cotra help` | All commands |
+
+## Diagnose problems
+
+Run `cotra doctor`. Each check reports `PASS`, `WARN`, `FAIL`, or `????` (could not be checked) with one line of evidence — Cotra never reports health it did not observe. Logs are in `%LOCALAPPDATA%\Cotra\logs` (`tunnel.log`, `supervisor.log`, `lifecycle.log`); tunnel output is redacted before it is written.
+
+## Update
+
+Cotra never checks for or downloads updates by itself.
+
+1. Download and verify the new release as in Install, then extract it.
+2. `cotra update --source C:\path\to\extracted-release --check` shows the version change.
+3. `cotra update --source C:\path\to\extracted-release` stops Cotra, switches versions, has the new version verify itself, and restarts it. If the new version fails its own check, the previous version is restored automatically and `cotra doctor` reports why.
+4. `cotra rollback` returns to the previous version. Older versions require `--allow-downgrade`.
+
+## Uninstall
+
+- `cotra uninstall` stops Cotra and removes its programs and the PATH entry. Your configuration, tunnel key, logs, and audit/approval/trust history are **kept** and listed.
+- `cotra uninstall --purge-data --yes` also deletes that data.
+- Your workspaces are never touched.
+
+## Security model and governance
+
+- [Architecture and delivery plan](docs/canonical/ARCHITECTURE_AND_DELIVERY_PLAN.md)
+- [Current canonical state](docs/canonical/CURRENT.md)
+- [Threat model](docs/security/THREAT_MODEL.md) and [regression matrix](docs/security/THREAT_MODEL_REGRESSION.md)
+- [Installer and lifecycle design](docs/canonical/P12_INSTALLER_LIFECYCLE_DESIGN.md)
+- [Dependency and license review](docs/research/DEPENDENCY_LICENSE_REVIEW.md)
 - [Diffcipline](docs/governance/DIFFCIPLINE.md)
-- [First SpecGrain](.specgrain/specs/SG-000001.json)
 
-The first authorized implementation slice after planning acceptance is a read-only MCP-to-policy-to-workspace path. Privileged write, execution, browser, and desktop-control authority are staged behind later proof gates.
+## Building from source
+
+`npm ci --ignore-scripts && npm run build`, then `cargo build --release --locked -p cotrad -p cotra-lifecycle --bins`, then `node scripts/package-release.mjs --out <dir>` to assemble a release directory and `node scripts/archive-release.mjs --release <dir> --out <dir>.zip` to archive it. CI builds with the deterministic flags in `.github/actions/build-package-qualify/action.yml` and checks that an independent rebuild is byte-identical.
+
+## License
+
+Apache License 2.0. Third-party components and their licenses are listed in `THIRD_PARTY_NOTICES.txt` in each release.
