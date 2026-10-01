@@ -1,0 +1,70 @@
+name: Release
+
+# Builds, packages, and qualifies a Windows x64 release from a version tag and
+# attaches it to a draft GitHub Release. Publishing the draft is a deliberate
+# maintainer action. Artifacts are unsigned (no paid code-signing certificate);
+# integrity is enforced by manifest verification at install and update.
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    name: Release / windows-latest
+    runs-on: windows-latest
+    timeout-minutes: 60
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.ref }}
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24"
+      - name: Require the tag to match the workspace version
+        shell: pwsh
+        run: |
+          $version = (Select-String -Path Cargo.toml -Pattern '^version = "(.+)"$' | Select-Object -First 1).Matches.Groups[1].Value
+          if ("v$version" -ne "${{ github.ref_name }}") { throw "tag ${{ github.ref_name }} does not match workspace version $version" }
+          "VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+      - uses: ./.github/actions/build-package-qualify
+        with:
+          release-dir: ${{ runner.temp }}/cotra-${{ env.VERSION }}-windows-x64
+      - name: Archive and hash
+        shell: pwsh
+        run: |
+          $name = "cotra-$env:VERSION-windows-x64"
+          $out = Join-Path $env:RUNNER_TEMP "dist"
+          New-Item -ItemType Directory -Force $out | Out-Null
+          Compress-Archive -Path (Join-Path $env:RUNNER_TEMP "$name\*") -DestinationPath (Join-Path $out "$name.zip")
+          Copy-Item (Join-Path $env:RUNNER_TEMP "$name\manifest.json") (Join-Path $out "$name.manifest.json")
+          Get-ChildItem $out -File | ForEach-Object { "{0}  {1}" -f (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower(), $_.Name } | Out-File (Join-Path $out "SHA256SUMS.txt") -Encoding ascii
+          Get-Content (Join-Path $out "SHA256SUMS.txt")
+      - name: Create or refresh the draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: pwsh
+        run: |
+          $out = Join-Path $env:RUNNER_TEMP "dist"
+          $files = (Get-ChildItem $out -File).FullName
+          $json = gh release view "${{ github.ref_name }}" --repo "${{ github.repository }}" --json isDraft 2>$null
+          $exists = $LASTEXITCODE -eq 0
+          if ($exists -and -not ($json | ConvertFrom-Json).isDraft) {
+            # Publishing is a deliberate, final maintainer action.
+            throw "release ${{ github.ref_name }} is already published; its assets are not replaced"
+          }
+          if ($exists) {
+            # A re-run after a partial upload refreshes the draft's assets.
+            gh release upload "${{ github.ref_name }}" $files --clobber --repo "${{ github.repository }}"
+          } else {
+            gh release create "${{ github.ref_name }}" $files --draft --verify-tag --repo "${{ github.repository }}" --title "Cotra $env:VERSION" --notes "Unsigned Windows x64 build of Cotra $env:VERSION from ${{ github.sha }}. Verify the archive against SHA256SUMS.txt; the installer verifies every payload file against manifest.json."
+          }
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

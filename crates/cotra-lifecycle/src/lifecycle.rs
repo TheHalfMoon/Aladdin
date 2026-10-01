@@ -262,6 +262,16 @@ mod imp {
                 "start Cotra from a non-elevated prompt; the runtime must not run with avoidable elevation",
             ));
         }
+        // A pending update may have activated a version that has not yet
+        // verified itself; nothing starts until the update finishes.
+        if let Some(marker) = crate::update::read_marker(layout)? {
+            if marker.state == crate::update::UpdateState::Pending {
+                return Err(LifecycleError::conflict(format!(
+                    "an update from {} to {} is in progress or was interrupted; finish it or run `cotra rollback` before starting",
+                    marker.from, marker.to
+                )));
+            }
+        }
         let state = Installer::new(layout.clone(), platform).verify()?;
         runnable_config(layout, &state.active.version)?;
         let current = status(layout)?;
@@ -557,6 +567,26 @@ pub fn stop(_layout: &Layout, _wait: Duration) -> Result<StopReport, LifecycleEr
 pub fn supervise(_layout: &Layout) -> i32 {
     eprintln!("cotra supervise: {}", windows_only().message);
     2
+}
+
+/// Held by every state-changing lifecycle command so install, update,
+/// rollback, start, stop, uninstall, and configuration changes never
+/// interleave across processes.
+pub struct LockGuard {
+    #[cfg(windows)]
+    _lock: crate::runtime::LifecycleLock,
+}
+
+#[cfg(windows)]
+pub fn lock(layout: &Layout) -> Result<LockGuard, LifecycleError> {
+    Ok(LockGuard {
+        _lock: crate::runtime::LifecycleLock::acquire(&layout.root, Duration::from_secs(60))?,
+    })
+}
+
+#[cfg(not(windows))]
+pub fn lock(_layout: &Layout) -> Result<LockGuard, LifecycleError> {
+    Ok(LockGuard {})
 }
 
 #[cfg(test)]

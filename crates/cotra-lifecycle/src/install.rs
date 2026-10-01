@@ -66,8 +66,8 @@ impl<'a> Installer<'a> {
         &self.layout
     }
 
-    /// Validates the platform and returns the verified Node.js runtime path.
-    pub fn check_prerequisites(&self, node: Option<&Path>) -> Result<PathBuf, LifecycleError> {
+    /// Validates the Windows build and refuses avoidable elevation.
+    pub fn check_prerequisites_without_node(&self) -> Result<(), LifecycleError> {
         let build = self.platform.windows_build()?;
         if build < MIN_WINDOWS_BUILD {
             return Err(LifecycleError::prerequisite(format!(
@@ -76,9 +76,15 @@ impl<'a> Installer<'a> {
         }
         if self.platform.is_avoidably_elevated()? {
             return Err(LifecycleError::prerequisite(
-                "run the per-user install from a non-elevated prompt; administrator rights are not required",
+                "run Cotra lifecycle commands from a non-elevated prompt; administrator rights are not required",
             ));
         }
+        Ok(())
+    }
+
+    /// Validates the platform and returns the verified Node.js runtime path.
+    pub fn check_prerequisites(&self, node: Option<&Path>) -> Result<PathBuf, LifecycleError> {
+        self.check_prerequisites_without_node()?;
         let node = match node {
             Some(path) => path.to_path_buf(),
             None => platform::find_node_on_path().ok_or_else(|| {
@@ -111,7 +117,7 @@ impl<'a> Installer<'a> {
         let repaired_existing = match &existing {
             Some(current) if current.version != version => {
                 return Err(LifecycleError::conflict(format!(
-                    "Cotra {} is already installed; a different version cannot be installed over it",
+                    "Cotra {} is already installed; use `cotra update --source <release-dir>` to change versions",
                     current.version
                 )));
             }
@@ -152,6 +158,17 @@ impl<'a> Installer<'a> {
 
         self.protect_root()?;
         self.verify()?;
+        crate::logs::transcript(
+            &self.layout,
+            &format!(
+                "install {version} {}",
+                if repaired_existing {
+                    "repaired"
+                } else {
+                    "installed"
+                }
+            ),
+        );
 
         Ok(InstallReport {
             version,
@@ -165,7 +182,7 @@ impl<'a> Installer<'a> {
         })
     }
 
-    fn prepare_root(&self) -> Result<(), LifecycleError> {
+    pub(crate) fn prepare_root(&self) -> Result<(), LifecycleError> {
         if let Ok(metadata) = fs::symlink_metadata(&self.layout.root) {
             if metadata.file_type().is_symlink() || !metadata.is_dir() {
                 return Err(LifecycleError::state(
@@ -193,14 +210,17 @@ impl<'a> Installer<'a> {
     /// Applies the owner-only DACL to the install tree. The tree is walked
     /// first and any link or reparse point fails closed, so the recursive ACL
     /// reset can never be redirected outside the install root.
-    fn protect_root(&self) -> Result<(), LifecycleError> {
+    pub(crate) fn protect_root(&self) -> Result<(), LifecycleError> {
         reject_links(&self.layout.root)?;
         self.platform.protect_tree(&self.layout.root)
     }
 
     /// Copies the verified release into a staging directory, re-verifies the
     /// copy, and activates it as `versions\<version>`.
-    fn stage_version(&self, release: &VerifiedRelease) -> Result<PathBuf, LifecycleError> {
+    pub(crate) fn stage_version(
+        &self,
+        release: &VerifiedRelease,
+    ) -> Result<PathBuf, LifecycleError> {
         let version = &release.manifest.version;
         let target = self.layout.version_dir(version);
         let staging = self
@@ -252,7 +272,7 @@ impl<'a> Installer<'a> {
     }
 
     /// Replaces `bin\cotra.exe`, renaming a possibly running copy aside first.
-    fn replace_cli(&self, source: &Path) -> Result<(), LifecycleError> {
+    pub(crate) fn replace_cli(&self, source: &Path) -> Result<(), LifecycleError> {
         let bin = self.layout.bin_dir();
         let target = self.layout.bin_cli();
         let incoming = bin.join(format!("cotra.exe.new-{}", nonce()));
@@ -349,6 +369,9 @@ impl<'a> Installer<'a> {
             ));
         }
 
+        if !options.purge_data {
+            crate::logs::transcript(&self.layout, "uninstall started; user data retained");
+        }
         let mut report = UninstallReport {
             removed: Vec::new(),
             retained: Vec::new(),

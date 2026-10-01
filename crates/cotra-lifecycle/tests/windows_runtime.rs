@@ -20,7 +20,9 @@ const TUNNEL_ID: &str = "tunnel_0123456789abcdefghijklmnopqrstuv";
 const FAKE_APP: &str = r#"import { spawn } from "node:child_process";
 import readline from "node:readline";
 const rl = readline.createInterface({ input: process.stdin });
-rl.on("line", () => {
+rl.on("line", (line) => {
+  const request = JSON.parse(line);
+  if (request.id === undefined) return;
   const child = spawn(process.env.COTRA_DAEMON, [], { stdio: ["pipe", "pipe", "ignore"], env: process.env });
   let buffer = "";
   child.stdout.on("data", (chunk) => {
@@ -29,7 +31,8 @@ rl.on("line", () => {
     if (newline < 0) return;
     const response = JSON.parse(buffer.slice(0, newline));
     const secretish = Object.keys(process.env).filter((name) => /KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL/i.test(name));
-    process.stdout.write(JSON.stringify({ cotrad_ok: response.ok, name: response.result && response.result.name, secretish }) + "\n");
+    const result = { cotrad_ok: response.ok, name: response.result && response.result.name, secretish };
+    process.stdout.write(JSON.stringify({ jsonrpc: "2.0", id: request.id, result }) + "\n");
     child.stdin.end();
   });
   child.stdin.write(JSON.stringify({ version: 1, request_id: "e2e", client_session_id: "e2e", workspace_id: process.env.COTRA_DEFAULT_WORKSPACE, capability: "system.status", operation: "get", target: null, arguments: {} }) + "\n");
@@ -251,7 +254,7 @@ fn install_configure_start_status_doctor_stop_restart_and_uninstall() {
     assert_eq!(started["status"]["state"], "running", "{started}");
     let tunnel_pid = started["status"]["tunnel_client_pid"].as_u64().unwrap() as u32;
 
-    let log = wait_for_log(&root.join("logs").join("tunnel.log"), "mcp-response");
+    let log = wait_for_log(&root.join("logs").join("tunnel.log"), "mcp-call");
     assert!(log.contains("fake-tunnel: key-file-read=true"), "{log}");
     assert!(log.contains("fake-tunnel: env-clean=true"), "{log}");
     assert!(log.contains("api_key=[REDACTED]"), "{log}");

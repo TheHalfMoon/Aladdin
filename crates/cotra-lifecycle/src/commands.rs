@@ -498,3 +498,78 @@ pub fn emergency_revoke(args: &mut Args) -> Result<Output, LifecycleError> {
         json: json!({"ok": true, "revoke": result}),
     })
 }
+
+pub fn update(args: &mut Args) -> Result<Output, LifecycleError> {
+    let source = PathBuf::from(
+        args.value("--source")?
+            .ok_or_else(|| LifecycleError::usage("--source <release-dir> is required"))?,
+    );
+    let options = cotra_lifecycle::update::UpdateOptions {
+        check_only: args.flag("--check"),
+        allow_downgrade: args.flag("--allow-downgrade"),
+        reinstall: args.flag("--reinstall"),
+    };
+    args.finish()?;
+    let layout = Layout::for_current_user()?;
+    let platform = host_platform();
+    let report = cotra_lifecycle::update::Updater::new(layout, platform.as_ref())
+        .update(&source, &options)?;
+    let human = match report.outcome {
+        cotra_lifecycle::update::UpdateOutcome::Checked => format!(
+            "Installed {}; candidate {} ({}). Compatible with the current configuration. Nothing was changed.\n",
+            report.from, report.to, report.direction
+        ),
+        cotra_lifecycle::update::UpdateOutcome::AlreadyCurrent => format!(
+            "Cotra {} is already installed; pass --reinstall to repair it from this release.\n",
+            report.to
+        ),
+        cotra_lifecycle::update::UpdateOutcome::Updated => format!(
+            "Cotra updated from {} to {} ({}){}. The previous version is kept for `cotra rollback`.\n",
+            report.from,
+            report.to,
+            report.direction,
+            if report.restarted { " and restarted" } else { "" }
+        ),
+    };
+    Ok(Output {
+        exit_code: 0,
+        human,
+        json: json!({"ok": true, "update": report}),
+    })
+}
+
+pub fn rollback(args: &mut Args) -> Result<Output, LifecycleError> {
+    args.finish()?;
+    let layout = Layout::for_current_user()?;
+    let platform = host_platform();
+    let report = cotra_lifecycle::update::Updater::new(layout, platform.as_ref()).rollback()?;
+    Ok(Output {
+        exit_code: 0,
+        human: format!(
+            "Rolled back from {} to {}{}.\n",
+            report.from,
+            report.to,
+            if report.restarted {
+                " and restarted"
+            } else {
+                "; Cotra is not running, start it with `cotra start`"
+            }
+        ),
+        json: json!({"ok": true, "rollback": report}),
+    })
+}
+
+/// Internal: verifies the installation with this binary's own code. Used by
+/// `update` to confirm a newly activated version can verify itself.
+pub fn self_check(args: &mut Args) -> Result<Output, LifecycleError> {
+    args.finish()?;
+    let layout = Layout::for_current_user()?;
+    let platform = host_platform();
+    let state = Installer::new(layout, platform.as_ref()).verify()?;
+    let cli = env!("CARGO_PKG_VERSION");
+    Ok(Output {
+        exit_code: 0,
+        human: format!("Cotra {} verified by CLI {cli}.\n", state.active.version),
+        json: json!({"ok": true, "active": state.active.version, "cli": cli}),
+    })
+}

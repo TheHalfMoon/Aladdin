@@ -291,6 +291,32 @@ pub fn run(layout: &Layout, platform: &dyn Platform) -> DoctorReport {
         });
     }
 
+    checks.push(match crate::update::read_marker(layout) {
+        Ok(None) => check("update_state", CheckStatus::Pass, "no pending or failed update"),
+        Ok(Some(marker)) => match marker.state {
+            crate::update::UpdateState::Pending => check(
+                "update_state",
+                CheckStatus::Fail,
+                format!(
+                    "an update from {} to {} was interrupted; the active version is verified above; run `cotra rollback` or repeat `cotra update`",
+                    marker.from, marker.to
+                ),
+            ),
+            crate::update::UpdateState::Failed => check(
+                "update_state",
+                CheckStatus::Warn,
+                format!(
+                    "the update from {} to {} failed and {} was restored: {}",
+                    marker.from,
+                    marker.to,
+                    marker.from,
+                    marker.reason.unwrap_or_default()
+                ),
+            ),
+        },
+        Err(error) => check("update_state", CheckStatus::Fail, error.message),
+    });
+
     checks.push(match &record {
         Some(record) => match &record.previous {
             Some(previous) if layout.version_dir(previous).is_dir() => check(
