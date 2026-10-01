@@ -1,0 +1,4 @@
+{
+  "command": "cotra",
+  "args": ["mcp", "stdio"]
+}

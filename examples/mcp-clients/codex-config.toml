@@ -1,0 +1,20 @@
+# Codex local MCP configuration for Cotra.
+# File: ~/.codex/config.toml (user scope) or .codex/config.toml (project scope).
+# Source: Codex MCP documentation; field names verified against it.
+# Uses only the supported installed entrypoints. No tunnel required.
+
+# Local process transport. Preferred: no secrets, no ports.
+[mcp_servers.cotra]
+command = "cotra"
+args = ["mcp", "stdio"]
+startup_timeout_sec = 20
+tool_timeout_sec = 60
+
+# Loopback Streamable HTTP transport. Requires COTRA_LOOPBACK_TOKEN in the
+# Codex process environment (at least 32 characters) and a running
+# `cotra mcp serve` listener. Comment out the block above when using this one.
+# [mcp_servers.cotra_http]
+# url = "http://127.0.0.1:PORT/mcp"
+# bearer_token_env_var = "COTRA_LOOPBACK_TOKEN"
+# startup_timeout_sec = 20
+# tool_timeout_sec = 60
