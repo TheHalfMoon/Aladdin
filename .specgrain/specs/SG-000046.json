@@ -1,0 +1,87 @@
+{
+  "id": "SG-000046",
+  "title": "Threat-model regression, security review, and final repository quality",
+  "program": "COTRA-P13",
+  "state": "GRAIN",
+  "risk": "medium",
+  "created": "2026-10-01",
+  "base": "52ab083ef3dfa250d1e1560fe223416596867451",
+  "dependencies": [
+    "SG-000045"
+  ],
+  "objective": "Complete COTRA-P13 release hardening without widening authority: record the threat-model regression of every threat and cross-capability composition against the closed implementation, add MCP exposure-drift regression tests, record the program-level security review, remove dead code that misrepresents the compiled test suite, and bring user documentation and stale governance headers into agreement with the implementation.",
+  "scope": {
+    "include": [
+      "docs/security/THREAT_MODEL_REGRESSION.md mapping threats T01 through T28 and the cross-capability compositions requested for release (confused deputy, approval reuse, stale identity, TOCTOU, traversal, reparse and symlink races, DNS rebinding, peer mismatch, redirect widening, secret and child-environment leakage, privilege erosion, input-lease reuse, visual retargeting, protected-surface bypass, installer and update tampering, rollback attacks, unsafe migration, MCP exposure drift) to the controls and the regression tests that exercise them, with residual risks",
+      "docs/security/RELEASE_SECURITY_REVIEW.md recording the program-level security review: method, the per-grain independent reviews (genuine TypeSafe Jev, Alibaba Open Code Review, exact-diff manual review), the review-thread outcomes, known residual risks, and no known blocking findings",
+      "Node regression tests asserting the MCP surface registers exactly the canonical 20-tool set and that no MCP tool source references lifecycle, installer, update, trust, or approval surfaces",
+      "removal of the 24 unreferenced crates/cotrad/src/sg000015_main.rs through sg000038_main.rs snapshot files, which are never compiled, with the compiled test set unchanged",
+      "README.md rewritten as the user guide: what Cotra is, what it can and cannot do (the exact tool set and current limitations), requirements, install and verification, configuration, connecting ChatGPT, approvals and trust, diagnostics, update and rollback, and uninstall, describing only commands that exist",
+      "status headers of historical documents corrected to point to the current canonical state",
+      "SHA256SUMS.txt written with LF line endings by the CI and release workflows, so the standard sha256sum -c verifies it (the SG-000045 release-candidate checksum file was observed with CRLF line endings)",
+      "a recorded final repository review (TODO/FIXME/placeholder/stub/unimplemented/panic markers, dead workflows and scripts, unused dependencies, version consistency, temporary qualification artifacts, branch and PR state)"
+    ],
+    "exclude": [
+      "any change to runtime behavior, MCP tools, capabilities, approvals, lifecycle commands, or release tooling other than the SHA256SUMS.txt line endings",
+      "removal of any compiled code or test",
+      "claims that real ChatGPT tunnel connectivity or interactive approval prompts were exercised in CI"
+    ]
+  },
+  "authority_delta": {
+    "filesystem": "None.",
+    "process": "None.",
+    "network": "None.",
+    "browser": "None.",
+    "ui_input": "None.",
+    "secrets": "None.",
+    "approval": "None.",
+    "privileged": "None."
+  },
+  "invariants": [
+    "no runtime authority, tool, or behavior changes",
+    "the compiled test set is unchanged by dead-code removal",
+    "documentation describes only commands and behavior that exist",
+    "the MCP surface is pinned to the canonical tool set by tests"
+  ],
+  "acceptance": [
+    {
+      "id": "A1",
+      "claim": "The threat-model regression covers T01 through T28 and the requested compositions, citing tests that run in CI, and states residual risks."
+    },
+    {
+      "id": "A2",
+      "claim": "Node tests fail if the MCP surface registers any tool outside, or omits any tool from, the canonical 20-tool set, or if any MCP tool source references lifecycle, installer, update, trust, or approval surfaces."
+    },
+    {
+      "id": "A3",
+      "claim": "The unreferenced cotrad snapshot files are removed and the compiled cotrad test list is unchanged."
+    },
+    {
+      "id": "A4",
+      "claim": "README.md documents only existing commands and states the current limitations honestly."
+    },
+    {
+      "id": "A5",
+      "claim": "The security review and final repository review are recorded with no known blocking findings."
+    },
+    {
+      "id": "A6",
+      "claim": "The CI release-candidate SHA256SUMS.txt uses LF line endings and verifies with sha256sum -c against the downloaded artifacts."
+    },
+    {
+      "id": "A7",
+      "claim": "All closed SG-000001 through SG-000045 regressions pass unchanged, and exact-head CI (including release qualification and supply-chain audit), genuine TypeSafe Jev, Alibaba Open Code Review, manual review of excluded files, and zero unresolved review threads all pass."
+    }
+  ],
+  "successor_requirements": {
+    "p13_exit": "The P13 exit jointly records the threat-model regression suite, dependency and license review, SBOM, artifact provenance, independent security review, fresh Windows end-to-end qualification, the rollback and recovery drill, and no known blocking findings, and records the project's final canonical state."
+  },
+  "review": {
+    "diffcipline": true,
+    "jev_semantic_review": true,
+    "alibaba_open_code_review": "required exact-range qualification where integrated",
+    "security_review": true,
+    "exact_head_ci": true
+  },
+  "done_when": "The threat-model regression, security review, MCP drift tests, dead-code removal, user documentation, and final repository review are complete with no authority change."
+}

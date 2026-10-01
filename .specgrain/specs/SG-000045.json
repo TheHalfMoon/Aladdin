@@ -2,7 +2,7 @@
   "id": "SG-000045",
   "title": "Release supply chain: SBOM, provenance, notices, reproducibility, and dependency review",
   "program": "COTRA-P13",
-  "state": "GRAIN",
+  "state": "CLOSED",
   "risk": "high",
   "created": "2026-10-01",
   "base": "ca51b2e63872a3119e138f4afc8fad4dce987c3c",
@@ -87,5 +87,25 @@
     "exact_head_ci": true,
     "release_artifact_qualification": true
   },
-  "done_when": "Release artifacts carry notices, a deterministic archive, a graph-accurate SBOM, provenance with an observed reproducibility result, a build-provenance attestation, and audited dependencies, with no runtime authority change."
+  "done_when": "Release artifacts carry notices, a deterministic archive, a graph-accurate SBOM, provenance with an observed reproducibility result, a build-provenance attestation, and audited dependencies, with no runtime authority change.",
+  "qualified_head": "b4e721f836a3f1e00ba14f7751e12b09d32f74d2",
+  "implementation_base": "dff4effacc10f9b566615b03e6828c978f46dfb9",
+  "implementation_merge": "52ab083ef3dfa250d1e1560fe223416596867451",
+  "pre_merge_ci": "36831005290",
+  "pre_merge_review_gates": "36831003048",
+  "post_merge_ci": "36831437317",
+  "canonical_evidence": {
+    "implementation_pr": 129,
+    "implementation_base": "dff4effacc10f9b566615b03e6828c978f46dfb9",
+    "qualified_head": "b4e721f836a3f1e00ba14f7751e12b09d32f74d2",
+    "pre_merge_ci": "36831005290",
+    "pre_merge_review_gates": "36831003048",
+    "merge_sha": "52ab083ef3dfa250d1e1560fe223416596867451",
+    "post_merge_ci": "36831437317",
+    "jev": "PASSED: genuine TypeSafe Jev exact-diff review covered 20/20 hunks with zero findings and zero blocking findings, pin 31f89602797fb7bea007f8a480bf368bf564954e",
+    "ocr": "PASSED: Alibaba Open Code Review v1.12.9 exact-range delegation over 12 changed files, 11 reviewable with delegated rules applied and 1 excluded (docs/research/DEPENDENCY_LICENSE_REVIEW.md) manually reviewed",
+    "security_review": "PASS on exact qualified head: no runtime authority changes; THIRD_PARTY_NOTICES.txt, the CycloneDX 1.5 SBOM, and the provenance record are generated from the actual release payload and the cargo normal-edge dependency graph; the SBOM generator verifies the payload exactly matches the manifest, refuses manifest paths outside the release and links or non-regular payload entries; notice collection never follows links and refuses declared license files outside their package; the archive is deterministic and refuses an output inside the release; an independent rebuild and repackage from a second checkout produced byte-identical cotra.exe, cotra-mcp-host.exe, cotrad.exe, and archive (96fc76ee5d9db206f986c81fdba6a154585a757d17756ba065981d45c90d5799) with pinned Rust 1.97.1 and Node.js 24.19.0; shipped binaries are built with --bins only so dev-dependency features never reach them; installation, MCP through the installed host with the exact 20-tool set, update, downgrade refusal, rollback, broken-release recovery, verified stop, and uninstall were qualified from the extracted archive; npm audit and cargo audit 0.22.2 pass with zero known vulnerabilities; the release workflow attaches the archive, SBOM, provenance, notices, and SHA256SUMS to a draft only and creates a free GitHub build-provenance attestation, never publishing. 15 bot review threads were resolved: 14 with fixes and 1 answered with reasons.",
+    "unresolved_review_threads": 0,
+    "authority_boundary": "Release supply-chain tooling only: deterministic archive, CycloneDX SBOM, provenance record, third-party notices in the payload, observed reproducibility, archive-based release qualification, dependency audits, and a draft-only release workflow with a build-provenance attestation. No runtime behavior, MCP tool, agent capability, approval, lifecycle command, network activity, or code-signing claim is added."
+  }
 }
