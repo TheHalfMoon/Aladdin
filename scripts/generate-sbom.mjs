@@ -13,7 +13,7 @@
 
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -113,9 +113,13 @@ function verifyPayload(release, manifest) {
   const visit = (dir) => {
     for (const name of readdirSync(dir).sort()) {
       const path = join(dir, name);
-      const stat = statSync(path);
+      // lstat: links and other non-regular entries are rejected, as the installer does.
+      const stat = lstatSync(path);
+      const rel = relative(release, path).split(sep).join("/");
+      if (stat.isSymbolicLink()) fail(`release contains a link: ${rel}`);
       if (stat.isDirectory()) visit(path);
-      else present.push(relative(release, path).split(sep).join("/"));
+      else if (stat.isFile()) present.push(rel);
+      else fail(`release contains a non-regular file: ${rel}`);
     }
   };
   visit(release);
@@ -124,7 +128,12 @@ function verifyPayload(release, manifest) {
     if (path !== "manifest.json" && !listed.has(path)) fail(`release contains an unlisted file: ${path}`);
   }
   for (const file of manifest.files) {
-    const path = join(release, ...file.path.split("/"));
+    // Manifest paths are relative, "/"-separated, and use only plain components.
+    const parts = typeof file.path === "string" ? file.path.split("/") : [];
+    if (!parts.length || parts.some((part) => !part || part === "." || part === ".." || /[\\:]/.test(part))) {
+      fail(`manifest lists an invalid path: ${JSON.stringify(file.path)}`);
+    }
+    const path = join(release, ...parts);
     if (!existsSync(path)) fail(`release is missing ${file.path}`);
     if (sha256(readFileSync(path)) !== file.sha256) fail(`SHA-256 mismatch for ${file.path}`);
   }

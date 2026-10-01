@@ -9,8 +9,8 @@
 //   node scripts/third-party-notices.mjs --release <release-dir> --out <file>
 
 import { execFileSync } from "node:child_process";
-import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { existsSync, lstatSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -40,7 +40,8 @@ function noticeFiles(dir, declared) {
     for (const name of readdirSync(current).sort()) {
       if (name === "node_modules" || name === ".git" || name === "target") continue;
       const path = join(current, name);
-      const stat = statSync(path);
+      // lstat: links are never followed, so only files inside the package are read.
+      const stat = lstatSync(path);
       const rel = prefix ? `${prefix}/${name}` : name;
       if (stat.isDirectory()) {
         if (depth < 3) visit(path, rel, depth + 1);
@@ -51,8 +52,12 @@ function noticeFiles(dir, declared) {
   };
   visit(dir, "", 0);
   if (declared) {
-    const path = join(dir, declared);
-    if (existsSync(path) && statSync(path).isFile()) found.set(declared.replace(/\\/g, "/"), path);
+    // A declared license file must stay inside the package directory.
+    const path = resolve(dir, declared);
+    const rel = relative(resolve(dir), path);
+    const inside = rel !== "" && rel !== ".." && !rel.startsWith(`..${sep}`) && !/^[A-Za-z]:|^[\\/]/.test(rel);
+    if (!inside) fail(`${dir} declares a license file outside the package: ${declared}`);
+    if (existsSync(path) && lstatSync(path).isFile()) found.set(rel.split(sep).join("/"), path);
   }
   return [...found.entries()]
     .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
