@@ -101,7 +101,7 @@ Codex and other command-based clients use the same command and arguments:
 
 Mistral Vibe Code accepts a stdio entry in its MCP server list with command `cotra` and arguments `["mcp", "stdio"]`. Generic MCP clients and the MCP Inspector connect with transport `stdio`, command `cotra`, and arguments `["mcp", "stdio"]`.
 
-`cotra` here is `%LOCALAPPDATA%\Cotra\bin\cotra.exe` on your user PATH after install. It resolves the active verified release on every launch, refuses tampered or inactive payloads, and fails closed when no workspace is configured.
+`cotra` here is `%LOCALAPPDATA%\Cotra\bin\cotra.exe` on your user PATH after install. It resolves the active verified release on every launch, refuses tampered or inactive payloads, and fails closed when no workspace is configured. Tested per-client files live in [`examples/mcp-clients`](examples/mcp-clients) (Claude Desktop JSON and Desktop Extension manifest, Codex TOML, Vibe Code TOML, generic shapes, and the Inspector qualification script).
 
 ## Connect over loopback HTTP (no tunnel required)
 
