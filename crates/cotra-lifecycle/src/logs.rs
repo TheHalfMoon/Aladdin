@@ -40,53 +40,58 @@ const KEY_PREFIXES: &[(&str, usize)] =
 
 /// Redacts one log line and bounds its length. Tokens are split on spaces
 /// and tabs; within a token every credential assignment (`name=value`,
-/// `name:value`, quoted JSON forms) and every key-like value is replaced, and
-/// an assignment whose value follows the separator in the next token (for
-/// example `password: secret` or pretty-printed JSON) redacts that token.
+/// `name:value`, quoted JSON forms) and every key-like value is replaced.
+/// When a credential value starts in a following token (`password: secret`,
+/// `--api-key value`, pretty-printed JSON) or is a quoted value that does not
+/// close within its token, the rest of the line is redacted, because the
+/// value's extent cannot be known and over-redaction is the safe direction.
+/// An authorization scheme (`Bearer`, `Basic`) redacts exactly one token.
 pub fn redact_line(line: &str) -> String {
     let mut out = Vec::new();
-    let mut pending = false;
+    let mut scheme_pending = false;
+    let mut redact_rest = false;
     let mut awaiting_separator = false;
     for token in line.split([' ', '\t']) {
         if token.is_empty() {
             out.push(String::new());
             continue;
         }
+        if redact_rest {
+            out.push(REDACTED.to_string());
+            continue;
+        }
         if awaiting_separator && matches!(token, "=" | ":" | "=>") {
             out.push(token.to_string());
             awaiting_separator = false;
-            pending = true;
+            redact_rest = true;
             continue;
         }
         awaiting_separator = false;
         let lower = token.to_ascii_lowercase();
-        let scheme = lower == "bearer" || lower == "basic";
-        if scheme {
+        if lower == "bearer" || lower == "basic" {
             out.push(token.to_string());
-            pending = true;
+            scheme_pending = true;
             continue;
         }
-        if pending {
+        if scheme_pending {
             out.push(REDACTED.to_string());
-            pending = false;
+            scheme_pending = false;
             continue;
         }
-        let (redacted, value_follows) = redact_token(token);
+        let (redacted, continues) = redact_token(token);
         out.push(redacted);
-        pending = value_follows;
+        redact_rest = continues;
         let bare = lower.trim_matches(|c: char| c == '"' || c == '\'');
         // An option such as `--api-key` or `--control-plane.api-key` whose
-        // value is the next token.
+        // value follows in the next token(s).
         let option_name = bare
             .strip_prefix('-')
             .filter(|_| !bare.contains('='))
             .and_then(|name| name.rsplit(['.', '-', '_']).next());
-        if !pending
-            && option_name.is_some_and(|last| marker_len(last.as_bytes()) == Some(last.len()))
-        {
-            pending = true;
+        if option_name.is_some_and(|last| marker_len(last.as_bytes()) == Some(last.len())) {
+            redact_rest = true;
         }
-        awaiting_separator = !pending && marker_len(bare.as_bytes()) == Some(bare.len());
+        awaiting_separator = !redact_rest && marker_len(bare.as_bytes()) == Some(bare.len());
     }
     let joined = out.join(" ");
     if joined.chars().count() > MAX_LINE_CHARS {
@@ -167,6 +172,7 @@ fn redact_token(token: &str) -> (String, bool) {
                         out.push_str(&token[copied..]);
                         return (out, true);
                     }
+                    let quoted = start > separator + 1;
                     let mut end = start;
                     while end < bytes.len()
                         && !matches!(
@@ -178,6 +184,10 @@ fn redact_token(token: &str) -> (String, bool) {
                     }
                     out.push_str(&token[copied..start]);
                     out.push_str(REDACTED);
+                    if quoted && end >= bytes.len() {
+                        // The quoted value continues past this token.
+                        return (out, true);
+                    }
                     index = end;
                     copied = end;
                     continue;
@@ -271,7 +281,8 @@ mod tests {
         );
         assert!(out.contains("api_key=[REDACTED]"), "{out}");
         assert!(out.starts_with("connect"));
-        assert!(out.ends_with(" ok"));
+        // A spaced credential (`token: abc`) redacts the rest of the line.
+        assert!(out.ends_with(REDACTED), "{out}");
         assert_hidden(r#"{"password":"hunter22","user":"u"}"#, &["hunter22"]);
     }
 
@@ -295,6 +306,15 @@ mod tests {
         assert_hidden("env OPENAI_API_KEY=plainsecret", &["plainsecret"]);
         assert_hidden("--api-key=plainsecret", &["plainsecret"]);
         assert_hidden("--api-key plainsecret", &["plainsecret"]);
+        assert_hidden(
+            r#"--api-key "C:\path with space" --verbose"#,
+            &["path", "with", "space"],
+        );
+        assert_hidden(r"--api-key file:C:\keys k", &["keys", " k"]);
+        assert_hidden("password: two words here", &["two", "words", "here"]);
+        assert_hidden(r#"password="two words" next"#, &["two", "words"]);
+        let scheme = redact_line("Authorization: Bearer abc.def next-field");
+        assert!(!scheme.contains("abc.def"), "{scheme}");
         assert_hidden(
             r"--control-plane.api-key file:C:\keys\k",
             &[r"file:C:\keys\k"],

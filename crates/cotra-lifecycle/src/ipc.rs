@@ -101,30 +101,48 @@ pub fn call(
         .stderr
         .take()
         .ok_or_else(|| LifecycleError::internal("cotrad stderr unavailable"))?;
-    // Drain stderr in fixed-size chunks, keeping only a bounded tail, and hand
-    // it back over a channel so a descendant holding the pipe can never block
-    // this call.
+    // Drain stderr in fixed-size chunks and keep only the last complete,
+    // already-redacted line, so truncation can never cut a credential marker
+    // away from its value. Over-long lines are dropped, not truncated. The
+    // result is handed back over a channel so a descendant holding the pipe
+    // can never block this call.
     let (diagnostics_sender, diagnostics) = mpsc::channel::<String>();
     std::thread::spawn(move || {
+        const MAX_LINE_BYTES: usize = 8 * 1024;
         let mut stderr = stderr;
-        let mut tail = Vec::<u8>::new();
+        let mut line = Vec::<u8>::new();
+        let mut oversized = false;
+        let mut last = String::new();
+        let finish_line = |line: &mut Vec<u8>, oversized: &mut bool, last: &mut String| {
+            let text = String::from_utf8_lossy(line);
+            if *oversized {
+                *last = "[diagnostic line too long]".into();
+            } else if !text.trim().is_empty() {
+                *last = crate::logs::redact_line(text.trim_end_matches('\r'))
+                    .chars()
+                    .take(400)
+                    .collect();
+            }
+            line.clear();
+            *oversized = false;
+        };
         let mut chunk = [0u8; 1024];
         while let Ok(read) = std::io::Read::read(&mut stderr, &mut chunk) {
             if read == 0 {
                 break;
             }
-            tail.extend_from_slice(&chunk[..read]);
-            if tail.len() > 2048 {
-                tail.drain(..tail.len() - 2048);
+            for &byte in &chunk[..read] {
+                if byte == b'\n' {
+                    finish_line(&mut line, &mut oversized, &mut last);
+                } else if line.len() < MAX_LINE_BYTES {
+                    line.push(byte);
+                } else {
+                    oversized = true;
+                }
             }
         }
-        let text = String::from_utf8_lossy(&tail);
-        let last = text
-            .lines()
-            .rev()
-            .find(|line| !line.trim().is_empty())
-            .unwrap_or("");
-        let _ = diagnostics_sender.send(crate::logs::redact_line(last).chars().take(400).collect());
+        finish_line(&mut line, &mut oversized, &mut last);
+        let _ = diagnostics_sender.send(last);
     });
     let mut stdin = child
         .stdin
