@@ -84,7 +84,7 @@ Controls:
 - no fallback to another online device;
 - two-user/two-device negative tests.
 
-Exit evidence: cross-route mutation attempts fail before local MCP dispatch.
+Exit evidence: cross-route requests, including read-only calls, fail before local MCP dispatch, and results never reach the wrong principal.
 
 ### UC-T02 Device identity spoofing
 
@@ -187,7 +187,7 @@ Controls:
 
 - cryptographically random session IDs when the negotiated MCP era requires sessions;
 - session scoped to authenticated principal + device + connection;
-- invalid/missing session IDs fail closed;
+- invalid/missing session IDs fail closed only when the negotiated protocol requires a session; stateless requests follow the SDK/spec;
 - bounded session lifetime;
 - modern stateless protocol handled according to the SDK/spec rather than emulating legacy session state.
 
@@ -231,6 +231,7 @@ Threat: write/execute request is delivered minutes later when the user no longer
 Controls:
 
 - no durable offline queue for mutating calls;
+- no durable offline queue for read calls;
 - short transport reconnect grace only;
 - original Cotra request/approval expiry remains effective;
 - queued items expire before dispatch;
@@ -414,6 +415,18 @@ Controls:
 - clear `REMOTE_RATE_LIMITED`/unavailable behavior;
 - self-host/local modes remain usable.
 
+### UC-T30b Compromised-relay device flooding
+
+Threat: a compromised relay or hijacked device-channel session floods a paired device with requests and approval prompts, causing denial of service or approval fatigue.
+
+Controls:
+
+- per-device request, concurrency, and approval-prompt rate limits at the local edge;
+- backpressure from the local edge to the device channel;
+- fail closed on overload with typed `REMOTE_RATE_LIMITED` or `REMOTE_SESSION_INACTIVE` rather than queuing unbounded work;
+- no durable queue for reads or writes after overload, lease expiry, or revocation;
+- qualification includes flooding from a compromised relay and approval-rate behavior.
+
 ### UC-T31 Pairing enumeration/privacy leak
 
 Threat: attacker learns whether a device/account exists from pairing responses.
@@ -457,7 +470,7 @@ Controls:
 - license review;
 - SBOM/provenance;
 - minimal dependency selection;
-- exact-head Jev/OCR/manual review.
+- exact-head TypeSafe Jev, Alibaba Open Code Review, and manual review.
 
 ### UC-T35 Relay operator impersonation
 
@@ -466,7 +479,10 @@ Threat: operator manually routes a request to a victim device.
 Controls:
 
 - authenticated account/device route state;
+- a device-verifiable authorization envelope binds the authenticated principal, connection, selected device, and request digest before local dispatch;
+- local dispatch rejects a remapped principal-to-device route even when the relay/device channel itself is authenticated;
 - local policy/approval still required;
+- active local remote-session lease still required for every remote dispatch, including reads;
 - sensitive effects show local target/consequence;
 - self-hosted mode for users who do not trust shared relay;
 - no claim that shared relay is end-to-end encrypted from provider to device.
@@ -499,7 +515,7 @@ Controls:
 - local Desktop Extension is a separate local path;
 - one remote backend must not assume requests originate locally merely because the user is on Claude Desktop.
 
-### Mistral Work
+### Mistral Vibe Work
 
 - HTTPS remote MCP endpoint;
 - static tool behavior compatible with current custom-connector limits;
@@ -512,15 +528,18 @@ Controls:
 
 ## 8. Required qualification before P15 exit
 
-- two-principal/two-device routing isolation;
+- two-principal/two-device routing isolation, including read-only cross-route attempts and wrong-principal result delivery;
 - provider/client identity tests;
 - PKCE/state/issuer/audience/scope OAuth tests;
-- access/refresh revoke tests;
+- access/refresh revoke tests, including principal-wide and all-route revocation;
 - pairing brute-force/replay/expiry tests;
 - device challenge/replay/rotation tests;
 - duplicate/reordered/expired relay frame tests;
 - reconnect/stale route tests;
 - offline mutation non-queueing test;
+- offline read non-queueing test after lease expiry, revoke, lock/logoff invalidation, and profile/policy change;
+- compromised-relay device flooding and approval-rate/backpressure test;
+- device-verifiable authorization envelope test for principal/connection/device/request-digest binding;
 - cancellation ambiguity test;
 - loopback Host/Origin/DNS-rebinding tests;
 - payload/log redaction tests;

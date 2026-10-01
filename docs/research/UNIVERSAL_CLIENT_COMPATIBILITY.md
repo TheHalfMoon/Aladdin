@@ -24,7 +24,7 @@ Verified constraints relevant to Cotra:
 1. ChatGPT and Codex share a universal public plugin directory on supported surfaces.
 2. A public remote MCP plugin requires a stable public HTTPS endpoint using Streamable HTTP; a private development tunnel is not sufficient for public submission.
 3. User-specific/private data and write actions should use the MCP OAuth 2.1 authorization model.
-4. Current OpenAI auth guidance requires protected-resource metadata, authorization-server metadata, PKCE S256, resource binding, and full token validation; OpenAI supports CIMD and DCR client-identification paths.
+4. Current OpenAI auth guidance requires protected-resource metadata, authorization-server metadata, PKCE S256, resource binding, and full token validation; OpenAI supports Client ID Metadata Documents (CIMD) and Dynamic Client Registration (DCR) client-identification paths.
 5. OpenAI can present a managed mTLS client certificate to remote MCP servers; mTLS authenticates the ChatGPT client and does not replace end-user OAuth.
 6. Each public tool must be independently exposed rather than hidden behind a generic executor/discovery operation.
 7. Public tools require accurate `readOnlyHint`, `destructiveHint`, and `openWorldHint`; annotations are not authorization and Cotra must continue to enforce local policy.
@@ -126,7 +126,7 @@ Cotra design consequence:
 
 | Client/surface | Preferred Cotra transport | Public relay required | Auth model | Target status |
 | --- | --- | --- | --- | --- |
-| Claude Desktop | stdio / Desktop Extension | No | local Cotra transport credential + local policy | P14 |
+| Claude Desktop | stdio / Desktop Extension | No | local | P14 |
 | Claude Code | stdio | No | local | P14 |
 | Codex local/CLI | stdio or supported local plugin MCP config | No | local | P14 |
 | Mistral Vibe Code | stdio | No | local | P14 |
@@ -135,7 +135,7 @@ Cotra design consequence:
 | ChatGPT web public plugin | HTTPS Streamable HTTP | Yes | OAuth 2.1 + paired device; OpenAI client identification defense in depth | P15/P17 |
 | Claude web remote connector | HTTPS MCP | Yes | relay account/pairing auth compatible with Claude connector behavior | P15/P17 |
 | Mistral Vibe Work | HTTPS Streamable HTTP | Yes | remote connector-compatible auth + paired device | P15/P17 |
-| Self-hosted hosted AI client | HTTPS Streamable HTTP | Usually | standards-based remote auth | P15 |
+| Hosted AI client using a self-hosted Cotra relay | HTTPS Streamable HTTP | Yes | standards-based remote auth | P15 |
 
 ## 7. Claims that are explicitly not yet proven
 

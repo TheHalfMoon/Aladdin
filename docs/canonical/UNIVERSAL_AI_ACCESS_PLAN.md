@@ -81,7 +81,7 @@ Requirements:
 
 ### 3.3 Remote web mode
 
-For hosted AI clients such as ChatGPT web, Claude web, and Mistral Work:
+For hosted AI clients such as ChatGPT web, Claude web, and Mistral Vibe Work:
 
 ```text
 Hosted AI provider
@@ -172,7 +172,8 @@ Required internal context fields:
 - `provider_kind`: `openai`, `anthropic`, `mistral`, `codex`, `generic`, or locally configured identifier;
 - `remote_principal_id`: opaque relay-authenticated identifier when remote; absent locally;
 - `device_id`: stable random Cotra installation identifier;
-- `connection_id`: short-lived remote connection identity;
+- `remote_connection_id`: stable provider MCP connection bound to one `remote_principal_id` and one exact `device_id`;
+- `connection_id`: short-lived remote transport connection identity bound to the stable `remote_connection_id` and current route/connection epoch;
 - `client_session_id`: locally generated session ID used by Cotra audit/policy;
 - `protocol_version`;
 - `tool_surface_profile`;
@@ -250,6 +251,8 @@ Initial scope vocabulary:
 
 A tool may require more than one scope. Local policy can always deny a scope-authorized request.
 
+A normative default-deny scope-to-tool/profile matrix must be reviewed before public remote exposure. Every tool and profile states its required scopes, and missing or unknown scope/tool mappings deny.
+
 ## 9. Public relay protocol
 
 The relay protocol must not be a generic TCP, HTTP, CONNECT, SOCKS, WebSocket-proxy, or arbitrary destination proxy.
@@ -270,15 +273,16 @@ Relay frames must carry at minimum:
 
 - protocol version;
 - route/device ID;
-- connection ID;
+- stable `remote_connection_id` and short-lived `connection_id`;
 - monotonically scoped message sequence or replay nonce;
 - request/response correlation ID;
 - message kind;
 - payload length;
 - creation/expiry time;
-- integrity/authentication information for the device channel.
+- integrity/authentication information for the device channel;
+- a device-verifiable authorization envelope that binds the authenticated principal, connection, selected device, and request digest before local dispatch.
 
-The relay must reject duplicate, expired, oversized, malformed, cross-route, and impossible-order frames.
+The relay must reject duplicate, expired, oversized, malformed, cross-route, and impossible-order frames. A compromised relay must not be able to redirect principal A's authenticated request to device B and have it accepted locally; local dispatch verifies the device-verifiable envelope.
 
 ### 9.3 Limits and backpressure
 
@@ -295,7 +299,7 @@ Hard limits are required for:
 - authentication failures;
 - pairing attempts.
 
-The default offline policy is fail closed. Cotra must not queue mutating operations for later surprise execution. A bounded retry/short grace period may exist only for transport reconnection and must preserve the original request/approval expiry semantics.
+The default offline policy is fail closed. Cotra must not queue operations for later surprise execution. Mutating operations must never be automatically retried after dispatch unless a stable operation ID is deduplicated by cotrad with result replay; retries are limited to idempotent reads and must preserve original request/approval expiry semantics. A bounded retry/short grace period may exist only for transport reconnection and must preserve the original request/approval expiry semantics.
 
 ### 9.4 Cancellation
 
@@ -405,7 +409,7 @@ The registry is local protected configuration.
 
 Each executable entry binds:
 
-- stable executable identity/path;
+- stable executable identity with an immutable verification rule (hash and, where available, publisher/signature) or a protected-path plus ACL ownership/writeability rule that prevents user-writable replacement, revalidated immediately before launch;
 - optional publisher/hash rule;
 - allowed argument grammar or argument policy;
 - allowed cwd roots;
@@ -420,7 +424,7 @@ Changing the registry is PRIVILEGED and requires STRONG local presence.
 
 No remote MCP tool can add or widen an executable entry.
 
-The first developer pack should cover common toolchains only through explicit entries (for example Git, Cargo, Node/npm, Python, test runners) and must be qualified on the target Windows environment.
+The first developer pack should begin with individually reviewed, non-interpreting binaries (for example Git and Cargo); Node/npm, Python, and test runners require separate grains with script/config provenance and descendant containment before exposure, and must be qualified on the target Windows environment.
 
 ## 15. Provider integration matrix
 
@@ -526,6 +530,7 @@ Add typed failures for the universal-access layer:
 - `RELAY_SEQUENCE_INVALID`
 - `REMOTE_RATE_LIMITED`
 - `REMOTE_QUEUE_EXPIRED`
+- `REMOTE_SESSION_INACTIVE`
 - `MCP_PROTOCOL_UNSUPPORTED`
 - `TOOL_SURFACE_DENIED`
 
@@ -725,7 +730,10 @@ Cross-tenant, OAuth, replay, reconnect, offline mutation, privacy/log, quota, an
 P15 exit:
 
 - a remote authenticated MCP client can safely reach one paired device without inbound PC ports;
-- relay compromise does not grant local approval/workspace authority in the tested model;
+- every remote MCP dispatch requires both device-backed pairing/OAuth and an active finite local remote-session lease checked by `cotrad` and bound to the exact remote connection, device, client profile, workspaces, policy revision, tool surface, and expiry;
+- the relay and the provider cannot create, widen, extend, or renew the local remote-session lease;
+- lease expiry, reconnect, token refresh, relay restart, lock/logoff invalidation, profile narrowing, policy revision change, workspace revoke, and device route revocation all deny remote dispatch, including read-only calls, with typed `REMOTE_SESSION_INACTIVE` where no active lease exists;
+- relay compromise does not grant local approval/workspace authority in the tested model, and read exfiltration through a compromised relay is bounded by the active lease scope and hard maximum duration;
 - self-host mode works independently of any Cotra-operated relay;
 - community relay limits are explicit and fail closed.
 
@@ -863,6 +871,6 @@ Completion requires:
 
 Implementation begins only after this plan, the universal-connectivity threat model, and compatibility matrix are reviewed and merged through the existing exact-head qualification process.
 
-The first implementation/activation packet after plan ratification is SG-000047.
+SG-000047 is the grain that ratifies and activates this plan; no implementation grain proceeds until SG-000047 closes.
 
 No P15 remote relay code may merge before P14's transport-neutral local contract is canonical. No P16 authority widening may merge before the capability/parity inventory is canonical. No public provider submission may occur before the remote threat model, auth, cross-tenant isolation, privacy policy, and production endpoint are qualified.

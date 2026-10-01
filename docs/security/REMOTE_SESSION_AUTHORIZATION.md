@@ -7,6 +7,7 @@ Companions:
 - `docs/canonical/UNIVERSAL_AI_ACCESS_PLAN.md`
 - `docs/security/REMOTE_PRINCIPAL_AUTH_MODEL.md`
 - `docs/security/UNIVERSAL_CONNECTIVITY_THREAT_MODEL.md`
+- `docs/security/CLIENT_CONNECTION_PROFILE_MODEL.md`
 
 ## 1. Why this boundary is required
 
@@ -26,7 +27,7 @@ A remote session lease is a local `cotrad` authorization object created only thr
 
 It binds at minimum:
 
-- exact `remote_connection_id`;
+- exact stable `remote_connection_id` and its current short-lived `connection_id`;
 - exact `device_id`;
 - authenticated `provider_kind` / remote client identity metadata;
 - allowed remote OAuth scope ceiling;
@@ -47,19 +48,19 @@ The relay cannot create, extend, widen, or renew it.
 For every remote MCP tool call, effective authorization is:
 
 ```text
-valid remote OAuth/client authentication
+valid remote OAuth/client authentication with current token scopes, where required tool scopes are within both the current token scopes and the leased OAuth scope ceiling
 AND exact paired remote connection/device route
 AND active local remote-session lease
 AND tool included in the leased local surface profile
 AND workspace included in the lease
-AND current policy revision still matches or revalidation succeeds
+AND current policy revision still matches or locally controlled revalidation succeeds through a local presence-based step the remote model cannot satisfy
 AND normal cotrad capability/provider-ceiling checks
 AND required per-action SOFT/STRONG approval
 ```
 
 Any denial wins.
 
-A valid remote OAuth token without a local lease produces a typed local denial such as `REMOTE_SESSION_INACTIVE`; it does not create a prompt that the remote model can satisfy.
+A valid remote OAuth token without a local lease produces a typed local denial such as `REMOTE_SESSION_INACTIVE`; it does not create a prompt that the remote model can satisfy. `REMOTE_SESSION_INACTIVE` is part of the shared typed-failure vocabulary in `docs/canonical/UNIVERSAL_AI_ACCESS_PLAN.md` section 18.
 
 ## 4. Lease creation UX
 
@@ -83,7 +84,7 @@ Creating or widening a remote session lease is a local privileged security decis
 
 Initial remote enable/pair and any persistent/default-allow policy require STRONG local user presence.
 
-A normal bounded lease may use the strongest local presence class chosen during implementation, but the remote model cannot satisfy it.
+A normal bounded lease creation or widening requires STRONG local user presence, and the remote model cannot satisfy it.
 
 ## 5. Duration
 
@@ -91,7 +92,7 @@ Remote leases are finite by default.
 
 Requirements:
 
-- hard maximum duration is implementation-defined and security-reviewed;
+- hard maximum duration is 15 minutes unless a separately reviewed release policy sets a shorter limit;
 - reconnect does not extend expiry;
 - provider token refresh does not extend expiry;
 - relay restart does not extend expiry;
@@ -105,16 +106,14 @@ A future locally configured persistent policy may create new finite leases autom
 
 Default remote policy is interactive-user-first.
 
-The remote session lease is suspended or invalidated when Cotra observes a security-relevant workstation transition that makes local user presence/approval unavailable, including as applicable:
+The remote session lease follows this deterministic state machine on every observed workstation transition:
 
-- user logoff;
-- Cotra shutdown;
-- emergency revoke;
-- device key/connection revoke;
-- workstation lock;
-- suspend/hibernate where state continuity is not proven.
+- user logoff: lease invalidated immediately; in-flight remote calls fail closed; reconnect requires a new STRONG-gated lease;
+- workstation lock: dispatch suspended immediately and in-flight calls fail closed; unlock alone does not resume dispatch without an active unexpired lease, and never extends expiry;
+- suspend/hibernate: lease suspended on suspend; on resume the lease remains expired if its deadline passed, otherwise dispatch stays suspended until Cotra revalidates device, connection, and policy epochs locally;
+- Cotra shutdown, emergency revoke, or device key/connection revoke: lease invalidated immediately with no retry window that outlives the original request/lease expiry.
 
-Unlock/resume does not silently widen or extend an expired lease.
+Unlock/resume does not silently widen or extend an expired lease. Race handling is fail closed: if a transition and a dispatch race, the transition wins.
 
 Exact Windows behavior must be qualified on real Windows; CI must not fabricate workstation-state evidence.
 
@@ -122,9 +121,11 @@ Exact Windows behavior must be qualified on real Windows; CI must not fabricate 
 
 A workspace/remote connection can choose among locally configured read modes.
 
+The effective read mode is the most restrictive of the client profile, workspace override, and lease: `disabled` denies, and `per_request` cannot be downgraded to `session`.
+
 ### `session`
 
-Default target. Read-only tools within the lease's exact workspace/profile may run during the active lease without an approval dialog for every call.
+Default target. Read-only tools that already require no local approval within the lease's exact workspace/profile may run during the active lease without an approval dialog for every call; read tools with an existing approval class retain it.
 
 ### `per_request`
 

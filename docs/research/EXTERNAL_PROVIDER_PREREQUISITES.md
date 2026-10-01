@@ -177,7 +177,7 @@ If a provider requirement cannot be met without violating Cotra's security or ze
 - mark the provider distribution state blocked externally;
 - do not weaken local security to satisfy the directory;
 - do not introduce surprise billing;
-- keep local/generic/self-host integrations releaseable.
+- keep local/generic/self-host integrations releasable.
 
 ## 14. Definition of success for the user's goal
 

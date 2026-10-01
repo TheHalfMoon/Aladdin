@@ -89,6 +89,8 @@ The implementation should avoid placing bearer secrets directly in command-line 
 
 The profile ID itself is not a secret.
 
+The stdio profile selector is caller-controlled, so the implementation must not trust an ID or alias alone. stdio must bind the selected profile to a protected per-profile launch credential, manifest, or OS-managed identity, and a malicious MCP host must not be able to launch Cotra under a higher-authority profile by supplying a different selector.
+
 The direct stdio process relationship supplies the transport path, while the local profile supplies the policy ceiling and audit identity.
 
 Cotra does not claim cryptographic isolation from arbitrary malicious code already running unrestricted under the same Windows user. A same-user attacker may be able to inspect process configuration or invoke installed executables. Cotra's protected-state, workspace, capability, and approval controls remain the security boundary against effects, but confidentiality from an already-unrestricted same-user process is outside the strict model.

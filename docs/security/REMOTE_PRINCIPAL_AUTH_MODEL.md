@@ -6,6 +6,7 @@ Planning base: `5feff3f15cc7e20464cafffd7b87d713b65a012f`
 Companions:
 - `docs/canonical/UNIVERSAL_AI_ACCESS_PLAN.md`
 - `docs/security/UNIVERSAL_CONNECTIVITY_THREAT_MODEL.md`
+- `docs/security/REMOTE_SESSION_AUTHORIZATION.md`
 - `docs/research/UNIVERSAL_CLIENT_COMPATIBILITY.md`
 
 ## 1. Problem
@@ -58,9 +59,11 @@ One provider MCP connection bound to:
 - one granted OAuth scope set;
 - one connection/revocation epoch.
 
-**v0.2 deliberately binds one remote provider connection to one device.**
+`remote_connection_id` is the stable provider-connection identity used by leases, revocation, and audit. It is distinct from the short-lived transport `connection_id` defined in `docs/canonical/UNIVERSAL_AI_ACCESS_PLAN.md` section 6. A lease binds the stable `remote_connection_id` together with its current short-lived `connection_id` and epoch, so lease and revocation checks never target different connection identities.
 
-A user who wants to connect a second PC creates a second provider connection. This avoids ambiguous device selection and cross-device routing in the first universal release.
+**v0.2 deliberately binds one remote provider connection to one device, and one remote principal to one device.**
+
+A user who wants to connect a second PC creates a second provider connection under a new `remote_principal_id`. This avoids ambiguous device selection and cross-device routing in the first universal release. There is no cross-device enrollment of a new device into an existing principal in v0.2; each device is an independent principal with per-device revocation, and principal-wide revocation means revoking every connection owned by that single-device principal plus every paired device route for that connection. Cross-device principal roaming is an explicit non-goal for v0.2.
 
 ### 3.5 `client_session_id`
 
@@ -121,7 +124,7 @@ A pairing transaction must be:
 
 - cryptographically random;
 - at least 80 bits of effective entropy for any manually entered representation;
-- preferably represented as an opaque URL token with at least 128 bits of entropy for QR/click flows;
+- preferably represented as an opaque URL token with at least 128 bits of entropy for QR/click flows, delivered so it is not persisted in browser history, bookmarks, or Referer headers and consumed/cleared as soon as the page redeems it;
 - single use;
 - short lived;
 - bound to the candidate `device_id` and OAuth authorization transaction;
@@ -168,6 +171,7 @@ Default policy:
 
 - access tokens are short lived;
 - refresh/token renewal is allowed only while the bound device connection is still valid under the current device/connection revocation epoch;
+- refresh additionally requires a fresh device-key proof or a short-lived device-signed online lease at the token endpoint, bound to the refresh family and the current connection epoch, so a stolen refresh token cannot renew while the legitimate device is offline or revoked;
 - a revoked device or connection cannot renew a token family;
 - a device that has been offline beyond the configured security window cannot silently renew indefinite remote access;
 - reconnect never changes the bound `device_id`.
@@ -184,10 +188,14 @@ Required commands/UX:
 
 - list paired remote connections;
 - revoke one provider connection;
+- revoke every connection owned by one principal;
 - revoke all remote connections for the device;
+- revoke every paired device route for the account;
 - rotate the device key;
-- disable remote mode entirely;
-- emergency revoke through the existing Cotra authority boundary.
+- disable remote mode entirely, which revokes every connection and every paired device route;
+- emergency revoke through the existing Cotra authority boundary, including a remotely reachable emergency revocation path that does not require physical access to a stolen or still-running device.
+
+A remotely reachable emergency revocation path uses an authenticated principal session, such as a still-valid OAuth session or provider-side connector removal propagated to the relay, to revoke device routes and token families without requiring commands on the lost device. Short access-token lifetime, device-gated refresh with fresh device-key proof, and the finite local remote-session lease bound the residual window until revocation propagates.
 
 Revocation increments the relevant epoch and invalidates:
 
@@ -205,10 +213,14 @@ The default v0.2 system intentionally avoids pretending that an email/password c
 If the only Cotra device is permanently lost:
 
 - the short access-token lifetime limits residual access;
-- device-gated renewal fails when the device cannot prove possession/current epoch;
+- device-gated renewal fails when the device cannot prove possession/current epoch with a fresh device-key proof;
+- a stolen or still-running device that retains its valid key remains able to prove possession until revocation propagates, so the user must invoke remotely reachable emergency revocation through an authenticated relay session or provider-side connector removal, in addition to local commands when available;
+- the finite local remote-session lease independently bounds remote dispatch after loss, and expiry, lock/logoff invalidation, or revocation denies even read-only dispatch;
 - a replacement installation receives a new `device_id` and key pair;
-- the user links the replacement as a new connection;
+- the user links the replacement as a new connection under a new principal;
 - provider-side connector removal remains an additional cleanup path.
+
+This document does not claim that a lost device is immediately contained without revocation. Containment requires revocation plus token and lease expiry.
 
 An optional recovery credential or passkey-backed multi-device Cotra account may be designed later, but it is not required for the initial universal release and must not be silently introduced as a new cloud dependency.
 
@@ -230,6 +242,15 @@ Initial remote OAuth scopes:
 - `cotra.write`
 - `cotra.execute`
 
+Normative scope-to-tool/profile matrix (default deny):
+
+- `cotra.read` authorizes only tools and profiles explicitly marked read-only in the reviewed matrix;
+- `cotra.write` additionally authorizes only explicitly marked write tools and profiles;
+- `cotra.execute` additionally authorizes only explicitly marked execute tools and profiles;
+- a tool that requires more than one scope needs every listed scope present in both the current token and the leased OAuth scope ceiling;
+- missing or unknown scope/tool/profile mappings deny;
+- the relay enforces this matrix before dispatch, and `cotrad` re-enforces it with the leased ceiling.
+
 OAuth scopes are an outer remote ceiling only.
 
 They do not:
@@ -247,13 +268,14 @@ Effective permission is the intersection of:
 
 ```text
 remote OAuth scope
+AND active local remote-session lease, including its OAuth scope ceiling, workspace set, tool-surface profile, policy revision, device/connection binding, and expiry
 AND locally enabled tool-surface profile
 AND workspace policy
 AND cotrad capability/provider ceiling
 AND required local approval
 ```
 
-Any denial wins.
+Any denial wins. A valid remote OAuth token without an active local lease denies with typed `REMOTE_SESSION_INACTIVE`.
 
 ## 13. Provider authentication compatibility
 
@@ -265,9 +287,9 @@ Production public plugin path uses OAuth 2.1. OpenAI's MCP client identity mecha
 
 Remote connector path should use the same OAuth 2.1 authorization server when the configured Claude connector supports it. Local Claude paths bypass remote OAuth and authenticate only to local Cotra transport.
 
-### Mistral Work
+### Mistral Vibe Work
 
-Current Mistral Work custom connectors auto-detect OAuth 2.1 with dynamic client registration, bearer, basic, or no-auth. The shared Cotra public relay should prefer OAuth 2.1/DCR rather than weakening to a static bearer token merely for convenience.
+Current Mistral Vibe Work custom connectors auto-detect OAuth 2.1 with dynamic client registration, bearer, basic, or no-auth. The shared Cotra public relay should prefer OAuth 2.1/DCR rather than weakening to a static bearer token merely for convenience.
 
 ### Local Mistral Vibe Code
 
