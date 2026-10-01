@@ -262,6 +262,16 @@ mod imp {
                 "start Cotra from a non-elevated prompt; the runtime must not run with avoidable elevation",
             ));
         }
+        // A pending update may have activated a version that has not yet
+        // verified itself; nothing starts until the update finishes.
+        if let Some(marker) = crate::update::read_marker(layout)? {
+            if marker.state == crate::update::UpdateState::Pending {
+                return Err(LifecycleError::conflict(format!(
+                    "an update from {} to {} is in progress or was interrupted; finish it or run `cotra rollback` before starting",
+                    marker.from, marker.to
+                )));
+            }
+        }
         let state = Installer::new(layout.clone(), platform).verify()?;
         runnable_config(layout, &state.active.version)?;
         let current = status(layout)?;

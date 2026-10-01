@@ -17,6 +17,7 @@ pub mod mcp_host;
 pub mod platform;
 #[cfg(windows)]
 pub mod runtime;
+pub mod update;
 pub mod version;
 
 use serde::Serialize;

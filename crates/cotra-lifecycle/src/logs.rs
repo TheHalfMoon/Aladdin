@@ -245,6 +245,15 @@ impl BoundedLog {
     }
 }
 
+/// Appends one redacted, timestamped line to `logs\lifecycle.log`. The
+/// transcript records lifecycle commands, versions, and outcomes only; a
+/// failure to write it never changes the outcome of the command.
+pub fn transcript(layout: &crate::layout::Layout, line: &str) {
+    if let Ok(mut log) = BoundedLog::open(&layout.logs_dir().join("lifecycle.log")) {
+        let _ = log.write_line(&format!("{} {line}", crate::lifecycle::now_ms()));
+    }
+}
+
 /// Returns up to `max_lines` final lines of a log file.
 pub fn tail(path: &Path, max_lines: usize) -> Vec<String> {
     let Ok(text) = fs::read_to_string(path) else {

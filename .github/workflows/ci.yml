@@ -52,6 +52,30 @@ jobs:
       - name: Test
         run: npm test
 
+  release-qualification:
+    name: Release qualification / windows-latest
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24"
+      - name: Build release binaries and the MCP app
+        run: |
+          npm install --ignore-scripts
+          npm run build
+          cargo build --release -p cotrad -p cotra-lifecycle --bins --examples
+      - name: Package release
+        run: node scripts/package-release.mjs --out "${{ runner.temp }}/cotra-release"
+      - name: Qualify the packaged release
+        env:
+          COTRA_RELEASE_DIR: ${{ runner.temp }}/cotra-release
+        run: cargo test --release -p cotra-lifecycle --test release_qualification -- --ignored --nocapture
+
   governance:
     name: Governance
     runs-on: ubuntu-latest

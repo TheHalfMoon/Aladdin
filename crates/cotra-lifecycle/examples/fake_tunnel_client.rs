@@ -1,14 +1,16 @@
 //! Test fixture standing in for the official OpenAI tunnel client in
 //! lifecycle qualification. It accepts the same arguments as the closed
 //! launch plan, reads the runtime key through its `file:` reference,
-//! publishes a loopback health URL, runs the MCP command over stdio, and
-//! reports what it observed on stdout (which the supervisor logs). It proves
-//! Cotra's supervision and launch path only; it does not prove the OpenAI
-//! service.
+//! publishes a loopback health URL, runs the MCP command over stdio, performs
+//! an MCP `initialize`, `tools/list`, and `tools/call system_status`
+//! exchange, and reports what it observed on stdout (which the supervisor
+//! logs). It proves Cotra's supervision, launch, and MCP-to-cotrad path only;
+//! it does not prove the OpenAI service.
 
+use serde_json::{json, Value};
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::TcpListener;
-use std::process::{Command, Stdio};
+use std::process::{ChildStdout, Command, Stdio};
 
 fn value(args: &[String], name: &str) -> String {
     let index = args
@@ -16,6 +18,26 @@ fn value(args: &[String], name: &str) -> String {
         .position(|arg| arg == name)
         .unwrap_or_else(|| panic!("missing {name}"));
     args[index + 1].clone()
+}
+
+fn read_response(reader: &mut BufReader<ChildStdout>, id: u64) -> Value {
+    for _ in 0..50 {
+        let mut line = String::new();
+        if reader.read_line(&mut line).unwrap_or(0) == 0 {
+            break;
+        }
+        if let Ok(message) = serde_json::from_str::<Value>(line.trim()) {
+            if message.get("id").and_then(Value::as_u64) == Some(id) {
+                return message;
+            }
+        }
+    }
+    json!({"error": "no response"})
+}
+
+fn short(value: &Value) -> String {
+    let text = value.to_string();
+    text.chars().take(300).collect()
 }
 
 fn main() {
@@ -64,13 +86,65 @@ fn main() {
         .spawn()
         .expect("start MCP command");
     let mut stdin = child.stdin.take().unwrap();
-    writeln!(stdin, "{{\"probe\":\"system.status\"}}").unwrap();
-    stdin.flush().unwrap();
-    let mut line = String::new();
-    BufReader::new(child.stdout.take().unwrap())
-        .read_line(&mut line)
-        .unwrap();
-    println!("fake-tunnel: mcp-response {}", line.trim());
+    let mut reader = BufReader::new(child.stdout.take().unwrap());
+    let mut send = |message: Value| {
+        writeln!(stdin, "{message}").unwrap();
+        stdin.flush().unwrap();
+    };
+
+    send(json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "initialize",
+        "params": {
+            "protocolVersion": "2025-06-18",
+            "capabilities": {},
+            "clientInfo": {"name": "fake-tunnel", "version": "0"}
+        }
+    }));
+    let initialize = read_response(&mut reader, 1);
+    println!(
+        "fake-tunnel: mcp-initialize server={} raw={}",
+        initialize
+            .pointer("/result/serverInfo/name")
+            .and_then(Value::as_str)
+            .unwrap_or("?"),
+        short(&initialize)
+    );
+    send(json!({"jsonrpc": "2.0", "method": "notifications/initialized"}));
+
+    send(json!({"jsonrpc": "2.0", "id": 2, "method": "tools/list"}));
+    let tools = read_response(&mut reader, 2);
+    let names = tools
+        .pointer("/result/tools")
+        .and_then(Value::as_array)
+        .map(|tools| {
+            tools
+                .iter()
+                .filter_map(|tool| tool.get("name").and_then(Value::as_str))
+                .collect::<Vec<_>>()
+                .join(",")
+        })
+        .unwrap_or_default();
+    println!("fake-tunnel: mcp-tools [{names}]");
+
+    send(json!({
+        "jsonrpc": "2.0",
+        "id": 3,
+        "method": "tools/call",
+        "params": {"name": "system_status", "arguments": {}}
+    }));
+    let call = read_response(&mut reader, 3);
+    let text = call.to_string();
+    println!(
+        "fake-tunnel: mcp-call is_error={} cotrad_answered={} raw={}",
+        call.pointer("/result/isError")
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
+        text.contains("internal_protocol_version") || text.contains(r#""cotrad_ok":true"#),
+        short(&call)
+    );
+
     // Keep the MCP session open, like the real client, until the supervisor's
     // job terminates this process tree.
     let _session_input = stdin;
