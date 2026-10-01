@@ -2,7 +2,7 @@
   "id": "SG-000049",
   "title": "Supported local stdio entrypoint",
   "program": "COTRA-P14",
-  "state": "GRAIN",
+  "state": "CLOSED",
   "risk": "low",
   "created": "2026-10-01",
   "base": "6bf2608a1b193f825c8474ae2cf91a30b71343bc",
@@ -73,5 +73,25 @@
     "exact_head_ci": true,
     "release_artifact_qualification": true
   },
-  "done_when": "The supported local stdio entrypoint is canonical with configuration examples and no authority change."
+  "done_when": "The supported local stdio entrypoint is canonical with configuration examples and no authority change.",
+  "qualified_head": "d92cc1fdd4a5c89504df0a09257f42c83b85d688",
+  "implementation_base": "900f681c93d556fb3cd047805a15e6735bb444f7",
+  "implementation_merge": "732e569c3a8b6e266ca1f1c2a172b9214ec314b1",
+  "pre_merge_ci": "36905281860",
+  "pre_merge_review_gates": "36905282144",
+  "post_merge_ci": "36906013359",
+  "canonical_evidence": {
+    "implementation_pr": 140,
+    "implementation_base": "900f681c93d556fb3cd047805a15e6735bb444f7",
+    "qualified_head": "d92cc1fdd4a5c89504df0a09257f42c83b85d688",
+    "pre_merge_ci": "36905281860",
+    "pre_merge_review_gates": "36905282144",
+    "merge_sha": "732e569c3a8b6e266ca1f1c2a172b9214ec314b1",
+    "post_merge_ci": "36906013359",
+    "jev": "PASSED: genuine TypeSafe Jev exact-diff review covered 7/7 hunks with zero findings and zero blocking findings, pin 31f89602797fb7bea007f8a480bf368bf564954e",
+    "ocr": "PASSED: Alibaba Open Code Review v1.12.9 exact-range delegation over 6 changed files, 4 reviewable with delegated rules applied and 2 excluded (README.md by unsupported-extension classification and transport-contract.test.ts by default-path classification) manually reviewed",
+    "security_review": "PASS on exact qualified head: cotra mcp stdio reuses the verified host launch with inherited stdio and sanitized environment, unknown actions fail closed as usage, tampered payloads and missing workspaces fail closed, local client examples require no tunnel, and all closed SG-000001 through SG-000048 regressions pass unchanged. Cubic, Qodo, and CodeRabbit threads evaluated but never used as qualification evidence; zero unresolved blocking threads.",
+    "unresolved_review_threads": 0,
+    "authority_boundary": "No new MCP tool, schema change, capability, approval, lifecycle, network listener, browser, UIA, clipboard, installer, elevation, or provider submission authority. Installed stdio entrypoint, examples, and contract tests only."
+  }
 }
