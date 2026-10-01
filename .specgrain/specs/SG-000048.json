@@ -1,0 +1,79 @@
+{
+  "id": "SG-000048",
+  "title": "Transport-neutral MCP server builder",
+  "program": "COTRA-P14",
+  "state": "GRAIN",
+  "risk": "low",
+  "created": "2026-10-01",
+  "base": "380680ea9b43f75f5a187c19d71e0c6f1e1a1ddb",
+  "dependencies": [
+    "SG-000047"
+  ],
+  "objective": "Establish the provider-neutral MCP server foundation without changing runtime authority: extract one authoritative server and tool registration source of truth, keep the v0.1 tool catalog and schemas byte-compatible, ensure transport adapters cannot create independent authority, and add transport contract tests proving identical schemas and behavior across the in-process builder and stdio transport.",
+  "scope": {
+    "include": [
+      "one authoritative MCP server and tool registration source under apps/cotra-mcp/src/server.ts with safe result projection under apps/cotra-mcp/src/result.ts",
+      "refactored stdio transport adapter and entrypoint that reuse the authoritative builder without independent tool registration",
+      "skeleton transport adapter structure for loopback_http and relay_device that reuses the same builder and kernel contract without adding new authority",
+      "transport identity context plumbing for transport_kind and provider_kind as request metadata, never as caller-controlled tool fields",
+      "transport contract tests proving identical tool names, schemas, annotations, and result projection across in-process builder and stdio child process",
+      "preserved v0.1 behavior including the canonical 20-tool surface test and existing kernel IPC contract"
+    ],
+    "exclude": [
+      "any new MCP tool, tool schema change, capability widening, approval change, or authority change",
+      "loopback HTTP listener implementation beyond skeleton structure (reserved for SG-000050)",
+      "relay device transport implementation beyond skeleton structure (reserved for COTRA-P15)",
+      "local client packages (reserved for SG-000051)",
+      "any P15 remote relay, OAuth, device uplink, or public edge code",
+      "any P16 tool-surface widening, executable registry, filesystem, browser, desktop, clipboard, or network exposure change",
+      "any provider submission, directory publication, or availability claim"
+    ]
+  },
+  "authority_delta": {
+    "filesystem": "None.",
+    "process": "None.",
+    "network": "None.",
+    "browser": "None.",
+    "ui_input": "None.",
+    "secrets": "None.",
+    "approval": "None.",
+    "privileged": "None."
+  },
+  "invariants": [
+    "one tool catalog source of truth; transport adapters cannot register tools independently",
+    "transport metadata is request context and never caller-controlled authority",
+    "tool schema stability; no v0.1 schema change without separate governance",
+    "local kernel remains authoritative; stdio behavior remains supported",
+    "no new OS authority introduced by transport refactoring"
+  ],
+  "acceptance": [
+    {
+      "id": "A1",
+      "claim": "One authoritative server builder registers the complete v0.1 tool catalog with byte-compatible schemas and safe result projection."
+    },
+    {
+      "id": "A2",
+      "claim": "Stdio transport reuses the authoritative builder with no independent tool authority, and loopback and relay skeletons reuse the same builder and kernel contract."
+    },
+    {
+      "id": "A3",
+      "claim": "Transport contract tests prove identical tool surface, schemas, and result projection across in-process builder and stdio transport, and all closed SG-000001 through SG-000047 regressions pass unchanged."
+    },
+    {
+      "id": "A4",
+      "claim": "Exact-head CI including release qualification and supply-chain audit, genuine TypeSafe Jev, Alibaba Open Code Review, manual review of excluded files, and zero unresolved review threads all pass."
+    }
+  ],
+  "successor_requirements": {
+    "sg_000049": "Supported local stdio entrypoint may proceed only after SG-000048 closes, using the authoritative builder without new authority."
+  },
+  "review": {
+    "diffcipline": true,
+    "jev_semantic_review": true,
+    "alibaba_open_code_review": "required exact-range qualification where integrated",
+    "security_review": true,
+    "exact_head_ci": true,
+    "release_artifact_qualification": true
+  },
+  "done_when": "The transport-neutral MCP server builder is canonical with preserved v0.1 catalog and transport contract tests and no authority change."
+}

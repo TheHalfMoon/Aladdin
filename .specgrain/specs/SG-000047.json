@@ -2,7 +2,7 @@
   "id": "SG-000047",
   "title": "Universal-access architecture and transport contract",
   "program": "COTRA-P14",
-  "state": "GRAIN",
+  "state": "CLOSED",
   "risk": "low",
   "created": "2026-10-01",
   "base": "e19fff84a2484b3b89f10087f2b0be53ae1c4512",
@@ -73,5 +73,25 @@
     "exact_head_ci": true,
     "release_artifact_qualification": true
   },
-  "done_when": "The universal-access architecture and transport contract is ratified with frozen identity fields and ordering gates and no authority change."
+  "done_when": "The universal-access architecture and transport contract is ratified with frozen identity fields and ordering gates and no authority change.",
+  "qualified_head": "3a53a2277e22ecf8e44870dc91f76de25fe8d030",
+  "implementation_base": "e19fff84a2484b3b89f10087f2b0be53ae1c4512",
+  "implementation_merge": "380680ea9b43f75f5a187c19d71e0c6f1e1a1ddb",
+  "pre_merge_ci": "36884910745",
+  "pre_merge_review_gates": "36884907569",
+  "post_merge_ci": "36885522871",
+  "canonical_evidence": {
+    "implementation_pr": 136,
+    "implementation_base": "e19fff84a2484b3b89f10087f2b0be53ae1c4512",
+    "qualified_head": "3a53a2277e22ecf8e44870dc91f76de25fe8d030",
+    "pre_merge_ci": "36884910745",
+    "pre_merge_review_gates": "36884907569",
+    "merge_sha": "380680ea9b43f75f5a187c19d71e0c6f1e1a1ddb",
+    "post_merge_ci": "36885522871",
+    "jev": "PASSED: genuine TypeSafe Jev exact-diff review covered 6/6 hunks with zero findings and zero blocking findings, pin 31f89602797fb7bea007f8a480bf368bf564954e",
+    "ocr": "PASSED: Alibaba Open Code Review v1.12.9 exact-range delegation over 3 changed files, 2 reviewable (.specgrain/canonical-evidence.json, .specgrain/specs/SG-000047.json) with delegated rules applied and 1 excluded (docs/canonical/CURRENT.md by unsupported-extension classification) manually reviewed",
+    "security_review": "PASS on exact qualified head: no runtime behavior, MCP tool, capability, approval, or lifecycle change; the ratified plan, threat model, auth models, profile model, and research matrices are recorded consistently with PR #135 repairs; transport identity fields, scope vocabulary with default-deny matrix duty, failure vocabulary including REMOTE_SESSION_INACTIVE, 15-minute lease maximum, and P15/P16/P17 ordering gates are frozen; all closed SG-000001 through SG-000046 regressions pass unchanged. Cubic, Qodo, and CodeRabbit threads evaluated but never used as qualification evidence; zero unresolved blocking threads.",
+    "unresolved_review_threads": 0,
+    "authority_boundary": "No runtime behavior, MCP tool, agent capability, approval, lifecycle command, network activity, or code-signing claim is added. Plan ratification and implementation authorization only."
+  }
 }
