@@ -346,7 +346,7 @@ This program-exit snapshot records SG-000041 through SG-000044 as merged and can
 
 Exit matrix (each criterion is COMPLETE with canonical evidence in `.specgrain/canonical-evidence.json` and the grain blocks above):
 
-Signed/reproducible release plan - COMPLETE:
+Draft-only release workflow with artifact integrity - COMPLETE:
 - a draft-only tag release workflow that requires the tag to match the workspace version, packages, qualifies the packaged artifact, and publishes SHA256SUMS; binaries are honestly recorded as unsigned (no paid certificate under the zero-cost rule) with integrity enforced by manifest verification; SBOM, provenance attestation, and reproducibility testing are assigned to COTRA-P13 (SG-000044).
 
 Per-user install first - COMPLETE:
