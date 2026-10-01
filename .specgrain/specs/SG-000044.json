@@ -13,8 +13,8 @@
   "scope": {
     "include": [
       "cotra update --source <dir> with --check, --allow-downgrade, and --reinstall: candidate verified exactly as an install; downgrade refused unless explicitly allowed; configuration-schema range compatibility required before any change; running instance stopped with verified termination and restarted after success",
-      "state\\update.json marker recording pending updates and failed updates with the reason; doctor reports an interrupted (pending) update as a failure and a failed, restored update as a warning",
-      "post-activation verification by running the new version's own `cotra self-check`; on failure the previous pointer, CLI copy, and install record are restored and verified, the failed version directory is removed, and the outcome is reported honestly",
+      "state\\update.json marker recording pending updates and failed updates with the reason; `cotra start` refuses to start while an update is pending, so no runtime can launch a version before its own self-check; doctor reports an interrupted (pending) update as a failure and a failed, restored update as a warning",
+      "post-activation verification by running the new version's own `cotra self-check`; on failure the previous pointer, CLI copy, and install record are restored and verified, the failed version directory is removed, an instance that was running before the update is restarted on the restored version, and the outcome is reported honestly",
       "cotra rollback to the retained previous version after verifying its payload against its own manifest and its configuration-schema compatibility, toggling active and previous",
       "pruning to the active and previous versions after a successful update, including staging and invalid leftovers",
       "logs\\lifecycle.log transcript of install, update, rollback, and uninstall outcomes, redacted and bounded",
@@ -40,7 +40,7 @@
     "privileged": "None."
   },
   "invariants": [
-    "the active version pointer always references a fully verified version",
+    "the active version pointer always references a payload verified against its manifest, and no runtime starts while an update is pending, so a version runs only after its own self-check",
     "an update whose new version cannot verify itself leaves the previous version active and verified",
     "downgrades require an explicit flag and incompatible configuration schemas change nothing",
     "configuration, secrets, and history are untouched by update and rollback",
@@ -48,13 +48,34 @@
     "the packaged release exposes exactly the canonical MCP tool set"
   ],
   "acceptance": [
-    {"id": "A1", "claim": "Tests prove --check changes nothing, downgrades are refused without the flag, and incompatible configuration schemas are refused before any change."},
-    {"id": "A2", "claim": "Tests prove a failed self-check restores and verifies the previous version, records a failed marker, and removes the failed version."},
-    {"id": "A3", "claim": "Tests prove rollback is refused without a retained previous version."},
-    {"id": "A4", "claim": "The release-qualification CI job proves, from a packaged release, install, MCP through the installed real app with the exact canonical tool set and a cotrad-backed tool call, a healthy doctor, update while running with restart, downgrade refusal, rollback with restart, automatic recovery from a broken release with doctor reporting it, verified stop, retaining uninstall, purge, and no runtime key in any output or log."},
-    {"id": "A5", "claim": "The release workflow parses, requires the tag to match the workspace version, qualifies the packaged release before archiving, and only creates a draft release."},
-    {"id": "A6", "claim": "All closed SG-000001 through SG-000043 regressions pass unchanged."},
-    {"id": "A7", "claim": "Exact-head Windows and Ubuntu Rust, Node, Governance, release qualification, genuine TypeSafe Jev, Alibaba Open Code Review, exact-diff security review, manual review of excluded files, and zero unresolved blocking review threads all pass."}
+    {
+      "id": "A1",
+      "claim": "Tests prove --check changes nothing, downgrades are refused without the flag, and incompatible configuration schemas are refused before any change."
+    },
+    {
+      "id": "A2",
+      "claim": "Tests prove a failed self-check restores and verifies the previous version, records a failed marker, removes the failed version, and restarts an instance that was running, and that start is refused while an update is pending."
+    },
+    {
+      "id": "A3",
+      "claim": "Tests prove rollback is refused without a retained previous version."
+    },
+    {
+      "id": "A4",
+      "claim": "The release-qualification CI job proves, from a packaged release, install, MCP through the installed real app with the exact canonical tool set and a cotrad-backed tool call, a healthy doctor, update while running with restart, downgrade refusal, rollback with restart, automatic recovery from a broken release with doctor reporting it, verified stop, retaining uninstall, purge, and no runtime key in any output or log."
+    },
+    {
+      "id": "A5",
+      "claim": "The release workflow parses, requires the tag to match the workspace version, qualifies the packaged release before archiving, and only creates a draft release."
+    },
+    {
+      "id": "A6",
+      "claim": "All closed SG-000001 through SG-000043 regressions pass unchanged."
+    },
+    {
+      "id": "A7",
+      "claim": "Exact-head Windows and Ubuntu Rust, Node, Governance, release qualification, genuine TypeSafe Jev, Alibaba Open Code Review, exact-diff security review, manual review of excluded files, and zero unresolved blocking review threads all pass."
+    }
   ],
   "successor_requirements": {
     "p12_exit": "The P12 exit packet jointly proves clean install, start, status, doctor, tunnel path, bounded capability operation, stop, restart, upgrade, failed-update recovery, uninstall, and retained-data behavior from canonical evidence, and records owner-performed real ChatGPT connectivity as outside CI.",
