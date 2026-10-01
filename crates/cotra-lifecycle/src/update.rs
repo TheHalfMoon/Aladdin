@@ -502,6 +502,9 @@ impl<'a> Updater<'a> {
     pub fn rollback(&self) -> Result<RollbackReport, LifecycleError> {
         let installer = self.installer();
         installer.check_prerequisites_without_node()?;
+        if !self.layout.root.is_dir() {
+            return Err(LifecycleError::not_installed("Cotra is not installed"));
+        }
         if let Some(marker) = read_marker(&self.layout)? {
             if marker.state == UpdateState::Pending {
                 return self.recover_pending(&marker);
@@ -764,6 +767,14 @@ mod tests {
             .find(|check| check.name == "update_state")
             .unwrap();
         assert_eq!(check.status, crate::doctor::CheckStatus::Fail);
+    }
+
+    #[test]
+    fn rollback_without_an_install_reports_not_installed() {
+        let platform = FakePlatform::default();
+        let layout = Layout::new(temp_dir("rollback-none").join("Cotra"));
+        let error = Updater::new(layout, &platform).rollback().unwrap_err();
+        assert_eq!(error.kind, crate::ErrorKind::NotInstalled);
     }
 
     #[test]
