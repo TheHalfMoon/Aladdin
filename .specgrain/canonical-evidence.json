@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "snapshot_base": "a7002bfd56657fe2aa4f3710d10942031d66a258",
+  "snapshot_base": "52552b4a49ffdf0859712a5b10751f77fc8fb309",
   "state_semantics": {
     "GRAIN": "Authorized or active work packet whose acceptance is not yet canonically proven.",
     "PROVEN": "Acceptance and required qualification are proven, but canonical closeout/governance is not yet complete.",
@@ -622,6 +622,18 @@
       "review_basis": "Exact-head genuine TypeSafe Jev 10/10 hunks with zero findings/blocking findings (pin 31f89602797fb7bea007f8a480bf368bf564954e), Alibaba Open Code Review v1.12.9 exact-range delegation over 10 files with 7 reviewable and 3 excluded files (README.md, examples README, and client-examples.test.ts) manually reviewed, exact-diff manual security review, Windows/Ubuntu Rust Node Governance, Supply chain audit, and Release qualification, successful post-merge CI, and zero unresolved review threads. Qodo billing-blocked and CodeRabbit skipped-review notices evaluated as non-evidence noise with zero substantive findings.",
       "unresolved_review_threads": 0,
       "authority_boundary": "No new MCP tool, schema change, capability, approval, lifecycle, network listener, browser, UIA, clipboard, installer, elevation, or provider submission authority. Tested client configuration, Desktop Extension manifest, contract tests, and Inspector qualification only."
+    },
+    "SG-000052": {
+      "implementation_pr": 146,
+      "implementation_base": "07533c7b0b471cfe2dba92e79212758ec30e33f6",
+      "qualified_head": "3c7c152add162079bf71e6dffb380be34b9b726d",
+      "pre_merge_ci": "36937668674",
+      "pre_merge_review_gates": "36937668186",
+      "merge_sha": "52552b4a49ffdf0859712a5b10751f77fc8fb309",
+      "post_merge_ci": "36938628825",
+      "review_basis": "Exact-head genuine TypeSafe Jev 3/3 hunks with zero findings/blocking findings (pin 31f89602797fb7bea007f8a480bf368bf564954e), Alibaba Open Code Review v1.12.9 exact-range delegation over 3 files with 1 reviewable and 2 excluded files (relay-contract.test.ts and RELAY_PROTOCOL_CONTRACT.md) manually reviewed, exact-diff manual security review, Windows/Ubuntu Rust Node Governance, Supply chain audit, and Release qualification, successful post-merge CI, and zero unresolved review threads. Qodo billing-blocked and CodeRabbit skipped-review notices evaluated as non-evidence noise with zero substantive findings.",
+      "unresolved_review_threads": 0,
+      "authority_boundary": "No relay, device uplink, OAuth, public edge, MCP tool, schema change, capability, approval, lifecycle, network listener, browser, UIA, clipboard, installer, elevation, or provider submission authority. Frozen contract document, pure vocabulary module, and contract tests only."
     }
   }
 }
