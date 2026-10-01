@@ -559,13 +559,19 @@ pub fn rollback(args: &mut Args) -> Result<Output, LifecycleError> {
     })
 }
 
-/// Local MCP entrypoint (`cotra mcp stdio`). This takes over standard I/O
-/// for the session, so it returns the child exit code instead of `Output`.
-/// Only `stdio` is supported; anything else fails closed as usage.
+/// Local MCP entrypoint (`cotra mcp stdio`, `cotra mcp serve`). This takes
+/// over standard I/O for the session, so it returns the child exit code
+/// instead of `Output`. Anything else fails closed as usage.
 pub fn mcp(args: &mut Args) -> Result<i32, LifecycleError> {
-    let action = args.positional("mcp action (stdio)")?;
+    let action = args.positional("mcp action (stdio, serve)")?;
+    let port = match args.value("--port")? {
+        Some(value) => Some(value.parse::<u16>().map_err(|_| {
+            LifecycleError::usage("cotra mcp serve --port must be from 1 to 65535")
+        })?),
+        None => None,
+    };
     args.finish()?;
-    cotra_lifecycle::mcp::run_action(&action)
+    cotra_lifecycle::mcp::run_action(&action, port)
 }
 
 /// Internal: verifies the installation with this binary's own code. Used by

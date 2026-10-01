@@ -52,6 +52,10 @@ Local MCP (no tunnel required):
       for local AI clients (Claude Desktop, Codex, Mistral Vibe Code, generic
       MCP clients). Uses the active verified install with the sanitized
       environment. Standard output stays the MCP channel.
+  cotra mcp serve [--port <1-65535>]      Serve the same MCP server over loopback
+      Streamable HTTP at http://127.0.0.1:<port>/mcp (ephemeral port by
+      default). Requires COTRA_LOOPBACK_TOKEN of at least 32 characters in
+      the environment. Binds 127.0.0.1 only and never opens a LAN port.
 
 Approvals:
   cotra approvals [--limit <n>]           Show recent approval decisions.

@@ -72,12 +72,18 @@ pub fn run_stdio_session(launch: &HostLaunch, config: &Config) -> i32 {
     }
 }
 
-/// Handles the `stdio` action: resolves the active verified launch and runs
-/// one session over inherited standard I/O. Returns the child exit code.
-/// Unknown actions fail closed as usage errors without touching stdio.
-pub fn run_action(action: &str) -> Result<i32, LifecycleError> {
+/// Handles the `stdio` and `serve` actions. `stdio` runs one MCP session
+/// over inherited standard I/O; `serve` starts the loopback HTTP listener.
+/// Returns the child exit code. Unknown actions fail closed as usage errors
+/// without touching stdio or opening any socket.
+pub fn run_action(action: &str, port: Option<u16>) -> Result<i32, LifecycleError> {
     match action {
         "stdio" => {
+            if port.is_some() {
+                return Err(LifecycleError::usage(
+                    "cotra mcp stdio takes no --port; run `cotra help`",
+                ));
+            }
             let layout = Layout::for_current_user()?;
             let platform = crate::host_platform();
             let (launch, config) =
@@ -86,9 +92,111 @@ pub fn run_action(action: &str) -> Result<i32, LifecycleError> {
                 })?;
             Ok(run_stdio_session(&launch, &config))
         }
+        "serve" => {
+            let layout = Layout::for_current_user()?;
+            let platform = crate::host_platform();
+            let token = std::env::var("COTRA_LOOPBACK_TOKEN").unwrap_or_default();
+            let (launch, config) = resolve_serve_launch(&layout, platform.as_ref(), port, &token)
+                .map_err(|error| {
+                if error.kind == crate::ErrorKind::Usage {
+                    error
+                } else {
+                    LifecycleError::state(format!("cotra mcp serve: {}", error.message))
+                }
+            })?;
+            Ok(run_serve_session(&launch, &config))
+        }
         _ => Err(LifecycleError::usage(
             "unknown mcp action; run `cotra help`",
         )),
+    }
+}
+
+/// The resolved launch for one loopback HTTP listener.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ServeLaunch {
+    pub node: PathBuf,
+    pub script: PathBuf,
+    pub cotrad: PathBuf,
+    pub port: Option<u16>,
+    pub token: String,
+}
+
+/// Minimum loopback credential length in characters. Mirrors the Node
+/// transport floor so both layers fail closed on the same weak secrets.
+pub const MIN_LOOPBACK_TOKEN_CHARS: usize = 32;
+
+/// Resolves the loopback listener launch for the active verified install.
+/// The credential comes only from the caller's environment and is never
+/// generated, stored, or logged here. There is no bind-address option:
+/// the Node transport always binds `127.0.0.1`.
+pub fn resolve_serve_launch(
+    layout: &Layout,
+    platform: &dyn crate::platform::Platform,
+    port: Option<u16>,
+    token: &str,
+) -> Result<(ServeLaunch, Config), LifecycleError> {
+    if port.is_some_and(|port| port == 0) {
+        return Err(LifecycleError::usage(
+            "cotra mcp serve --port must be from 1 to 65535",
+        ));
+    }
+    if token.chars().count() < MIN_LOOPBACK_TOKEN_CHARS {
+        return Err(LifecycleError::usage(
+            "COTRA_LOOPBACK_TOKEN of at least 32 characters is required to serve loopback MCP",
+        ));
+    }
+    let state = Installer::new(layout.clone(), platform).verify()?;
+    let version_dir = layout.version_dir(&state.active.version);
+    let node = PathBuf::from(&state.record.node_path);
+    let node_version = platform.node_version(&node)?;
+    if node_version.major < MIN_NODE_MAJOR {
+        return Err(LifecycleError::prerequisite(format!(
+            "Node.js {node_version} is older than the required {MIN_NODE_MAJOR}"
+        )));
+    }
+    let config = Config::load(layout)?;
+    config.check_workspaces_with_policy()?;
+    Ok((
+        ServeLaunch {
+            node,
+            script: version_dir
+                .join("app")
+                .join("cotra-mcp")
+                .join("dist")
+                .join("entrypoints")
+                .join("loopback_http.js"),
+            cotrad: version_dir.join("cotrad.exe"),
+            port,
+            token: token.to_string(),
+        },
+        config,
+    ))
+}
+
+/// Runs the loopback listener with inherited standard I/O and returns the
+/// child exit code. The bound URL is reported on standard error only.
+pub fn run_serve_session(launch: &ServeLaunch, config: &Config) -> i32 {
+    let mut env = crate::ipc::child_environment(config);
+    env.insert(
+        "COTRA_DAEMON".into(),
+        launch.cotrad.to_string_lossy().into_owned(),
+    );
+    env.insert("COTRA_LOOPBACK_TOKEN".into(), launch.token.clone());
+    if let Some(port) = launch.port {
+        env.insert("COTRA_LOOPBACK_PORT".into(), port.to_string());
+    }
+    let status = Command::new(&launch.node)
+        .arg(&launch.script)
+        .env_clear()
+        .envs(env)
+        .status();
+    match status {
+        Ok(status) => status.code().unwrap_or(1),
+        Err(error) => {
+            eprintln!("cotra mcp serve: start Node.js: {error}");
+            2
+        }
     }
 }
 
@@ -176,7 +284,45 @@ mod tests {
 
     #[test]
     fn unknown_action_fails_closed_as_usage() {
-        let error = run_action("http").unwrap_err();
+        let error = run_action("http", None).unwrap_err();
         assert_eq!(error.kind, crate::ErrorKind::Usage);
+    }
+
+    #[test]
+    fn serve_launch_points_at_the_loopback_entrypoint() {
+        let platform = FakePlatform::default();
+        let layout = install("0.2.0", &platform);
+        let token = "0123456789abcdef0123456789abcdef";
+        let (launch, _) = resolve_serve_launch(&layout, &platform, Some(8080), token).unwrap();
+        assert_eq!(
+            launch.script,
+            layout
+                .version_dir("0.2.0")
+                .join("app/cotra-mcp/dist/entrypoints/loopback_http.js")
+        );
+        assert_eq!(
+            launch.cotrad,
+            layout.version_dir("0.2.0").join("cotrad.exe")
+        );
+        assert_eq!(launch.port, Some(8080));
+        assert_eq!(launch.token, token);
+    }
+
+    #[test]
+    fn serve_without_credential_zero_port_or_tampering_fails_closed() {
+        let platform = FakePlatform::default();
+        let layout = install("0.2.0", &platform);
+        let token = "0123456789abcdef0123456789abcdef";
+        assert!(resolve_serve_launch(&layout, &platform, None, "").is_err());
+        assert!(resolve_serve_launch(&layout, &platform, None, "short").is_err());
+        assert!(resolve_serve_launch(&layout, &platform, Some(0), token).is_err());
+        std::fs::write(
+            layout
+                .version_dir("0.2.0")
+                .join("app/cotra-mcp/dist/index.js"),
+            b"replaced",
+        )
+        .unwrap();
+        assert!(resolve_serve_launch(&layout, &platform, None, token).is_err());
     }
 }
