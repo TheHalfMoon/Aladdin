@@ -11,6 +11,7 @@
 // the same rules the installer enforces.
 
 import { createHash } from "node:crypto";
+import { execFileSync } from "node:child_process";
 import {
   copyFileSync,
   existsSync,
@@ -149,6 +150,14 @@ for (const { key, entry } of locked) {
   }
   copyPackage(source, join(appOut, ...key.split("/")));
 }
+
+// Third-party notices are generated from the actual shipped dependency graph
+// and this payload's node_modules, and become part of the verified payload.
+execFileSync(
+  process.execPath,
+  [join(repo, "scripts", "third-party-notices.mjs"), "--release", out, "--out", join(out, "THIRD_PARTY_NOTICES.txt")],
+  { cwd: repo, stdio: "inherit" }
+);
 
 const files = [];
 walk(out, files);

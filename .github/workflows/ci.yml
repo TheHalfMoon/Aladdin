@@ -55,7 +55,94 @@ jobs:
   release-qualification:
     name: Release qualification / windows-latest
     runs-on: windows-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          path: second-checkout
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24"
+      - uses: ./.github/actions/build-package-qualify
+        with:
+          release-dir: ${{ runner.temp }}/cotra-release
+      - name: Rebuild, package, and archive from a second checkout
+        shell: pwsh
+        working-directory: second-checkout
+        run: |
+          $cargoHome = if ($env:CARGO_HOME) { $env:CARGO_HOME } else { Join-Path $HOME ".cargo" }
+          $env:RUSTFLAGS = "-C link-arg=/Brepro --remap-path-prefix=$PWD=C:\cotra --remap-path-prefix=$cargoHome=C:\cargo"
+          $second = Join-Path $env:RUNNER_TEMP "cotra-release-second"
+          npm ci --ignore-scripts
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm run build
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cargo build --release --locked -p cotrad -p cotra-lifecycle --bins
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node scripts/package-release.mjs --out $second
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node scripts/archive-release.mjs --release $second --out "$second.zip"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Compare the independent builds
+        shell: pwsh
+        run: |
+          $out = Join-Path $env:RUNNER_TEMP "dist"
+          New-Item -ItemType Directory -Force $out | Out-Null
+          $binaries = [ordered]@{}
+          $identical = $true
+          foreach ($name in "cotra.exe", "cotra-mcp-host.exe", "cotrad.exe") {
+            $first = (Get-FileHash (Join-Path (Join-Path $env:RUNNER_TEMP "cotra-release") $name) -Algorithm SHA256).Hash.ToLower()
+            $second = (Get-FileHash (Join-Path (Join-Path $env:RUNNER_TEMP "cotra-release-second") $name) -Algorithm SHA256).Hash.ToLower()
+            $binaries[$name] = [ordered]@{ first = $first; second = $second; identical = ($first -eq $second) }
+            if ($first -ne $second) { $identical = $false }
+          }
+          $firstArchive = (Get-FileHash (Join-Path $env:RUNNER_TEMP "cotra-release.zip") -Algorithm SHA256).Hash.ToLower()
+          $secondArchive = (Get-FileHash (Join-Path $env:RUNNER_TEMP "cotra-release-second.zip") -Algorithm SHA256).Hash.ToLower()
+          $archive = [ordered]@{ first = $firstArchive; second = $secondArchive; identical = ($firstArchive -eq $secondArchive) }
+          if ($firstArchive -ne $secondArchive) { $identical = $false }
+          $result = [ordered]@{
+            method = "two clean builds and packages from separate checkouts on the same runner with /Brepro and source and registry path remapping; shipped binaries and the final archives compared by SHA-256"
+            rustflags = "-C link-arg=/Brepro --remap-path-prefix=<checkout>=C:\cotra --remap-path-prefix=<cargo home>=C:\cargo"
+            binaries = $binaries
+            archive = $archive
+            identical = $identical
+          }
+          $result | ConvertTo-Json -Depth 5 | Out-File (Join-Path $out "reproducibility.json") -Encoding utf8
+          Get-Content (Join-Path $out "reproducibility.json")
+          if (-not $identical) { throw "independent release builds differ" }
+      - name: Generate SBOM and provenance
+        shell: pwsh
+        run: |
+          $release = Join-Path $env:RUNNER_TEMP "cotra-release"
+          $out = Join-Path $env:RUNNER_TEMP "dist"
+          $version = (Get-Content (Join-Path $release "manifest.json") | ConvertFrom-Json).version
+          $name = "cotra-$version-windows-x64"
+          Copy-Item "$release.zip" (Join-Path $out "$name.zip")
+          Copy-Item (Join-Path $release "manifest.json") (Join-Path $out "$name.manifest.json")
+          Copy-Item (Join-Path $release "THIRD_PARTY_NOTICES.txt") (Join-Path $out "THIRD_PARTY_NOTICES.txt")
+          node scripts/generate-sbom.mjs --release $release --out (Join-Path $out "$name.cdx.json")
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node scripts/provenance.mjs --release $release --artifact (Join-Path $out "$name.zip") --sbom (Join-Path $out "$name.cdx.json") --reproducibility (Join-Path $out "reproducibility.json") --out (Join-Path $out "$name.provenance.json")
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Get-ChildItem $out -File | Where-Object Name -ne "SHA256SUMS.txt" | Sort-Object Name | ForEach-Object { "{0}  {1}" -f (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower(), $_.Name } | Out-File (Join-Path $out "SHA256SUMS.txt") -Encoding ascii
+          Get-Content (Join-Path $out "SHA256SUMS.txt")
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: cotra-release-candidate-${{ github.event.pull_request.head.sha || github.sha }}
+          path: ${{ runner.temp }}/dist/*
+          if-no-files-found: error
+          retention-days: 30
+
+  supply-chain:
+    name: Supply chain audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -64,9 +151,14 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: "24"
-      - uses: ./.github/actions/build-package-qualify
-        with:
-          release-dir: ${{ runner.temp }}/cotra-release
+      - name: Audit locked npm dependencies
+        run: |
+          npm ci --ignore-scripts
+          npm audit
+      - name: Audit locked Rust dependencies
+        run: |
+          cargo install cargo-audit --locked --version 0.22.2
+          cargo audit
 
   governance:
     name: Governance

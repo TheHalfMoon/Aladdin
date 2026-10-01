@@ -1,14 +1,15 @@
-name: Build, package, and qualify a Cotra release
+name: Build, package, archive, and qualify a Cotra release
 description: >-
-  Builds the release binaries and the MCP app from the locked dependency
-  graph, packages a release directory, and runs the release-artifact
-  qualification against it. Shared by CI and the release workflow so both
-  qualify exactly the same packaging. Requires checkout, the Rust toolchain,
-  and Node.js to be set up first.
+  Builds the release binaries with deterministic flags and the MCP app from
+  the locked dependency graph, packages a release directory (including
+  third-party notices), writes a deterministic ZIP archive, extracts it, and
+  runs the release-artifact qualification against the extracted archive.
+  Shared by CI and the release workflow so both qualify exactly the same
+  artifact. Requires checkout, the Rust toolchain, and Node.js first.
 
 inputs:
   release-dir:
-    description: Directory to write the packaged release into.
+    description: Directory to write the packaged release into. The archive is written next to it as <release-dir>.zip.
     required: true
 
 runs:
@@ -20,14 +21,25 @@ runs:
     - name: Build the MCP app
       shell: pwsh
       run: npm run build
+    - name: Set deterministic release build flags
+      shell: pwsh
+      run: |
+        $cargoHome = if ($env:CARGO_HOME) { $env:CARGO_HOME } else { Join-Path $HOME ".cargo" }
+        "RUSTFLAGS=-C link-arg=/Brepro --remap-path-prefix=$env:GITHUB_WORKSPACE=C:\cotra --remap-path-prefix=$cargoHome=C:\cargo" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
     - name: Build release binaries and the tunnel fixture
       shell: pwsh
       run: cargo build --release --locked -p cotrad -p cotra-lifecycle --bins --examples
     - name: Package release
       shell: pwsh
       run: node scripts/package-release.mjs --out "${{ inputs.release-dir }}"
-    - name: Qualify the packaged release
+    - name: Write the deterministic archive
+      shell: pwsh
+      run: node scripts/archive-release.mjs --release "${{ inputs.release-dir }}" --out "${{ inputs.release-dir }}.zip"
+    - name: Extract the archive for qualification
+      shell: pwsh
+      run: Expand-Archive -Path "${{ inputs.release-dir }}.zip" -DestinationPath "${{ inputs.release-dir }}-from-archive"
+    - name: Qualify the release extracted from the archive
       shell: pwsh
       env:
-        COTRA_RELEASE_DIR: ${{ inputs.release-dir }}
+        COTRA_RELEASE_DIR: ${{ inputs.release-dir }}-from-archive
       run: cargo test --release --locked -p cotra-lifecycle --test release_qualification -- --ignored --nocapture
