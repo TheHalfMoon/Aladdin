@@ -136,13 +136,18 @@ fn windows_private_powershell_timeout_is_verified_and_typed() {
 fn windows_private_powershell_stdout_limit_is_verified_and_typed() {
     let root = workspace("StdoutLimit");
     let limits = ExecutionLimits {
-        timeout: Duration::from_secs(10),
+        // A cold, zero-capability AppContainer PowerShell can take well over
+        // ten seconds to start on a loaded runner. The generous timeout only
+        // gives it time to write; the script then sleeps far longer than the
+        // timeout, so the asserted OutputLimit can come only from the limit
+        // being enforced, not from a normal exit or the timeout.
+        timeout: Duration::from_secs(60),
         stdout_bytes: 32,
         stderr_bytes: 1024,
     };
     let plan = powershell_plan(
         &root,
-        "[Console]::Out.Write(('x' * 4096)); [Threading.Thread]::Sleep(30000)",
+        "[Console]::Out.Write(('x' * 4096)); [Threading.Thread]::Sleep(120000)",
         limits,
     );
     let result = execute_contained(plan, &profile("StdoutLimit"));
@@ -157,13 +162,18 @@ fn windows_private_powershell_stdout_limit_is_verified_and_typed() {
 fn windows_private_powershell_stderr_limit_is_verified_and_typed() {
     let root = workspace("StderrLimit");
     let limits = ExecutionLimits {
-        timeout: Duration::from_secs(10),
+        // A cold, zero-capability AppContainer PowerShell can take well over
+        // ten seconds to start on a loaded runner. The generous timeout only
+        // gives it time to write; the script then sleeps far longer than the
+        // timeout, so the asserted OutputLimit can come only from the limit
+        // being enforced, not from a normal exit or the timeout.
+        timeout: Duration::from_secs(60),
         stdout_bytes: 1024,
         stderr_bytes: 32,
     };
     let plan = powershell_plan(
         &root,
-        "[Console]::Error.Write(('e' * 4096)); [Threading.Thread]::Sleep(30000)",
+        "[Console]::Error.Write(('e' * 4096)); [Threading.Thread]::Sleep(120000)",
         limits,
     );
     let result = execute_contained(plan, &profile("StderrLimit"));
