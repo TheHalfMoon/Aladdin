@@ -256,14 +256,23 @@ fn is_safe_cotra_env(name: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::atomic::{AtomicU64, Ordering};
     use std::time::{SystemTime, UNIX_EPOCH};
 
     fn temp_dir(name: &str) -> PathBuf {
+        // Tests run in parallel and the clock can repeat, so a per-process
+        // counter keeps every directory unique; otherwise one test's cleanup
+        // can delete another test's files.
+        static NEXT: AtomicU64 = AtomicU64::new(0);
         let n = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_nanos();
-        let p = env::temp_dir().join(format!("cotra-tunnel-{name}-{n}"));
+        let seq = NEXT.fetch_add(1, Ordering::Relaxed);
+        let p = env::temp_dir().join(format!(
+            "cotra-tunnel-{name}-{}-{n}-{seq}",
+            std::process::id()
+        ));
         fs::create_dir_all(&p).unwrap();
         p
     }
