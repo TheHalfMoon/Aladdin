@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "snapshot_base": "380680ea9b43f75f5a187c19d71e0c6f1e1a1ddb",
+  "snapshot_base": "6bf2608a1b193f825c8474ae2cf91a30b71343bc",
   "state_semantics": {
     "GRAIN": "Authorized or active work packet whose acceptance is not yet canonically proven.",
     "PROVEN": "Acceptance and required qualification are proven, but canonical closeout/governance is not yet complete.",
@@ -574,6 +574,18 @@
       "review_basis": "Exact-head genuine TypeSafe Jev 6/6 hunks with zero findings/blocking findings (pin 31f89602797fb7bea007f8a480bf368bf564954e), Alibaba Open Code Review v1.12.9 exact-range delegation over 3 files with 2 reviewable and 1 excluded file (docs/canonical/CURRENT.md) manually reviewed, exact-diff manual security review, Windows/Ubuntu Rust Node Governance, Supply chain audit, and Release qualification, successful post-merge CI, and zero unresolved review threads. Cubic, Qodo, and CodeRabbit threads evaluated but never used as qualification evidence.",
       "unresolved_review_threads": 0,
       "authority_boundary": "No runtime behavior, MCP tool, agent capability, approval, lifecycle command, network activity, or code-signing claim is added. Plan ratification and implementation authorization only."
+    },
+    "SG-000048": {
+      "implementation_pr": 138,
+      "implementation_base": "db85a70a52904292ef5fd80baa1f9c9742c9b476",
+      "qualified_head": "3009cba9406d944fce39464ee721b2c2cbfc7be5",
+      "pre_merge_ci": "36898284828",
+      "pre_merge_review_gates": "36898282397",
+      "merge_sha": "6bf2608a1b193f825c8474ae2cf91a30b71343bc",
+      "post_merge_ci": "36898893574",
+      "review_basis": "Exact-head genuine TypeSafe Jev 26/26 hunks with zero findings/blocking findings (pin 31f89602797fb7bea007f8a480bf368bf564954e), Alibaba Open Code Review v1.12.9 exact-range delegation over 18 files with 13 reviewable and 5 excluded test files manually reviewed, exact-diff manual security review, Windows/Ubuntu Rust Node Governance, Supply chain audit, and Release qualification (packaging repaired to include dist subdirectories), successful post-merge CI, and zero unresolved review threads. Cubic, Qodo, and CodeRabbit threads evaluated but never used as qualification evidence.",
+      "unresolved_review_threads": 0,
+      "authority_boundary": "No new MCP tool, schema change, capability, approval, lifecycle, network, browser, UIA, clipboard, installer, elevation, or provider submission authority. Transport refactoring and packaging fix only."
     }
   }
 }

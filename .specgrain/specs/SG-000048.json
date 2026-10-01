@@ -2,7 +2,7 @@
   "id": "SG-000048",
   "title": "Transport-neutral MCP server builder",
   "program": "COTRA-P14",
-  "state": "GRAIN",
+  "state": "CLOSED",
   "risk": "low",
   "created": "2026-10-01",
   "base": "380680ea9b43f75f5a187c19d71e0c6f1e1a1ddb",
@@ -75,5 +75,25 @@
     "exact_head_ci": true,
     "release_artifact_qualification": true
   },
-  "done_when": "The transport-neutral MCP server builder is canonical with preserved v0.1 catalog and transport contract tests and no authority change."
+  "done_when": "The transport-neutral MCP server builder is canonical with preserved v0.1 catalog and transport contract tests and no authority change.",
+  "qualified_head": "3009cba9406d944fce39464ee721b2c2cbfc7be5",
+  "implementation_base": "db85a70a52904292ef5fd80baa1f9c9742c9b476",
+  "implementation_merge": "6bf2608a1b193f825c8474ae2cf91a30b71343bc",
+  "pre_merge_ci": "36898284828",
+  "pre_merge_review_gates": "36898282397",
+  "post_merge_ci": "36898893574",
+  "canonical_evidence": {
+    "implementation_pr": 138,
+    "implementation_base": "db85a70a52904292ef5fd80baa1f9c9742c9b476",
+    "qualified_head": "3009cba9406d944fce39464ee721b2c2cbfc7be5",
+    "pre_merge_ci": "36898284828",
+    "pre_merge_review_gates": "36898282397",
+    "merge_sha": "6bf2608a1b193f825c8474ae2cf91a30b71343bc",
+    "post_merge_ci": "36898893574",
+    "jev": "PASSED: genuine TypeSafe Jev exact-diff review covered 26/26 hunks with zero findings and zero blocking findings, pin 31f89602797fb7bea007f8a480bf368bf564954e",
+    "ocr": "PASSED: Alibaba Open Code Review v1.12.9 exact-range delegation over 18 changed files, 13 reviewable with delegated rules applied and 5 excluded (4 modified test files and 1 new transport-contract test by default-path classification) manually reviewed",
+    "security_review": "PASS on exact qualified head: one authoritative server builder with preserved v0.1 20-tool catalog and schemas, single result projection, stdio reuse with no independent authority, loopback and relay skeletons fail closed with TRANSPORT_UNAVAILABLE, transport contract tests prove identical surface, packaging repaired to include dist subdirectories with release qualification passing, and all closed SG-000001 through SG-000047 regressions pass unchanged. Cubic, Qodo, and CodeRabbit threads evaluated but never used as qualification evidence; zero unresolved blocking threads.",
+    "unresolved_review_threads": 0,
+    "authority_boundary": "No new MCP tool, schema change, capability, approval, lifecycle, network, browser, UIA, clipboard, installer, elevation, or provider submission authority. Transport refactoring and packaging fix only."
+  }
 }
