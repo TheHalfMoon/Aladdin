@@ -465,8 +465,8 @@ SG-000045 - Release supply chain: SBOM, provenance, notices, reproducibility, an
 This activation authorizes implementation and qualification of release supply-chain hardening without any runtime authority change:
 - third-party notices generated from the actual shipped dependency graph and included in every release payload;
 - a deterministic release archive, a CycloneDX 1.5 SBOM of the shipped crates, npm packages, and payload files, and a provenance record;
-- deterministic release build flags, with reproducibility reported exactly as observed by comparing the packaged binaries against an independent build from a separate checkout;
-- installation qualified from the extracted archive itself, and release-candidate artifacts uploaded from CI;
+- deterministic release build flags, with reproducibility reported exactly as observed by comparing the shipped binaries and the final archive against an independent build and package from a separate checkout;
+- installation, MCP operation, update, rollback, failed-update recovery, stop, and uninstall qualified from the extracted archive itself, and release-candidate artifacts uploaded from CI;
 - npm and Rust dependency vulnerability audits in CI;
 - a draft-only release workflow that attaches the SBOM, provenance, notices, and checksums and creates a free GitHub build-provenance attestation;
 - a recorded dependency and license review.
