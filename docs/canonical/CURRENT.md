@@ -1,11 +1,11 @@
 # Cotra Current Canonical Frontier
 
-Status: PROGRAM_EXIT_CANDIDATE
+Status: ACTIVE_GRAIN
 Date: 2026-10-01
-Governance snapshot base: 8eda138ed60344199024005bbd19bbaa7182af0f
+Governance snapshot base: ca51b2e63872a3119e138f4afc8fad4dce987c3c
 Evidence ledger: `.specgrain/canonical-evidence.json`
 
-`Governance snapshot base` records the exact canonical implementation merge from which this closeout and program-exit snapshot was authored. It deliberately does not claim the eventual merge SHA of the commit containing this file.
+`Governance snapshot base` records the exact canonical parent from which this activation snapshot was authored. It deliberately does not claim the eventual merge SHA of the commit containing this file.
 
 ## SpecGrain state semantics
 
@@ -342,7 +342,7 @@ All P11 closeouts (SG-000038 PR `#109`, SG-000039 PR `#112`, SG-000040 PR `#116`
 
 COTRA-P12 is exited at this frontier. Installer and lifecycle is closed under SG-000041 protected Cotra state isolation, SG-000042 per-user install foundation, SG-000043 lifecycle runtime, and SG-000044 update, rollback, recovery, and release qualification, with a verified per-user install under an owner-only protected tree, a job-bound supervisor of the official tunnel client, observed-state status and doctor, secret-safe tunnel setup, explicit offline updates with self-verification and automatic recovery, and no agent-reachable installer, lifecycle, or update authority.
 
-This program-exit snapshot records SG-000041 through SG-000044 as merged and canonical. The P12 exit becomes part of the canonical frontier only after this program-exit change itself merges and the resulting canonical main passes post-merge CI.
+The COTRA-P12 program-exit PR `#127` qualified on exact head `409e0b9378b57d21618a80271d78fa53cfc46bab` with CI `36821133253` SUCCESS (including release qualification), Review Gates `36821130313` SUCCESS, genuine TypeSafe Jev `8/8` hunks with zero findings and zero blocking findings, Alibaba Open Code Review v1.12.9 (`2 reviewable + 1 excluded/manually reviewed`), and 2 review threads resolved with wording fixes. It merged normally as canonical main `ca51b2e63872a3119e138f4afc8fad4dce987c3c`; post-merge CI `36822234487` completed SUCCESS across Governance, Node/Ubuntu, Node/Windows, Rust/Ubuntu, Rust/Windows, and Release qualification. COTRA-P12 is therefore exited canonically.
 
 Exit matrix (each criterion is COMPLETE with canonical evidence in `.specgrain/canonical-evidence.json` and the grain blocks above):
 
@@ -384,9 +384,7 @@ All P12 closeouts (SG-000041 PR `#120`, SG-000042 PR `#122`, SG-000043 PR `#124`
 
 ## Successor frontier
 
-COTRA-P12 is exited at this frontier, so the next lawful unit must be derived from the canonical COTRA-P13 release-hardening plan. No successor grain beyond the P12 exit is authorized by this program-exit candidate.
-
-After this P12 exit merges and its post-merge CI succeeds, the first COTRA-P13 grain may be activated. COTRA-P13 must deliver the threat-model regression suite, dependency and license review, SBOM, artifact provenance, an independent security review, fresh Windows end-to-end qualification, a rollback and recovery drill, and no known blocking findings, without widening any authority.
+COTRA-P13 continues at this frontier. No successor grain beyond SG-000045 is authorized by this activation.
 
 ## Closed SG-000033 screenshot capture
 
@@ -462,9 +460,22 @@ SG-000044 proved explicit offline update with downgrade refusal, configuration-s
 
 ## Active grain
 
-No COTRA-P12 grain is active. COTRA-P12 is exited at this frontier.
+SG-000045 - Release supply chain: SBOM, provenance, notices, reproducibility, and dependency review - is the sole active COTRA-P13 grain.
 
-No COTRA-P13 grain is active. The successor frontier is the first lawful COTRA-P13 grain itself.
+This activation authorizes implementation and qualification of release supply-chain hardening without any runtime authority change:
+- third-party notices generated from the actual shipped dependency graph and included in every release payload;
+- a deterministic release archive, a CycloneDX 1.5 SBOM of the shipped crates, npm packages, and payload files, and a provenance record;
+- deterministic release build flags, with reproducibility reported exactly as observed by comparing the packaged binaries against an independent build from a separate checkout;
+- installation qualified from the extracted archive itself, and release-candidate artifacts uploaded from CI;
+- npm and Rust dependency vulnerability audits in CI;
+- a draft-only release workflow that attaches the SBOM, provenance, notices, and checksums and creates a free GitHub build-provenance attestation;
+- a recorded dependency and license review.
+
+## Active acceptance frontier
+
+SG-000045 must prove the archive, SBOM, notices, and provenance are generated from the actual artifact and graph, reproducibility is observed rather than assumed, installation is qualified from the archive, dependency audits pass, the release workflow remains draft-only, and every closed SG-000001 through SG-000044 regression passes unchanged.
+
+No runtime behavior, MCP tool, capability, approval, or lifecycle command changes, and no code-signing claim is made. The threat-model regression and final quality grain, and the P13 exit, remain successor work.
 
 ## Canonical public authority boundary retained
 
@@ -554,7 +565,7 @@ Still denied or absent outside the closed COTRA-P07 scope, the closed COTRA-P08 
 - caller-selected download destinations, absolute destinations, and destinations outside the approved workspace root;
 - download persistence of cookies, credentials, tokens, session material, or personal browser state.
 
-COTRA-P07 through COTRA-P12 are exited at this frontier. COTRA-P13 remains unauthorized until this P12 exit merges and its post-merge CI succeeds. SG-000041 keeps Cotra protected state outside every admitted workspace, and the P12 installer, lifecycle, and update surfaces are human-invoked only. Raw credentials must never be accepted merely because Git or a network transport can consume them.
+COTRA-P07 through COTRA-P12 are exited at this frontier. COTRA-P13 is active through SG-000045, which changes release supply-chain tooling only. SG-000041 keeps Cotra protected state outside every admitted workspace, and the P12 installer, lifecycle, and update surfaces are human-invoked only. Raw credentials must never be accepted merely because Git or a network transport can consume them.
 
 Windows public `process.spawn` remains positively restricted to the exact SG-000010-qualified `%SystemRoot%\System32\whoami.exe` target.
 
