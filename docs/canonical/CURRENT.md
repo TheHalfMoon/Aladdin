@@ -384,7 +384,7 @@ All P12 closeouts (SG-000041 PR `#120`, SG-000042 PR `#122`, SG-000043 PR `#124`
 
 ## Successor frontier
 
-COTRA-P13 continues at this frontier. No successor grain beyond SG-000045 is authorized by this activation.
+COTRA-P13 continues at this frontier. SG-000045 is closed and SG-000046 is the sole active grain; no successor grain beyond SG-000046 is authorized.
 
 ## Closed SG-000033 screenshot capture
 

@@ -548,7 +548,7 @@
       "pre_merge_ci": "36831005290",
       "merge_sha": "52ab083ef3dfa250d1e1560fe223416596867451",
       "post_merge_ci": "36831437317",
-      "review_basis": "Exact-head genuine TypeSafe Jev 20/20 hunks with zero findings/blocking findings, Alibaba Open Code Review v1.12.9 exact-range delegation over 11 reviewable files with 1 excluded file (docs/research/DEPENDENCY_LICENSE_REVIEW.md) manually reviewed, exact-diff manual security review, Windows/Ubuntu Rust Node Governance, Supply chain audit, and Release qualification (archive-extracted install and lifecycle qualification plus independent byte-identical rebuild) qualification, successful post-merge CI, and zero unresolved review threads (15 resolved).",
+      "review_basis": "Exact-head genuine TypeSafe Jev 20/20 hunks with zero findings/blocking findings, Alibaba Open Code Review v1.12.9 exact-range delegation over 11 reviewable files with 1 excluded file (docs/research/DEPENDENCY_LICENSE_REVIEW.md) manually reviewed, exact-diff manual security review, Windows/Ubuntu Rust Node Governance, Supply chain audit, and Release qualification (archive-extracted install and lifecycle qualification plus independent byte-identical rebuild), successful post-merge CI, and zero unresolved review threads (15 resolved).",
       "unresolved_review_threads": 0,
       "authority_boundary": "Release supply-chain tooling only: deterministic archive, CycloneDX SBOM, provenance record, third-party notices in the payload, observed reproducibility, archive-based release qualification, dependency audits, and a draft-only release workflow with a build-provenance attestation. No runtime behavior, MCP tool, agent capability, approval, lifecycle command, network activity, or code-signing claim is added."
     }

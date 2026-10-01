@@ -58,7 +58,7 @@
     },
     {
       "id": "A4",
-      "claim": "README.md documents only existing commands and states the current limitations honestly."
+      "claim": "README.md is the user guide and covers what Cotra is, what it can and cannot do (the exact tool set and current limitations), requirements, install and verification, configuration, connecting ChatGPT, approvals and trust, diagnostics, update and rollback, and uninstall, documenting only commands that exist; and the status headers of historical documents point to the current canonical state."
     },
     {
       "id": "A5",
@@ -81,7 +81,8 @@
     "jev_semantic_review": true,
     "alibaba_open_code_review": "required exact-range qualification where integrated",
     "security_review": true,
-    "exact_head_ci": true
+    "exact_head_ci": true,
+    "release_artifact_qualification": true
   },
   "done_when": "The threat-model regression, security review, MCP drift tests, dead-code removal, user documentation, and final repository review are complete with no authority change."
 }
