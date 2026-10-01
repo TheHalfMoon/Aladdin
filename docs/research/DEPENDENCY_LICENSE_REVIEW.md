@@ -26,12 +26,18 @@ All are from crates.io, pinned by `Cargo.lock` with registry checksums.
 | sha2 | 0.10.9 | MIT OR Apache-2.0 | SHA-256 for manifests, digests, approvals, audit chains |
 | digest, block-buffer, crypto-common | 0.10.7 / 0.10.4 / 0.1.7 | MIT OR Apache-2.0 | RustCrypto traits used by sha2 |
 | cpufeatures | 0.2.17 | MIT OR Apache-2.0 | CPU feature detection for sha2 |
-| generic-array | 0.14.7 | MIT | Fixed-size arrays for RustCrypto |
+| generic-array | 0.14.7 | MIT (declared by the crate; it ships an MIT `LICENSE`) | Fixed-size arrays for RustCrypto |
 | typenum | 1.20.1 | MIT OR Apache-2.0 | Type-level numbers for generic-array |
 | cfg-if | 1.0.5 | MIT OR Apache-2.0 | Conditional compilation helper |
 | windows-sys | 0.52.0 | MIT OR Apache-2.0 | Raw Win32 bindings (ACLs, jobs, processes, registry, console, WinHTTP) |
 | windows | 0.52.0, 0.58.0 | MIT OR Apache-2.0 | WinRT/Win32 bindings (Windows Hello presence, UI Automation, clipboard) |
-| windows-core, windows-implement, windows-interface, windows-result, windows-strings, windows-targets, windows_x86_64_msvc | 0.52.x / 0.58.x / 0.2.0 / 0.1.0 / 0.52.6 | MIT OR Apache-2.0 | Support crates and import libraries for the windows bindings |
+| windows-core | 0.52.0, 0.58.0 | MIT OR Apache-2.0 | Core support for the windows bindings |
+| windows-implement | 0.58.0 | MIT OR Apache-2.0 | Procedural macro for COM implementations (compile time) |
+| windows-interface | 0.58.0 | MIT OR Apache-2.0 | Procedural macro for COM interfaces (compile time) |
+| windows-result | 0.2.0 | MIT OR Apache-2.0 | Windows error and result types |
+| windows-strings | 0.1.0 | MIT OR Apache-2.0 | Windows string types |
+| windows-targets | 0.52.6 | MIT OR Apache-2.0 | Import-library selection for the Windows targets |
+| windows_x86_64_msvc | 0.52.6 | MIT OR Apache-2.0 | Import libraries for x86_64-pc-windows-msvc |
 | proc-macro2, quote, syn (2.x and 3.x), unicode-ident | 1.0.107 / 1.0.47 / 2.0.119, 3.0.6 / 1.0.26 | MIT OR Apache-2.0 (unicode-ident adds Unicode-3.0) | Compile-time procedural macros (serde_derive, windows-implement/interface); not linked into the binaries |
 
 Observations:

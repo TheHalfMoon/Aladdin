@@ -54,8 +54,12 @@ function run(command, args) {
 }
 
 function npmVersion() {
-  const cli = join(dirname(process.execPath), "node_modules", "npm", "bin", "npm-cli.js");
-  if (!existsSync(cli)) return null;
+  // Windows layouts ship npm next to node.exe; Unix layouts under lib/.
+  const cli = [
+    join(dirname(process.execPath), "node_modules", "npm", "bin", "npm-cli.js"),
+    join(dirname(dirname(process.execPath)), "lib", "node_modules", "npm", "bin", "npm-cli.js")
+  ].find((path) => existsSync(path));
+  if (!cli) return null;
   try {
     return execFileSync(process.execPath, [cli, "--version"]).toString().trim();
   } catch {

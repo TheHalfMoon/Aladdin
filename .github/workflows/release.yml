@@ -32,7 +32,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: "24"
+          node-version: "24.19.0"
       - name: Require the tag to match the workspace version
         shell: pwsh
         run: |
@@ -42,19 +42,23 @@ jobs:
       - uses: ./.github/actions/build-package-qualify
         with:
           release-dir: ${{ runner.temp }}/cotra-${{ env.VERSION }}-windows-x64
+      - uses: ./.github/actions/reproducibility-check
+        with:
+          ref: ${{ github.ref }}
+          release-dir: ${{ runner.temp }}/cotra-${{ env.VERSION }}-windows-x64
+          out-dir: ${{ runner.temp }}/dist
       - name: Collect release assets
         shell: pwsh
         run: |
           $name = "cotra-$env:VERSION-windows-x64"
           $release = Join-Path $env:RUNNER_TEMP $name
           $out = Join-Path $env:RUNNER_TEMP "dist"
-          New-Item -ItemType Directory -Force $out | Out-Null
           Copy-Item "$release.zip" (Join-Path $out "$name.zip")
           Copy-Item (Join-Path $release "manifest.json") (Join-Path $out "$name.manifest.json")
           Copy-Item (Join-Path $release "THIRD_PARTY_NOTICES.txt") (Join-Path $out "THIRD_PARTY_NOTICES.txt")
           node scripts/generate-sbom.mjs --release $release --out (Join-Path $out "$name.cdx.json")
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          node scripts/provenance.mjs --release $release --artifact (Join-Path $out "$name.zip") --sbom (Join-Path $out "$name.cdx.json") --out (Join-Path $out "$name.provenance.json")
+          node scripts/provenance.mjs --release $release --artifact (Join-Path $out "$name.zip") --sbom (Join-Path $out "$name.cdx.json") --reproducibility (Join-Path $out "reproducibility.json") --out (Join-Path $out "$name.provenance.json")
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Get-ChildItem $out -File | Where-Object Name -ne "SHA256SUMS.txt" | Sort-Object Name | ForEach-Object { "{0}  {1}" -f (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower(), $_.Name } | Out-File (Join-Path $out "SHA256SUMS.txt") -Encoding ascii
           Get-Content (Join-Path $out "SHA256SUMS.txt")

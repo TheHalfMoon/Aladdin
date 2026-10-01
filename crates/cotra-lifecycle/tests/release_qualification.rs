@@ -75,6 +75,19 @@ impl Cleanup {
 
 impl Drop for Cleanup {
     fn drop(&mut self) {
+        if std::thread::panicking() {
+            // Surface the runtime's own logs before they are removed, so a
+            // failure on a CI runner can be diagnosed.
+            for log in ["tunnel.log", "supervisor.log", "lifecycle.log"] {
+                let path = self.local.join("Cotra").join("logs").join(log);
+                let text = fs::read_to_string(&path).unwrap_or_default();
+                let tail = text.lines().rev().take(40).collect::<Vec<_>>();
+                eprintln!("---- {log} (last {} lines) ----", tail.len());
+                for line in tail.iter().rev() {
+                    eprintln!("{line}");
+                }
+            }
+        }
         let cli = self.local.join("Cotra").join("bin").join("cotra.exe");
         if cli.is_file() {
             let _ = Command::new(&cli)

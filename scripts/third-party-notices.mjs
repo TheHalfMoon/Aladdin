@@ -29,11 +29,34 @@ function arg(name) {
   return resolve(process.argv[index + 1]);
 }
 
-function noticeFiles(dir) {
-  return readdirSync(dir)
-    .filter((name) => NOTICE_FILE.test(name) && statSync(join(dir, name)).isFile())
-    .sort()
-    .map((name) => ({ name, text: readFileSync(join(dir, name), "utf8").replace(/\r\n/g, "\n").trimEnd() }));
+/**
+ * License and notice files a package ships: matching files anywhere in the
+ * package (excluding nested dependencies and VCS folders) plus a declared
+ * license file, each listed by its path relative to the package root.
+ */
+function noticeFiles(dir, declared) {
+  const found = new Map();
+  const visit = (current, prefix, depth) => {
+    for (const name of readdirSync(current).sort()) {
+      if (name === "node_modules" || name === ".git" || name === "target") continue;
+      const path = join(current, name);
+      const stat = statSync(path);
+      const rel = prefix ? `${prefix}/${name}` : name;
+      if (stat.isDirectory()) {
+        if (depth < 3) visit(path, rel, depth + 1);
+      } else if (stat.isFile() && (NOTICE_FILE.test(name) || /^licen[cs]es?$/i.test(prefix.split("/").pop() ?? ""))) {
+        found.set(rel, path);
+      }
+    }
+  };
+  visit(dir, "", 0);
+  if (declared) {
+    const path = join(dir, declared);
+    if (existsSync(path) && statSync(path).isFile()) found.set(declared.replace(/\\/g, "/"), path);
+  }
+  return [...found.entries()]
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+    .map(([name, path]) => ({ name, text: readFileSync(path, "utf8").replace(/\r\n/g, "\n").trimEnd() }));
 }
 
 function crates() {
@@ -58,7 +81,14 @@ function crates() {
   return [...reached]
     .map((id) => packages.get(id))
     .filter((p) => p.source)
-    .map((p) => ({ kind: "crate", name: p.name, version: p.version, license: p.license, dir: dirname(p.manifest_path) }));
+    .map((p) => ({
+      kind: "crate",
+      name: p.name,
+      version: p.version,
+      license: p.license,
+      licenseFile: p.license_file,
+      dir: dirname(p.manifest_path)
+    }));
 }
 
 function npmPackages(release) {
@@ -74,7 +104,10 @@ function npmPackages(release) {
       }
       if (existsSync(join(path, "package.json"))) {
         const pkg = JSON.parse(readFileSync(join(path, "package.json"), "utf8"));
-        found.push({ kind: "npm", name: pkg.name, version: pkg.version, license: pkg.license, dir: path });
+        const declared = typeof pkg.license === "string" && /^SEE LICEN[CS]E IN /i.test(pkg.license)
+          ? pkg.license.replace(/^SEE LICEN[CS]E IN /i, "")
+          : null;
+        found.push({ kind: "npm", name: pkg.name, version: pkg.version, license: pkg.license, licenseFile: declared, dir: path });
         visit(join(path, "node_modules"));
       }
     }
@@ -85,16 +118,23 @@ function npmPackages(release) {
 
 const release = arg("--release");
 const out = arg("--out");
-const entries = [...crates(), ...npmPackages(release)].sort((a, b) =>
-  `${a.kind}:${a.name}@${a.version}` < `${b.kind}:${b.name}@${b.version}` ? -1 : 1
-);
+// One entry per kind:name@version (a package installed at several nesting
+// levels ships the same text), in a strict total order.
+const byKey = new Map();
+for (const entry of [...crates(), ...npmPackages(release)]) {
+  const key = `${entry.kind}:${entry.name}@${entry.version}`;
+  if (!byKey.has(key)) byKey.set(key, entry);
+}
+const entries = [...byKey.entries()]
+  .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+  .map(([, entry]) => entry);
 const missing = [];
 let text =
   "Cotra third-party notices\n\n" +
   "Cotra is licensed under the Apache License 2.0 (see LICENSE). This release\n" +
   "includes the following third-party components, each under its own license.\n";
 for (const entry of entries) {
-  const files = noticeFiles(entry.dir);
+  const files = noticeFiles(entry.dir, entry.licenseFile);
   if (!entry.license || files.length === 0) missing.push(`${entry.kind} ${entry.name}@${entry.version}`);
   text += `\n${"=".repeat(78)}\n${entry.name} ${entry.version} (${entry.kind})\nLicense: ${entry.license ?? "UNDECLARED"}\n`;
   for (const file of files) {

@@ -13,8 +13,8 @@
 
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -107,6 +107,29 @@ function cargoComponents() {
   return { components, dependencies, rootRefs: roots.map(ref) };
 }
 
+/** Fails unless the release directory holds exactly the manifest's files with matching digests. */
+function verifyPayload(release, manifest) {
+  const present = [];
+  const visit = (dir) => {
+    for (const name of readdirSync(dir).sort()) {
+      const path = join(dir, name);
+      const stat = statSync(path);
+      if (stat.isDirectory()) visit(path);
+      else present.push(relative(release, path).split(sep).join("/"));
+    }
+  };
+  visit(release);
+  const listed = new Set(manifest.files.map((file) => file.path));
+  for (const path of present) {
+    if (path !== "manifest.json" && !listed.has(path)) fail(`release contains an unlisted file: ${path}`);
+  }
+  for (const file of manifest.files) {
+    const path = join(release, ...file.path.split("/"));
+    if (!existsSync(path)) fail(`release is missing ${file.path}`);
+    if (sha256(readFileSync(path)) !== file.sha256) fail(`SHA-256 mismatch for ${file.path}`);
+  }
+}
+
 function npmComponents(release) {
   const base = join(release, "app", "cotra-mcp", "node_modules");
   const found = [];
@@ -129,6 +152,20 @@ function npmComponents(release) {
   };
   visit(base);
   const appPkg = JSON.parse(readFileSync(join(release, "app", "cotra-mcp", "package.json"), "utf8"));
+  // Node resolves a dependency from the nearest enclosing node_modules
+  // directory, so resolve edges the same way rather than by name only.
+  const byPath = new Map(found.map((entry) => [entry.path, entry]));
+  const appDir = dirname(base);
+  const resolveFrom = (fromDir, name) => {
+    // Check <dir>/node_modules/<name> from the package directory upward to
+    // the app directory, exactly as Node's module resolution does.
+    for (let dir = fromDir; ; dir = dirname(dir)) {
+      const candidate = join(dir, "node_modules", ...name.split("/"));
+      if (byPath.has(candidate)) return byPath.get(candidate);
+      if (dir === appDir || dirname(dir) === dir) return undefined;
+    }
+  };
+  const owner = new Map(found.map((entry) => [npmPurl(entry.pkg.name, entry.pkg.version), entry.path]));
   const components = new Map();
   const dependencies = new Map();
   for (const { pkg } of found) {
@@ -142,14 +179,14 @@ function npmComponents(release) {
       licenses: pkg.license ? [{ expression: pkg.license }] : []
     });
     const deps = Object.keys(pkg.dependencies ?? {})
-      .map((dep) => found.find((entry) => entry.pkg.name === dep))
+      .map((dep) => resolveFrom(owner.get(ref), dep))
       .filter(Boolean)
       .map((entry) => npmPurl(entry.pkg.name, entry.pkg.version));
     dependencies.set(ref, [...new Set(deps)].sort());
   }
   const appRef = `cotra:${appPkg.name}@${appPkg.version}`;
   const appDeps = Object.keys(appPkg.dependencies ?? {})
-    .map((dep) => found.find((entry) => entry.pkg.name === dep))
+    .map((dep) => byPath.get(join(base, ...dep.split("/"))))
     .filter(Boolean)
     .map((entry) => npmPurl(entry.pkg.name, entry.pkg.version))
     .sort();
@@ -167,6 +204,7 @@ const release = arg("--release");
 const out = arg("--out");
 const manifestBytes = readFileSync(join(release, "manifest.json"));
 const manifest = JSON.parse(manifestBytes);
+verifyPayload(release, manifest);
 const manifestHash = sha256(manifestBytes);
 const cargo = cargoComponents();
 const npm = npmComponents(release);

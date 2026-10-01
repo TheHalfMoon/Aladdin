@@ -48,6 +48,10 @@ const DOS_TIME = 0;
 const DOS_DATE = (0 << 9) | (1 << 5) | 1; // 1980-01-01
 const release = arg("--release");
 const out = arg("--out");
+const relativeOut = relative(release, out);
+if (!relativeOut.startsWith("..") && !relativeOut.startsWith(sep) && !/^[A-Za-z]:/.test(relativeOut)) {
+  fail("--out must be outside the release directory");
+}
 const files = [];
 walk(release, files);
 const entries = files
