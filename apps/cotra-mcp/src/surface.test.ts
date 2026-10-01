@@ -31,10 +31,22 @@ const CANONICAL_TOOLS = [
   "workspace_get"
 ];
 
+/** Every non-test TypeScript source under src, including subdirectories. */
 function toolSources(): Array<[string, string]> {
-  return readdirSync(srcDir)
-    .filter((name) => name.endsWith(".ts") && !name.endsWith(".test.ts"))
-    .map((name) => [name, readFileSync(join(srcDir, name), "utf8")]);
+  const found: Array<[string, string]> = [];
+  const visit = (dir: string, prefix: string): void => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const rel = prefix ? `${prefix}/${entry.name}` : entry.name;
+      const path = join(dir, entry.name);
+      if (entry.isDirectory()) {
+        visit(path, rel);
+      } else if (entry.name.endsWith(".ts") && !entry.name.endsWith(".test.ts")) {
+        found.push([rel, readFileSync(path, "utf8")]);
+      }
+    }
+  };
+  visit(srcDir, "");
+  return found.sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
 }
 
 test("the MCP surface registers exactly the canonical closed tool set", () => {
@@ -53,10 +65,10 @@ test("no MCP tool source reaches lifecycle, installer, update, trust, or approva
   const forbidden = [
     /cotra\.exe/i,
     /cotra-mcp-host/i,
-    /\bsupervise\b/,
-    /self-check/,
-    /emergency[-_]revoke|revoke_emergency/,
-    /workspace\.trust\.|trust\.history|approval\.history/,
+    /\bsupervise\b/i,
+    /self-check/i,
+    /emergency[-_]revoke|revoke_emergency/i,
+    /workspace\.trust\.|trust\.history|approval\.history/i,
     /tunnel-runtime-key|tunnel_runtime_key/i
   ];
   for (const [name, text] of toolSources()) {

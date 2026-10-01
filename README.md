@@ -46,7 +46,13 @@ Everything else is denied. Cotra also contains capabilities that are deliberatel
 ## Install
 
 1. Download `cotra-<version>-windows-x64.zip` and `SHA256SUMS.txt` from the project's GitHub Releases page (release automation only prepares drafts; a release appears there once the maintainer publishes it) and verify the hash:
-   `Get-FileHash .\cotra-<version>-windows-x64.zip -Algorithm SHA256`
+   ```powershell
+   $zip = "cotra-<version>-windows-x64.zip"
+   $expected = ((Get-Content .\SHA256SUMS.txt) | Where-Object { $_ -like "*  $zip" } | ForEach-Object { $_.Split(" ")[0] })
+   $actual = (Get-FileHash ".\$zip" -Algorithm SHA256).Hash.ToLower()
+   if (-not $expected -or $actual -ne $expected) { throw "checksum mismatch: do not extract $zip" } else { "checksum OK" }
+   ```
+   On Linux or WSL, `sha256sum -c --ignore-missing SHA256SUMS.txt` does the same.
    Optionally verify provenance: `gh attestation verify .\cotra-<version>-windows-x64.zip --repo TheHalfMoon/Cotra`.
 2. Extract the archive and run, from the extracted folder:
    `.\cotra.exe install`
