@@ -114,10 +114,22 @@ const runtimePackage = {
 writeFileSync(join(appOut, "package.json"), `${JSON.stringify(runtimePackage, null, 2)}\n`);
 const distSource = join(appSource, "dist");
 if (!existsSync(join(distSource, "index.js"))) fail("apps/cotra-mcp/dist/index.js missing; run npm run build first");
-for (const name of readdirSync(distSource).sort()) {
-  if (!name.endsWith(".js") || name.endsWith(".test.js")) continue;
-  copyFileSync(join(distSource, name), join(appOut, "dist", name));
+function copyDistJs(fromDir, toDir) {
+  for (const name of readdirSync(fromDir).sort()) {
+    const source = join(fromDir, name);
+    const stat = lstatSync(source);
+    if (stat.isSymbolicLink()) fail(`MCP dist must not contain links: ${source}`);
+    if (stat.isDirectory()) {
+      copyDistJs(source, join(toDir, name));
+      continue;
+    }
+    if (!stat.isFile()) fail(`unsupported MCP dist entry: ${source}`);
+    if (!name.endsWith(".js") || name.endsWith(".test.js")) continue;
+    mkdirSync(toDir, { recursive: true });
+    copyFileSync(source, join(toDir, name));
+  }
 }
+copyDistJs(distSource, join(appOut, "dist"));
 
 // Copy exactly the locked production dependency closure from the repository's
 // node_modules (installed by `npm ci` from package-lock.json). Nothing is
