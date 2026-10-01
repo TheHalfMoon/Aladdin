@@ -559,6 +559,15 @@ pub fn rollback(args: &mut Args) -> Result<Output, LifecycleError> {
     })
 }
 
+/// Local MCP entrypoint (`cotra mcp stdio`). This takes over standard I/O
+/// for the session, so it returns the child exit code instead of `Output`.
+/// Only `stdio` is supported; anything else fails closed as usage.
+pub fn mcp(args: &mut Args) -> Result<i32, LifecycleError> {
+    let action = args.positional("mcp action (stdio)")?;
+    args.finish()?;
+    cotra_lifecycle::mcp::run_action(&action)
+}
+
 /// Internal: verifies the installation with this binary's own code. Used by
 /// `update` to confirm a newly activated version can verify itself.
 pub fn self_check(args: &mut Args) -> Result<Output, LifecycleError> {

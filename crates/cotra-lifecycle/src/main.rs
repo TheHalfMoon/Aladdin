@@ -47,6 +47,12 @@ Runtime:
   cotra status                            Show install, configuration, and runtime state.
   cotra doctor                            Run diagnostics; exits non-zero on failures.
 
+Local MCP (no tunnel required):
+  cotra mcp stdio                         Run the authoritative MCP server over stdio
+      for local AI clients (Claude Desktop, Codex, Mistral Vibe Code, generic
+      MCP clients). Uses the active verified install with the sanitized
+      environment. Standard output stays the MCP channel.
+
 Approvals:
   cotra approvals [--limit <n>]           Show recent approval decisions.
   cotra emergency-revoke                  Invalidate all pending approvals (Windows Hello).
@@ -115,6 +121,16 @@ fn main() {
             Err(error) => {
                 eprintln!("cotra supervise: {}", error.message);
                 2
+            }
+        };
+        std::process::exit(code);
+    }
+    if args.command == "mcp" {
+        let code = match commands::mcp(&mut args) {
+            Ok(code) => code,
+            Err(error) => {
+                eprintln!("cotra: {}", error.message);
+                error.kind.exit_code()
             }
         };
         std::process::exit(code);

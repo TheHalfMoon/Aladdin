@@ -73,6 +73,36 @@ Everything else is denied. Cotra also contains capabilities that are deliberatel
 1. `cotra start` — starts the official tunnel client under Cotra's supervisor. It reports `running` only when the tunnel client is alive and its local health endpoint answers.
 2. In ChatGPT, connect to your Secure MCP Tunnel as described in OpenAI's documentation. ChatGPT then sees the 20 tools above.
 
+## Connect local MCP clients (no tunnel required)
+
+Local clients that can launch a command use `cotra mcp stdio`. It starts the same authoritative MCP server over standard input and output, with the same 20 tools and the same local approvals. No tunnel setup is needed. Standard output stays the MCP channel, so run it only through the client configuration below, not by hand.
+
+Claude Desktop (`claude_desktop_config.json`):
+
+```json
+{
+  "mcpServers": {
+    "cotra": {
+      "command": "cotra",
+      "args": ["mcp", "stdio"]
+    }
+  }
+}
+```
+
+Codex and other command-based clients use the same command and arguments:
+
+```json
+{
+  "command": "cotra",
+  "args": ["mcp", "stdio"]
+}
+```
+
+Mistral Vibe Code accepts a stdio entry in its MCP server list with command `cotra` and arguments `["mcp", "stdio"]`. Generic MCP clients and the MCP Inspector connect with transport `stdio`, command `cotra`, and arguments `["mcp", "stdio"]`.
+
+`cotra` here is `%LOCALAPPDATA%\Cotra\bin\cotra.exe` on your user PATH after install. It resolves the active verified release on every launch, refuses tampered or inactive payloads, and fails closed when no workspace is configured.
+
 ## Everyday commands
 
 | Command | Purpose |
