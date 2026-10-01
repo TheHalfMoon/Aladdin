@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "snapshot_base": "732e569c3a8b6e266ca1f1c2a172b9214ec314b1",
+  "snapshot_base": "276cadd15f47121ad2e9aa84a91a224f4b388f88",
   "state_semantics": {
     "GRAIN": "Authorized or active work packet whose acceptance is not yet canonically proven.",
     "PROVEN": "Acceptance and required qualification are proven, but canonical closeout/governance is not yet complete.",
@@ -598,6 +598,18 @@
       "review_basis": "Exact-head genuine TypeSafe Jev 7/7 hunks with zero findings/blocking findings (pin 31f89602797fb7bea007f8a480bf368bf564954e), Alibaba Open Code Review v1.12.9 exact-range delegation over 6 files with 4 reviewable and 2 excluded files (README.md and transport-contract.test.ts) manually reviewed, exact-diff manual security review, Windows/Ubuntu Rust Node Governance, Supply chain audit, and Release qualification, successful post-merge CI, and zero unresolved review threads. Cubic, Qodo, and CodeRabbit threads evaluated but never used as qualification evidence.",
       "unresolved_review_threads": 0,
       "authority_boundary": "No new MCP tool, schema change, capability, approval, lifecycle, network listener, browser, UIA, clipboard, installer, elevation, or provider submission authority. Installed stdio entrypoint, examples, and contract tests only."
+    },
+    "SG-000050": {
+      "implementation_pr": 142,
+      "implementation_base": "46f92d0add5447893d19176aa0827860f741d88e",
+      "qualified_head": "1298915ec2ddd9d243d599fc05094c4f30d95ce2",
+      "pre_merge_ci": "36910345831",
+      "pre_merge_review_gates": "36910345950",
+      "merge_sha": "276cadd15f47121ad2e9aa84a91a224f4b388f88",
+      "post_merge_ci": "36911084305",
+      "review_basis": "Exact-head genuine TypeSafe Jev 10/10 hunks with zero findings/blocking findings (pin 31f89602797fb7bea007f8a480bf368bf564954e), Alibaba Open Code Review v1.12.9 exact-range delegation over 8 files with 5 reviewable and 3 excluded files (README.md and 2 test files) manually reviewed, exact-diff manual security review, Windows/Ubuntu Rust Node Governance, Supply chain audit, and Release qualification, successful post-merge CI, and zero unresolved review threads. Cubic, Qodo, and CodeRabbit threads evaluated but never used as qualification evidence.",
+      "unresolved_review_threads": 0,
+      "authority_boundary": "No new MCP tool, schema change, capability, approval, lifecycle, browser, UIA, clipboard, installer, elevation, or provider submission authority. Loopback listener, serve command, docs, and tests only; relay transport remains a fail-closed skeleton."
     }
   }
 }

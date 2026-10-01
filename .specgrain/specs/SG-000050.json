@@ -2,7 +2,7 @@
   "id": "SG-000050",
   "title": "Loopback Streamable HTTP transport",
   "program": "COTRA-P14",
-  "state": "GRAIN",
+  "state": "CLOSED",
   "risk": "medium",
   "created": "2026-10-01",
   "base": "732e569c3a8b6e266ca1f1c2a172b9214ec314b1",
@@ -76,5 +76,25 @@
     "exact_head_ci": true,
     "release_artifact_qualification": true
   },
-  "done_when": "The loopback Streamable HTTP transport is canonical with auth, validation, bounds, and no authority change."
+  "done_when": "The loopback Streamable HTTP transport is canonical with auth, validation, bounds, and no authority change.",
+  "qualified_head": "1298915ec2ddd9d243d599fc05094c4f30d95ce2",
+  "implementation_base": "46f92d0add5447893d19176aa0827860f741d88e",
+  "implementation_merge": "276cadd15f47121ad2e9aa84a91a224f4b388f88",
+  "pre_merge_ci": "36910345831",
+  "pre_merge_review_gates": "36910345950",
+  "post_merge_ci": "36911084305",
+  "canonical_evidence": {
+    "implementation_pr": 142,
+    "implementation_base": "46f92d0add5447893d19176aa0827860f741d88e",
+    "qualified_head": "1298915ec2ddd9d243d599fc05094c4f30d95ce2",
+    "pre_merge_ci": "36910345831",
+    "pre_merge_review_gates": "36910345950",
+    "merge_sha": "276cadd15f47121ad2e9aa84a91a224f4b388f88",
+    "post_merge_ci": "36911084305",
+    "jev": "PASSED: genuine TypeSafe Jev exact-diff review covered 10/10 hunks with zero findings and zero blocking findings, pin 31f89602797fb7bea007f8a480bf368bf564954e",
+    "ocr": "PASSED: Alibaba Open Code Review v1.12.9 exact-range delegation over 8 changed files, 5 reviewable with delegated rules applied and 3 excluded (README.md by unsupported-extension classification and 2 test files by default-path classification) manually reviewed",
+    "security_review": "PASS on exact qualified head: loopback-only Streamable HTTP on 127.0.0.1 reusing the authoritative builder, per-user bearer credential with constant-time comparison, Host and Origin validation with DNS-rebinding tests, bounded bodies and sessions with expiry sweep, strict non-wildcard CORS, no privileged surface on the listener, cotra mcp serve with inherited stdio and sanitized environment, and all closed SG-000001 through SG-000049 regressions pass unchanged. Cubic, Qodo, and CodeRabbit threads evaluated but never used as qualification evidence; zero unresolved blocking threads.",
+    "unresolved_review_threads": 0,
+    "authority_boundary": "No new MCP tool, schema change, capability, approval, lifecycle, browser, UIA, clipboard, installer, elevation, or provider submission authority. Loopback listener, serve command, docs, and tests only; relay transport remains a fail-closed skeleton."
+  }
 }
