@@ -1,0 +1,75 @@
+{
+  "id": "SG-000051",
+  "title": "Local client packages and configuration",
+  "program": "COTRA-P14",
+  "state": "GRAIN",
+  "risk": "low",
+  "created": "2026-10-01",
+  "base": "276cadd15f47121ad2e9aa84a91a224f4b388f88",
+  "dependencies": [
+    "SG-000050"
+  ],
+  "objective": "Publish tested local client configuration for independent MCP clients without changing runtime authority: Claude Desktop extension and config, Codex and ChatGPT local plugin configuration where supported, Mistral Vibe Code stdio and Streamable HTTP configuration, and generic MCP client examples with inspector qualification.",
+  "scope": {
+    "include": [
+      "Claude Desktop configuration and Desktop Extension packaging where supported",
+      "Codex and ChatGPT local MCP configuration using cotra mcp stdio",
+      "Mistral Vibe Code stdio and loopback HTTP configuration",
+      "generic MCP client configuration and MCP inspector qualification",
+      "client package contract tests proving examples reference only supported entrypoints"
+    ],
+    "exclude": [
+      "any new MCP tool, tool schema change, capability widening, approval change, or authority change",
+      "any public provider submission, directory publication, or availability claim",
+      "any P15 remote relay, OAuth, device uplink, or public edge code",
+      "any P16 tool-surface widening or provider submission"
+    ]
+  },
+  "authority_delta": {
+    "filesystem": "None.",
+    "process": "None.",
+    "network": "None.",
+    "browser": "None.",
+    "ui_input": "None.",
+    "secrets": "None.",
+    "approval": "None.",
+    "privileged": "None."
+  },
+  "invariants": [
+    "authoritative builder remains the single tool source of truth",
+    "client packages add no independent tool authority",
+    "examples reference only supported installed entrypoints",
+    "no tunnel requirement for local clients",
+    "no new OS authority introduced"
+  ],
+  "acceptance": [
+    {
+      "id": "A1",
+      "claim": "Tested configuration packages exist for Claude Desktop, Codex, Mistral Vibe Code, and generic MCP clients."
+    },
+    {
+      "id": "A2",
+      "claim": "At least three independent local MCP clients use Cotra with identical policy and approval behavior across transports."
+    },
+    {
+      "id": "A3",
+      "claim": "Contract tests prove examples reference only supported entrypoints, and all closed SG-000001 through SG-000050 regressions pass unchanged."
+    },
+    {
+      "id": "A4",
+      "claim": "Exact-head CI including release qualification and supply-chain audit, genuine TypeSafe Jev, Alibaba Open Code Review, manual review of excluded files, and zero unresolved review threads all pass."
+    }
+  ],
+  "successor_requirements": {
+    "p14_exit": "COTRA-P14 exits only after SG-000051 closes with local clients qualified on stdio and loopback without new OS authority."
+  },
+  "review": {
+    "diffcipline": true,
+    "jev_semantic_review": true,
+    "alibaba_open_code_review": "required exact-range qualification where integrated",
+    "security_review": true,
+    "exact_head_ci": true,
+    "release_artifact_qualification": true
+  },
+  "done_when": "Local client packages are canonical with multi-client qualification and no authority change."
+}
