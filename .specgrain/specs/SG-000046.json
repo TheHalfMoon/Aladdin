@@ -2,7 +2,7 @@
   "id": "SG-000046",
   "title": "Threat-model regression, security review, and final repository quality",
   "program": "COTRA-P13",
-  "state": "GRAIN",
+  "state": "CLOSED",
   "risk": "medium",
   "created": "2026-10-01",
   "base": "52ab083ef3dfa250d1e1560fe223416596867451",
@@ -84,5 +84,25 @@
     "exact_head_ci": true,
     "release_artifact_qualification": true
   },
-  "done_when": "The threat-model regression, security review, MCP drift tests, dead-code removal, user documentation, and final repository review are complete with no authority change."
+  "done_when": "The threat-model regression, security review, MCP drift tests, dead-code removal, user documentation, and final repository review are complete with no authority change.",
+  "qualified_head": "f1962a423785ae5a51e4ec500621eb05556d94b7",
+  "implementation_base": "90d64654d27e277e7010d3520c6224877a5100e9",
+  "implementation_merge": "365e4183a0112fa1c9722daaebfe22bc36532b99",
+  "pre_merge_ci": "36846172030",
+  "pre_merge_review_gates": "36846168929",
+  "post_merge_ci": "36847294467",
+  "canonical_evidence": {
+    "implementation_pr": 133,
+    "implementation_base": "90d64654d27e277e7010d3520c6224877a5100e9",
+    "qualified_head": "f1962a423785ae5a51e4ec500621eb05556d94b7",
+    "pre_merge_ci": "36846172030",
+    "pre_merge_review_gates": "36846168929",
+    "merge_sha": "365e4183a0112fa1c9722daaebfe22bc36532b99",
+    "post_merge_ci": "36847294467",
+    "jev": "PASSED: genuine TypeSafe Jev exact-diff review covered 32/32 hunks with zero findings and zero blocking findings, pin 31f89602797fb7bea007f8a480bf368bf564954e",
+    "ocr": "PASSED: Alibaba Open Code Review v1.12.9 exact-range delegation over 32 changed files, 2 reviewable (the CI and release workflows) with delegated rules applied and 30 excluded (24 deleted never-compiled cotrad snapshots, README.md, apps/cotra-mcp/src/surface.test.ts, and 4 documents) manually reviewed",
+    "security_review": "PASS on exact qualified head: no runtime behavior, MCP tool, capability, approval, or lifecycle change; the threat-model regression maps T01 through T28 and the requested compositions to controls and to 76 cited Rust and Node tests verified to exist and run in CI; Node surface tests pin the MCP surface to exactly the canonical 20 tools across the whole source tree and keep lifecycle, installer, update, trust, and approval surfaces out of MCP tool sources, and a mutation check confirmed both fail on a planted subdirectory tool and a capitalized forbidden term; the 24 removed cotrad snapshot files were never compiled (autobins disabled, the only bin is src/sg000039_main.rs) and Graft 0.21.1 structural analysis found no reference to them, with the Windows Rust suite unchanged at 542 passed and 1 ignored; README.md documents only commands present in the cotra CLI, and its checksum step was tested to accept the genuine release-candidate archive and reject a modified copy; SHA256SUMS.txt is written with LF line endings and verified with sha256sum -c against the downloaded release-candidate artifacts; the release and final repository reviews record no open blocking finding. 3 bot review threads were resolved with fixes. A cotra-tunnel test temporary-directory race found during qualification was repaired separately in PR #132.",
+    "unresolved_review_threads": 0,
+    "authority_boundary": "Documentation, regression tests, removal of never-compiled snapshot files, and checksum-file line endings only. No runtime behavior, MCP tool, agent capability, approval, lifecycle command, network activity, or code-signing claim is added."
+  }
 }
