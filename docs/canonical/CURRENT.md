@@ -2,7 +2,7 @@
 
 Status: COMPLETE_CANONICAL
 Date: 2026-10-01
-Governance snapshot base: 6bf2608a1b193f825c8474ae2cf91a30b71343bc
+Governance snapshot base: 732e569c3a8b6e266ca1f1c2a172b9214ec314b1
 Evidence ledger: `.specgrain/canonical-evidence.json`
 
 `Governance snapshot base` records the exact canonical parent from which this activation snapshot was authored. It deliberately does not claim the eventual merge SHA of the commit containing this file.
@@ -384,15 +384,15 @@ All P12 closeouts (SG-000041 PR `#120`, SG-000042 PR `#122`, SG-000043 PR `#124`
 
 ## Successor frontier
 
-SG-000047 - Universal-access architecture and transport contract - is CLOSED canonical. SG-000048 - Transport-neutral MCP server builder - is CLOSED canonical. SG-000049 - Supported local stdio entrypoint - is the sole active COTRA-P14 grain.
+SG-000047 - Universal-access architecture and transport contract - is CLOSED canonical. SG-000048 - Transport-neutral MCP server builder - is CLOSED canonical. SG-000049 - Supported local stdio entrypoint - is CLOSED canonical. SG-000050 - Loopback Streamable HTTP transport - is the sole active COTRA-P14 grain.
 
-SG-000048 closed canonically on implementation PR `#138` (implementation base `db85a70a52904292ef5fd80baa1f9c9742c9b476`, qualified head `3009cba9406d944fce39464ee721b2c2cbfc7be5`, CI `36898284828`, Review Gates `36898282397`, genuine TypeSafe Jev `26/26` hunk coverage with zero findings and zero blocking findings, Alibaba Open Code Review v1.12.9 exact-range delegation over `18` files with `13` reviewable and `5` excluded test files manually reviewed, merge `6bf2608a1b193f825c8474ae2cf91a30b71343bc`, post-merge CI `36898893574`) with zero unresolved review threads. The implementation established one authoritative MCP server builder with preserved v0.1 20-tool catalog and schemas, single result projection, stdio reuse with no independent authority, loopback and relay skeletons failing closed, transport contract tests, and a packaging repair to include dist subdirectories, with all closed SG-000001 through SG-000047 regressions passing unchanged and no new authority.
+SG-000049 closed canonically on implementation PR `#140` (implementation base `900f681c93d556fb3cd047805a15e6735bb444f7`, qualified head `d92cc1fdd4a5c89504df0a09257f42c83b85d688`, CI `36905281860`, Review Gates `36905282144`, genuine TypeSafe Jev `7/7` hunk coverage with zero findings and zero blocking findings, Alibaba Open Code Review v1.12.9 exact-range delegation over `6` files with `4` reviewable and `2` excluded files manually reviewed, merge `732e569c3a8b6e266ca1f1c2a172b9214ec314b1`, post-merge CI `36906013359`) with zero unresolved review threads. The implementation added `cotra mcp stdio` reusing the verified host launch with inherited stdio and sanitized environment, local client configuration examples requiring no tunnel, and entrypoint contract tests, with all closed SG-000001 through SG-000048 regressions passing unchanged and no new authority.
 
-SG-000049 now authorizes, without any runtime authority change, the supported local stdio entrypoint using the authoritative builder with configuration examples and no tunnel requirement.
+SG-000050 now authorizes, without any runtime authority change beyond the loopback listener itself, the loopback-only Streamable HTTP transport with per-user credential auth, Host and Origin validation, DNS-rebinding protection, and bounded limits.
 
 ## Active acceptance frontier
 
-SG-000049 must prove a supported installed stdio entrypoint launches the authoritative server with protected environment and lifecycle behavior, configuration examples enable local clients without a tunnel with identical policy and approval behavior, entrypoint contract tests prove identical surface, and every closed SG-000001 through SG-000048 regression passes unchanged.
+SG-000050 must prove a loopback-only listener serves the authoritative catalog with credential auth and correct session semantics, Host and Origin validation with DNS-rebinding protection and bound limits pass negative tests, transport contract tests prove identical surface across stdio and loopback, and every closed SG-000001 through SG-000049 regression passes unchanged.
 
 No P15 remote relay code may merge before P14 transport-neutral local contract work is canonical. No P16 authority widening may merge before the capability/parity inventory is canonical. No public provider submission may occur before the remote threat model, auth, cross-tenant isolation, privacy policy, and production endpoint are qualified.
 
@@ -528,9 +528,17 @@ SG-000048 proved one authoritative MCP server builder with the preserved v0.1 20
 
 The canonical SG-000048 authority adds no new MCP tool, schema change, capability, approval, lifecycle, network, browser, UIA, clipboard, installer, elevation, or provider submission authority. Transport refactoring and packaging fix only.
 
+## Closed SG-000049 supported local stdio entrypoint
+
+SG-000049 closed canonically: implementation PR `#140` (implementation base `900f681c93d556fb3cd047805a15e6735bb444f7`, qualified head `d92cc1fdd4a5c89504df0a09257f42c83b85d688`, CI `36905281860`, Review Gates `36905282144`, genuine TypeSafe Jev `7/7` hunks with zero findings and zero blocking findings, Alibaba Open Code Review v1.12.9 exact-range delegation over `6` files with `4` reviewable and `2` excluded files manually reviewed, merge `732e569c3a8b6e266ca1f1c2a172b9214ec314b1`, post-merge CI `36906013359`), all with zero unresolved review threads.
+
+SG-000049 proved a supported installed `cotra mcp stdio` entrypoint launching the authoritative MCP server through the same verified launch as the tunnel host, with inherited stdio keeping stdout a pure MCP channel, unknown actions failing closed as usage, tampered payloads and missing workspaces failing closed, local client configuration examples for Claude Desktop, Codex, Mistral Vibe Code, and generic clients requiring no tunnel, and entrypoint contract tests proving the installed path reuses the transport. All closed SG-000001 through SG-000048 regressions pass unchanged.
+
+The canonical SG-000049 authority adds no new MCP tool, schema change, capability, approval, lifecycle, network listener, browser, UIA, clipboard, installer, elevation, or provider submission authority. Installed stdio entrypoint, examples, and contract tests only.
+
 ## Final canonical state
 
-The authorized Cotra roadmap through COTRA-P13 is complete at this frontier: every grain authorized for COTRA-P00 through COTRA-P13 (SG-000001 through SG-000046) is `CLOSED` with machine-checked evidence in `.specgrain/canonical-evidence.json`, COTRA-P06 through COTRA-P13 carry explicit exit records above, and the earlier phases' grains closed under the governance current at the time. COTRA-P14 universal access is authorized with SG-000047 `CLOSED`, SG-000048 `CLOSED`, and SG-000049 as the sole active grain; P14 implementation continues under the frozen transport contract and ordering gates. As recorded for SG-000004, the live ChatGPT tunnel end-to-end path of COTRA-P03 remains UNPROVEN because it requires the owner's OpenAI credentials.
+The authorized Cotra roadmap through COTRA-P13 is complete at this frontier: every grain authorized for COTRA-P00 through COTRA-P13 (SG-000001 through SG-000046) is `CLOSED` with machine-checked evidence in `.specgrain/canonical-evidence.json`, COTRA-P06 through COTRA-P13 carry explicit exit records above, and the earlier phases' grains closed under the governance current at the time. COTRA-P14 universal access is authorized with SG-000047 `CLOSED`, SG-000048 `CLOSED`, SG-000049 `CLOSED`, and SG-000050 as the sole active grain; P14 implementation continues under the frozen transport contract and ordering gates. As recorded for SG-000004, the live ChatGPT tunnel end-to-end path of COTRA-P03 remains UNPROVEN because it requires the owner's OpenAI credentials.
 
 Release state:
 - every change to `main` builds, packages, archives, and qualifies the Windows x64 release from the extracted archive on a fresh runner, verifies an independent byte-identical rebuild, audits dependencies, and uploads a release candidate (`cotra-release-candidate-<sha>`) with the archive, manifest, CycloneDX SBOM, provenance record, reproducibility record, third-party notices, and `SHA256SUMS.txt`;
@@ -542,7 +550,7 @@ Residual limitations, recorded honestly:
 - public `process.spawn` on Windows is restricted to `whoami.exe`, and `git_fetch`/`git_push` destination policies are not configurable through the `cotra` CLI, so those tools fail closed in an installed Cotra;
 - no paid or human third-party security audit was performed; review relied on genuine TypeSafe Jev, Alibaba Open Code Review, exact-diff manual security review, and local Graft structural analysis.
 
-Any further capability, release, or audit work beyond the active SG-000049 requires a new, explicitly authorized SpecGrain.
+Any further capability, release, or audit work beyond the active SG-000050 requires a new, explicitly authorized SpecGrain.
 
 ## Canonical public authority boundary retained
 

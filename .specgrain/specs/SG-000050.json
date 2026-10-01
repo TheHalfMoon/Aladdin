@@ -1,0 +1,80 @@
+{
+  "id": "SG-000050",
+  "title": "Loopback Streamable HTTP transport",
+  "program": "COTRA-P14",
+  "state": "GRAIN",
+  "risk": "medium",
+  "created": "2026-10-01",
+  "base": "732e569c3a8b6e266ca1f1c2a172b9214ec314b1",
+  "dependencies": [
+    "SG-000049"
+  ],
+  "objective": "Expose a loopback-only Streamable HTTP MCP transport using the authoritative builder without changing runtime authority: bind only to loopback, require a per-user credential, validate Host and Origin with DNS-rebinding protection, enforce bounded body, header, stream, session, and idle limits, and keep the privileged config surface off the MCP listener.",
+  "scope": {
+    "include": [
+      "loopback-only Streamable HTTP listener reusing the SG-000048 authoritative builder and result projection",
+      "per-user local credential or session secret with fail-closed missing or invalid credentials",
+      "Host validation, Origin validation where applicable, and DNS-rebinding protection tests",
+      "bounded request body, header count and size, concurrent streams, session lifetime, and idle timeout",
+      "correct Streamable HTTP semantics including stateless requests where protocol negotiation permits them",
+      "negative tests for LAN exposure, wildcard CORS, oversized frames, expired sessions, and cross-origin browser drives"
+    ],
+    "exclude": [
+      "any new MCP tool, tool schema change, capability widening, approval change, or authority change",
+      "binding to 0.0.0.0, LAN interfaces, or wildcard CORS",
+      "any privileged config or admin surface on the MCP listener",
+      "relay device transport implementation (reserved for COTRA-P15)",
+      "local client packages beyond configuration (reserved for SG-000051)",
+      "any P15 remote relay, OAuth, device uplink, or public edge code",
+      "any P16 tool-surface widening or provider submission"
+    ]
+  },
+  "authority_delta": {
+    "filesystem": "None.",
+    "process": "None.",
+    "network": "Local loopback listener only; no LAN or outbound authority.",
+    "browser": "None.",
+    "ui_input": "None.",
+    "secrets": "None.",
+    "approval": "None.",
+    "privileged": "None."
+  },
+  "invariants": [
+    "authoritative builder remains the single tool source of truth",
+    "loopback transport adds no independent tool authority",
+    "loopback-only bind with no silent LAN exposure",
+    "per-user credential required with fail-closed auth",
+    "no privileged surface on the MCP listener",
+    "no new OS authority beyond the loopback listener"
+  ],
+  "acceptance": [
+    {
+      "id": "A1",
+      "claim": "A loopback-only Streamable HTTP listener serves the authoritative tool catalog with per-user credential auth and correct session semantics."
+    },
+    {
+      "id": "A2",
+      "claim": "Host validation, Origin validation, DNS-rebinding protection, and bound limits are proven by negative tests including browser cross-origin drives."
+    },
+    {
+      "id": "A3",
+      "claim": "Transport contract tests prove identical tool surface across stdio and loopback, and all closed SG-000001 through SG-000049 regressions pass unchanged."
+    },
+    {
+      "id": "A4",
+      "claim": "Exact-head CI including release qualification and supply-chain audit, genuine TypeSafe Jev, Alibaba Open Code Review, manual review of excluded files, and zero unresolved review threads all pass."
+    }
+  ],
+  "successor_requirements": {
+    "sg_000051": "Local client packages may proceed only after SG-000050 closes, documenting loopback plus stdio configuration."
+  },
+  "review": {
+    "diffcipline": true,
+    "jev_semantic_review": true,
+    "alibaba_open_code_review": "required exact-range qualification where integrated",
+    "security_review": true,
+    "exact_head_ci": true,
+    "release_artifact_qualification": true
+  },
+  "done_when": "The loopback Streamable HTTP transport is canonical with auth, validation, bounds, and no authority change."
+}
