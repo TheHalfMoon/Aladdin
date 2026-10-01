@@ -15,7 +15,7 @@
       "cotra update --source <dir> with --check, --allow-downgrade, and --reinstall: candidate verified exactly as an install; downgrade refused unless explicitly allowed; configuration-schema range compatibility required before any change; running instance stopped with verified termination and restarted after success",
       "state\\update.json marker recording pending updates and failed updates with the reason; `cotra start` refuses to start while an update is pending, so no runtime can launch a version before its own self-check; doctor reports an interrupted (pending) update as a failure and a failed, restored update as a warning",
       "post-activation verification by running the new version's own `cotra self-check`; on failure the previous pointer, CLI copy, and install record are restored and verified, the failed version directory is removed, an instance that was running before the update is restarted on the restored version, and the outcome is reported honestly",
-      "cotra rollback to the retained previous version after verifying its payload against its own manifest and its configuration-schema compatibility, toggling active and previous",
+      "cotra rollback to the retained previous version after verifying its payload against its own manifest and its configuration-schema compatibility, swapping the active and previous versions in the pointer and install record",
       "pruning to the active and previous versions after a successful update, including staging and invalid leftovers",
       "logs\\lifecycle.log transcript of install, update, rollback, and uninstall outcomes, redacted and bounded",
       ".github/workflows/release.yml on v* tags: tag and workspace version must match, build, package, qualify the packaged release, archive, SHA256SUMS, and a draft GitHub Release; no publication without a maintainer",
@@ -40,7 +40,7 @@
     "privileged": "None."
   },
   "invariants": [
-    "the active version pointer always references a payload verified against its manifest, and no runtime starts while an update is pending, so a version runs only after its own self-check",
+    "the active version pointer always references a payload verified against its manifest, and no runtime starts while an update is pending, so a version activated by an update runs only after its own self-check",
     "an update whose new version cannot verify itself leaves the previous version active and verified",
     "downgrades require an explicit flag and incompatible configuration schemas change nothing",
     "configuration, secrets, and history are untouched by update and rollback",
