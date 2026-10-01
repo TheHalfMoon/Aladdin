@@ -2,7 +2,7 @@
   "id": "SG-000044",
   "title": "Update, rollback, recovery, and release qualification",
   "program": "COTRA-P12",
-  "state": "GRAIN",
+  "state": "CLOSED",
   "risk": "high",
   "created": "2026-10-01",
   "base": "0737ee3f86edfcc2a808625877c3dc8bb8690cc4",
@@ -90,5 +90,25 @@
     "native_windows_qualification": true,
     "release_artifact_qualification": true
   },
-  "done_when": "Explicit offline update with self-verification and automatic recovery, rollback, failure reporting, a draft-only release workflow, and CI qualification of the packaged release are specified with no agent-reachable authority."
+  "done_when": "Explicit offline update with self-verification and automatic recovery, rollback, failure reporting, a draft-only release workflow, and CI qualification of the packaged release are specified with no agent-reachable authority.",
+  "qualified_head": "6b727829bcf911f4fcd6212b02d9842b7964e4c1",
+  "implementation_base": "4146d9527e464ec45d096f887a2d87dc0404cdd2",
+  "implementation_merge": "8eda138ed60344199024005bbd19bbaa7182af0f",
+  "pre_merge_ci": "36818287283",
+  "pre_merge_review_gates": "36818285903",
+  "post_merge_ci": "36819042233",
+  "canonical_evidence": {
+    "implementation_pr": 126,
+    "implementation_base": "4146d9527e464ec45d096f887a2d87dc0404cdd2",
+    "qualified_head": "6b727829bcf911f4fcd6212b02d9842b7964e4c1",
+    "pre_merge_ci": "36818287283",
+    "pre_merge_review_gates": "36818285903",
+    "merge_sha": "8eda138ed60344199024005bbd19bbaa7182af0f",
+    "post_merge_ci": "36819042233",
+    "jev": "PASSED: genuine TypeSafe Jev exact-diff review covered 34/34 hunks with zero findings and zero blocking findings, pin 31f89602797fb7bea007f8a480bf368bf564954e",
+    "ocr": "PASSED: Alibaba Open Code Review v1.12.9 exact-range delegation over 17 changed files, 16 reviewable with delegated rules applied and 1 excluded (package-lock.json) manually reviewed",
+    "security_review": "PASS on exact qualified head: explicit offline update only, with no network update activity; candidates verified exactly as installs; downgrades require --allow-downgrade; incompatible configuration schemas change nothing; a per-install named-mutex lifecycle lock serializes install, uninstall, update, rollback, start, stop, and configuration commands; start refuses while an update is pending; every activated version is manifest-verified and self-checked by its own CLI before any runtime starts; failed self-checks, post-stop failures, and failed rollbacks restore and restart honestly; interrupted updates are recovered through the validated pending marker even when the pointer and install record disagree; rollback and recovery refuse links and reparse points in the install tree before reading retained versions; the lifecycle transcript never writes through links; npm dependencies are pinned by package-lock.json and packaging copies only the locked production closure; the release workflow only creates or refreshes a draft and never replaces a published release's assets; the release-qualification CI job qualifies the packaged artifact on a fresh windows-latest runner. 23 bot review threads were resolved with fixes; the SG-000013 PowerShell timing flake was repaired separately in PR #125.",
+    "unresolved_review_threads": 0,
+    "authority_boundary": "Explicit offline update, rollback, interrupted- and failed-update recovery, a lifecycle lock, a draft-only release workflow, and release-artifact qualification are closed. No network update activity, silent migration, MCP tool, agent capability, approval change, service, or elevation is added."
+  }
 }

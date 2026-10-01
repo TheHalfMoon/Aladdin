@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "snapshot_base": "0737ee3f86edfcc2a808625877c3dc8bb8690cc4",
+  "snapshot_base": "8eda138ed60344199024005bbd19bbaa7182af0f",
   "state_semantics": {
     "GRAIN": "Authorized or active work packet whose acceptance is not yet canonically proven.",
     "PROVEN": "Acceptance and required qualification are proven, but canonical closeout/governance is not yet complete.",
@@ -529,6 +529,17 @@
       "review_basis": "Exact-head genuine TypeSafe Jev 38/38 hunks with zero findings/blocking findings, Alibaba Open Code Review v1.12.9 exact-range delegation over 20 reviewable files with 1 excluded file (Cargo.lock) manually reviewed, exact-diff manual security review, Windows/Ubuntu Rust Node Governance qualification including Windows-native job, identity, stop-event, and real-binary lifecycle end-to-end tests, successful post-merge CI, and zero unresolved review threads (28 resolved).",
       "unresolved_review_threads": 0,
       "authority_boundary": "A human-invoked lifecycle runtime is closed: cotra-mcp-host for the active verified version, workspace configuration with policy-kernel admission, owner-only tunnel key setup with file-reference delivery, a job-bound supervisor of the official tunnel client, identity-verified start, stop, status, and doctor reporting only observed state, redacted bounded logs, and local clients of existing STRONG trust and revoke paths. No MCP tool, agent capability, approval class, or network access beyond a loopback health probe is added."
+    },
+    "SG-000044": {
+      "implementation_pr": 126,
+      "implementation_base": "4146d9527e464ec45d096f887a2d87dc0404cdd2",
+      "qualified_head": "6b727829bcf911f4fcd6212b02d9842b7964e4c1",
+      "pre_merge_ci": "36818287283",
+      "merge_sha": "8eda138ed60344199024005bbd19bbaa7182af0f",
+      "post_merge_ci": "36819042233",
+      "review_basis": "Exact-head genuine TypeSafe Jev 34/34 hunks with zero findings/blocking findings, Alibaba Open Code Review v1.12.9 exact-range delegation over 16 reviewable files with 1 excluded file (package-lock.json) manually reviewed, exact-diff manual security review, Windows/Ubuntu Rust Node Governance and Release qualification (packaged artifact on a fresh windows-latest runner), successful post-merge CI, and zero unresolved review threads (23 resolved).",
+      "unresolved_review_threads": 0,
+      "authority_boundary": "Explicit offline update, rollback, interrupted- and failed-update recovery, a lifecycle lock, a draft-only release workflow, and release-artifact qualification are closed. No network update activity, silent migration, MCP tool, agent capability, approval change, service, or elevation is added."
     }
   }
 }
