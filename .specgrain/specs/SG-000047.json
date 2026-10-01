@@ -1,0 +1,77 @@
+{
+  "id": "SG-000047",
+  "title": "Universal-access architecture and transport contract",
+  "program": "COTRA-P14",
+  "state": "GRAIN",
+  "risk": "low",
+  "created": "2026-10-01",
+  "base": "e19fff84a2484b3b89f10087f2b0be53ae1c4512",
+  "dependencies": [
+    "SG-000046"
+  ],
+  "objective": "Ratify the universal AI access plan and authorize the P14 transport-neutral local foundation without any runtime authority change: record the ratified plan, threat model, remote principal auth model, remote session authorization, client connection profile model, and compatibility matrix as the implementation contract, and freeze transport identity fields and invariants for successor grains.",
+  "scope": {
+    "include": [
+      "ratification of docs/canonical/UNIVERSAL_AI_ACCESS_PLAN.md as merged in PR #135 (merge e19fff84a2484b3b89f10087f2b0be53ae1c4512) with the 36 review-thread repairs",
+      "ratification of docs/security/UNIVERSAL_CONNECTIVITY_THREAT_MODEL.md including UC-T01 read isolation, UC-T14 no durable queue for reads or writes, UC-T30b compromised-relay flooding, UC-T35 device-verifiable authorization envelope, and stateless Streamable HTTP semantics",
+      "ratification of docs/security/REMOTE_PRINCIPAL_AUTH_MODEL.md including device-backed principal, stable remote_connection_id versus short-lived connection_id, fresh device-key proof for refresh, principal-wide and all-route revocation, remotely reachable emergency revocation, normative default-deny scope-to-tool matrix, and lease-inclusive effective permission",
+      "ratification of docs/security/REMOTE_SESSION_AUTHORIZATION.md including mandatory local lease, STRONG presence for creation and widening, 15-minute hard maximum, deterministic lock/logoff/suspend handling, locally controlled policy revalidation, read-mode precedence, sensitive-read approval retention, typed REMOTE_SESSION_INACTIVE, and no durable queue",
+      "ratification of docs/security/CLIENT_CONNECTION_PROFILE_MODEL.md including per-client least-privilege profiles and protected stdio binding",
+      "ratification of docs/research/UNIVERSAL_CLIENT_COMPATIBILITY.md and docs/research/EXTERNAL_PROVIDER_PREREQUISITES.md with re-verification duty before provider submission",
+      "frozen transport identity fields: transport_kind, provider_kind, remote_principal_id, device_id, stable remote_connection_id, short-lived connection_id, client_session_id, protocol_version, tool_surface_profile, workspace_id, policy_revision",
+      "recorded P14 successor sequence SG-000048 through SG-000051 and the P15/P16/P17 ordering gates from the ratified plan"
+    ],
+    "exclude": [
+      "any change to runtime behavior, MCP tools, capabilities, approvals, lifecycle commands, installer, update, or release tooling",
+      "any P15 remote relay, OAuth, device uplink, or public edge code",
+      "any P16 tool-surface widening, executable registry, filesystem, browser, desktop, clipboard, or network exposure change",
+      "any provider submission, directory publication, or availability claim"
+    ]
+  },
+  "authority_delta": {
+    "filesystem": "None.",
+    "process": "None.",
+    "network": "None.",
+    "browser": "None.",
+    "ui_input": "None.",
+    "secrets": "None.",
+    "approval": "None.",
+    "privileged": "None."
+  },
+  "invariants": [
+    "no runtime authority, tool, or behavior changes",
+    "cotrad remains the local authorization kernel and provider integrations remain adapters",
+    "Desktop Commander is not a dependency, fallback, transport, or qualification tool",
+    "plan ratification and implementation authorization remain separate and no implementation grain proceeds until SG-000047 closes"
+  ],
+  "acceptance": [
+    {
+      "id": "A1",
+      "claim": "The ratified plan, threat model, auth models, profile model, and research matrices are recorded as the implementation contract with the PR #135 security repairs and consistent terminology."
+    },
+    {
+      "id": "A2",
+      "claim": "Transport identity fields, scope vocabulary with default-deny matrix duty, failure vocabulary including REMOTE_SESSION_INACTIVE, and the P14/P15/P16 ordering gates are frozen for successor grains."
+    },
+    {
+      "id": "A3",
+      "claim": "No runtime behavior, MCP tool, capability, approval, or lifecycle change is introduced, and every closed SG-000001 through SG-000046 regression passes unchanged."
+    },
+    {
+      "id": "A4",
+      "claim": "Exact-head CI including release qualification and supply-chain audit, genuine TypeSafe Jev, Alibaba Open Code Review, manual review of excluded files, and zero unresolved review threads all pass."
+    }
+  ],
+  "successor_requirements": {
+    "sg_000048": "Transport-neutral MCP server builder may proceed only after SG-000047 closes, preserving the v0.1 tool catalog and schemas with transport contract tests."
+  },
+  "review": {
+    "diffcipline": true,
+    "jev_semantic_review": true,
+    "alibaba_open_code_review": "required exact-range qualification where integrated",
+    "security_review": true,
+    "exact_head_ci": true,
+    "release_artifact_qualification": true
+  },
+  "done_when": "The universal-access architecture and transport contract is ratified with frozen identity fields and ordering gates and no authority change."
+}
