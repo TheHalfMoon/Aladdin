@@ -1,0 +1,153 @@
+#!/usr/bin/env node
+// Writes THIRD_PARTY_NOTICES.txt for a Cotra release: for every third-party
+// crate linked into the shipped binaries (x86_64-pc-windows-msvc, normal
+// dependency edges only) and every npm package in the release's
+// app/cotra-mcp/node_modules, the declared license expression and the full
+// text of each license or notice file the package ships.
+//
+// Usage:
+//   node scripts/third-party-notices.mjs --release <release-dir> --out <file>
+
+import { execFileSync } from "node:child_process";
+import { existsSync, lstatSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, join, relative, resolve, sep } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const TARGET = "x86_64-pc-windows-msvc";
+const ROOT_PACKAGES = ["cotrad", "cotra-lifecycle"];
+const NOTICE_FILE = /^(licen[cs]e|copying|notice|unlicense)([-_.].*)?$/i;
+
+function fail(message) {
+  console.error(`third-party-notices: ${message}`);
+  process.exit(1);
+}
+
+function arg(name) {
+  const index = process.argv.indexOf(name);
+  if (index === -1 || !process.argv[index + 1]) fail(`${name} <value> is required`);
+  return resolve(process.argv[index + 1]);
+}
+
+/**
+ * License and notice files a package ships: matching files anywhere in the
+ * package (excluding nested dependencies and VCS folders) plus a declared
+ * license file, each listed by its path relative to the package root.
+ */
+function noticeFiles(dir, declared) {
+  const found = new Map();
+  const visit = (current, prefix, depth) => {
+    for (const name of readdirSync(current).sort()) {
+      if (name === "node_modules" || name === ".git" || name === "target") continue;
+      const path = join(current, name);
+      // lstat: links are never followed, so only files inside the package are read.
+      const stat = lstatSync(path);
+      const rel = prefix ? `${prefix}/${name}` : name;
+      if (stat.isDirectory()) {
+        if (depth < 3) visit(path, rel, depth + 1);
+      } else if (stat.isFile() && (NOTICE_FILE.test(name) || /^licen[cs]es?$/i.test(prefix.split("/").pop() ?? ""))) {
+        found.set(rel, path);
+      }
+    }
+  };
+  visit(dir, "", 0);
+  if (declared) {
+    // A declared license file must stay inside the package directory.
+    const path = resolve(dir, declared);
+    const rel = relative(resolve(dir), path);
+    const inside = rel !== "" && rel !== ".." && !rel.startsWith(`..${sep}`) && !/^[A-Za-z]:|^[\\/]/.test(rel);
+    if (!inside) fail(`${dir} declares a license file outside the package: ${declared}`);
+    if (existsSync(path) && lstatSync(path).isFile()) found.set(rel.split(sep).join("/"), path);
+  }
+  return [...found.entries()]
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+    .map(([name, path]) => ({ name, text: readFileSync(path, "utf8").replace(/\r\n/g, "\n").trimEnd() }));
+}
+
+function crates() {
+  const metadata = JSON.parse(
+    execFileSync("cargo", ["metadata", "--format-version", "1", "--filter-platform", TARGET], {
+      cwd: repo,
+      maxBuffer: 256 * 1024 * 1024
+    }).toString()
+  );
+  const packages = new Map(metadata.packages.map((p) => [p.id, p]));
+  const nodes = new Map(metadata.resolve.nodes.map((n) => [n.id, n]));
+  const reached = new Set();
+  const stack = metadata.packages.filter((p) => ROOT_PACKAGES.includes(p.name) && !p.source).map((p) => p.id);
+  while (stack.length) {
+    const id = stack.pop();
+    if (reached.has(id)) continue;
+    reached.add(id);
+    for (const dep of nodes.get(id)?.deps ?? []) {
+      if (dep.dep_kinds.some((kind) => kind.kind === null)) stack.push(dep.pkg);
+    }
+  }
+  return [...reached]
+    .map((id) => packages.get(id))
+    .filter((p) => p.source)
+    .map((p) => ({
+      kind: "crate",
+      name: p.name,
+      version: p.version,
+      license: p.license,
+      licenseFile: p.license_file,
+      dir: dirname(p.manifest_path)
+    }));
+}
+
+function npmPackages(release) {
+  const found = [];
+  const visit = (dir) => {
+    if (!existsSync(dir)) return;
+    for (const name of readdirSync(dir).sort()) {
+      if (name.startsWith(".")) continue;
+      const path = join(dir, name);
+      if (name.startsWith("@")) {
+        visit(path);
+        continue;
+      }
+      if (existsSync(join(path, "package.json"))) {
+        const pkg = JSON.parse(readFileSync(join(path, "package.json"), "utf8"));
+        const declared = typeof pkg.license === "string" && /^SEE LICEN[CS]E IN /i.test(pkg.license)
+          ? pkg.license.replace(/^SEE LICEN[CS]E IN /i, "")
+          : null;
+        found.push({ kind: "npm", name: pkg.name, version: pkg.version, license: pkg.license, licenseFile: declared, dir: path });
+        visit(join(path, "node_modules"));
+      }
+    }
+  };
+  visit(join(release, "app", "cotra-mcp", "node_modules"));
+  return found;
+}
+
+const release = arg("--release");
+const out = arg("--out");
+// One entry per kind:name@version (a package installed at several nesting
+// levels ships the same text), in a strict total order.
+const byKey = new Map();
+for (const entry of [...crates(), ...npmPackages(release)]) {
+  const key = `${entry.kind}:${entry.name}@${entry.version}`;
+  if (!byKey.has(key)) byKey.set(key, entry);
+}
+const entries = [...byKey.entries()]
+  .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+  .map(([, entry]) => entry);
+const missing = [];
+let text =
+  "Cotra third-party notices\n\n" +
+  "Cotra is licensed under the Apache License 2.0 (see LICENSE). This release\n" +
+  "includes the following third-party components, each under its own license.\n";
+for (const entry of entries) {
+  const files = noticeFiles(entry.dir, entry.licenseFile);
+  if (!entry.license || files.length === 0) missing.push(`${entry.kind} ${entry.name}@${entry.version}`);
+  text += `\n${"=".repeat(78)}\n${entry.name} ${entry.version} (${entry.kind})\nLicense: ${entry.license ?? "UNDECLARED"}\n`;
+  for (const file of files) {
+    text += `\n--- ${file.name} ---\n${file.text}\n`;
+  }
+}
+if (missing.length) {
+  text += `\n${"=".repeat(78)}\nComponents without a declared license or shipped license file:\n${missing.join("\n")}\n`;
+}
+writeFileSync(out, text);
+console.log(`third-party-notices: ${entries.length} components; ${missing.length} without a shipped license file -> ${out}`);

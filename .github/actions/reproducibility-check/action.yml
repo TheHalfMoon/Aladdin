@@ -1,0 +1,73 @@
+name: Check release reproducibility
+description: >-
+  Checks out the same revision a second time, rebuilds, repackages, and
+  re-archives it with the deterministic release flags, and compares every
+  shipped binary and the final archive with the first build by SHA-256.
+  Writes reproducibility.json to the output directory and fails if any
+  digest differs. Run after build-package-qualify.
+
+inputs:
+  ref:
+    description: Revision to check out again.
+    required: true
+  release-dir:
+    description: The first build's packaged release directory (its archive is <release-dir>.zip).
+    required: true
+  out-dir:
+    description: Directory that receives reproducibility.json.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      with:
+        ref: ${{ inputs.ref }}
+        path: second-checkout
+        persist-credentials: false
+    - name: Rebuild, package, and archive from the second checkout
+      shell: pwsh
+      working-directory: second-checkout
+      run: |
+        $cargoHome = if ($env:CARGO_HOME) { $env:CARGO_HOME } else { Join-Path $HOME ".cargo" }
+        $env:RUSTFLAGS = "-C link-arg=/Brepro --remap-path-prefix=$PWD=C:\cotra --remap-path-prefix=$cargoHome=C:\cargo"
+        $second = "${{ inputs.release-dir }}-second"
+        npm ci --ignore-scripts
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        npm run build
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        cargo build --release --locked -p cotrad -p cotra-lifecycle --bins
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        node scripts/package-release.mjs --out $second
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        node scripts/archive-release.mjs --release $second --out "$second.zip"
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    - name: Compare the independent builds
+      shell: pwsh
+      run: |
+        $first = "${{ inputs.release-dir }}"
+        $second = "${{ inputs.release-dir }}-second"
+        $out = "${{ inputs.out-dir }}"
+        New-Item -ItemType Directory -Force $out | Out-Null
+        $identical = $true
+        $binaries = [ordered]@{}
+        foreach ($name in "cotra.exe", "cotra-mcp-host.exe", "cotrad.exe") {
+          $a = (Get-FileHash (Join-Path $first $name) -Algorithm SHA256).Hash.ToLower()
+          $b = (Get-FileHash (Join-Path $second $name) -Algorithm SHA256).Hash.ToLower()
+          $binaries[$name] = [ordered]@{ first = $a; second = $b; identical = ($a -eq $b) }
+          if ($a -ne $b) { $identical = $false }
+        }
+        $a = (Get-FileHash "$first.zip" -Algorithm SHA256).Hash.ToLower()
+        $b = (Get-FileHash "$second.zip" -Algorithm SHA256).Hash.ToLower()
+        if ($a -ne $b) { $identical = $false }
+        $result = [ordered]@{
+          method = "two clean builds and packages from separate checkouts on the same runner with pinned toolchains, /Brepro, and source and registry path remapping; shipped binaries and final archives compared by SHA-256"
+          rustc = (rustc -V)
+          node = (node -v)
+          binaries = $binaries
+          archive = [ordered]@{ first = $a; second = $b; identical = ($a -eq $b) }
+          identical = $identical
+        }
+        $result | ConvertTo-Json -Depth 5 | Out-File (Join-Path $out "reproducibility.json") -Encoding utf8
+        Get-Content (Join-Path $out "reproducibility.json")
+        if (-not $identical) { throw "independent release builds differ" }
