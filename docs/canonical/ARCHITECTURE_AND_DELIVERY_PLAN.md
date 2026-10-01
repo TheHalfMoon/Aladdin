@@ -1,6 +1,6 @@
 # Cotra Architecture and Delivery Plan
 
-Status: IMPLEMENTATION-READY PLANNING
+Status: CANONICAL PLAN (delivered through COTRA-P13; the current canonical state is recorded in `docs/canonical/CURRENT.md`)
 Planning snapshot: 2026-09-23
 Canonical bootstrap base: 7de4779682b9e8dc794d6c675d7ed6c420355d13
 Target platform: Windows 11 first

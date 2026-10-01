@@ -2,6 +2,8 @@
 
 Snapshot: 2026-09-23
 
+Historical record of the dependencies introduced by SG-000001. The current, release-wide dependency and license review is `docs/research/DEPENDENCY_LICENSE_REVIEW.md`; exact versions are pinned by `Cargo.lock` and `package-lock.json`.
+
 This file records direct implementation dependencies introduced by SG-000001.
 
 ## Model Context Protocol TypeScript server
