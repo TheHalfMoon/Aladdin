@@ -11,71 +11,170 @@ use std::path::{Path, PathBuf};
 
 pub const MAX_LOG_BYTES: u64 = 1024 * 1024;
 const MAX_LINE_CHARS: usize = 4096;
+const TRUNCATED: &str = " [TRUNCATED]";
 pub const REDACTED: &str = "[REDACTED]";
 
+/// Credential assignment names, longest first so compound names win.
 const ASSIGNMENT_MARKERS: &[&str] = &[
-    "api_key",
-    "api-key",
-    "apikey",
+    "refresh_token",
     "access_token",
-    "token",
-    "secret",
-    "password",
-    "passwd",
     "authorization",
     "credential",
+    "password",
+    "api_key",
+    "api-key",
+    "session",
+    "apikey",
+    "passwd",
+    "secret",
+    "cookie",
+    "token",
+    "pwd",
+    "key",
 ];
 
-/// Redacts one log line and bounds its length.
+/// Prefixes of well-known key formats and the minimum number of key
+/// characters that must follow them.
+const KEY_PREFIXES: &[(&str, usize)] =
+    &[("github_pat_", 16), ("sess-", 8), ("ghp_", 16), ("sk-", 8)];
+
+/// Redacts one log line and bounds its length. Tokens are split on spaces
+/// and tabs; within a token every credential assignment (`name=value`,
+/// `name:value`, quoted JSON forms) and every key-like value is replaced, and
+/// an assignment whose value follows the separator in the next token (for
+/// example `password: secret` or pretty-printed JSON) redacts that token.
 pub fn redact_line(line: &str) -> String {
     let mut out = Vec::new();
-    let mut redact_next = false;
-    for token in line.split(' ') {
-        if redact_next && !token.is_empty() {
-            out.push(REDACTED.to_string());
-            redact_next = false;
+    let mut pending = false;
+    let mut awaiting_separator = false;
+    for token in line.split([' ', '\t']) {
+        if token.is_empty() {
+            out.push(String::new());
             continue;
         }
-        let lower = token.to_ascii_lowercase();
-        if lower == "bearer" || lower == "basic" {
-            redact_next = true;
+        if awaiting_separator && matches!(token, "=" | ":" | "=>") {
             out.push(token.to_string());
+            awaiting_separator = false;
+            pending = true;
             continue;
         }
-        out.push(redact_token(token, &lower));
+        awaiting_separator = false;
+        let lower = token.to_ascii_lowercase();
+        let scheme = lower == "bearer" || lower == "basic";
+        if scheme {
+            out.push(token.to_string());
+            pending = true;
+            continue;
+        }
+        if pending {
+            out.push(REDACTED.to_string());
+            pending = false;
+            continue;
+        }
+        let (redacted, value_follows) = redact_token(token);
+        out.push(redacted);
+        pending = value_follows;
+        let bare = lower.trim_matches(|c: char| c == '"' || c == '\'');
+        awaiting_separator = !pending && marker_len(bare.as_bytes()) == Some(bare.len());
     }
-    let mut joined = out.join(" ");
+    let joined = out.join(" ");
     if joined.chars().count() > MAX_LINE_CHARS {
-        joined = joined.chars().take(MAX_LINE_CHARS).collect::<String>() + " [TRUNCATED]";
+        joined
+            .chars()
+            .take(MAX_LINE_CHARS - TRUNCATED.len())
+            .collect::<String>()
+            + TRUNCATED
+    } else {
+        joined
     }
-    joined
 }
 
-fn redact_token(token: &str, lower: &str) -> String {
-    let trimmed = lower.trim_matches(|c: char| c == '"' || c == '\'' || c == ',');
-    if looks_like_key(trimmed) {
-        return REDACTED.to_string();
-    }
-    for separator in ['=', ':'] {
-        if let Some(index) = lower.find(separator) {
-            let name = lower[..index].trim_matches(|c: char| c == '"' || c == '\'' || c == '-');
-            if ASSIGNMENT_MARKERS
-                .iter()
-                .any(|marker| name.ends_with(marker))
-                && index + 1 < token.len()
-            {
-                return format!("{}{REDACTED}", &token[..=index]);
+fn is_word(byte: u8) -> bool {
+    byte.is_ascii_alphanumeric() || byte == b'_' || byte == b'-'
+}
+
+fn is_quote(byte: u8) -> bool {
+    byte == b'"' || byte == b'\''
+}
+
+fn key_like_len(rest: &[u8]) -> Option<usize> {
+    KEY_PREFIXES.iter().find_map(|(prefix, minimum)| {
+        let prefix = prefix.as_bytes();
+        if !rest.starts_with(prefix) {
+            return None;
+        }
+        let body = rest[prefix.len()..]
+            .iter()
+            .take_while(|byte| is_word(**byte) || **byte == b'.')
+            .count();
+        (body >= *minimum).then_some(prefix.len() + body)
+    })
+}
+
+fn marker_len(rest: &[u8]) -> Option<usize> {
+    ASSIGNMENT_MARKERS.iter().find_map(|marker| {
+        let marker = marker.as_bytes();
+        let bounded =
+            rest.starts_with(marker) && rest.get(marker.len()).is_none_or(|next| !is_word(*next));
+        bounded.then_some(marker.len())
+    })
+}
+
+/// Redacts every credential assignment and key-like value in one
+/// whitespace-free token. Returns the redacted token and whether its last
+/// assignment has no value in this token (so the next token is the value).
+fn redact_token(token: &str) -> (String, bool) {
+    let lower = token.to_ascii_lowercase();
+    let bytes = lower.as_bytes();
+    let mut out = String::with_capacity(token.len());
+    let mut copied = 0;
+    let mut index = 0;
+    while index < bytes.len() {
+        let at_boundary = index == 0 || !is_word(bytes[index - 1]);
+        if at_boundary {
+            if let Some(length) = key_like_len(&bytes[index..]) {
+                out.push_str(&token[copied..index]);
+                out.push_str(REDACTED);
+                index += length;
+                copied = index;
+                continue;
+            }
+            if let Some(length) = marker_len(&bytes[index..]) {
+                let mut separator = index + length;
+                while separator < bytes.len() && is_quote(bytes[separator]) {
+                    separator += 1;
+                }
+                if separator < bytes.len() && (bytes[separator] == b'=' || bytes[separator] == b':')
+                {
+                    let mut start = separator + 1;
+                    while start < bytes.len() && is_quote(bytes[start]) {
+                        start += 1;
+                    }
+                    if start >= bytes.len() {
+                        out.push_str(&token[copied..]);
+                        return (out, true);
+                    }
+                    let mut end = start;
+                    while end < bytes.len()
+                        && !matches!(
+                            bytes[end],
+                            b'&' | b',' | b';' | b'"' | b'\'' | b'}' | b')' | b']'
+                        )
+                    {
+                        end += 1;
+                    }
+                    out.push_str(&token[copied..start]);
+                    out.push_str(REDACTED);
+                    index = end;
+                    copied = end;
+                    continue;
+                }
             }
         }
+        index += 1;
     }
-    token.to_string()
-}
-
-fn looks_like_key(token: &str) -> bool {
-    (token.starts_with("sk-") && token.len() >= 11)
-        || (token.starts_with("sess-") && token.len() >= 13)
-        || (token.starts_with("ghp_") && token.len() >= 20)
-        || (token.starts_with("github_pat_") && token.len() >= 20)
+    out.push_str(&token[copied..]);
+    (out, false)
 }
 
 /// An append-only log file with one rotated generation.
@@ -140,26 +239,54 @@ mod tests {
     use super::*;
     use crate::test_support::temp_dir;
 
-    #[test]
-    fn key_like_tokens_and_assignments_are_redacted() {
-        let line = "connect api_key=sk-proj-abcdef123456 token: abc Authorization: Bearer xyz.123 key sk-1234567890ab ok";
+    fn assert_hidden(line: &str, secrets: &[&str]) -> String {
         let out = redact_line(line);
-        assert!(!out.contains("sk-proj-abcdef123456"), "{out}");
-        assert!(!out.contains("xyz.123"), "{out}");
-        assert!(!out.contains("sk-1234567890ab"), "{out}");
-        assert!(out.contains("api_key=[REDACTED]"), "{out}");
-        assert!(out.contains("connect"));
-        assert!(out.contains(" ok"));
-        let json = redact_line(r#"{"password":"hunter22","user":"u"}"#);
-        assert!(!json.contains("hunter22"), "{json}");
+        for secret in secrets {
+            assert!(
+                !out.contains(secret),
+                "{secret} survived in {out:?} (from {line:?})"
+            );
+        }
+        out
     }
 
     #[test]
-    fn ordinary_lines_are_unchanged_and_long_lines_are_bounded() {
-        let line = "tunnel connected to control plane in 120ms";
-        assert_eq!(redact_line(line), line);
-        let long = "x".repeat(10_000);
-        assert!(redact_line(&long).len() < 4200);
+    fn key_like_tokens_and_assignments_are_redacted() {
+        let out = assert_hidden(
+            "connect api_key=sk-proj-abcdef123456 token: abc Authorization: Bearer xyz.123 key sk-1234567890ab ok",
+            &["sk-proj-abcdef123456", "abc", "xyz.123", "sk-1234567890ab"],
+        );
+        assert!(out.contains("api_key=[REDACTED]"), "{out}");
+        assert!(out.starts_with("connect"));
+        assert!(out.ends_with(" ok"));
+        assert_hidden(r#"{"password":"hunter22","user":"u"}"#, &["hunter22"]);
+    }
+
+    #[test]
+    fn spaced_tabbed_pretty_and_later_assignments_are_redacted() {
+        assert_hidden("password: hunter22", &["hunter22"]);
+        assert_hidden("password = hunter22", &["hunter22"]);
+        assert_hidden(r#"  "password": "hunter22","#, &["hunter22"]);
+        assert_hidden("value	sk-abcdefghijklmnop", &["sk-abcdefghijklmnop"]);
+        assert_hidden("value	sk-abcdefghijklmnop", &["sk-abcdefghijklmnop"]);
+        assert_hidden("GET /cb?x=1&token=abc123&y=2", &["abc123"]);
+        assert_hidden(r#"{"user":"u","password":"hunter22"}"#, &["hunter22"]);
+        assert_hidden("key=sk-proj-abcdef123456", &["sk-proj-abcdef123456"]);
+        assert_hidden("session=s3cr3t-value;path=/", &["s3cr3t-value"]);
+        assert_hidden("Authorization: Basic dXNlcjpwYXNz", &["dXNlcjpwYXNz"]);
+        assert_hidden("cookie: id=abc", &["id=abc"]);
+    }
+
+    #[test]
+    fn ordinary_words_containing_markers_are_not_redacted() {
+        for line in [
+            "monkey=banana",
+            "tokens=5 keys=3",
+            "turkey: roasted",
+            "tunnel connected to control plane in 120ms",
+        ] {
+            assert_eq!(redact_line(line), line);
+        }
     }
 
     #[test]

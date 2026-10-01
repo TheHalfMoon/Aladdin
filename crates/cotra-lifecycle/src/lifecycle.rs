@@ -55,7 +55,9 @@ pub struct StopResult {
 pub struct LastExit {
     pub reason: String,
     pub exit_code: Option<i32>,
-    pub job_empty: bool,
+    /// `Some` only when the job was actually observed; `None` when the
+    /// supervisor failed before or without observing it.
+    pub job_empty: Option<bool>,
     pub at_ms: u64,
 }
 
@@ -178,6 +180,11 @@ mod imp {
     fn read_supervisor_record(layout: &Layout) -> Result<Option<SupervisorRecord>, LifecycleError> {
         let record: Option<SupervisorRecord> = read_json(&layout.supervisor_record())?;
         if let Some(record) = &record {
+            if record.schema != SUPERVISOR_SCHEMA {
+                return Err(LifecycleError::state(
+                    "the supervisor record has an unsupported schema; inspect and remove run/supervisor.json",
+                ));
+            }
             if !is_installed_cli(layout, std::path::Path::new(&record.supervisor.image)) {
                 return Err(LifecycleError::state(
                     "the supervisor record names a process outside the Cotra install; inspect and remove run/supervisor.json",
@@ -305,7 +312,14 @@ mod imp {
                 }
             }
             if std::time::Instant::now() >= deadline {
-                return status(layout);
+                let current = status(layout)?;
+                if current.state == RunState::NotRunning {
+                    return Err(LifecycleError::state(format!(
+                        "the supervisor did not become ready within the wait limit: {}",
+                        current.detail
+                    )));
+                }
+                return Ok(current);
             }
             std::thread::sleep(Duration::from_millis(100));
         }
@@ -389,7 +403,7 @@ mod imp {
                     &LastExit {
                         reason: error.message,
                         exit_code: None,
-                        job_empty: true,
+                        job_empty: None,
                         at_ms: now_ms(),
                     },
                 );
@@ -399,8 +413,13 @@ mod imp {
     }
 
     fn supervise_inner(layout: &Layout) -> Result<i32, LifecycleError> {
-        let current: crate::layout::CurrentRecord = read_json(&layout.current_file())?
-            .ok_or_else(|| LifecycleError::not_installed("Cotra is not installed"))?;
+        // Re-verify here rather than trusting `start`'s preflight: the
+        // supervisor may be invoked directly, or the install may change between
+        // the preflight and this launch.
+        let platform = crate::host_platform();
+        let current = Installer::new(layout.clone(), platform.as_ref())
+            .verify()?
+            .active;
         let (_, tunnel) = runnable_config(layout, &current.version)?;
         let event = StopEvent::create(&runtime::stop_event_name(&layout.root))?;
         runtime::disinherit_standard_handles();
@@ -497,7 +516,7 @@ mod imp {
                 &LastExit {
                     reason: "the tunnel client exited".into(),
                     exit_code,
-                    job_empty,
+                    job_empty: Some(job_empty),
                     at_ms: now_ms(),
                 },
             )?;

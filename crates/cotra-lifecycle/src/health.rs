@@ -54,11 +54,20 @@ pub fn probe(url: &HealthUrl, timeout: Duration) -> Result<u16, LifecycleError> 
     stream
         .write_all(request.as_bytes())
         .map_err(|error| LifecycleError::state(format!("health probe write: {error}")))?;
-    let mut buffer = [0u8; 64];
-    let read = stream
-        .read(&mut buffer)
-        .map_err(|error| LifecycleError::state(format!("health probe read: {error}")))?;
-    let head = String::from_utf8_lossy(&buffer[..read]);
+    // Read until the status line is complete (or EOF, or a small bound), so
+    // a status line split across TCP segments is still parsed.
+    let mut buffer = Vec::with_capacity(64);
+    let mut chunk = [0u8; 64];
+    while buffer.len() < 256 && !buffer.windows(2).any(|pair| pair == b"\r\n") {
+        let read = stream
+            .read(&mut chunk)
+            .map_err(|error| LifecycleError::state(format!("health probe read: {error}")))?;
+        if read == 0 {
+            break;
+        }
+        buffer.extend_from_slice(&chunk[..read]);
+    }
+    let head = String::from_utf8_lossy(&buffer);
     head.strip_prefix("HTTP/1.")
         .and_then(|rest| rest.get(2..5))
         .and_then(|code| code.parse::<u16>().ok())

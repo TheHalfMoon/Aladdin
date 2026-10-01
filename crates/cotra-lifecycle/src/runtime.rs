@@ -12,8 +12,7 @@ use std::path::Path;
 use std::ptr;
 use std::time::Duration;
 use windows_sys::Win32::Foundation::{
-    CloseHandle, GetLastError, ERROR_ALREADY_EXISTS, FILETIME, HANDLE, STILL_ACTIVE, WAIT_OBJECT_0,
-    WAIT_TIMEOUT,
+    CloseHandle, GetLastError, ERROR_ALREADY_EXISTS, FILETIME, HANDLE, WAIT_OBJECT_0, WAIT_TIMEOUT,
 };
 use windows_sys::Win32::System::Diagnostics::ToolHelp::{
     CreateToolhelp32Snapshot, Thread32First, Thread32Next, TH32CS_SNAPTHREAD, THREADENTRY32,
@@ -27,8 +26,8 @@ use windows_sys::Win32::System::JobObjects::{
 use windows_sys::Win32::System::Threading::{
     CreateEventW, GetExitCodeProcess, GetProcessTimes, OpenEventW, OpenProcess, OpenThread,
     QueryFullProcessImageNameW, ResumeThread, SetEvent, TerminateProcess, WaitForMultipleObjects,
-    EVENT_MODIFY_STATE, PROCESS_NAME_WIN32, PROCESS_QUERY_LIMITED_INFORMATION, PROCESS_SYNCHRONIZE,
-    PROCESS_TERMINATE, THREAD_SUSPEND_RESUME,
+    WaitForSingleObject, EVENT_MODIFY_STATE, PROCESS_NAME_WIN32, PROCESS_QUERY_LIMITED_INFORMATION,
+    PROCESS_SYNCHRONIZE, PROCESS_TERMINATE, THREAD_SUSPEND_RESUME,
 };
 
 /// An owned kernel handle closed on drop.
@@ -81,12 +80,16 @@ fn open_process(pid: u32, access: u32) -> Option<OwnedHandle> {
     OwnedHandle::new(unsafe { OpenProcess(access, 0, pid) })
 }
 
+/// Whether the process has not exited. A zero-timeout wait is used instead
+/// of comparing the exit code with `STILL_ACTIVE`, because a process may
+/// legitimately exit with code 259.
+fn is_running(handle: &OwnedHandle) -> bool {
+    // SAFETY: the handle was opened with SYNCHRONIZE access.
+    unsafe { WaitForSingleObject(handle.raw(), 0) == WAIT_TIMEOUT }
+}
+
 fn identity_of(handle: &OwnedHandle, pid: u32) -> Option<ProcessIdentity> {
-    let mut exit_code = 0u32;
-    // SAFETY: valid handle and out-pointer to a local.
-    if unsafe { GetExitCodeProcess(handle.raw(), &mut exit_code) } == 0
-        || exit_code != STILL_ACTIVE as u32
-    {
+    if !is_running(handle) {
         return None;
     }
     let mut creation = FILETIME {
@@ -132,7 +135,7 @@ fn identity_of(handle: &OwnedHandle, pid: u32) -> Option<ProcessIdentity> {
 /// Returns the identity of a running process, or `None` if it is not running
 /// or cannot be inspected.
 pub fn identify(pid: u32) -> Option<ProcessIdentity> {
-    let handle = open_process(pid, PROCESS_QUERY_LIMITED_INFORMATION)?;
+    let handle = open_process(pid, PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_SYNCHRONIZE)?;
     identity_of(&handle, pid)
 }
 
@@ -318,11 +321,12 @@ pub struct DetachedProcess {
 impl DetachedProcess {
     /// Returns the exit code once the process has exited.
     pub fn exit_code(&self) -> Option<u32> {
+        if is_running(&self.handle) {
+            return None;
+        }
         let mut code = 0u32;
         // SAFETY: valid process handle and out-pointer to a local.
-        if unsafe { GetExitCodeProcess(self.handle.raw(), &mut code) } == 0
-            || code == STILL_ACTIVE as u32
-        {
+        if unsafe { GetExitCodeProcess(self.handle.raw(), &mut code) } == 0 {
             return None;
         }
         Some(code)

@@ -79,6 +79,28 @@ fn built(name: &str) -> PathBuf {
     path
 }
 
+/// Stops any runtime left by a failed assertion and removes temporary
+/// directories, so a red run leaves no processes or state behind.
+struct Cleanup {
+    local: PathBuf,
+    dirs: Vec<PathBuf>,
+}
+
+impl Drop for Cleanup {
+    fn drop(&mut self) {
+        let cli = self.local.join("Cotra").join("bin").join("cotra.exe");
+        if cli.is_file() {
+            let _ = Command::new(&cli)
+                .args(["stop", "--json"])
+                .env("LOCALAPPDATA", &self.local)
+                .output();
+        }
+        for dir in self.dirs.iter().chain(std::iter::once(&self.local)) {
+            let _ = fs::remove_dir_all(dir);
+        }
+    }
+}
+
 fn release() -> PathBuf {
     let dir = temp_dir("release");
     let payload: Vec<(&str, Vec<u8>)> = vec![
@@ -163,8 +185,13 @@ fn install_configure_start_status_doctor_stop_restart_and_uninstall() {
     let local = temp_dir("local");
     let root = local.join("Cotra");
     let project = temp_dir("project");
-    let key_file = temp_dir("key").join("runtime.key");
+    let key_dir = temp_dir("key");
+    let key_file = key_dir.join("runtime.key");
     fs::write(&key_file, format!("{SECRET}\n")).unwrap();
+    let _cleanup = Cleanup {
+        local: local.clone(),
+        dirs: vec![release.clone(), project.clone(), key_dir.clone()],
+    };
     let exe = release.join("cotra.exe");
 
     json_ok(&cotra(

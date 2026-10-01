@@ -7,7 +7,7 @@
 
 use crate::config::{self, Config};
 use crate::install::Installer;
-use crate::layout::{read_json, InstallRecord, Layout};
+use crate::layout::{InstallRecord, Layout};
 use crate::platform::{Platform, MIN_NODE_MAJOR, MIN_WINDOWS_BUILD};
 use serde::Serialize;
 use std::path::Path;
@@ -123,7 +123,7 @@ pub fn run(layout: &Layout, platform: &dyn Platform) -> DoctorReport {
         None => check("version_consistency", CheckStatus::Unknown, "not installed"),
     });
 
-    let record: Option<InstallRecord> = read_json(&layout.install_file()).ok().flatten();
+    let record: Option<InstallRecord> = crate::layout::read_install(layout).ok().flatten();
     checks.push(match &record {
         Some(record) => match platform.node_version(Path::new(&record.node_path)) {
             Ok(version) if version.major >= MIN_NODE_MAJOR => check(
@@ -253,6 +253,27 @@ pub fn run(layout: &Layout, platform: &dyn Platform) -> DoctorReport {
     });
 
     checks.push(approval_surface());
+
+    // The supervised runtime and every cotrad probe receive the sanitized
+    // environment, which drops state-path overrides, so the runtime always
+    // uses the default files inspected below.
+    let overrides = cotra_policy::protected_state::PROTECTED_STATE_OVERRIDES
+        .iter()
+        .filter(|name| std::env::var_os(name).is_some())
+        .copied()
+        .collect::<Vec<_>>();
+    checks.push(if overrides.is_empty() {
+        check("state_locations", CheckStatus::Pass, "default Cotra state files")
+    } else {
+        check(
+            "state_locations",
+            CheckStatus::Warn,
+            format!(
+                "{} set in this shell; the supervised runtime does not receive these overrides and uses the default files checked below",
+                overrides.join(", ")
+            ),
+        )
+    });
 
     for (name, file) in [
         ("trust_state", "trust.jsonl"),

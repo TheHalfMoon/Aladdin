@@ -93,9 +93,21 @@ pub fn call(
         .envs(child_environment(config))
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
-        .stderr(Stdio::null())
+        .stderr(Stdio::piped())
         .spawn()
         .map_err(|error| LifecycleError::state(format!("start cotrad: {error}")))?;
+    // Keep a bounded tail of cotrad's diagnostics for failure messages.
+    let stderr = child
+        .stderr
+        .take()
+        .ok_or_else(|| LifecycleError::internal("cotrad stderr unavailable"))?;
+    let diagnostics = std::thread::spawn(move || {
+        let mut tail = String::new();
+        for line in BufReader::new(stderr).lines().map_while(Result::ok) {
+            tail = crate::logs::redact_line(&line).chars().take(400).collect();
+        }
+        tail
+    });
     let mut stdin = child
         .stdin
         .take()
@@ -135,20 +147,30 @@ pub fn call(
     };
     // cotrad exits on stdin EOF; make sure it does not outlive this call.
     let deadline = std::time::Instant::now() + Duration::from_secs(5);
-    loop {
+    let exited = loop {
         match child.try_wait() {
-            Ok(Some(_)) => break,
+            Ok(Some(_)) => break true,
             Ok(None) if std::time::Instant::now() < deadline => {
                 std::thread::sleep(Duration::from_millis(25));
             }
             _ => {
                 let _ = child.kill();
-                let _ = child.wait();
-                break;
+                break child.wait().is_ok();
             }
         }
-    }
-    outcome
+    };
+    let tail = if exited {
+        diagnostics.join().unwrap_or_default()
+    } else {
+        String::new()
+    };
+    outcome.map_err(|error| {
+        if tail.is_empty() {
+            error
+        } else {
+            LifecycleError::state(format!("{} (cotrad: {tail})", error.message))
+        }
+    })
 }
 
 /// Returns the `result` of a successful response or the typed error.

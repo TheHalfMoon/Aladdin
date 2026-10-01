@@ -122,6 +122,9 @@ fn main() {
             } else {
                 print!("{}", output.human);
             }
+            if output.exit_code != 0 {
+                std::process::exit(output.exit_code);
+            }
         }
         Err(error) => {
             if json_output {
@@ -138,6 +141,9 @@ fn main() {
 }
 
 pub(crate) struct Output {
+    /// Process exit code for a command that produced output but must still
+    /// report failure (for example `doctor` with failing checks).
+    pub(crate) exit_code: i32,
     pub(crate) human: String,
     pub(crate) json: serde_json::Value,
 }
@@ -147,6 +153,7 @@ fn run(args: &mut Args) -> Result<Output, LifecycleError> {
         "help" | "--help" | "-h" => {
             args.finish()?;
             Ok(Output {
+                exit_code: 0,
                 human: HELP.into(),
                 json: json!({"ok": true, "help": HELP}),
             })
@@ -203,6 +210,7 @@ fn install(args: &mut Args) -> Result<Output, LifecycleError> {
         human.push_str(&format!("    {}\n", path.display()));
     }
     Ok(Output {
+        exit_code: 0,
         human,
         json: json!({"ok": true, "install": report}),
     })
@@ -278,6 +286,7 @@ fn uninstall(args: &mut Args) -> Result<Output, LifecycleError> {
         ));
     }
     Ok(Output {
+        exit_code: 0,
         human,
         json: json!({"ok": true, "uninstall": report}),
     })
@@ -288,9 +297,9 @@ fn version(args: &mut Args) -> Result<Output, LifecycleError> {
     let cli = env!("CARGO_PKG_VERSION");
     let layout = Layout::for_current_user()?;
     let current: Option<cotra_lifecycle::layout::CurrentRecord> =
-        cotra_lifecycle::layout::read_json(&layout.current_file())?;
+        cotra_lifecycle::layout::read_current(&layout)?;
     let record: Option<cotra_lifecycle::layout::InstallRecord> =
-        cotra_lifecycle::layout::read_json(&layout.install_file())?;
+        cotra_lifecycle::layout::read_install(&layout)?;
     let installed = current.as_ref().map(|current| current.version.clone());
     let previous = record.and_then(|record| record.previous);
     let human = format!(
@@ -299,6 +308,7 @@ fn version(args: &mut Args) -> Result<Output, LifecycleError> {
         previous.as_deref().unwrap_or("none"),
     );
     Ok(Output {
+        exit_code: 0,
         human,
         json: json!({"ok": true, "cli": cli, "installed": installed, "previous": previous}),
     })

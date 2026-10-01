@@ -34,6 +34,7 @@ pub fn workspace(args: &mut Args) -> Result<Output, LifecycleError> {
             let entry = config.add_workspace(&id, &dir)?;
             config.save(&layout)?;
             Ok(Output {
+                exit_code: 0,
                 human: format!(
                     "Workspace {} added: {}\nIt is not trusted for STRONG-gated operations until `cotra workspace trust {}`.\n{RESTART_HINT}",
                     entry.id,
@@ -50,6 +51,7 @@ pub fn workspace(args: &mut Args) -> Result<Output, LifecycleError> {
             let entry = config.remove_workspace(&id)?;
             config.save(&layout)?;
             Ok(Output {
+                exit_code: 0,
                 human: format!(
                     "Workspace {} removed from configuration. Files in {} were not touched.\n{RESTART_HINT}",
                     entry.id,
@@ -92,6 +94,7 @@ pub fn workspace(args: &mut Args) -> Result<Output, LifecycleError> {
                 human.push_str("No workspaces configured. Add one with `cotra workspace add <id> <directory>`.\n");
             }
             Ok(Output {
+                exit_code: 0,
                 human,
                 json: json!({"ok": true, "workspaces": rows}),
             })
@@ -118,12 +121,19 @@ pub fn workspace(args: &mut Args) -> Result<Output, LifecycleError> {
                 ("workspace.trust.revoke", "revoke")
             };
             eprintln!("Confirm with Windows Hello when prompted. This is a STRONG approval and cannot be granted by an agent.");
-            let request = ipc::request(&id, capability, operation, json!({}));
+            let configured = config
+                .workspaces
+                .iter()
+                .find(|entry| entry.id.eq_ignore_ascii_case(&id))
+                .map(|entry| entry.id.clone())
+                .unwrap_or(id);
+            let request = ipc::request(&configured, capability, operation, json!({}));
             let response = ipc::call(&cotrad, &config, &request, Duration::from_secs(180))?;
             let result = ipc::expect_ok(&response)?.clone();
             Ok(Output {
+                exit_code: 0,
                 human: format!(
-                    "Workspace {id} is now {} (trust revision {}).\n",
+                    "Workspace {configured} is now {} (trust revision {}).\n",
                     if result.get("trusted").and_then(Value::as_bool) == Some(true) {
                         "trusted"
                     } else {
@@ -180,25 +190,37 @@ pub fn tunnel(args: &mut Args) -> Result<Output, LifecycleError> {
                 client: client.clone(),
                 tunnel_id: tunnel_id.clone(),
             });
+            // Key and configuration change together: any failure after the key
+            // is written restores both the previous key and configuration.
             let previous_key = std::fs::read(layout.runtime_key_file()).ok();
             config::store_runtime_key(&layout, &key)?;
             drop(key);
-            if let Err(error) = config::tunnel_config(&layout, &config, &version) {
-                match previous_key {
+            let platform = host_platform();
+            let committed = config::tunnel_config(&layout, &config, &version)
+                .and_then(|_| config.save(&layout))
+                .and_then(|()| platform.verify_tree_acl(&layout.root));
+            if let Err(error) = committed {
+                let restored_key = match previous_key {
                     Some(bytes) => cotra_lifecycle::layout::write_bytes_atomic(
                         &layout.runtime_key_file(),
                         &bytes,
-                    )?,
-                    None => {
-                        let _ = std::fs::remove_file(layout.runtime_key_file());
-                    }
-                }
-                previous.save(&layout)?;
-                return Err(error);
+                    ),
+                    None => std::fs::remove_file(layout.runtime_key_file())
+                        .or_else(|error| match error.kind() {
+                            std::io::ErrorKind::NotFound => Ok(()),
+                            _ => Err(error),
+                        })
+                        .map_err(|error| LifecycleError::io("remove new runtime key", error)),
+                };
+                let restored_config = previous.save(&layout);
+                return Err(match (restored_key, restored_config) {
+                    (Ok(()), Ok(())) => error,
+                    _ => LifecycleError::state(format!(
+                        "tunnel setup failed ({}) and the previous key or configuration could not be fully restored; rerun `cotra tunnel setup`",
+                        error.message
+                    )),
+                });
             }
-            config.save(&layout)?;
-            let platform = host_platform();
-            platform.verify_tree_acl(&layout.root)?;
             let mut human = format!(
                 "Tunnel {tunnel_id} configured with client {}.\nThe runtime key is stored in {} (owner-only) and is passed to the tunnel client by file reference only.\n",
                 client.display(),
@@ -212,6 +234,7 @@ pub fn tunnel(args: &mut Args) -> Result<Output, LifecycleError> {
             }
             human.push_str("Next: `cotra start`, then `cotra status` or `cotra doctor`.\n");
             Ok(Output {
+                exit_code: 0,
                 human,
                 json: json!({"ok": true, "tunnel_id": tunnel_id, "client": client, "key_file": layout.runtime_key_file()}),
             })
@@ -232,6 +255,7 @@ pub fn tunnel(args: &mut Args) -> Result<Output, LifecycleError> {
                 None => "The tunnel is not configured. Run `cotra tunnel setup`.\n".into(),
             };
             Ok(Output {
+                exit_code: 0,
                 human,
                 json: json!({"ok": true, "tunnel": config.tunnel, "runtime_key_present": key_present}),
             })
@@ -286,6 +310,7 @@ pub fn start(args: &mut Args) -> Result<Output, LifecycleError> {
     let platform = host_platform();
     let status = lifecycle::start(&layout, platform.as_ref(), wait)?;
     Ok(Output {
+        exit_code: 0,
         human: describe(&status),
         json: json!({"ok": status.state != RunState::NotRunning, "status": status}),
     })
@@ -303,6 +328,7 @@ pub fn stop(args: &mut Args) -> Result<Output, LifecycleError> {
         StopOutcome::SupervisorTerminated => format!("Cotra stopped: {}.\n", report.detail),
     };
     Ok(Output {
+        exit_code: 0,
         human,
         json: json!({"ok": true, "stop": report}),
     })
@@ -312,7 +338,7 @@ pub fn status(args: &mut Args) -> Result<Output, LifecycleError> {
     args.finish()?;
     let layout = Layout::for_current_user()?;
     let installed: Option<cotra_lifecycle::layout::CurrentRecord> =
-        cotra_lifecycle::layout::read_json(&layout.current_file())?;
+        cotra_lifecycle::layout::read_current(&layout)?;
     let config = Config::load(&layout);
     let runtime = lifecycle::status(&layout)?;
     let mut human = match &installed {
@@ -333,6 +359,7 @@ pub fn status(args: &mut Args) -> Result<Output, LifecycleError> {
     }
     human.push_str(&describe(&runtime));
     Ok(Output {
+        exit_code: 0,
         human,
         json: json!({
             "ok": true,
@@ -364,13 +391,12 @@ pub fn doctor(args: &mut Args) -> Result<Output, LifecycleError> {
     } else {
         "One or more checks failed.\n"
     });
-    if !report.healthy {
-        return Err(LifecycleError::new(
-            cotra_lifecycle::ErrorKind::State,
-            human.trim_end().to_string(),
-        ));
-    }
     Ok(Output {
+        exit_code: if report.healthy {
+            0
+        } else {
+            cotra_lifecycle::ErrorKind::State.exit_code()
+        },
         human,
         json: json!({"ok": report.healthy, "doctor": report}),
     })
@@ -436,6 +462,7 @@ pub fn approvals(args: &mut Args) -> Result<Output, LifecycleError> {
         human.push_str("No approval history.\n");
     }
     Ok(Output {
+        exit_code: 0,
         human,
         json: json!({"ok": true, "approvals": result}),
     })
@@ -460,6 +487,7 @@ pub fn emergency_revoke(args: &mut Args) -> Result<Output, LifecycleError> {
     )?;
     let result = ipc::expect_ok(&response)?.clone();
     Ok(Output {
+        exit_code: 0,
         human: format!(
             "Emergency revoke recorded (revoke epoch {}). Pending approvals are invalid.\n",
             result
