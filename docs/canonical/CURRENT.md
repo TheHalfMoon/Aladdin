@@ -390,7 +390,7 @@ This activation ratifies the universal AI access plan merged in PR `#135` as mer
 
 - the ratified plan, universal-connectivity threat model, remote principal auth model, remote session authorization, client connection profile model, compatibility matrix, and external provider prerequisites as the implementation contract;
 - frozen transport identity fields (`transport_kind`, `provider_kind`, `remote_principal_id`, `device_id`, stable `remote_connection_id`, short-lived `connection_id`, `client_session_id`, `protocol_version`, `tool_surface_profile`, `workspace_id`, `policy_revision`);
-- the normative default-deny scope-to-tool/profile matrix duty, the typed `REMOTE_SESSION_INACTIVE` failure contract, the `15`-minute lease hard maximum, and the P14/P15/P16 ordering gates for successor grains.
+- the normative default-deny scope-to-tool/profile matrix duty, the typed `REMOTE_SESSION_INACTIVE` failure contract, the `15`-minute lease hard maximum, and the P15/P16/P17 ordering gates for successor grains.
 
 ## Active acceptance frontier
 
