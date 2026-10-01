@@ -1,0 +1,77 @@
+{
+  "id": "SG-000049",
+  "title": "Supported local stdio entrypoint",
+  "program": "COTRA-P14",
+  "state": "GRAIN",
+  "risk": "low",
+  "created": "2026-10-01",
+  "base": "6bf2608a1b193f825c8474ae2cf91a30b71343bc",
+  "dependencies": [
+    "SG-000048"
+  ],
+  "objective": "Expose a supported local stdio entrypoint using the authoritative builder without changing runtime authority: document and qualify `cotra mcp stdio` (or equivalent installed entrypoint) with protected environment and lifecycle behavior, plus package configuration examples for local clients, requiring no OpenAI tunnel.",
+  "scope": {
+    "include": [
+      "supported `cotra mcp stdio` or equivalent installed entrypoint reusing the SG-000048 authoritative builder",
+      "protected environment handling reusing the existing daemon env allowlist with no secret leakage",
+      "lifecycle behavior for start, stop, and diagnostics consistent with existing local policy",
+      "local client configuration examples for Claude Desktop, Codex, Mistral Vibe Code, and generic MCP clients",
+      "stdio entrypoint contract tests proving identical tool surface through the installed entrypoint"
+    ],
+    "exclude": [
+      "any new MCP tool, tool schema change, capability widening, approval change, or authority change",
+      "loopback HTTP listener implementation (reserved for SG-000050)",
+      "relay device transport implementation (reserved for COTRA-P15)",
+      "local client packages beyond configuration examples (reserved for SG-000051)",
+      "any P15 remote relay, OAuth, device uplink, or public edge code",
+      "any P16 tool-surface widening or provider submission"
+    ]
+  },
+  "authority_delta": {
+    "filesystem": "None.",
+    "process": "None.",
+    "network": "None.",
+    "browser": "None.",
+    "ui_input": "None.",
+    "secrets": "None.",
+    "approval": "None.",
+    "privileged": "None."
+  },
+  "invariants": [
+    "authoritative builder remains the single tool source of truth",
+    "stdio entrypoint adds no independent tool authority",
+    "protected environment allowlist unchanged with no secret leakage",
+    "no OpenAI tunnel requirement for local clients",
+    "no new OS authority introduced"
+  ],
+  "acceptance": [
+    {
+      "id": "A1",
+      "claim": "A supported installed stdio entrypoint launches the authoritative MCP server with protected environment and lifecycle behavior."
+    },
+    {
+      "id": "A2",
+      "claim": "Configuration examples enable local MCP clients without an OpenAI tunnel, with identical policy and approval behavior."
+    },
+    {
+      "id": "A3",
+      "claim": "Entrypoint contract tests prove identical tool surface through the installed path, and all closed SG-000001 through SG-000048 regressions pass unchanged."
+    },
+    {
+      "id": "A4",
+      "claim": "Exact-head CI including release qualification and supply-chain audit, genuine TypeSafe Jev, Alibaba Open Code Review, manual review of excluded files, and zero unresolved review threads all pass."
+    }
+  ],
+  "successor_requirements": {
+    "sg_000050": "Loopback Streamable HTTP may proceed only after SG-000049 closes, with loopback-only bind and local auth."
+  },
+  "review": {
+    "diffcipline": true,
+    "jev_semantic_review": true,
+    "alibaba_open_code_review": "required exact-range qualification where integrated",
+    "security_review": true,
+    "exact_head_ci": true,
+    "release_artifact_qualification": true
+  },
+  "done_when": "The supported local stdio entrypoint is canonical with configuration examples and no authority change."
+}
