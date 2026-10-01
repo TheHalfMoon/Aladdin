@@ -32,7 +32,7 @@ test("no MCP tool source forwards a browser capability to the kernel", () => {
 });
 
 test("no browser tool is registered on the MCP server surface", () => {
-  const text = readFileSync(join(srcDir, "index.ts"), "utf8");
+  const text = readFileSync(join(srcDir, "server.ts"), "utf8");
   assert.match(text, /registerGitFetchTools/);
   assert.doesNotMatch(text, /browser/i);
 });

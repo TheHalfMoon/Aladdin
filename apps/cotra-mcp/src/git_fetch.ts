@@ -1,6 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/server";
 import * as z from "zod/v4";
-import { KernelClient, type KernelResponse } from "./kernel.js";
+import { KernelClient } from "./kernel.js";
+import { projectKernelResult } from "./result.js";
 
 const EXPECTED_HEAD = /^[0-9a-f]{40}$/;
 const EXPECTED_PRIOR = /^([0-9a-f]{40}|ABSENT)$/;
@@ -62,45 +63,6 @@ export function gitFetchSchema(defaultWorkspace: string) {
     .strict();
 }
 
-function asToolResult(response: KernelResponse) {
-  if (!response.ok) {
-    return {
-      isError: true,
-      content: [
-        {
-          type: "text" as const,
-          text: JSON.stringify(
-            {
-              error: response.error ?? {
-                code: "INTERNAL_ERROR",
-                message: "cotrad returned an unspecified failure"
-              }
-            },
-            null,
-            2
-          )
-        }
-      ]
-    };
-  }
-
-  return {
-    content: [
-      {
-        type: "text" as const,
-        text: JSON.stringify(
-          {
-            result: response.result,
-            evidence: response.evidence
-          },
-          null,
-          2
-        )
-      }
-    ]
-  };
-}
-
 export function registerGitFetchTools(
   server: McpServer,
   kernel: KernelClient,
@@ -114,7 +76,7 @@ export function registerGitFetchTools(
       inputSchema: gitFetchPreviewSchema(defaultWorkspace)
     },
     async ({ workspace_id, path, policy_id, branch }) =>
-      asToolResult(
+      projectKernelResult(
         await kernel.call({
           workspaceId: workspace_id,
           capability: "git.fetch.preview",
@@ -141,7 +103,7 @@ export function registerGitFetchTools(
       expected_head,
       expected_prior
     }) =>
-      asToolResult(
+      projectKernelResult(
         await kernel.call({
           workspaceId: workspace_id,
           capability: "git.fetch",

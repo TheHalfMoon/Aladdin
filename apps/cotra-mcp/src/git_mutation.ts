@@ -1,6 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/server";
 import * as z from "zod/v4";
-import { KernelClient, type KernelResponse } from "./kernel.js";
+import { KernelClient } from "./kernel.js";
+import { projectKernelResult } from "./result.js";
 
 const EXPECTED_HEAD = /^[0-9a-f]{40}$/;
 const APPROVAL_TIMEOUT_MS = 10 * 60_000;
@@ -43,45 +44,6 @@ export function gitCommitSchema(defaultWorkspace: string) {
   });
 }
 
-function asToolResult(response: KernelResponse) {
-  if (!response.ok) {
-    return {
-      isError: true,
-      content: [
-        {
-          type: "text" as const,
-          text: JSON.stringify(
-            {
-              error: response.error ?? {
-                code: "INTERNAL_ERROR",
-                message: "cotrad returned an unspecified failure"
-              }
-            },
-            null,
-            2
-          )
-        }
-      ]
-    };
-  }
-
-  return {
-    content: [
-      {
-        type: "text" as const,
-        text: JSON.stringify(
-          {
-            result: response.result,
-            evidence: response.evidence
-          },
-          null,
-          2
-        )
-      }
-    ]
-  };
-}
-
 async function callMutation(
   kernel: KernelClient,
   input: {
@@ -92,7 +54,7 @@ async function callMutation(
     arguments: Record<string, unknown>;
   }
 ) {
-  return asToolResult(
+  return projectKernelResult(
     await kernel.call({
       workspaceId: input.workspaceId,
       capability: input.capability,
