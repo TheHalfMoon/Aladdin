@@ -2,7 +2,7 @@
 
 Status: COMPLETE_CANONICAL
 Date: 2026-10-01
-Governance snapshot base: 365e4183a0112fa1c9722daaebfe22bc36532b99
+Governance snapshot base: e19fff84a2484b3b89f10087f2b0be53ae1c4512
 Evidence ledger: `.specgrain/canonical-evidence.json`
 
 `Governance snapshot base` records the exact canonical parent from which this activation snapshot was authored. It deliberately does not claim the eventual merge SHA of the commit containing this file.
@@ -384,7 +384,19 @@ All P12 closeouts (SG-000041 PR `#120`, SG-000042 PR `#122`, SG-000043 PR `#124`
 
 ## Successor frontier
 
-There is no active grain. COTRA-P13 is exited and every authorized grain of the roadmap is closed; see "Final canonical state" below. No successor grain is authorized.
+SG-000047 - Universal-access architecture and transport contract - is the sole active COTRA-P14 grain.
+
+This activation ratifies the universal AI access plan merged in PR `#135` as merge `e19fff84a2484b3b89f10087f2b0be53ae1c4512` with exact-head CI, Review Gates, genuine TypeSafe Jev `7/7` hunk coverage with zero findings, Alibaba Open Code Review v1.12.9 exact-range delegation (`7` total files, `0` reviewable, `7` excluded by unsupported-extension classification and manually reviewed), Graft `0.21.1` structural analysis, and zero unresolved review threads (`36` resolved with fixes). It authorizes, without any runtime authority change:
+
+- the ratified plan, universal-connectivity threat model, remote principal auth model, remote session authorization, client connection profile model, compatibility matrix, and external provider prerequisites as the implementation contract;
+- frozen transport identity fields (`transport_kind`, `provider_kind`, `remote_principal_id`, `device_id`, stable `remote_connection_id`, short-lived `connection_id`, `client_session_id`, `protocol_version`, `tool_surface_profile`, `workspace_id`, `policy_revision`);
+- the normative default-deny scope-to-tool/profile matrix duty, the typed `REMOTE_SESSION_INACTIVE` failure contract, the `15`-minute lease hard maximum, and the P14/P15/P16 ordering gates for successor grains.
+
+## Active acceptance frontier
+
+SG-000047 must prove the ratified corpus is recorded consistently, identity fields and ordering gates are frozen, no runtime behavior changes, and every closed SG-000001 through SG-000046 regression passes unchanged.
+
+No P15 remote relay code may merge before P14 transport-neutral local contract work is canonical. No P16 authority widening may merge before the capability/parity inventory is canonical. No public provider submission may occur before the remote threat model, auth, cross-tenant isolation, privacy policy, and production endpoint are qualified.
 
 ## Closed SG-000033 screenshot capture
 
@@ -504,7 +516,7 @@ The COTRA-P13 program-exit change is this closeout itself. Its classification be
 
 ## Final canonical state
 
-The authorized Cotra roadmap is complete at this frontier: every grain authorized for COTRA-P00 through COTRA-P13 (SG-000001 through SG-000046) is `CLOSED` with machine-checked evidence in `.specgrain/canonical-evidence.json`, COTRA-P06 through COTRA-P13 carry explicit exit records above, the earlier phases' grains closed under the governance current at the time, and no grain is active or authorized. As recorded for SG-000004, the live ChatGPT tunnel end-to-end path of COTRA-P03 remains UNPROVEN because it requires the owner's OpenAI credentials.
+The authorized Cotra roadmap through COTRA-P13 is complete at this frontier: every grain authorized for COTRA-P00 through COTRA-P13 (SG-000001 through SG-000046) is `CLOSED` with machine-checked evidence in `.specgrain/canonical-evidence.json`, COTRA-P06 through COTRA-P13 carry explicit exit records above, and the earlier phases' grains closed under the governance current at the time. COTRA-P14 universal access is newly authorized with SG-000047 as the sole active grain; no P14 implementation grain is authorized until SG-000047 closes. As recorded for SG-000004, the live ChatGPT tunnel end-to-end path of COTRA-P03 remains UNPROVEN because it requires the owner's OpenAI credentials.
 
 Release state:
 - every change to `main` builds, packages, archives, and qualifies the Windows x64 release from the extracted archive on a fresh runner, verifies an independent byte-identical rebuild, audits dependencies, and uploads a release candidate (`cotra-release-candidate-<sha>`) with the archive, manifest, CycloneDX SBOM, provenance record, reproducibility record, third-party notices, and `SHA256SUMS.txt`;
@@ -516,7 +528,7 @@ Residual limitations, recorded honestly:
 - public `process.spawn` on Windows is restricted to `whoami.exe`, and `git_fetch`/`git_push` destination policies are not configurable through the `cotra` CLI, so those tools fail closed in an installed Cotra;
 - no paid or human third-party security audit was performed; review relied on genuine TypeSafe Jev, Alibaba Open Code Review, exact-diff manual security review, and local Graft structural analysis.
 
-Any further capability, release, or audit work requires a new, explicitly authorized SpecGrain.
+Any further capability, release, or audit work beyond the newly authorized SG-000047 requires a new, explicitly authorized SpecGrain.
 
 ## Canonical public authority boundary retained
 
