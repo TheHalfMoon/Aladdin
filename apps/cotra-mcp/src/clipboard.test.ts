@@ -32,7 +32,7 @@ test("no MCP tool source forwards a clipboard capability to the kernel", () => {
 });
 
 test("no clipboard tool is registered on the MCP server surface", () => {
-  const text = readFileSync(join(srcDir, "index.ts"), "utf8");
+  const text = readFileSync(join(srcDir, "server.ts"), "utf8");
   assert.match(text, /registerGitFetchTools/);
   assert.doesNotMatch(text, /clipboard/i);
 });
