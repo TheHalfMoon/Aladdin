@@ -39,6 +39,7 @@ Recorded under SG-000046 against the repository at its activation base:
 
 - **Markers**: no `TODO`, `FIXME`, `XXX`, `HACK`, `todo!()`, or `unimplemented!()` in code. The single `unreachable!()` (`crates/cotra-provider-process/src/lib.rs`, private-execution qualification) sits in a `match` guarded by the `matches!` check immediately above it.
 - **Dead code**: the 24 snapshot files `crates/cotrad/src/sg000015_main.rs` through `sg000038_main.rs` were never compiled (`cotrad` builds only `src/sg000039_main.rs`, which includes `src/main.rs`) and are removed; the compiled `cotrad` test set is unchanged.
+- **Test reliability**: two timing- and naming-dependent test races found in CI were repaired without weakening assertions (SG-000013 output limits in PR #125; `cotra-tunnel` shared temporary directories in PR #132).
 - **Test-only code**: `cotra-approval`'s `test-support` module is referenced only from `#[cfg(test)]` modules.
 - **Workflows and scripts**: `ci.yml`, `review-gates.yml`, and the draft-only `release.yml`, two composite actions, and five release scripts, all in use; no temporary qualification workflow is committed.
 - **Versions**: the Cargo workspace, root `package.json`, and `apps/cotra-mcp/package.json` are all `0.1.0`; Rust 1.97.1 is pinned by `rust-toolchain.toml` and Node.js 24.19.0 by the workflows.
