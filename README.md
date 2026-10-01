@@ -103,6 +103,19 @@ Mistral Vibe Code accepts a stdio entry in its MCP server list with command `cot
 
 `cotra` here is `%LOCALAPPDATA%\Cotra\bin\cotra.exe` on your user PATH after install. It resolves the active verified release on every launch, refuses tampered or inactive payloads, and fails closed when no workspace is configured.
 
+## Connect over loopback HTTP (no tunnel required)
+
+`cotra mcp serve` exposes the same 20 tools over Streamable HTTP on `127.0.0.1` only. It never binds a LAN address. Every request needs a per-user bearer credential:
+
+```powershell
+$env:COTRA_LOOPBACK_TOKEN = "<at-least-32-characters-you-choose>"
+cotra mcp serve
+```
+
+The listener prints its URL, for example `http://127.0.0.1:54321/mcp`, on standard error. Pass `--port <1-65535>` to choose the port instead of an ephemeral one. The credential is required on every request as `Authorization: Bearer <token>`; missing or wrong credentials fail closed, as do forged `Host` or browser `Origin` values. Browser pages on other origins cannot drive the listener. Keep the token on your machine and never commit it.
+
+Mistral Vibe Code HTTP mode and generic Streamable HTTP clients connect to the printed URL with the bearer header. Clients that can launch a command should prefer `cotra mcp stdio` above.
+
 ## Everyday commands
 
 | Command | Purpose |

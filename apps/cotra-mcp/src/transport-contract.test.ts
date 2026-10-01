@@ -109,6 +109,14 @@ test("installed stdio entrypoint reuses the stdio transport", () => {
   assert.ok(!text.includes("buildCotraServer"), "the entrypoint must not bypass the transport");
 });
 
+test("loopback transport reuses the authoritative builder", () => {
+  const entry = allSources().find(([name]) => name === "transports/loopback_http.ts");
+  assert.ok(entry, "transports/loopback_http.ts exists");
+  const [, text] = entry as [string, string];
+  assert.ok(text.includes("buildCotraServer"), "loopback must use buildCotraServer");
+  assert.ok(!text.includes("registerTool("), "loopback must not register tools directly");
+});
+
 test("result projection is the single authoritative source", () => {
   for (const name of ["git_fetch.ts", "git_mutation.ts", "git_push.ts", "server.ts"]) {
     const entry = allSources().find(([rel]) => rel === name);
