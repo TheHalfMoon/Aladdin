@@ -26,9 +26,15 @@ runs:
       run: |
         $cargoHome = if ($env:CARGO_HOME) { $env:CARGO_HOME } else { Join-Path $HOME ".cargo" }
         "RUSTFLAGS=-C link-arg=/Brepro --remap-path-prefix=$env:GITHUB_WORKSPACE=C:\cotra --remap-path-prefix=$cargoHome=C:\cargo" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-    - name: Build release binaries and the tunnel fixture
+    - name: Build the shipped release binaries
       shell: pwsh
-      run: cargo build --release --locked -p cotrad -p cotra-lifecycle --bins --examples
+      # Binaries only: building examples in the same invocation would unify
+      # dev-dependency features (including test-only approval support) into
+      # the shipped binaries.
+      run: cargo build --release --locked -p cotrad -p cotra-lifecycle --bins
+    - name: Build the tunnel test fixture separately
+      shell: pwsh
+      run: cargo build --release --locked -p cotra-lifecycle --example fake_tunnel_client
     - name: Package release
       shell: pwsh
       run: node scripts/package-release.mjs --out "${{ inputs.release-dir }}"
