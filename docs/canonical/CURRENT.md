@@ -2,7 +2,7 @@
 
 Status: COMPLETE_CANONICAL
 Date: 2026-10-01
-Governance snapshot base: e19fff84a2484b3b89f10087f2b0be53ae1c4512
+Governance snapshot base: 380680ea9b43f75f5a187c19d71e0c6f1e1a1ddb
 Evidence ledger: `.specgrain/canonical-evidence.json`
 
 `Governance snapshot base` records the exact canonical parent from which this activation snapshot was authored. It deliberately does not claim the eventual merge SHA of the commit containing this file.
@@ -384,17 +384,19 @@ All P12 closeouts (SG-000041 PR `#120`, SG-000042 PR `#122`, SG-000043 PR `#124`
 
 ## Successor frontier
 
-SG-000047 - Universal-access architecture and transport contract - is the sole active COTRA-P14 grain.
+SG-000047 - Universal-access architecture and transport contract - is CLOSED canonical. SG-000048 - Transport-neutral MCP server builder - is the sole active COTRA-P14 grain.
 
-This activation ratifies the universal AI access plan merged in PR `#135` as merge `e19fff84a2484b3b89f10087f2b0be53ae1c4512` with exact-head CI, Review Gates, genuine TypeSafe Jev `7/7` hunk coverage with zero findings, Alibaba Open Code Review v1.12.9 exact-range delegation (`7` total files, `0` reviewable, `7` excluded by unsupported-extension classification and manually reviewed), Graft `0.21.1` structural analysis, and zero unresolved review threads (`36` resolved with fixes). It authorizes, without any runtime authority change:
+SG-000047 closed canonically on activation PR `#136` (activation base `e19fff84a2484b3b89f10087f2b0be53ae1c4512`, qualified head `3a53a2277e22ecf8e44870dc91f76de25fe8d030`, CI `36884910745`, Review Gates `36884907569`, genuine TypeSafe Jev `6/6` hunk coverage with zero findings and zero blocking findings, Alibaba Open Code Review v1.12.9 exact-range delegation over `3` files with `2` reviewable and `1` excluded file `docs/canonical/CURRENT.md` manually reviewed, merge `380680ea9b43f75f5a187c19d71e0c6f1e1a1ddb`, post-merge CI `36885522871`) with zero unresolved review threads. The activation ratified the universal AI access plan merged in PR `#135` as merge `e19fff84a2484b3b89f10087f2b0be53ae1c4512` with exact-head CI, Review Gates, genuine TypeSafe Jev `7/7` hunk coverage with zero findings, Alibaba Open Code Review v1.12.9 exact-range delegation (`7` total files, `0` reviewable, `7` excluded by unsupported-extension classification and manually reviewed), Graft `0.21.1` structural analysis, and zero unresolved review threads (`36` resolved with fixes). It authorized, without any runtime authority change:
 
 - the ratified plan, universal-connectivity threat model, remote principal auth model, remote session authorization, client connection profile model, compatibility matrix, and external provider prerequisites as the implementation contract;
 - frozen transport identity fields (`transport_kind`, `provider_kind`, `remote_principal_id`, `device_id`, stable `remote_connection_id`, short-lived `connection_id`, `client_session_id`, `protocol_version`, `tool_surface_profile`, `workspace_id`, `policy_revision`);
 - the normative default-deny scope-to-tool/profile matrix duty, the typed `REMOTE_SESSION_INACTIVE` failure contract, the `15`-minute lease hard maximum, and the P15/P16/P17 ordering gates for successor grains.
 
+SG-000048 now authorizes, without any runtime authority change, the transport-neutral MCP server builder preserving the v0.1 tool catalog and schemas with transport contract tests.
+
 ## Active acceptance frontier
 
-SG-000047 must prove the ratified corpus is recorded consistently, identity fields and ordering gates are frozen, no runtime behavior changes, and every closed SG-000001 through SG-000046 regression passes unchanged.
+SG-000048 must prove one authoritative server builder registers the complete v0.1 tool catalog with byte-compatible schemas, stdio reuses the builder with no independent authority, loopback and relay skeletons reuse the same builder and kernel contract, transport contract tests prove identical surface across in-process builder and stdio, and every closed SG-000001 through SG-000047 regression passes unchanged.
 
 No P15 remote relay code may merge before P14 transport-neutral local contract work is canonical. No P16 authority widening may merge before the capability/parity inventory is canonical. No public provider submission may occur before the remote threat model, auth, cross-tenant isolation, privacy policy, and production endpoint are qualified.
 
@@ -514,9 +516,17 @@ No known blocking findings - COMPLETE:
 
 The COTRA-P13 program-exit change is this closeout itself. Its classification becomes canonical only after it merges and the resulting canonical main passes post-merge CI.
 
+## Closed SG-000047 universal-access architecture and transport contract
+
+SG-000047 closed canonically: activation PR `#136` (activation base `e19fff84a2484b3b89f10087f2b0be53ae1c4512`, qualified head `3a53a2277e22ecf8e44870dc91f76de25fe8d030`, CI `36884910745`, Review Gates `36884907569`, genuine TypeSafe Jev `6/6` hunks with zero findings and zero blocking findings, Alibaba Open Code Review v1.12.9 exact-range delegation over `3` files with `2` reviewable and `1` excluded file `docs/canonical/CURRENT.md` manually reviewed, merge `380680ea9b43f75f5a187c19d71e0c6f1e1a1ddb`, post-merge CI `36885522871`), all with zero unresolved review threads. The activation ratified the universal AI access plan merged in PR `#135` as merge `e19fff84a2484b3b89f10087f2b0be53ae1c4512` with genuine TypeSafe Jev `7/7`, Alibaba Open Code Review v1.12.9 `7` total files with `0` reviewable and `7` excluded manually reviewed, Graft structural analysis, and `36` resolved review threads.
+
+SG-000047 proved that the ratified plan, universal-connectivity threat model, remote principal auth model, remote session authorization, client connection profile model, compatibility matrix, and external provider prerequisites are recorded as the implementation contract; that transport identity fields (`transport_kind`, `provider_kind`, `remote_principal_id`, `device_id`, stable `remote_connection_id`, short-lived `connection_id`, `client_session_id`, `protocol_version`, `tool_surface_profile`, `workspace_id`, `policy_revision`), the default-deny scope-to-tool matrix duty, the typed `REMOTE_SESSION_INACTIVE` failure contract, the `15`-minute lease hard maximum, and the P15/P16/P17 ordering gates are frozen for successor grains; and that no runtime behavior, MCP tool, capability, approval, or lifecycle change was introduced with every closed SG-000001 through SG-000046 regression passing unchanged.
+
+The canonical SG-000047 authority adds no runtime authority. It records plan ratification and implementation authorization only. `cotrad` remains the local authorization kernel, provider integrations remain adapters, and Desktop Commander is not a dependency, fallback, transport, or qualification tool.
+
 ## Final canonical state
 
-The authorized Cotra roadmap through COTRA-P13 is complete at this frontier: every grain authorized for COTRA-P00 through COTRA-P13 (SG-000001 through SG-000046) is `CLOSED` with machine-checked evidence in `.specgrain/canonical-evidence.json`, COTRA-P06 through COTRA-P13 carry explicit exit records above, and the earlier phases' grains closed under the governance current at the time. COTRA-P14 universal access is newly authorized with SG-000047 as the sole active grain; no P14 implementation grain is authorized until SG-000047 closes. As recorded for SG-000004, the live ChatGPT tunnel end-to-end path of COTRA-P03 remains UNPROVEN because it requires the owner's OpenAI credentials.
+The authorized Cotra roadmap through COTRA-P13 is complete at this frontier: every grain authorized for COTRA-P00 through COTRA-P13 (SG-000001 through SG-000046) is `CLOSED` with machine-checked evidence in `.specgrain/canonical-evidence.json`, COTRA-P06 through COTRA-P13 carry explicit exit records above, and the earlier phases' grains closed under the governance current at the time. COTRA-P14 universal access is authorized with SG-000047 `CLOSED` and SG-000048 as the sole active grain; P14 implementation is now authorized under the frozen transport contract and ordering gates. As recorded for SG-000004, the live ChatGPT tunnel end-to-end path of COTRA-P03 remains UNPROVEN because it requires the owner's OpenAI credentials.
 
 Release state:
 - every change to `main` builds, packages, archives, and qualifies the Windows x64 release from the extracted archive on a fresh runner, verifies an independent byte-identical rebuild, audits dependencies, and uploads a release candidate (`cotra-release-candidate-<sha>`) with the archive, manifest, CycloneDX SBOM, provenance record, reproducibility record, third-party notices, and `SHA256SUMS.txt`;
@@ -528,7 +538,7 @@ Residual limitations, recorded honestly:
 - public `process.spawn` on Windows is restricted to `whoami.exe`, and `git_fetch`/`git_push` destination policies are not configurable through the `cotra` CLI, so those tools fail closed in an installed Cotra;
 - no paid or human third-party security audit was performed; review relied on genuine TypeSafe Jev, Alibaba Open Code Review, exact-diff manual security review, and local Graft structural analysis.
 
-Any further capability, release, or audit work beyond the newly authorized SG-000047 requires a new, explicitly authorized SpecGrain.
+Any further capability, release, or audit work beyond the active SG-000048 requires a new, explicitly authorized SpecGrain.
 
 ## Canonical public authority boundary retained
 
