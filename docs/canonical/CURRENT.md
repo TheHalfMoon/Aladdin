@@ -2,7 +2,7 @@
 
 Status: COMPLETE_CANONICAL
 Date: 2026-10-01
-Governance snapshot base: a7002bfd56657fe2aa4f3710d10942031d66a258
+Governance snapshot base: 52552b4a49ffdf0859712a5b10751f77fc8fb309
 Evidence ledger: `.specgrain/canonical-evidence.json`
 
 `Governance snapshot base` records the exact canonical parent from which this activation snapshot was authored. It deliberately does not claim the eventual merge SHA of the commit containing this file.
@@ -384,17 +384,19 @@ All P12 closeouts (SG-000041 PR `#120`, SG-000042 PR `#122`, SG-000043 PR `#124`
 
 ## Successor frontier
 
-SG-000047 - Universal-access architecture and transport contract - is CLOSED canonical. SG-000048 - Transport-neutral MCP server builder - is CLOSED canonical. SG-000049 - Supported local stdio entrypoint - is CLOSED canonical. SG-000050 - Loopback Streamable HTTP transport - is CLOSED canonical. SG-000051 - Local client packages and configuration - is CLOSED canonical. SG-000052 - Relay protocol and remote threat contract - is the sole active COTRA-P15 grain.
+SG-000047 - Universal-access architecture and transport contract - is CLOSED canonical. SG-000048 - Transport-neutral MCP server builder - is CLOSED canonical. SG-000049 - Supported local stdio entrypoint - is CLOSED canonical. SG-000050 - Loopback Streamable HTTP transport - is CLOSED canonical. SG-000051 - Local client packages and configuration - is CLOSED canonical. SG-000052 - Relay protocol and remote threat contract - is CLOSED canonical. SG-000053 - Device identity, pairing, and revocation - is the sole active COTRA-P15 grain.
 
 SG-000050 closed canonically on implementation PR `#142` (implementation base `46f92d0add5447893d19176aa0827860f741d88e`, qualified head `1298915ec2ddd9d243d599fc05094c4f30d95ce2`, CI `36910345831`, Review Gates `36910345950`, genuine TypeSafe Jev `10/10` hunk coverage with zero findings and zero blocking findings, Alibaba Open Code Review v1.12.9 exact-range delegation over `8` files with `5` reviewable and `3` excluded files manually reviewed, merge `276cadd15f47121ad2e9aa84a91a224f4b388f88`, post-merge CI `36911084305`) with zero unresolved review threads. The implementation added the loopback-only Streamable HTTP transport with per-user bearer credential, Host and Origin validation, DNS-rebinding tests, bounded bodies and sessions, strict CORS, and `cotra mcp serve`, with all closed SG-000001 through SG-000049 regressions passing unchanged and no new tool authority.
 
 SG-000051 closed canonically on implementation PR `#144` (implementation base `37541fc25e96060aed9213cefb467fea56df5e0e`, qualified head `5a7462f7a19c0d4dd98e7507285877ea0dfde18f`, CI `36916190095`, Review Gates `36916190376`, genuine TypeSafe Jev `10/10` hunk coverage with zero findings and zero blocking findings, Alibaba Open Code Review v1.12.9 exact-range delegation over `10` files with `7` reviewable and `3` excluded files manually reviewed, merge `a7002bfd56657fe2aa4f3710d10942031d66a258`, post-merge CI `36916848206`) with zero unresolved review threads. The implementation added tested local client packages (Claude Desktop JSON and Desktop Extension manifest, Codex TOML, Vibe Code TOML, generic stdio and HTTP shapes) with contract tests pinning supported installed entrypoints and the Inspector qualification script driving `tools/list` over three independent client paths with the 20-tool catalog checked on each, with all closed SG-000001 through SG-000050 regressions passing unchanged and no new authority.
 
-SG-000052 now authorizes, without any network implementation, the design-first relay protocol and remote threat contract for COTRA-P15. No relay, device uplink, OAuth, or public edge code may merge until the contract is frozen.
+SG-000052 closed canonically on implementation PR `#146` (implementation base `07533c7b0b471cfe2dba92e79212758ec30e33f6`, qualified head `3c7c152add162079bf71e6dffb380be34b9b726d`, CI `36937668674`, Review Gates `36937668186`, genuine TypeSafe Jev `3/3` hunk coverage with zero findings and zero blocking findings, Alibaba Open Code Review v1.12.9 exact-range delegation over `3` files with `1` reviewable and `2` excluded files manually reviewed, merge `52552b4a49ffdf0859712a5b10751f77fc8fb309`, post-merge CI `36938628825`) with zero unresolved review threads. The implementation froze the relay protocol and remote threat contract with routing, request and response frames, the device-verifiable authorization envelope, replay and sequencing and duplication and reconnect and queue and cancellation and expiry behavior, the 17-code typed-failure vocabulary, quotas and backpressure and privacy and logging and offline semantics, explicit denied generic-proxy shapes, and 12 contract tests pinning the frozen vocabulary, with all closed SG-000001 through SG-000051 regressions passing unchanged and no network implementation.
+
+SG-000053 now authorizes device identity, one-time pairing, and revocation against the frozen relay contract. The private device key never leaves the device, pairing alone grants no trust or approval, and revocation invalidates active and refreshable sessions.
 
 ## Active acceptance frontier
 
-SG-000052 must prove routing, request and response frames, authenticated identity binding, selected-device binding, request digest binding, replay, sequencing, duplication, reconnect, queue, cancellation, expiry, quotas, privacy, logging, offline semantics, and typed failures are frozen with fail-closed semantics and generic proxy shapes explicitly denied, contract tests prove the frozen vocabulary, and every closed SG-000001 through SG-000051 regression passes unchanged.
+SG-000053 must prove protected local device key handling with challenge and response authentication, key rotation, and connection epochs; one-time pairing with high entropy, short expiry, one-shot consumption, and rate limiting; hard, principal-wide, all-route, and emergency revocation; envelope tests proving no principal-to-device remap; and every closed SG-000001 through SG-000052 regression passing unchanged.
 
 No P15 relay, device uplink, OAuth, or public edge implementation code may merge before the SG-000052 contract is canonical. No P16 authority widening may merge before the capability/parity inventory is canonical. No public provider submission may occur before the remote threat model, auth, cross-tenant isolation, privacy policy, and production endpoint are qualified.
 
@@ -591,9 +593,17 @@ No blocking findings and consistent evidence - COMPLETE:
 
 All P14 closeouts (SG-000047 PR `#136`, SG-000048 PR `#138`, SG-000049 PR `#140`, SG-000050 PR `#142`, SG-000051 PR `#144`) merged normally with zero unresolved blocking review threads and successful post-merge CI.
 
+## Closed SG-000052 relay protocol and remote threat contract
+
+SG-000052 closed canonically: implementation PR `#146` (implementation base `07533c7b0b471cfe2dba92e79212758ec30e33f6`, qualified head `3c7c152add162079bf71e6dffb380be34b9b726d`, CI `36937668674`, Review Gates `36937668186`, genuine TypeSafe Jev `3/3` hunks with zero findings and zero blocking findings, Alibaba Open Code Review v1.12.9 exact-range delegation over `3` files with `1` reviewable and `2` excluded files manually reviewed, merge `52552b4a49ffdf0859712a5b10751f77fc8fb309`, post-merge CI `36938628825`), all with zero unresolved review threads.
+
+SG-000052 proved the frozen relay contract in `docs/security/RELAY_PROTOCOL_CONTRACT.md` with exact routing (`authenticated principal -> paired device -> active device channel -> local MCP session`), exact request and response envelope fields, five frozen frame kinds, an explicit denied generic-proxy list, the device-verifiable authorization envelope binding principal, connection, device, request digest, epoch, and session context, connection-scoped sequencing with single-use replay nonces and duplicate rejection, a bounded 60-second reconnect grace with at most 16 queued frames and no durable offline queue for reads or writes, the frozen 17-code typed-failure vocabulary distinct from local failures, hard quotas with backpressure and fail-closed overload, transient-only payload handling with class-only logs, and the lease-bound offline and workstation semantics; plus a pure frozen-vocabulary module with 12 contract tests pinning every frozen set and proving the relay device transport remains a fail-closed skeleton. All closed SG-000001 through SG-000051 regressions pass unchanged.
+
+The canonical SG-000052 authority adds no relay, device uplink, OAuth, public edge, MCP tool, schema change, capability, approval, lifecycle, network listener, browser, UIA, clipboard, installer, elevation, or provider submission authority. Frozen contract document, pure vocabulary module, and contract tests only.
+
 ## Final canonical state
 
-The authorized Cotra roadmap through COTRA-P13 is complete at this frontier: every grain authorized for COTRA-P00 through COTRA-P13 (SG-000001 through SG-000046) is `CLOSED` with machine-checked evidence in `.specgrain/canonical-evidence.json`, COTRA-P06 through COTRA-P13 carry explicit exit records above, and the earlier phases' grains closed under the governance current at the time. COTRA-P14 universal access is exited at this frontier with SG-000047 `CLOSED`, SG-000048 `CLOSED`, SG-000049 `CLOSED`, SG-000050 `CLOSED`, and SG-000051 `CLOSED` carrying the explicit exit record above; COTRA-P15 remote relay, identity, and web access is authorized with SG-000052 as the sole active grain under the design-first relay contract gate. As recorded for SG-000004, the live ChatGPT tunnel end-to-end path of COTRA-P03 remains UNPROVEN because it requires the owner's OpenAI credentials.
+The authorized Cotra roadmap through COTRA-P13 is complete at this frontier: every grain authorized for COTRA-P00 through COTRA-P13 (SG-000001 through SG-000046) is `CLOSED` with machine-checked evidence in `.specgrain/canonical-evidence.json`, COTRA-P06 through COTRA-P13 carry explicit exit records above, and the earlier phases' grains closed under the governance current at the time. COTRA-P14 universal access is exited at this frontier with SG-000047 `CLOSED`, SG-000048 `CLOSED`, SG-000049 `CLOSED`, SG-000050 `CLOSED`, and SG-000051 `CLOSED` carrying the explicit exit record above; COTRA-P15 remote relay, identity, and web access is authorized with SG-000052 `CLOSED` and SG-000053 as the sole active grain. As recorded for SG-000004, the live ChatGPT tunnel end-to-end path of COTRA-P03 remains UNPROVEN because it requires the owner's OpenAI credentials.
 
 Release state:
 - every change to `main` builds, packages, archives, and qualifies the Windows x64 release from the extracted archive on a fresh runner, verifies an independent byte-identical rebuild, audits dependencies, and uploads a release candidate (`cotra-release-candidate-<sha>`) with the archive, manifest, CycloneDX SBOM, provenance record, reproducibility record, third-party notices, and `SHA256SUMS.txt`;
@@ -605,7 +615,7 @@ Residual limitations, recorded honestly:
 - public `process.spawn` on Windows is restricted to `whoami.exe`, and `git_fetch`/`git_push` destination policies are not configurable through the `cotra` CLI, so those tools fail closed in an installed Cotra;
 - no paid or human third-party security audit was performed; review relied on genuine TypeSafe Jev, Alibaba Open Code Review, exact-diff manual security review, and local Graft structural analysis.
 
-Any further capability, release, or audit work beyond the active SG-000052 requires a new, explicitly authorized SpecGrain.
+Any further capability, release, or audit work beyond the active SG-000053 requires a new, explicitly authorized SpecGrain.
 
 ## Canonical public authority boundary retained
 

@@ -1,0 +1,80 @@
+{
+  "id": "SG-000053",
+  "title": "Device identity, pairing, and revocation",
+  "program": "COTRA-P15",
+  "state": "GRAIN",
+  "risk": "high",
+  "created": "2026-10-01",
+  "base": "52552b4a49ffdf0859712a5b10751f77fc8fb309",
+  "dependencies": [
+    "SG-000052"
+  ],
+  "objective": "Implement device identity, one-time pairing, and revocation against the frozen SG-000052 relay contract without granting remote authority: protected local device key, public device identity, challenge and response, high-entropy short-expiry one-time pairing codes with rate limiting, key rotation, connection epochs, hard revoke, principal-wide revoke, all-route revoke, and emergency revoke and recovery semantics.",
+  "scope": {
+    "include": [
+      "protected local device key with the private key never leaving the device",
+      "public device identity and challenge and response authentication",
+      "one-time pairing with high-entropy codes, short expiry, and rate limiting",
+      "key rotation and connection epochs",
+      "hard revoke, principal-wide revoke, all-route revoke, and emergency revoke and recovery semantics",
+      "device-verifiable authorization envelope binding authenticated principal, connection, selected device, request digest, epoch, and session context",
+      "negative tests proving a compromised relay cannot remap principal A onto device B"
+    ],
+    "exclude": [
+      "any OAuth authorization implementation (SG-000054)",
+      "any device uplink networking beyond the frozen contract vocabulary (SG-000055)",
+      "any public edge implementation (SG-000056)",
+      "any relay deployment (SG-000057)",
+      "any new local MCP tool, tool schema change, capability widening, or approval change",
+      "any P16 tool-surface widening or provider submission",
+      "any public provider submission, directory publication, or availability claim"
+    ]
+  },
+  "authority_delta": {
+    "filesystem": "None beyond the protected device-key store defined here.",
+    "process": "None.",
+    "network": "None.",
+    "browser": "None.",
+    "ui_input": "None.",
+    "secrets": "Device key material is created and held under the existing protected-state boundary; no new secret class is exposed to tools.",
+    "approval": "None.",
+    "privileged": "None."
+  },
+  "invariants": [
+    "the private device key never leaves the device and is never returned by any tool",
+    "the remote provider cannot create or replace device identity",
+    "pairing alone grants no workspace trust and no action approval",
+    "revocation invalidates active and refreshable sessions, not only UI state",
+    "the SG-000052 frame, envelope, failure, and bound vocabulary stays frozen"
+  ],
+  "acceptance": [
+    {
+      "id": "A1",
+      "claim": "Protected local device key, public device identity, and challenge and response authentication work with key rotation and connection epochs."
+    },
+    {
+      "id": "A2",
+      "claim": "One-time pairing enforces high entropy, short expiry, one-shot consumption, and rate limiting, and pairing grants no trust or approval by itself."
+    },
+    {
+      "id": "A3",
+      "claim": "Hard, principal-wide, all-route, and emergency revocation invalidate active and refreshable sessions, and envelope tests prove no principal-A-to-device-B remap."
+    },
+    {
+      "id": "A4",
+      "claim": "Exact-head CI including release qualification and supply-chain audit, genuine TypeSafe Jev, Alibaba Open Code Review, manual review of excluded files, and zero unresolved review threads all pass."
+    }
+  ],
+  "successor_requirements": {
+    "sg_000054": "OAuth 2.1 authorization boundary may proceed only after SG-000053 closes with device identity, pairing, and revocation qualified."
+  },
+  "review": {
+    "diffcipline": true,
+    "jev_semantic_review": true,
+    "alibaba_open_code_review": "required exact-range qualification where integrated",
+    "security_review": true,
+    "exact_head_ci": true,
+    "release_artifact_qualification": true
+  },
+  "done_when": "Device identity, pairing, and revocation are canonical with remap-proof envelope tests and no remote authority."
+}

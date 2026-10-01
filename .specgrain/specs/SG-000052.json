@@ -2,7 +2,7 @@
   "id": "SG-000052",
   "title": "Relay protocol and remote threat contract",
   "program": "COTRA-P15",
-  "state": "GRAIN",
+  "state": "CLOSED",
   "risk": "medium",
   "created": "2026-10-01",
   "base": "a7002bfd56657fe2aa4f3710d10942031d66a258",
@@ -73,5 +73,25 @@
     "exact_head_ci": true,
     "release_artifact_qualification": true
   },
-  "done_when": "The relay protocol and remote threat contract is frozen with denied generic-proxy shapes and no network implementation."
+  "done_when": "The relay protocol and remote threat contract is frozen with denied generic-proxy shapes and no network implementation.",
+  "qualified_head": "3c7c152add162079bf71e6dffb380be34b9b726d",
+  "implementation_base": "07533c7b0b471cfe2dba92e79212758ec30e33f6",
+  "implementation_merge": "52552b4a49ffdf0859712a5b10751f77fc8fb309",
+  "pre_merge_ci": "36937668674",
+  "pre_merge_review_gates": "36937668186",
+  "post_merge_ci": "36938628825",
+  "canonical_evidence": {
+    "implementation_pr": 146,
+    "implementation_base": "07533c7b0b471cfe2dba92e79212758ec30e33f6",
+    "qualified_head": "3c7c152add162079bf71e6dffb380be34b9b726d",
+    "pre_merge_ci": "36937668674",
+    "pre_merge_review_gates": "36937668186",
+    "merge_sha": "52552b4a49ffdf0859712a5b10751f77fc8fb309",
+    "post_merge_ci": "36938628825",
+    "jev": "PASSED: genuine TypeSafe Jev exact-diff review covered 3/3 hunks with zero findings and zero blocking findings, pin 31f89602797fb7bea007f8a480bf368bf564954e",
+    "ocr": "PASSED: Alibaba Open Code Review v1.12.9 exact-range delegation over 3 changed files, 1 reviewable (apps/cotra-mcp/src/relay_contract.ts) with delegated rules applied and 2 excluded (apps/cotra-mcp/src/relay-contract.test.ts by default-path classification and docs/security/RELAY_PROTOCOL_CONTRACT.md by unsupported-extension classification) manually reviewed",
+    "security_review": "PASS on exact qualified head: frozen relay protocol and remote threat contract with routing, request and response frames, device-verifiable authorization envelope, replay and sequencing and duplication and reconnect and queue and cancellation and expiry behavior, 17-code typed-failure vocabulary distinct from local failures, quotas and backpressure and privacy and logging and offline semantics, explicit denied generic-proxy shapes, and 12 contract tests pinning the vocabulary with the relay device transport remaining a fail-closed skeleton. No relay, device uplink, OAuth, public edge, MCP tool, schema, capability, approval, lifecycle, browser, UIA, clipboard, installer, elevation, or provider submission code. All closed SG-000001 through SG-000051 regressions pass unchanged. Qodo billing-blocked and CodeRabbit skipped-review notices evaluated as non-evidence noise with zero substantive findings; zero unresolved blocking threads.",
+    "unresolved_review_threads": 0,
+    "authority_boundary": "No relay, device uplink, OAuth, public edge, MCP tool, schema change, capability, approval, lifecycle, network listener, browser, UIA, clipboard, installer, elevation, or provider submission authority. Frozen contract document, pure vocabulary module, and contract tests only."
+  }
 }
