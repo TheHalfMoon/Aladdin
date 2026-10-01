@@ -2,7 +2,7 @@
 
 Status: ACTIVE_GRAIN
 Date: 2026-10-01
-Governance snapshot base: fdd1b06d4c3acc7846493cde8df8947d9ea2a672
+Governance snapshot base: 0737ee3f86edfcc2a808625877c3dc8bb8690cc4
 Evidence ledger: `.specgrain/canonical-evidence.json`
 
 `Governance snapshot base` records the exact canonical implementation merge from which this closeout-and-activation snapshot was authored. It deliberately does not claim the eventual merge SHA of the commit containing this file.
@@ -340,7 +340,7 @@ All P11 closeouts (SG-000038 PR `#109`, SG-000039 PR `#112`, SG-000040 PR `#116`
 
 ## Successor frontier
 
-COTRA-P12 continues at this frontier. No successor grain beyond SG-000043 is authorized by this activation.
+COTRA-P12 continues at this frontier. No successor grain beyond SG-000044 is authorized by this activation.
 
 ## Closed SG-000033 screenshot capture
 
@@ -402,22 +402,26 @@ SG-000042 closed canonically: activation in governance PR `#120` (head `664fcdb9
 
 SG-000042 proved the human-invoked `cotra install`, `uninstall`, and `version` commands: `cotra-release-manifest-v1` verification rejecting tampered, unlisted, missing-required, duplicate, unknown-field, hostile-path, link, and reparse-point releases before any copy; prerequisite failure on old Windows builds, avoidable split-token elevation, and missing or old Node.js; an owner-only protected DACL for the user and SYSTEM applied only after the install tree is proven free of links and reparse points and verified by SDDL read-back (accepting the user's full SID and its machine-rendered token, such as `LA` for a built-in Administrator, and rejecting every other principal); staged, re-verified activation behind an atomic pointer; exact user `PATH` handling; same-version repair; and uninstall that retains configuration, secrets, logs, and history unless `--purge-data --yes` is given. The first exact-head Windows attempt failed on the SDDL alias and was fixed before the qualified head. No agent authority is added.
 
+## Closed SG-000043 lifecycle runtime
+
+SG-000043 closed canonically: activation in governance PR `#122` (head `051bab90b9f47ea21d6329a5e1207e3fac1fc255`, CI `36793022566`, Review Gates `36793022604`, genuine TypeSafe Jev `11/11` hunks with zero findings, Alibaba Open Code Review v1.12.9 `3 reviewable + 2 excluded/manually reviewed`, merge `6a86a7e709fd067adff8b03b192cb7851789bf4c`, post-merge CI `36793764140`), implementation PR `#123` (qualified head `7c28aceacef01794596833f4d42c2b7ccdad4927`, CI `36800120591`, Review Gates `36800119193`, genuine TypeSafe Jev `38/38` hunks with zero findings and zero blocking findings, Alibaba Open Code Review v1.12.9 `20 reviewable + 1 excluded/manually reviewed`, merge `0737ee3f86edfcc2a808625877c3dc8bb8690cc4`, post-merge CI `36801225127`), exact-diff manual security review, and 28 review threads all resolved (27 led to fixes, 1 answered).
+
+SG-000043 proved the human-invoked lifecycle runtime: `cotra-mcp-host` runs only the active, fully re-verified version with the recorded Node.js runtime and admitted workspaces; the runtime key is stored owner-only, delivered by file reference, and absent from argv, environment, logs, and output, while tunnel-client output is redacted before logging; the detached supervisor inherits only NUL and its log, assigns the suspended tunnel client to a kill-on-close Job Object before resume, and re-verifies the install; `start`, `stop`, `status`, and `doctor` report only observed state, with `stop` acting only on identity-verified processes inside the install and reporting verified termination only on an observed empty job; and trust grant, revoke, approval history, and emergency revoke are local clients of the existing `cotrad` STRONG and history paths. A Windows-native test drives the real `cotra`, `cotra-mcp-host`, `cotrad`, and Node.js through configure, start, MCP-to-`cotrad`, status, doctor, verified stop, restart, and uninstall. No agent authority is added.
+
 ## Active grain
 
-SG-000043 - Lifecycle runtime: supervision, tunnel setup, and diagnostics - is the sole active COTRA-P12 grain.
+SG-000044 - Update, rollback, recovery, and release qualification - is the sole active COTRA-P12 grain.
 
-This activation authorizes implementation and qualification of the lifecycle runtime in `docs/canonical/P12_INSTALLER_LIFECYCLE_DESIGN.md` section 6:
-- `cotra-mcp-host`, which runs the installed `cotra-mcp` app for the active version only, with the matching `cotrad`, admitted workspaces, and the sanitized environment;
-- `cotra workspace add|remove|list` with policy-kernel admission, and `workspace trust|untrust`, `approvals`, and `emergency-revoke` as local clients of the existing `cotrad` STRONG and history paths;
-- `cotra tunnel setup|show` with owner-only key storage, file-reference delivery, and no key in argv, environment, logs, or output;
-- a detached supervisor that assigns the official tunnel client to a kill-on-close Job Object before it runs, `cotra start`, identity-verified `cotra stop` with an observed job-empty result, `cotra status`, and `cotra doctor`, each reporting only observed state;
-- redacted bounded logs, environment casing normalization, and uninstall that stops a running instance first.
+This activation authorizes implementation and qualification of `docs/canonical/P12_INSTALLER_LIFECYCLE_DESIGN.md` sections 7 and 8:
+- explicit offline `cotra update --source <dir>` with `--check`, downgrade refusal unless `--allow-downgrade`, configuration-schema compatibility before any change, verified stop and restart, atomic activation, and post-activation `cotra self-check` by the new version with automatic restoration of the previous version on failure;
+- `cotra rollback` to the retained previous version, update markers reported by `doctor`, pruning, and a lifecycle transcript;
+- a tag-triggered draft-only release workflow and a release-qualification CI job that packages a real release and qualifies install, MCP through the installed real app with the exact canonical tool set, update, downgrade refusal, rollback, automatic recovery from a broken release, stop, and uninstall from that artifact.
 
 ## Active acceptance frontier
 
-SG-000043 must prove configuration, key, and workspace validation; active-version-only MCP hosting; job assignment before resume and job-empty confirmation; identity-based stop; log redaction and loopback-only health probing; secret-free child environments; doctor never claiming health it did not observe; and, with the real `cotra`, `cotra-mcp-host`, `cotrad`, and Node.js binaries on Windows, the full configure, start, status, doctor, stop, restart, and uninstall flow with the runtime key absent from every output and log.
+SG-000044 must prove `--check` changes nothing, downgrades and incompatible configuration schemas are refused before any change, a failed self-check restores and verifies the previous version, rollback requires a retained previous version, the release workflow only creates a draft after qualifying the packaged artifact, and the release-qualification job passes from the packaged release with the runtime key absent from every output and log, with every closed SG-000001 through SG-000043 regression passing unchanged.
 
-No MCP tool, agent capability, new approval class, or network access beyond the loopback health probe is added by SG-000043, and the OpenAI tunnel client is supervised, never reimplemented or redistributed. Update, rollback, recovery, the release workflow, and the P12 exit packet remain successor work.
+No automatic or network update activity, silent migration, MCP tool, agent capability, approval change, service, or elevation is added by SG-000044. SBOM, provenance attestation, reproducibility testing, and code signing remain COTRA-P13 work, and the P12 exit packet remains successor work.
 
 ## Canonical public authority boundary retained
 
@@ -507,7 +511,7 @@ Still denied or absent outside the closed COTRA-P07 scope, the closed COTRA-P08 
 - caller-selected download destinations, absolute destinations, and destinations outside the approved workspace root;
 - download persistence of cookies, credentials, tokens, session material, or personal browser state.
 
-COTRA-P07 through COTRA-P11 are exited at this frontier. COTRA-P12 is active through SG-000043. SG-000042 closed the human-invoked per-user install foundation, SG-000043 adds only human-invoked lifecycle runtime commands, no update authority is granted yet, and SG-000041 keeps Cotra protected state outside every admitted workspace. Raw credentials must never be accepted merely because Git or a network transport can consume them.
+COTRA-P07 through COTRA-P11 are exited at this frontier. COTRA-P12 is active through SG-000044. SG-000042 and SG-000043 closed the human-invoked install foundation and lifecycle runtime, SG-000044 adds only explicit offline update and rollback and release qualification, and SG-000041 keeps Cotra protected state outside every admitted workspace. Raw credentials must never be accepted merely because Git or a network transport can consume them.
 
 Windows public `process.spawn` remains positively restricted to the exact SG-000010-qualified `%SystemRoot%\System32\whoami.exe` target.
 

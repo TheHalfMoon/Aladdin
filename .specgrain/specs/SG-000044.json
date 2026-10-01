@@ -1,0 +1,73 @@
+{
+  "id": "SG-000044",
+  "title": "Update, rollback, recovery, and release qualification",
+  "program": "COTRA-P12",
+  "state": "GRAIN",
+  "risk": "high",
+  "created": "2026-10-01",
+  "base": "0737ee3f86edfcc2a808625877c3dc8bb8690cc4",
+  "dependencies": [
+    "SG-000043"
+  ],
+  "objective": "Deliver the update and recovery model and release path in docs/canonical/P12_INSTALLER_LIFECYCLE_DESIGN.md sections 7 and 8: explicit offline update from a verified release directory with downgrade refusal, configuration-schema compatibility, verified stop and restart, atomic activation, post-activation self-verification by the new version's own CLI with automatic restoration of the previous version on failure, explicit rollback to the retained previous version, interrupted- and failed-update reporting, a lifecycle transcript, a tag-triggered draft release workflow, and a CI job that packages a real release and qualifies the full lifecycle from that artifact.",
+  "scope": {
+    "include": [
+      "cotra update --source <dir> with --check, --allow-downgrade, and --reinstall: candidate verified exactly as an install; downgrade refused unless explicitly allowed; configuration-schema range compatibility required before any change; running instance stopped with verified termination and restarted after success",
+      "state\\update.json marker recording pending updates and failed updates with the reason; doctor reports an interrupted (pending) update as a failure and a failed, restored update as a warning",
+      "post-activation verification by running the new version's own `cotra self-check`; on failure the previous pointer, CLI copy, and install record are restored and verified, the failed version directory is removed, and the outcome is reported honestly",
+      "cotra rollback to the retained previous version after verifying its payload against its own manifest and its configuration-schema compatibility, toggling active and previous",
+      "pruning to the active and previous versions after a successful update, including staging and invalid leftovers",
+      "logs\\lifecycle.log transcript of install, update, rollback, and uninstall outcomes, redacted and bounded",
+      ".github/workflows/release.yml on v* tags: tag and workspace version must match, build, package, qualify the packaged release, archive, SHA256SUMS, and a draft GitHub Release; no publication without a maintainer",
+      "a release-qualification CI job on windows-latest that builds, packages with scripts/package-release.mjs, installs the packaged artifact, drives MCP initialize, tools/list (exact canonical tool set), and tools/call system_status through the installed real cotra-mcp app to cotrad, runs doctor, updates while running, refuses a downgrade, rolls back, recovers automatically from a release whose CLI cannot verify itself, stops with verification, and uninstalls with retention and purge",
+      "the tunnel fixture speaks MCP JSON-RPC for that qualification and still stands in only for the OpenAI client"
+    ],
+    "exclude": [
+      "automatic or network update checks, downloads, or background updates",
+      "silent or automatic configuration migration",
+      "SBOM, provenance attestation, reproducibility claims, and code signing, which are COTRA-P13 work",
+      "any MCP tool, agent capability, approval change, service, scheduled task, or elevation"
+    ]
+  },
+  "authority_delta": {
+    "filesystem": "The human-invoked CLI replaces version payloads, the pointer, the CLI copy, the install record, and the update marker only beneath %LOCALAPPDATA%\\Cotra. Configuration, secrets, and history are not modified by update or rollback.",
+    "process": "The CLI runs the new version's `cotra self-check` and stops and restarts only its own supervisor. No agent process authority is added.",
+    "network": "None. Updates are applied from a local release directory; the release workflow runs in GitHub Actions on tags.",
+    "browser": "None.",
+    "ui_input": "None.",
+    "secrets": "None added. The CI qualification asserts the runtime key appears in no output or log.",
+    "approval": "None.",
+    "privileged": "None."
+  },
+  "invariants": [
+    "the active version pointer always references a fully verified version",
+    "an update whose new version cannot verify itself leaves the previous version active and verified",
+    "downgrades require an explicit flag and incompatible configuration schemas change nothing",
+    "configuration, secrets, and history are untouched by update and rollback",
+    "no update activity happens without an explicit human command and a local release directory",
+    "the packaged release exposes exactly the canonical MCP tool set"
+  ],
+  "acceptance": [
+    {"id": "A1", "claim": "Tests prove --check changes nothing, downgrades are refused without the flag, and incompatible configuration schemas are refused before any change."},
+    {"id": "A2", "claim": "Tests prove a failed self-check restores and verifies the previous version, records a failed marker, and removes the failed version."},
+    {"id": "A3", "claim": "Tests prove rollback is refused without a retained previous version."},
+    {"id": "A4", "claim": "The release-qualification CI job proves, from a packaged release, install, MCP through the installed real app with the exact canonical tool set and a cotrad-backed tool call, a healthy doctor, update while running with restart, downgrade refusal, rollback with restart, automatic recovery from a broken release with doctor reporting it, verified stop, retaining uninstall, purge, and no runtime key in any output or log."},
+    {"id": "A5", "claim": "The release workflow parses, requires the tag to match the workspace version, qualifies the packaged release before archiving, and only creates a draft release."},
+    {"id": "A6", "claim": "All closed SG-000001 through SG-000043 regressions pass unchanged."},
+    {"id": "A7", "claim": "Exact-head Windows and Ubuntu Rust, Node, Governance, release qualification, genuine TypeSafe Jev, Alibaba Open Code Review, exact-diff security review, manual review of excluded files, and zero unresolved blocking review threads all pass."}
+  ],
+  "successor_requirements": {
+    "p12_exit": "The P12 exit packet jointly proves clean install, start, status, doctor, tunnel path, bounded capability operation, stop, restart, upgrade, failed-update recovery, uninstall, and retained-data behavior from canonical evidence, and records owner-performed real ChatGPT connectivity as outside CI.",
+    "p13": "SBOM, provenance attestation, reproducibility testing, dependency and license review, and threat-model regression are COTRA-P13 work."
+  },
+  "review": {
+    "diffcipline": true,
+    "jev_semantic_review": true,
+    "alibaba_open_code_review": "required exact-range qualification where integrated",
+    "security_review": true,
+    "exact_head_ci": true,
+    "native_windows_qualification": true,
+    "release_artifact_qualification": true
+  },
+  "done_when": "Explicit offline update with self-verification and automatic recovery, rollback, failure reporting, a draft-only release workflow, and CI qualification of the packaged release are specified with no agent-reachable authority."
+}
