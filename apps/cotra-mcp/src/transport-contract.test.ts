@@ -97,6 +97,18 @@ test("stdio transport reuses the authoritative builder", () => {
   assert.ok(!text.includes("registerTool("), "stdio must not register tools directly");
 });
 
+test("installed stdio entrypoint reuses the stdio transport", () => {
+  const entry = allSources().find(([name]) => name === "entrypoints/stdio.ts");
+  assert.ok(entry, "entrypoints/stdio.ts exists");
+  const [, text] = entry as [string, string];
+  assert.ok(
+    text.includes("../transports/stdio.js"),
+    "the installed entrypoint must reuse the stdio transport"
+  );
+  assert.ok(!text.includes("registerTool("), "the entrypoint must not register tools directly");
+  assert.ok(!text.includes("buildCotraServer"), "the entrypoint must not bypass the transport");
+});
+
 test("result projection is the single authoritative source", () => {
   for (const name of ["git_fetch.ts", "git_mutation.ts", "git_push.ts", "server.ts"]) {
     const entry = allSources().find(([rel]) => rel === name);

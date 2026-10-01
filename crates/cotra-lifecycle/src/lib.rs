@@ -13,6 +13,7 @@ pub mod layout;
 pub mod lifecycle;
 pub mod logs;
 pub mod manifest;
+pub mod mcp;
 pub mod mcp_host;
 pub mod platform;
 #[cfg(windows)]
