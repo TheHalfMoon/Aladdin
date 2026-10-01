@@ -67,6 +67,30 @@ impl Layout {
     pub fn supervisor_record(&self) -> PathBuf {
         self.run_dir().join("supervisor.json")
     }
+    pub fn stop_result(&self) -> PathBuf {
+        self.run_dir().join("stop-result.json")
+    }
+    pub fn last_exit(&self) -> PathBuf {
+        self.run_dir().join("last-exit.json")
+    }
+    pub fn health_url_file(&self) -> PathBuf {
+        self.run_dir().join("tunnel-health.url")
+    }
+    pub fn config_file(&self) -> PathBuf {
+        self.state_dir().join("config.json")
+    }
+    pub fn secrets_dir(&self) -> PathBuf {
+        self.state_dir().join("secrets")
+    }
+    pub fn runtime_key_file(&self) -> PathBuf {
+        self.secrets_dir().join("tunnel-runtime-key")
+    }
+    pub fn tunnel_log(&self) -> PathBuf {
+        self.logs_dir().join("tunnel.log")
+    }
+    pub fn supervisor_log(&self) -> PathBuf {
+        self.logs_dir().join("supervisor.log")
+    }
 
     /// User-owned data that uninstall retains unless purging is requested.
     pub fn retained_data(&self) -> Vec<PathBuf> {
@@ -121,6 +145,60 @@ pub struct InstallRecord {
     pub previous: Option<String>,
     pub node_path: String,
     pub path_entry_added: bool,
+}
+
+impl CurrentRecord {
+    /// Checks the schema, the version (which becomes a path component), and
+    /// the manifest digest before the record is used.
+    pub fn validate(&self) -> Result<(), LifecycleError> {
+        if self.schema != CURRENT_SCHEMA {
+            return Err(LifecycleError::state(
+                "current.json has an unsupported schema",
+            ));
+        }
+        crate::version::Version::parse(&self.version)
+            .map_err(|_| LifecycleError::state("current.json names an invalid version"))?;
+        if !crate::manifest::is_sha256_hex(&self.manifest_sha256) {
+            return Err(LifecycleError::state(
+                "current.json has an invalid manifest digest",
+            ));
+        }
+        Ok(())
+    }
+}
+
+impl InstallRecord {
+    /// Checks the schema and every version, which become path components.
+    pub fn validate(&self) -> Result<(), LifecycleError> {
+        if self.schema != INSTALL_SCHEMA {
+            return Err(LifecycleError::state(
+                "install.json has an unsupported schema",
+            ));
+        }
+        for version in std::iter::once(&self.active).chain(self.previous.iter()) {
+            crate::version::Version::parse(version)
+                .map_err(|_| LifecycleError::state("install.json names an invalid version"))?;
+        }
+        Ok(())
+    }
+}
+
+/// Reads and validates `current.json`.
+pub fn read_current(layout: &Layout) -> Result<Option<CurrentRecord>, LifecycleError> {
+    let record: Option<CurrentRecord> = read_json(&layout.current_file())?;
+    if let Some(record) = &record {
+        record.validate()?;
+    }
+    Ok(record)
+}
+
+/// Reads and validates `install.json`.
+pub fn read_install(layout: &Layout) -> Result<Option<InstallRecord>, LifecycleError> {
+    let record: Option<InstallRecord> = read_json(&layout.install_file())?;
+    if let Some(record) = &record {
+        record.validate()?;
+    }
+    Ok(record)
 }
 
 pub fn read_json<T: for<'de> Deserialize<'de>>(path: &Path) -> Result<Option<T>, LifecycleError> {

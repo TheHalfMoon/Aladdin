@@ -21,6 +21,7 @@ const MAX_RELATIVE_PATH: usize = 200;
 /// Payload files every installable release must contain.
 pub const REQUIRED_FILES: &[&str] = &[
     "cotra.exe",
+    "cotra-mcp-host.exe",
     "cotrad.exe",
     "app/cotra-mcp/package.json",
     "app/cotra-mcp/dist/index.js",

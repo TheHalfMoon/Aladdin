@@ -1,8 +1,7 @@
 //! Per-user install, uninstall, and install-state inspection.
 
 use crate::layout::{
-    read_json, write_json_atomic, CurrentRecord, InstallRecord, Layout, CURRENT_SCHEMA,
-    INSTALL_SCHEMA,
+    write_json_atomic, CurrentRecord, InstallRecord, Layout, CURRENT_SCHEMA, INSTALL_SCHEMA,
 };
 use crate::manifest::{self, join_relative, Manifest, VerifiedRelease, MANIFEST_FILE};
 use crate::platform::{self, Platform, MIN_NODE_MAJOR, MIN_WINDOWS_BUILD};
@@ -107,8 +106,8 @@ impl<'a> Installer<'a> {
         let version = release.manifest.version.clone();
 
         self.prepare_root()?;
-        let existing: Option<CurrentRecord> = read_json(&self.layout.current_file())?;
-        let previous_record: Option<InstallRecord> = read_json(&self.layout.install_file())?;
+        let existing: Option<CurrentRecord> = crate::layout::read_current(&self.layout)?;
+        let previous_record: Option<InstallRecord> = crate::layout::read_install(&self.layout)?;
         let repaired_existing = match &existing {
             Some(current) if current.version != version => {
                 return Err(LifecycleError::conflict(format!(
@@ -282,14 +281,14 @@ impl<'a> Installer<'a> {
 
     /// Verifies the pointer, the active payload, the CLI copy, and the ACLs.
     pub fn verify(&self) -> Result<InstallState, LifecycleError> {
-        let active: CurrentRecord = read_json(&self.layout.current_file())?
+        let active: CurrentRecord = crate::layout::read_current(&self.layout)?
             .ok_or_else(|| LifecycleError::not_installed("Cotra is not installed"))?;
         if active.schema != CURRENT_SCHEMA {
             return Err(LifecycleError::state(
                 "current.json has an unsupported schema",
             ));
         }
-        let record: InstallRecord = read_json(&self.layout.install_file())?
+        let record: InstallRecord = crate::layout::read_install(&self.layout)?
             .ok_or_else(|| LifecycleError::state("install.json is missing"))?;
         if record.schema != INSTALL_SCHEMA || record.active != active.version {
             return Err(LifecycleError::state(
@@ -332,7 +331,10 @@ impl<'a> Installer<'a> {
     pub fn uninstall(&self, options: &UninstallOptions) -> Result<UninstallReport, LifecycleError> {
         let root_exists = self.layout.root.is_dir();
         let record: Option<InstallRecord> = if root_exists {
-            read_json(&self.layout.install_file())?
+            // Tolerant read: uninstall only consults `path_entry_added` and
+            // builds no path from the record, so a malformed record must not
+            // strand the user with an install the CLI refuses to remove.
+            crate::layout::read_json::<InstallRecord>(&self.layout.install_file()).unwrap_or(None)
         } else {
             None
         };

@@ -3,10 +3,20 @@
 //! This crate backs the human-invoked `cotra` CLI. It is never reachable from
 //! the MCP surface and adds no agent capability.
 
+pub mod config;
+pub mod console;
+pub mod doctor;
+pub mod health;
 pub mod install;
+pub mod ipc;
 pub mod layout;
+pub mod lifecycle;
+pub mod logs;
 pub mod manifest;
+pub mod mcp_host;
 pub mod platform;
+#[cfg(windows)]
+pub mod runtime;
 pub mod version;
 
 use serde::Serialize;
