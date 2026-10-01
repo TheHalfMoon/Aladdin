@@ -22,7 +22,7 @@ runs:
       run: npm run build
     - name: Build release binaries and the tunnel fixture
       shell: pwsh
-      run: cargo build --release -p cotrad -p cotra-lifecycle --bins --examples
+      run: cargo build --release --locked -p cotrad -p cotra-lifecycle --bins --examples
     - name: Package release
       shell: pwsh
       run: node scripts/package-release.mjs --out "${{ inputs.release-dir }}"
@@ -30,4 +30,4 @@ runs:
       shell: pwsh
       env:
         COTRA_RELEASE_DIR: ${{ inputs.release-dir }}
-      run: cargo test --release -p cotra-lifecycle --test release_qualification -- --ignored --nocapture
+      run: cargo test --release --locked -p cotra-lifecycle --test release_qualification -- --ignored --nocapture

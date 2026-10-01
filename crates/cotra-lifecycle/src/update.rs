@@ -95,7 +95,7 @@ pub fn read_marker(layout: &Layout) -> Result<Option<UpdateMarker>, LifecycleErr
             || Version::parse(&marker.to).is_err()
         {
             return Err(LifecycleError::state(
-                "state\\update.json is malformed; run `cotra rollback` or reinstall",
+                "state\\update.json is malformed; inspect and delete it, then run `cotra doctor` (or reinstall)",
             ));
         }
     }
@@ -436,6 +436,9 @@ impl<'a> Updater<'a> {
     /// version even if the pointer and install record disagree.
     fn recover_pending(&self, marker: &UpdateMarker) -> Result<RollbackReport, LifecycleError> {
         let installer = self.installer();
+        // Refuse links and reparse points anywhere in the install tree before
+        // reading or copying from a retained version directory.
+        installer.protect_root()?;
         let (manifest, bytes) = self.verified_version(&marker.from)?;
         if !compatible(&manifest, current_config_schema(&self.layout)?) {
             return Err(LifecycleError::conflict(format!(
@@ -464,7 +467,12 @@ impl<'a> Updater<'a> {
             &InstallRecord {
                 schema: INSTALL_SCHEMA.into(),
                 active: marker.from.clone(),
-                previous: candidate_ok.then(|| marker.to.clone()),
+                // Keep an existing rollback target when the candidate is invalid.
+                previous: if candidate_ok {
+                    Some(marker.to.clone())
+                } else {
+                    record.previous.clone()
+                },
                 node_path: record.node_path,
                 path_entry_added: record.path_entry_added,
             },
@@ -499,6 +507,7 @@ impl<'a> Updater<'a> {
                 return self.recover_pending(&marker);
             }
         }
+        installer.protect_root()?;
         let current: CurrentRecord = crate::layout::read_current(&self.layout)?
             .ok_or_else(|| LifecycleError::not_installed("Cotra is not installed"))?;
         let record: InstallRecord = crate::layout::read_install(&self.layout)?

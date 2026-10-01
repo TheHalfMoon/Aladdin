@@ -552,7 +552,7 @@ pub fn rollback(args: &mut Args) -> Result<Output, LifecycleError> {
             if report.restarted {
                 " and restarted"
             } else {
-                ""
+                "; Cotra is not running, start it with `cotra start`"
             }
         ),
         json: json!({"ok": true, "rollback": report}),
