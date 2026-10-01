@@ -309,6 +309,182 @@ pub fn disinherit_standard_handles() {
     }
 }
 
+/// A detached process started by [`spawn_detached`].
+pub struct DetachedProcess {
+    handle: OwnedHandle,
+    pub pid: u32,
+}
+
+impl DetachedProcess {
+    /// Returns the exit code once the process has exited.
+    pub fn exit_code(&self) -> Option<u32> {
+        let mut code = 0u32;
+        // SAFETY: valid process handle and out-pointer to a local.
+        if unsafe { GetExitCodeProcess(self.handle.raw(), &mut code) } == 0
+            || code == STILL_ACTIVE as u32
+        {
+            return None;
+        }
+        Some(code)
+    }
+}
+
+fn quote_argument(argument: &str) -> String {
+    if !argument.is_empty() && !argument.contains([' ', '\t', '"']) {
+        return argument.to_string();
+    }
+    let mut quoted = String::from('"');
+    let mut backslashes = 0;
+    for c in argument.chars() {
+        match c {
+            '\\' => backslashes += 1,
+            '"' => {
+                quoted.push_str(&"\\".repeat(backslashes * 2 + 1));
+                quoted.push('"');
+                backslashes = 0;
+            }
+            _ => {
+                quoted.push_str(&"\\".repeat(backslashes));
+                quoted.push(c);
+                backslashes = 0;
+            }
+        }
+    }
+    quoted.push_str(&"\\".repeat(backslashes * 2));
+    quoted.push('"');
+    quoted
+}
+
+/// Starts a detached process whose only inherited handles are NUL for stdin
+/// and `log` for stdout and stderr, enforced with
+/// `PROC_THREAD_ATTRIBUTE_HANDLE_LIST`. No other inheritable handle of this
+/// process (for example a pipe a caller is reading) can reach the child.
+pub fn spawn_detached(
+    program: &Path,
+    args: &[&str],
+    env: &std::collections::BTreeMap<String, String>,
+    log: &std::fs::File,
+) -> Result<DetachedProcess, LifecycleError> {
+    use std::os::windows::io::AsRawHandle;
+    use windows_sys::Win32::Foundation::{SetHandleInformation, HANDLE_FLAG_INHERIT};
+    use windows_sys::Win32::System::Threading::{
+        CreateProcessW, DeleteProcThreadAttributeList, InitializeProcThreadAttributeList,
+        UpdateProcThreadAttribute, CREATE_BREAKAWAY_FROM_JOB, CREATE_NEW_PROCESS_GROUP,
+        CREATE_UNICODE_ENVIRONMENT, DETACHED_PROCESS, EXTENDED_STARTUPINFO_PRESENT,
+        PROCESS_INFORMATION, PROC_THREAD_ATTRIBUTE_HANDLE_LIST, STARTF_USESTDHANDLES,
+        STARTUPINFOEXW,
+    };
+
+    let null = std::fs::OpenOptions::new()
+        .read(true)
+        .open("NUL")
+        .map_err(|error| LifecycleError::io("open NUL", error))?;
+    let output = log
+        .try_clone()
+        .map_err(|error| LifecycleError::io("duplicate log handle", error))?;
+    let handles = [
+        null.as_raw_handle() as HANDLE,
+        output.as_raw_handle() as HANDLE,
+    ];
+    for handle in handles {
+        // SAFETY: both handles are owned by live File values above.
+        if unsafe { SetHandleInformation(handle, HANDLE_FLAG_INHERIT, HANDLE_FLAG_INHERIT) } == 0 {
+            return Err(last_error("SetHandleInformation"));
+        }
+    }
+
+    let mut size = 0usize;
+    // SAFETY: a null list with a size out-pointer queries the required size.
+    unsafe { InitializeProcThreadAttributeList(ptr::null_mut(), 1, 0, &mut size) };
+    let mut attributes = vec![0u8; size];
+    let list = attributes.as_mut_ptr() as *mut c_void;
+    // SAFETY: `attributes` provides `size` bytes for one attribute.
+    if unsafe { InitializeProcThreadAttributeList(list, 1, 0, &mut size) } == 0 {
+        return Err(last_error("InitializeProcThreadAttributeList"));
+    }
+    struct ListGuard(*mut c_void);
+    impl Drop for ListGuard {
+        fn drop(&mut self) {
+            // SAFETY: the list was initialized successfully.
+            unsafe { DeleteProcThreadAttributeList(self.0) };
+        }
+    }
+    let _guard = ListGuard(list);
+    // SAFETY: `handles` outlives the CreateProcessW call below.
+    if unsafe {
+        UpdateProcThreadAttribute(
+            list,
+            0,
+            PROC_THREAD_ATTRIBUTE_HANDLE_LIST as usize,
+            handles.as_ptr() as *const c_void,
+            std::mem::size_of_val(&handles),
+            ptr::null_mut(),
+            ptr::null(),
+        )
+    } == 0
+    {
+        return Err(last_error("UpdateProcThreadAttribute"));
+    }
+
+    let mut command_line = std::iter::once(quote_argument(&program.to_string_lossy()))
+        .chain(args.iter().map(|arg| quote_argument(arg)))
+        .collect::<Vec<_>>()
+        .join(" ")
+        .encode_utf16()
+        .chain(Some(0))
+        .collect::<Vec<u16>>();
+    let mut environment = Vec::<u16>::new();
+    for (name, value) in env {
+        environment.extend(format!("{name}={value}").encode_utf16());
+        environment.push(0);
+    }
+    environment.push(0);
+    let application = wide(program.as_os_str());
+
+    // SAFETY: zeroed STARTUPINFOEXW is valid before the fields are set.
+    let mut startup: STARTUPINFOEXW = unsafe { std::mem::zeroed() };
+    startup.StartupInfo.cb = std::mem::size_of::<STARTUPINFOEXW>() as u32;
+    startup.StartupInfo.dwFlags = STARTF_USESTDHANDLES;
+    startup.StartupInfo.hStdInput = handles[0];
+    startup.StartupInfo.hStdOutput = handles[1];
+    startup.StartupInfo.hStdError = handles[1];
+    startup.lpAttributeList = list;
+
+    let base = EXTENDED_STARTUPINFO_PRESENT
+        | CREATE_UNICODE_ENVIRONMENT
+        | DETACHED_PROCESS
+        | CREATE_NEW_PROCESS_GROUP;
+    for flags in [base | CREATE_BREAKAWAY_FROM_JOB, base] {
+        // SAFETY: zeroed PROCESS_INFORMATION is a valid out value.
+        let mut info: PROCESS_INFORMATION = unsafe { std::mem::zeroed() };
+        // SAFETY: every pointer refers to a live, NUL-terminated buffer or
+        // initialized structure for the duration of the call.
+        let created = unsafe {
+            CreateProcessW(
+                application.as_ptr(),
+                command_line.as_mut_ptr(),
+                ptr::null(),
+                ptr::null(),
+                1,
+                flags,
+                environment.as_ptr() as *const c_void,
+                ptr::null(),
+                &startup.StartupInfo,
+                &mut info,
+            )
+        };
+        if created != 0 {
+            // SAFETY: the thread handle is owned and not needed.
+            unsafe { CloseHandle(info.hThread) };
+            return Ok(DetachedProcess {
+                handle: OwnedHandle(info.hProcess),
+                pid: info.dwProcessId,
+            });
+        }
+    }
+    Err(last_error("CreateProcessW"))
+}
+
 /// Name of the per-install stop event in the session-local namespace.
 pub fn stop_event_name(root: &Path) -> String {
     let digest = Sha256::digest(root.to_string_lossy().to_ascii_lowercase().as_bytes());

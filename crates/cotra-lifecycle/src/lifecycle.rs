@@ -150,10 +150,7 @@ mod imp {
     use std::os::windows::process::CommandExt;
     use std::process::{Command, Stdio};
     use std::sync::{Arc, Mutex};
-    use windows_sys::Win32::System::Threading::{
-        CREATE_BREAKAWAY_FROM_JOB, CREATE_NEW_PROCESS_GROUP, CREATE_NO_WINDOW, CREATE_SUSPENDED,
-        DETACHED_PROCESS,
-    };
+    use windows_sys::Win32::System::Threading::{CREATE_NO_WINDOW, CREATE_SUSPENDED};
 
     fn to_identity(recorded: &RecordedProcess) -> ProcessIdentity {
         ProcessIdentity {
@@ -283,30 +280,20 @@ mod imp {
             .append(true)
             .open(layout.supervisor_log())
             .map_err(|error| LifecycleError::io("open supervisor log", error))?;
-        let spawn = |flags: u32| -> std::io::Result<std::process::Child> {
-            Command::new(&exe)
-                .arg("supervise")
-                .env_clear()
-                .envs(cotra_tunnel::sanitized_env(&crate::ipc::host_environment()))
-                .stdin(Stdio::null())
-                .stdout(log.try_clone()?)
-                .stderr(log.try_clone()?)
-                .creation_flags(flags)
-                .spawn()
-        };
-        runtime::disinherit_standard_handles();
-        let base = DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP;
-        let mut child = spawn(base | CREATE_BREAKAWAY_FROM_JOB)
-            .or_else(|_| spawn(base))
-            .map_err(|error| LifecycleError::state(format!("start supervisor: {error}")))?;
+        let child = runtime::spawn_detached(
+            &exe,
+            &["supervise"],
+            &cotra_tunnel::sanitized_env(&crate::ipc::host_environment()),
+            &log,
+        )?;
 
         let deadline = std::time::Instant::now() + wait;
         loop {
-            if let Ok(Some(exit)) = child.try_wait() {
+            if let Some(exit) = child.exit_code() {
                 let last: Option<LastExit> = read_json(&layout.last_exit()).ok().flatten();
                 let tail = crate::logs::tail(&layout.supervisor_log(), 5).join(" | ");
                 return Err(LifecycleError::state(format!(
-                    "the supervisor exited during start ({exit}); {}; supervisor log: {tail}",
+                    "the supervisor exited during start (exit code {exit}); {}; supervisor log: {tail}",
                     last.map(|last| last.reason)
                         .unwrap_or_else(|| "no exit record".into())
                 )));

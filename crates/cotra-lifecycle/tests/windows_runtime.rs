@@ -42,18 +42,41 @@ fn temp_dir(label: &str) -> PathBuf {
     dir
 }
 
+/// Builds (if needed) and returns `cotrad.exe` or the tunnel fixture from
+/// the same target directory and profile as this test. `cargo test` does not
+/// produce `cotrad.exe` itself because cotrad's tests are unit tests.
 fn built(name: &str) -> PathBuf {
     let cli = PathBuf::from(env!("CARGO_BIN_EXE_cotra"));
-    let dir = cli.parent().unwrap();
-    for candidate in [dir.join(name), dir.join("examples").join(name)] {
-        if candidate.is_file() {
-            return candidate;
-        }
+    let dir = cli.parent().unwrap().to_path_buf();
+    let (path, args): (PathBuf, &[&str]) = if name == "cotrad.exe" {
+        (
+            dir.join(name),
+            &["build", "-p", "cotrad", "--bin", "cotrad"],
+        )
+    } else {
+        (
+            dir.join("examples").join(name),
+            &[
+                "build",
+                "-p",
+                "cotra-lifecycle",
+                "--example",
+                "fake_tunnel_client",
+            ],
+        )
+    };
+    let mut command = Command::new(env!("CARGO"));
+    command
+        .args(args)
+        .current_dir(env!("CARGO_MANIFEST_DIR"))
+        .env("CARGO_TARGET_DIR", dir.parent().unwrap());
+    if !cfg!(debug_assertions) {
+        command.arg("--release");
     }
-    panic!(
-        "{name} is not built next to {}; run the workspace test suite",
-        cli.display()
-    );
+    let status = command.status().unwrap();
+    assert!(status.success(), "building {name} failed");
+    assert!(path.is_file(), "{} was not produced", path.display());
+    path
 }
 
 fn release() -> PathBuf {
