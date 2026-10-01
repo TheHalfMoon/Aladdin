@@ -157,6 +157,19 @@ pub(crate) struct Output {
 }
 
 fn run(args: &mut Args) -> Result<Output, LifecycleError> {
+    // State-changing commands hold the per-install lifecycle lock for their
+    // whole duration so they never interleave across processes.
+    let mutating = matches!(
+        args.command.as_str(),
+        "install" | "uninstall" | "update" | "rollback" | "start" | "stop" | "workspace" | "tunnel"
+    );
+    let _lock = if mutating {
+        Some(cotra_lifecycle::lifecycle::lock(
+            &Layout::for_current_user()?,
+        )?)
+    } else {
+        None
+    };
     match args.command.as_str() {
         "help" | "--help" | "-h" => {
             args.finish()?;

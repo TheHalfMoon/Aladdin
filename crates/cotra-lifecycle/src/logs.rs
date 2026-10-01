@@ -249,7 +249,17 @@ impl BoundedLog {
 /// transcript records lifecycle commands, versions, and outcomes only; a
 /// failure to write it never changes the outcome of the command.
 pub fn transcript(layout: &crate::layout::Layout, line: &str) {
-    if let Ok(mut log) = BoundedLog::open(&layout.logs_dir().join("lifecycle.log")) {
+    // Never write through a link or reparse point: the logs directory and the
+    // file must be plain entries beneath the install root.
+    let path = layout.logs_dir().join("lifecycle.log");
+    for entry in [layout.logs_dir(), path.clone()] {
+        if let Ok(metadata) = fs::symlink_metadata(&entry) {
+            if metadata.file_type().is_symlink() || crate::manifest::is_reparse_point(&metadata) {
+                return;
+            }
+        }
+    }
+    if let Ok(mut log) = BoundedLog::open(&path) {
         let _ = log.write_line(&format!("{} {line}", crate::lifecycle::now_ms()));
     }
 }
@@ -345,6 +355,19 @@ mod tests {
         ] {
             assert_eq!(redact_line(line), line);
         }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn transcript_never_writes_through_a_link() {
+        let base = temp_dir("transcript-link");
+        let outside = base.join("outside");
+        fs::create_dir_all(&outside).unwrap();
+        let layout = crate::layout::Layout::new(base.join("Cotra"));
+        fs::create_dir_all(&layout.root).unwrap();
+        std::os::unix::fs::symlink(&outside, layout.logs_dir()).unwrap();
+        transcript(&layout, "install 0.1.0 installed");
+        assert!(!outside.join("lifecycle.log").exists());
     }
 
     #[test]

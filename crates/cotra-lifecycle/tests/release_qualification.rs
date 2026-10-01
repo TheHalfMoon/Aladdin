@@ -60,6 +60,39 @@ fn fake_tunnel() -> PathBuf {
     path
 }
 
+/// Stops any runtime left by a failed assertion and removes the temporary
+/// directories this test created (never the provided release directory).
+struct Cleanup {
+    local: PathBuf,
+    dirs: std::cell::RefCell<Vec<PathBuf>>,
+}
+
+impl Cleanup {
+    fn track(&self, dir: &Path) {
+        self.dirs.borrow_mut().push(dir.to_path_buf());
+    }
+}
+
+impl Drop for Cleanup {
+    fn drop(&mut self) {
+        let cli = self.local.join("Cotra").join("bin").join("cotra.exe");
+        if cli.is_file() {
+            let _ = Command::new(&cli)
+                .args(["stop", "--json"])
+                .env("LOCALAPPDATA", &self.local)
+                .output();
+        }
+        for dir in self
+            .dirs
+            .borrow()
+            .iter()
+            .chain(std::iter::once(&self.local))
+        {
+            let _ = fs::remove_dir_all(dir);
+        }
+    }
+}
+
 fn copy_tree(from: &Path, to: &Path) {
     fs::create_dir_all(to).unwrap();
     for entry in fs::read_dir(from).unwrap() {
@@ -167,7 +200,12 @@ fn packaged_release_installs_runs_updates_recovers_and_uninstalls() {
     let root = local.join("Cotra");
     let project = temp_dir("project");
     fs::write(project.join("hello.txt"), b"hello from the workspace").unwrap();
-    let key_file = temp_dir("key").join("runtime.key");
+    let key_dir = temp_dir("key");
+    let key_file = key_dir.join("runtime.key");
+    let cleanup = Cleanup {
+        local: local.clone(),
+        dirs: std::cell::RefCell::new(vec![project.clone(), key_dir.clone()]),
+    };
     fs::write(&key_file, SECRET).unwrap();
     let tunnel_log = root.join("logs").join("tunnel.log");
 
@@ -254,6 +292,7 @@ fn packaged_release_installs_runs_updates_recovers_and_uninstalls() {
     // Update while running: stopped, switched, verified by the new CLI, restarted.
     let next = bump_patch(&base_version, 1);
     let candidate = derived_release(&release, &next, None);
+    cleanup.track(&candidate);
     let checked = json_ok(&cotra(
         &cli,
         &local,
@@ -304,6 +343,7 @@ fn packaged_release_installs_runs_updates_recovers_and_uninstalls() {
     let bad_version = bump_patch(&base_version, 2);
     let broken_cli = fs::read(&tunnel).unwrap();
     let broken = derived_release(&release, &bad_version, Some(("cotra.exe", &broken_cli)));
+    cleanup.track(&broken);
     let failed = cotra(
         &cli,
         &local,

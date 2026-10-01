@@ -10,7 +10,9 @@
 use serde_json::{json, Value};
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::TcpListener;
-use std::process::{ChildStdout, Command, Stdio};
+use std::process::{Command, Stdio};
+use std::sync::mpsc;
+use std::time::{Duration, Instant};
 
 fn value(args: &[String], name: &str) -> String {
     let index = args
@@ -20,19 +22,28 @@ fn value(args: &[String], name: &str) -> String {
     args[index + 1].clone()
 }
 
-fn read_response(reader: &mut BufReader<ChildStdout>, id: u64) -> Value {
-    for _ in 0..50 {
-        let mut line = String::new();
-        if reader.read_line(&mut line).unwrap_or(0) == 0 {
-            break;
-        }
-        if let Ok(message) = serde_json::from_str::<Value>(line.trim()) {
-            if message.get("id").and_then(Value::as_u64) == Some(id) {
-                return message;
+/// Waits up to 60 seconds for the JSON-RPC response with `id`. A missing
+/// response fails the fixture immediately with a diagnostic, so a broken
+/// exchange is reported instead of hanging qualification.
+fn read_response(lines: &mpsc::Receiver<String>, id: u64) -> Value {
+    let deadline = Instant::now() + Duration::from_secs(60);
+    loop {
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        match lines.recv_timeout(remaining) {
+            Ok(line) => {
+                if let Ok(message) = serde_json::from_str::<Value>(line.trim()) {
+                    if message.get("id").and_then(Value::as_u64) == Some(id) {
+                        return message;
+                    }
+                }
+            }
+            Err(_) => {
+                println!("fake-tunnel: no response for id {id}");
+                eprintln!("fake-tunnel: no response for id {id}");
+                std::process::exit(1);
             }
         }
     }
-    json!({"error": "no response"})
 }
 
 fn short(value: &Value) -> String {
@@ -86,7 +97,22 @@ fn main() {
         .spawn()
         .expect("start MCP command");
     let mut stdin = child.stdin.take().unwrap();
-    let mut reader = BufReader::new(child.stdout.take().unwrap());
+    let stdout = child.stdout.take().unwrap();
+    let (line_sender, lines) = mpsc::channel::<String>();
+    std::thread::spawn(move || {
+        let mut reader = BufReader::new(stdout);
+        loop {
+            let mut line = String::new();
+            match reader.read_line(&mut line) {
+                Ok(0) | Err(_) => break,
+                Ok(_) => {
+                    if line_sender.send(line).is_err() {
+                        break;
+                    }
+                }
+            }
+        }
+    });
     let mut send = |message: Value| {
         writeln!(stdin, "{message}").unwrap();
         stdin.flush().unwrap();
@@ -102,7 +128,7 @@ fn main() {
             "clientInfo": {"name": "fake-tunnel", "version": "0"}
         }
     }));
-    let initialize = read_response(&mut reader, 1);
+    let initialize = read_response(&lines, 1);
     println!(
         "fake-tunnel: mcp-initialize server={} raw={}",
         initialize
@@ -114,7 +140,7 @@ fn main() {
     send(json!({"jsonrpc": "2.0", "method": "notifications/initialized"}));
 
     send(json!({"jsonrpc": "2.0", "id": 2, "method": "tools/list"}));
-    let tools = read_response(&mut reader, 2);
+    let tools = read_response(&lines, 2);
     let names = tools
         .pointer("/result/tools")
         .and_then(Value::as_array)
@@ -134,7 +160,7 @@ fn main() {
         "method": "tools/call",
         "params": {"name": "system_status", "arguments": {}}
     }));
-    let call = read_response(&mut reader, 3);
+    let call = read_response(&lines, 3);
     let text = call.to_string();
     println!(
         "fake-tunnel: mcp-call is_error={} cotrad_answered={} raw={}",

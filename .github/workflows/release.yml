@@ -35,17 +35,9 @@ jobs:
           $version = (Select-String -Path Cargo.toml -Pattern '^version = "(.+)"$' | Select-Object -First 1).Matches.Groups[1].Value
           if ("v$version" -ne "${{ github.ref_name }}") { throw "tag ${{ github.ref_name }} does not match workspace version $version" }
           "VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-      - name: Build release binaries and the MCP app
-        run: |
-          npm install --ignore-scripts
-          npm run build
-          cargo build --release -p cotrad -p cotra-lifecycle --bins --examples
-      - name: Package release
-        run: node scripts/package-release.mjs --out "${{ runner.temp }}/cotra-${{ env.VERSION }}-windows-x64"
-      - name: Qualify the packaged release
-        env:
-          COTRA_RELEASE_DIR: ${{ runner.temp }}/cotra-${{ env.VERSION }}-windows-x64
-        run: cargo test --release -p cotra-lifecycle --test release_qualification -- --ignored --nocapture
+      - uses: ./.github/actions/build-package-qualify
+        with:
+          release-dir: ${{ runner.temp }}/cotra-${{ env.VERSION }}-windows-x64
       - name: Archive and hash
         shell: pwsh
         run: |
@@ -56,10 +48,19 @@ jobs:
           Copy-Item (Join-Path $env:RUNNER_TEMP "$name\manifest.json") (Join-Path $out "$name.manifest.json")
           Get-ChildItem $out -File | ForEach-Object { "{0}  {1}" -f (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower(), $_.Name } | Out-File (Join-Path $out "SHA256SUMS.txt") -Encoding ascii
           Get-Content (Join-Path $out "SHA256SUMS.txt")
-      - name: Create draft release
+      - name: Create or refresh the draft release
         env:
           GH_TOKEN: ${{ github.token }}
         shell: pwsh
         run: |
           $out = Join-Path $env:RUNNER_TEMP "dist"
-          gh release create "${{ github.ref_name }}" (Get-ChildItem $out -File).FullName --draft --verify-tag --repo "${{ github.repository }}" --title "Cotra $env:VERSION" --notes "Unsigned Windows x64 build of Cotra $env:VERSION from ${{ github.sha }}. Verify the archive against SHA256SUMS.txt; the installer verifies every payload file against manifest.json."
+          $files = (Get-ChildItem $out -File).FullName
+          gh release view "${{ github.ref_name }}" --repo "${{ github.repository }}" --json isDraft 2>$null | Out-Null
+          if ($LASTEXITCODE -eq 0) {
+            # A re-run after a partial upload refreshes the assets of the
+            # existing release instead of failing.
+            gh release upload "${{ github.ref_name }}" $files --clobber --repo "${{ github.repository }}"
+          } else {
+            gh release create "${{ github.ref_name }}" $files --draft --verify-tag --repo "${{ github.repository }}" --title "Cotra $env:VERSION" --notes "Unsigned Windows x64 build of Cotra $env:VERSION from ${{ github.sha }}. Verify the archive against SHA256SUMS.txt; the installer verifies every payload file against manifest.json."
+          }
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

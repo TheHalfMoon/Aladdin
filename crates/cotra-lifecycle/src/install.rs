@@ -84,17 +84,7 @@ impl<'a> Installer<'a> {
 
     /// Validates the platform and returns the verified Node.js runtime path.
     pub fn check_prerequisites(&self, node: Option<&Path>) -> Result<PathBuf, LifecycleError> {
-        let build = self.platform.windows_build()?;
-        if build < MIN_WINDOWS_BUILD {
-            return Err(LifecycleError::prerequisite(format!(
-                "Windows build {build} is older than the supported minimum {MIN_WINDOWS_BUILD}"
-            )));
-        }
-        if self.platform.is_avoidably_elevated()? {
-            return Err(LifecycleError::prerequisite(
-                "run the per-user install from a non-elevated prompt; administrator rights are not required",
-            ));
-        }
+        self.check_prerequisites_without_node()?;
         let node = match node {
             Some(path) => path.to_path_buf(),
             None => platform::find_node_on_path().ok_or_else(|| {

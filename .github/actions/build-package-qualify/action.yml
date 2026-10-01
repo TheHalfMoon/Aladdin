@@ -1,0 +1,33 @@
+name: Build, package, and qualify a Cotra release
+description: >-
+  Builds the release binaries and the MCP app from the locked dependency
+  graph, packages a release directory, and runs the release-artifact
+  qualification against it. Shared by CI and the release workflow so both
+  qualify exactly the same packaging. Requires checkout, the Rust toolchain,
+  and Node.js to be set up first.
+
+inputs:
+  release-dir:
+    description: Directory to write the packaged release into.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Install locked npm dependencies
+      shell: pwsh
+      run: npm ci --ignore-scripts
+    - name: Build the MCP app
+      shell: pwsh
+      run: npm run build
+    - name: Build release binaries and the tunnel fixture
+      shell: pwsh
+      run: cargo build --release -p cotrad -p cotra-lifecycle --bins --examples
+    - name: Package release
+      shell: pwsh
+      run: node scripts/package-release.mjs --out "${{ inputs.release-dir }}"
+    - name: Qualify the packaged release
+      shell: pwsh
+      env:
+        COTRA_RELEASE_DIR: ${{ inputs.release-dir }}
+      run: cargo test --release -p cotra-lifecycle --test release_qualification -- --ignored --nocapture

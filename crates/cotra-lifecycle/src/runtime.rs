@@ -312,6 +312,48 @@ pub fn disinherit_standard_handles() {
     }
 }
 
+/// An exclusive per-install lifecycle lock (a session-local named mutex), held
+/// by every state-changing lifecycle command so install, update, rollback,
+/// start, stop, and uninstall never interleave. A mutex abandoned by a
+/// crashed holder is acquired normally.
+pub struct LifecycleLock(OwnedHandle);
+
+impl LifecycleLock {
+    pub fn acquire(root: &Path, timeout: Duration) -> Result<Self, LifecycleError> {
+        use windows_sys::Win32::Foundation::WAIT_ABANDONED;
+        use windows_sys::Win32::System::Threading::{CreateMutexW, WaitForSingleObject};
+        let digest = Sha256::digest(root.to_string_lossy().to_ascii_lowercase().as_bytes());
+        let hex = digest
+            .iter()
+            .take(8)
+            .map(|b| format!("{b:02x}"))
+            .collect::<String>();
+        let name = wide(std::ffi::OsStr::new(&format!(
+            "Local\\Cotra-Lifecycle-{hex}"
+        )));
+        // SAFETY: null attributes are permitted; the name is NUL-terminated.
+        let mutex = OwnedHandle::new(unsafe { CreateMutexW(ptr::null(), 0, name.as_ptr()) })
+            .ok_or_else(|| last_error("CreateMutexW"))?;
+        let millis = u32::try_from(timeout.as_millis()).unwrap_or(u32::MAX - 1);
+        // SAFETY: valid mutex handle.
+        match unsafe { WaitForSingleObject(mutex.raw(), millis) } {
+            WAIT_OBJECT_0 | WAIT_ABANDONED => Ok(Self(mutex)),
+            WAIT_TIMEOUT => Err(LifecycleError::conflict(
+                "another Cotra lifecycle command is running for this install; try again when it finishes",
+            )),
+            _ => Err(last_error("WaitForSingleObject")),
+        }
+    }
+}
+
+impl Drop for LifecycleLock {
+    fn drop(&mut self) {
+        use windows_sys::Win32::System::Threading::ReleaseMutex;
+        // SAFETY: this thread owns the mutex acquired in `acquire`.
+        unsafe { ReleaseMutex(self.0.raw()) };
+    }
+}
+
 /// A detached process started by [`spawn_detached`].
 pub struct DetachedProcess {
     handle: OwnedHandle,

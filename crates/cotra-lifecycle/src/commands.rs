@@ -34,7 +34,7 @@ pub fn workspace(args: &mut Args) -> Result<Output, LifecycleError> {
             let entry = config.add_workspace(&id, &dir)?;
             config.save(&layout)?;
             Ok(Output {
-               exit_code: 0,
+                exit_code: 0,
                 human: format!(
                     "Workspace {} added: {}\nIt is not trusted for STRONG-gated operations until `cotra workspace trust {}`.\n{RESTART_HINT}",
                     entry.id,
@@ -51,7 +51,7 @@ pub fn workspace(args: &mut Args) -> Result<Output, LifecycleError> {
             let entry = config.remove_workspace(&id)?;
             config.save(&layout)?;
             Ok(Output {
-               exit_code: 0,
+                exit_code: 0,
                 human: format!(
                     "Workspace {} removed from configuration. Files in {} were not touched.\n{RESTART_HINT}",
                     entry.id,

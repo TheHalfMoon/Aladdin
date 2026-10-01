@@ -11,7 +11,6 @@
 // the same rules the installer enforces.
 
 import { createHash } from "node:crypto";
-import { execFileSync } from "node:child_process";
 import {
   copyFileSync,
   existsSync,
@@ -19,7 +18,6 @@ import {
   mkdirSync,
   readdirSync,
   readFileSync,
-  rmSync,
   writeFileSync
 } from "node:fs";
 import { dirname, join, relative, resolve, sep } from "node:path";
@@ -120,18 +118,37 @@ for (const name of readdirSync(distSource).sort()) {
   copyFileSync(join(distSource, name), join(appOut, "dist", name));
 }
 
-// Run npm through the current Node executable so no shell is involved.
-const npmCli = join(dirname(process.execPath), "node_modules", "npm", "bin", "npm-cli.js");
-const npmArgs = ["install", "--omit=dev", "--ignore-scripts", "--no-audit", "--no-fund", "--no-package-lock"];
-if (existsSync(npmCli)) {
-  execFileSync(process.execPath, [npmCli, ...npmArgs], { cwd: appOut, stdio: "inherit" });
-} else if (process.platform !== "win32") {
-  execFileSync("npm", npmArgs, { cwd: appOut, stdio: "inherit" });
-} else {
-  fail(`npm CLI not found next to ${process.execPath}`);
+// Copy exactly the locked production dependency closure from the repository's
+// node_modules (installed by `npm ci` from package-lock.json). Nothing is
+// resolved or downloaded at packaging time, so the payload matches the
+// versions and integrity hashes that CI tested.
+const lock = JSON.parse(readFileSync(join(repo, "package-lock.json"), "utf8"));
+const locked = Object.entries(lock.packages ?? {})
+  .filter(([key, entry]) => key.startsWith("node_modules/") && !entry.dev && !entry.link)
+  .map(([key, entry]) => ({ key, entry }))
+  .sort((a, b) => (a.key < b.key ? -1 : 1));
+if (locked.length === 0) fail("package-lock.json lists no production dependencies");
+function copyPackage(from, to) {
+  mkdirSync(to, { recursive: true });
+  for (const name of readdirSync(from)) {
+    if (name === "node_modules" || name === ".bin") continue;
+    const source = join(from, name);
+    const stat = lstatSync(source);
+    if (stat.isSymbolicLink()) fail(`dependency contains a link: ${source}`);
+    if (stat.isDirectory()) copyPackage(source, join(to, name));
+    else if (stat.isFile()) copyFileSync(source, join(to, name));
+  }
 }
-rmSync(join(appOut, "node_modules", ".bin"), { recursive: true, force: true });
-rmSync(join(appOut, "node_modules", ".package-lock.json"), { force: true });
+for (const { key, entry } of locked) {
+  const source = join(repo, ...key.split("/"));
+  const pkgPath = join(source, "package.json");
+  if (!existsSync(pkgPath)) fail(`${key} is not installed; run npm ci first`);
+  const installed = JSON.parse(readFileSync(pkgPath, "utf8"));
+  if (installed.version !== entry.version) {
+    fail(`${key} is ${installed.version} but package-lock.json pins ${entry.version}; run npm ci`);
+  }
+  copyPackage(source, join(appOut, ...key.split("/")));
+}
 
 const files = [];
 walk(out, files);

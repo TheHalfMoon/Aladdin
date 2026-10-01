@@ -86,8 +86,20 @@ pub fn update_marker_path(layout: &Layout) -> std::path::PathBuf {
     layout.state_dir().join("update.json")
 }
 
+/// Reads and validates `state\update.json`; malformed markers are errors.
 pub fn read_marker(layout: &Layout) -> Result<Option<UpdateMarker>, LifecycleError> {
-    read_json(&update_marker_path(layout))
+    let marker: Option<UpdateMarker> = read_json(&update_marker_path(layout))?;
+    if let Some(marker) = &marker {
+        if marker.schema != UPDATE_SCHEMA
+            || Version::parse(&marker.from).is_err()
+            || Version::parse(&marker.to).is_err()
+        {
+            return Err(LifecycleError::state(
+                "state\\update.json is malformed; run `cotra rollback` or reinstall",
+            ));
+        }
+    }
+    Ok(marker)
 }
 
 fn write_marker(
@@ -212,6 +224,7 @@ impl<'a> Updater<'a> {
     ) -> Result<UpdateReport, LifecycleError> {
         let installer = self.installer();
         installer.check_prerequisites_without_node()?;
+        self.resolve_pending_for_update()?;
         let state = installer.verify()?;
         let release = manifest::verify_release(source)?;
         let from = state.active.version.clone();
@@ -249,9 +262,33 @@ impl<'a> Updater<'a> {
         }
 
         let was_running = stop_if_running(&self.layout)?;
-        installer.prepare_root()?;
-        let version_dir = installer.stage_version(&release)?;
-        write_marker(&self.layout, UpdateState::Pending, &from, &to, None)?;
+        // Any failure before activation leaves the original version active;
+        // restart it if it was running.
+        let prepared = installer
+            .prepare_root()
+            .and_then(|()| installer.stage_version(&release))
+            .and_then(|dir| {
+                write_marker(&self.layout, UpdateState::Pending, &from, &to, None).map(|()| dir)
+            });
+        let version_dir = match prepared {
+            Ok(dir) => dir,
+            Err(error) => {
+                let restarted =
+                    was_running && restart(&self.layout, self.platform).unwrap_or(false);
+                return Err(LifecycleError::new(
+                    error.kind,
+                    format!(
+                        "{}; nothing was activated{}",
+                        error.message,
+                        if restarted {
+                            " and Cotra was restarted"
+                        } else {
+                            ""
+                        }
+                    ),
+                ));
+            }
+        };
         let previous_current = state.active.clone();
         let previous_record = state.record.clone();
         let activate = || -> Result<(), LifecycleError> {
@@ -342,10 +379,126 @@ impl<'a> Updater<'a> {
         installer.verify().map(|_| ())
     }
 
-    /// Activates the retained previous version.
+    /// Reads a retained version's manifest and verifies its payload.
+    fn verified_version(&self, version: &str) -> Result<(Manifest, Vec<u8>), LifecycleError> {
+        let dir = self.layout.version_dir(version);
+        let bytes = std::fs::read(dir.join(MANIFEST_FILE)).map_err(|error| {
+            LifecycleError::state(format!("version {version} is unavailable: {error}"))
+        })?;
+        let manifest: Manifest = serde_json::from_slice(&bytes).map_err(|error| {
+            LifecycleError::state(format!("manifest of {version} is corrupt: {error}"))
+        })?;
+        manifest.validate()?;
+        if manifest.version != version {
+            return Err(LifecycleError::state(format!(
+                "manifest version mismatch for {version}"
+            )));
+        }
+        manifest::verify_payload(&dir, &manifest)?;
+        Ok((manifest, bytes))
+    }
+
+    /// Before a new update: an interrupted update whose target is active,
+    /// verified, and passes its own self-check is completed; any other
+    /// pending state must be resolved with `cotra rollback`.
+    fn resolve_pending_for_update(&self) -> Result<(), LifecycleError> {
+        let Some(marker) = read_marker(&self.layout)? else {
+            return Ok(());
+        };
+        if marker.state != UpdateState::Pending {
+            return Ok(());
+        }
+        let completed = self
+            .installer()
+            .verify()
+            .ok()
+            .filter(|state| state.active.version == marker.to);
+        if completed.is_some()
+            && self_check(&self.layout.version_dir(&marker.to).join("cotra.exe")).is_ok()
+        {
+            let _ = std::fs::remove_file(update_marker_path(&self.layout));
+            crate::logs::transcript(
+                &self.layout,
+                &format!(
+                    "interrupted update {} -> {} completed after self-check",
+                    marker.from, marker.to
+                ),
+            );
+            return Ok(());
+        }
+        Err(LifecycleError::conflict(format!(
+            "an interrupted update from {} to {} was not completed; run `cotra rollback` to restore {}",
+            marker.from, marker.to, marker.from
+        )))
+    }
+
+    /// Recovers from an interrupted update: restores the marker's `from`
+    /// version even if the pointer and install record disagree.
+    fn recover_pending(&self, marker: &UpdateMarker) -> Result<RollbackReport, LifecycleError> {
+        let installer = self.installer();
+        let (manifest, bytes) = self.verified_version(&marker.from)?;
+        if !compatible(&manifest, current_config_schema(&self.layout)?) {
+            return Err(LifecycleError::conflict(format!(
+                "Cotra {} does not support the current configuration schema; nothing was changed",
+                marker.from
+            )));
+        }
+        let record: Option<InstallRecord> = read_json(&self.layout.install_file()).unwrap_or(None);
+        let record = record.ok_or_else(|| {
+            LifecycleError::state(
+                "install.json is unreadable; reinstall from the release directory",
+            )
+        })?;
+        let candidate_ok = self.verified_version(&marker.to).is_ok();
+        write_json_atomic(
+            &self.layout.current_file(),
+            &CurrentRecord {
+                schema: CURRENT_SCHEMA.into(),
+                version: marker.from.clone(),
+                manifest_sha256: manifest::sha256_bytes(&bytes),
+            },
+        )?;
+        installer.replace_cli(&self.layout.version_dir(&marker.from).join("cotra.exe"))?;
+        write_json_atomic(
+            &self.layout.install_file(),
+            &InstallRecord {
+                schema: INSTALL_SCHEMA.into(),
+                active: marker.from.clone(),
+                previous: candidate_ok.then(|| marker.to.clone()),
+                node_path: record.node_path,
+                path_entry_added: record.path_entry_added,
+            },
+        )?;
+        if !candidate_ok && marker.to != marker.from {
+            let _ = std::fs::remove_dir_all(self.layout.version_dir(&marker.to));
+        }
+        installer.protect_root()?;
+        installer.verify()?;
+        let _ = std::fs::remove_file(update_marker_path(&self.layout));
+        crate::logs::transcript(
+            &self.layout,
+            &format!(
+                "interrupted update {} -> {} rolled back",
+                marker.from, marker.to
+            ),
+        );
+        Ok(RollbackReport {
+            from: marker.to.clone(),
+            to: marker.from.clone(),
+            restarted: false,
+        })
+    }
+
+    /// Activates the retained previous version, or recovers an interrupted
+    /// update when a pending marker exists.
     pub fn rollback(&self) -> Result<RollbackReport, LifecycleError> {
         let installer = self.installer();
         installer.check_prerequisites_without_node()?;
+        if let Some(marker) = read_marker(&self.layout)? {
+            if marker.state == UpdateState::Pending {
+                return self.recover_pending(&marker);
+            }
+        }
         let current: CurrentRecord = crate::layout::read_current(&self.layout)?
             .ok_or_else(|| LifecycleError::not_installed("Cotra is not installed"))?;
         let record: InstallRecord = crate::layout::read_install(&self.layout)?
@@ -403,9 +556,13 @@ impl<'a> Updater<'a> {
                 &self.layout,
                 &format!("rollback {from} -> {previous} failed: {}", error.message),
             );
+            let restarted = restored.is_ok()
+                && was_running
+                && restart(&self.layout, self.platform).unwrap_or(false);
             return Err(match restored {
                 Ok(()) => LifecycleError::state(format!(
-                    "rollback to {previous} failed and {from} remains active: {}",
+                    "rollback to {previous} failed and {from} remains active{}: {}",
+                    if restarted { " and was restarted" } else { "" },
                     error.message
                 )),
                 Err(restore) => LifecycleError::state(format!(
@@ -545,6 +702,59 @@ mod tests {
         let error = crate::lifecycle::start(&layout, &platform, std::time::Duration::from_secs(1))
             .unwrap_err();
         assert!(!error.message.contains("in progress"), "{}", error.message);
+    }
+
+    #[test]
+    fn rollback_recovers_a_crash_between_pointer_and_install_record() {
+        let (layout, platform) = setup("0.2.0");
+        let installer = Installer::new(layout.clone(), &platform);
+        let release = manifest::verify_release(&release_dir("0.3.0")).unwrap();
+        installer.stage_version(&release).unwrap();
+        write_marker(&layout, UpdateState::Pending, "0.2.0", "0.3.0", None).unwrap();
+        // Simulate a crash after the pointer flip but before install.json.
+        write_json_atomic(
+            &layout.current_file(),
+            &CurrentRecord {
+                schema: CURRENT_SCHEMA.into(),
+                version: "0.3.0".into(),
+                manifest_sha256: release.manifest_sha256.clone(),
+            },
+        )
+        .unwrap();
+        assert!(installer.verify().is_err());
+        let error = Updater::new(layout.clone(), &platform)
+            .update(&release_dir("0.3.0"), &UpdateOptions::default())
+            .unwrap_err();
+        assert!(
+            error.message.contains("cotra rollback"),
+            "{}",
+            error.message
+        );
+
+        let report = Updater::new(layout.clone(), &platform).rollback().unwrap();
+        assert_eq!(report.to, "0.2.0");
+        let state = installer.verify().unwrap();
+        assert_eq!(state.active.version, "0.2.0");
+        assert_eq!(state.record.previous.as_deref(), Some("0.3.0"));
+        assert!(read_marker(&layout).unwrap().is_none());
+    }
+
+    #[test]
+    fn malformed_markers_are_errors_not_warnings() {
+        let (layout, platform) = setup("0.2.0");
+        std::fs::write(
+            update_marker_path(&layout),
+            br#"{"schema":"other","state":"failed","from":"0.2.0","to":"0.3.0","reason":null,"at_ms":1}"#,
+        )
+        .unwrap();
+        assert!(read_marker(&layout).is_err());
+        let report = crate::doctor::run(&layout, &platform);
+        let check = report
+            .checks
+            .iter()
+            .find(|check| check.name == "update_state")
+            .unwrap();
+        assert_eq!(check.status, crate::doctor::CheckStatus::Fail);
     }
 
     #[test]

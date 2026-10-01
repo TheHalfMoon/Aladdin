@@ -569,6 +569,26 @@ pub fn supervise(_layout: &Layout) -> i32 {
     2
 }
 
+/// Held by every state-changing lifecycle command so install, update,
+/// rollback, start, stop, uninstall, and configuration changes never
+/// interleave across processes.
+pub struct LockGuard {
+    #[cfg(windows)]
+    _lock: crate::runtime::LifecycleLock,
+}
+
+#[cfg(windows)]
+pub fn lock(layout: &Layout) -> Result<LockGuard, LifecycleError> {
+    Ok(LockGuard {
+        _lock: crate::runtime::LifecycleLock::acquire(&layout.root, Duration::from_secs(60))?,
+    })
+}
+
+#[cfg(not(windows))]
+pub fn lock(_layout: &Layout) -> Result<LockGuard, LifecycleError> {
+    Ok(LockGuard {})
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
