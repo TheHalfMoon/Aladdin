@@ -1,8 +1,8 @@
 # Cotra Current Canonical Frontier
 
-Status: ACTIVE_GRAIN
+Status: COMPLETE_CANONICAL
 Date: 2026-10-01
-Governance snapshot base: 52ab083ef3dfa250d1e1560fe223416596867451
+Governance snapshot base: 365e4183a0112fa1c9722daaebfe22bc36532b99
 Evidence ledger: `.specgrain/canonical-evidence.json`
 
 `Governance snapshot base` records the exact canonical parent from which this activation snapshot was authored. It deliberately does not claim the eventual merge SHA of the commit containing this file.
@@ -384,7 +384,7 @@ All P12 closeouts (SG-000041 PR `#120`, SG-000042 PR `#122`, SG-000043 PR `#124`
 
 ## Successor frontier
 
-COTRA-P13 continues at this frontier. SG-000045 is closed and SG-000046 is the sole active grain; no successor grain beyond SG-000046 is authorized.
+There is no active grain. COTRA-P13 is exited and every authorized grain of the roadmap is closed; see "Final canonical state" below. No successor grain is authorized.
 
 ## Closed SG-000033 screenshot capture
 
@@ -464,25 +464,59 @@ SG-000045 closed canonically: activation in governance PR `#128` (head `6f21d554
 
 SG-000045 proved release supply-chain accountability without runtime change: third-party notices, a CycloneDX 1.5 SBOM, and a provenance record generated from the actual payload and the shipped dependency graph, with the SBOM generator verifying the payload against the manifest and refusing paths outside the release, links, and non-regular entries; a deterministic archive; pinned Rust 1.97.1 and Node.js 24.19.0; an independent rebuild and repackage from a second checkout that produced byte-identical `cotra.exe`, `cotra-mcp-host.exe`, `cotrad.exe`, and archive on the qualified head (shipped binaries are built with `--bins` only, after the first attempt showed that building examples together unified test-only dependency features into them); installation, MCP operation, update, rollback, recovery, stop, and uninstall qualified from the extracted archive; `npm audit` and `cargo audit` with zero known vulnerabilities; release-candidate artifacts uploaded from CI; a recorded dependency and license review; and a draft-only release workflow that attaches the artifacts and creates a free GitHub build-provenance attestation. No code-signing claim is made and no agent authority is added.
 
-## Active grain
+## Closed SG-000046 threat-model regression, security review, and final quality
 
-SG-000046 - Threat-model regression, security review, and final repository quality - is the sole active COTRA-P13 grain.
+SG-000046 closed canonically: activation in governance PR `#131` (head `7392a745b0c9840fcbb1999b7140a2f610078ded`, CI `36844687870`, Review Gates `36844684807`, genuine TypeSafe Jev `9/9` hunks with zero findings, Alibaba Open Code Review v1.12.9 `3 reviewable + 1 excluded/manually reviewed`, 4 review threads resolved with fixes, merge `90d64654d27e277e7010d3520c6224877a5100e9`, post-merge CI `36845197865`), implementation PR `#133` (qualified head `f1962a423785ae5a51e4ec500621eb05556d94b7`, CI `36846172030` including the release-qualification and supply-chain audit jobs, Review Gates `36846168929`, genuine TypeSafe Jev `32/32` hunks with zero findings and zero blocking findings, Alibaba Open Code Review v1.12.9 `2 reviewable + 30 excluded/manually reviewed`, Graft 0.21.1 local structural analysis, merge `365e4183a0112fa1c9722daaebfe22bc36532b99`, post-merge CI `36847294467`), exact-diff manual security review, and 3 review threads all resolved with fixes. A `cotra-tunnel` test temporary-directory race found on the first activation attempt was repaired in PR `#132` (merge `dfc67bd89e6557876b76ab4898a803153b55bfff`, post-merge CI `36844218800`) without changing any assertion.
 
-This activation authorizes, without any runtime authority change:
-- a threat-model regression mapping T01 through T28 and the requested cross-capability compositions to the implemented controls and the CI tests that exercise them, with residual risks;
-- a recorded program-level security review;
-- Node regression tests pinning the MCP surface to the canonical 20-tool set and keeping lifecycle, installer, update, trust, and approval surfaces out of MCP tool sources;
-- removal of the 24 unreferenced `crates/cotrad/src/sg000015_main.rs` through `sg000038_main.rs` snapshot files, with the compiled test set unchanged;
-- `README.md` as the user guide, describing only existing commands and stating current limitations;
-- corrected status headers of historical documents;
-- LF line endings for `SHA256SUMS.txt` so the standard `sha256sum -c` verifies it;
-- a recorded final repository review.
+SG-000046 proved, without any runtime change: the threat-model regression in `docs/security/THREAT_MODEL_REGRESSION.md` maps T01 through T28 and the requested cross-capability compositions to the implemented controls and to tests that exist and run in CI; Node tests pin the MCP surface to exactly the canonical 20 tools across the whole source tree and keep lifecycle, installer, update, trust, and approval surfaces out of MCP tool sources; the 24 never-compiled `cotrad` snapshot files are removed with the Windows Rust suite unchanged at 542 passed; `README.md` is the user guide and documents only existing commands; historical document headers point to the current state; `SHA256SUMS.txt` verifies with `sha256sum -c`; and the program-level security review and final repository review in `docs/security/RELEASE_SECURITY_REVIEW.md` record no open blocking finding.
 
-## Active acceptance frontier
+## COTRA-P13 exit
 
-SG-000046 must prove the regression matrix cites tests that exist and run in CI, the MCP surface is pinned by tests, the dead-code removal leaves the compiled test set unchanged, the documentation matches the implementation, the checksum file verifies with standard tools, and every closed SG-000001 through SG-000045 regression passes unchanged.
+COTRA-P13 is exited at this frontier. Release hardening is closed under SG-000045 release supply chain and SG-000046 threat-model regression, security review, and final repository quality.
 
-No runtime behavior, MCP tool, capability, approval, or lifecycle command changes. The P13 exit and the project's final canonical state remain successor work.
+Exit matrix (each criterion is COMPLETE with canonical evidence in `.specgrain/canonical-evidence.json` and the grain blocks above, except where a limitation is stated):
+
+Threat-model regression suite - COMPLETE:
+- `docs/security/THREAT_MODEL_REGRESSION.md` maps T01 through T28 and the requested cross-capability compositions to the implemented controls and to tests that run in exact-head CI, and Node tests pin the MCP surface to the canonical 20-tool set (SG-000046).
+
+Dependency and license review - COMPLETE:
+- `docs/research/DEPENDENCY_LICENSE_REVIEW.md` records every shipped crate and npm package with version, license, and purpose; every license is permissive; `npm audit` and `cargo audit` run on every change with zero known vulnerabilities (SG-000045).
+
+SBOM - COMPLETE:
+- a CycloneDX 1.5 SBOM generated from the actual payload and shipped dependency graph is produced by CI for every change and attached to draft releases (SG-000045).
+
+Artifact provenance - COMPLETE:
+- a provenance record with the observed reproducibility result is produced by CI, and the draft-only release workflow creates a free GitHub build-provenance attestation; independent rebuilds from a second checkout are byte-identical (SG-000045).
+
+Independent security review - COMPLETE within the zero-cost rule:
+- every grain from SG-000008A onward passed genuine TypeSafe Jev and Alibaba Open Code Review on its exact head plus exact-diff manual security review, and the program-level review is recorded in `docs/security/RELEASE_SECURITY_REVIEW.md` (SG-000046). No paid or human third-party security audit was performed.
+
+Fresh Windows E2E - COMPLETE for everything automatable:
+- the release-qualification job installs the archived release on a fresh `windows-latest` runner and drives MCP through the installed host, `doctor`, update, rollback, recovery, verified stop, and uninstall (SG-000044, SG-000045). Real ChatGPT connectivity through the OpenAI tunnel and interactive SOFT/STRONG prompts require the owner's credentials and a human and are not exercised in CI.
+
+Rollback and recovery drill - COMPLETE:
+- the same job refuses a downgrade, rolls back, and recovers automatically from a release whose CLI cannot verify itself (SG-000044, SG-000045).
+
+No known blocking findings - COMPLETE:
+- every review thread on the P12 and P13 pull requests was resolved, and the security review records no open blocking finding (SG-000046).
+
+The COTRA-P13 program-exit change is this closeout itself. Its classification becomes canonical only after it merges and the resulting canonical main passes post-merge CI.
+
+## Final canonical state
+
+The authorized Cotra roadmap is complete at this frontier: every grain authorized for COTRA-P00 through COTRA-P13 (SG-000001 through SG-000046) is `CLOSED` with machine-checked evidence in `.specgrain/canonical-evidence.json`, COTRA-P06 through COTRA-P13 carry explicit exit records above, the earlier phases' grains closed under the governance current at the time, and no grain is active or authorized. As recorded for SG-000004, the live ChatGPT tunnel end-to-end path of COTRA-P03 remains UNPROVEN because it requires the owner's OpenAI credentials.
+
+Release state:
+- every change to `main` builds, packages, archives, and qualifies the Windows x64 release from the extracted archive on a fresh runner, verifies an independent byte-identical rebuild, audits dependencies, and uploads a release candidate (`cotra-release-candidate-<sha>`) with the archive, manifest, CycloneDX SBOM, provenance record, reproducibility record, third-party notices, and `SHA256SUMS.txt`;
+- pushing a `v<version>` tag creates or refreshes a draft GitHub release with the same assets and a GitHub build-provenance attestation; publishing a release is the owner's decision and no release has been published by automation.
+
+Residual limitations, recorded honestly:
+- release binaries are unsigned (no paid certificate under the zero-cost rule); integrity relies on manifest verification, `SHA256SUMS.txt`, and the provenance attestation;
+- real ChatGPT connectivity through the OpenAI Secure MCP Tunnel requires the owner's OpenAI account and tunnel credentials, and interactive SOFT/STRONG prompts and SmartScreen behavior require a human; none of these is exercised in CI;
+- public `process.spawn` on Windows is restricted to `whoami.exe`, and `git_fetch`/`git_push` destination policies are not configurable through the `cotra` CLI, so those tools fail closed in an installed Cotra;
+- no paid or human third-party security audit was performed; review relied on genuine TypeSafe Jev, Alibaba Open Code Review, exact-diff manual security review, and local Graft structural analysis.
+
+Any further capability, release, or audit work requires a new, explicitly authorized SpecGrain.
 
 ## Canonical public authority boundary retained
 
@@ -572,7 +606,7 @@ Still denied or absent outside the closed COTRA-P07 scope, the closed COTRA-P08 
 - caller-selected download destinations, absolute destinations, and destinations outside the approved workspace root;
 - download persistence of cookies, credentials, tokens, session material, or personal browser state.
 
-COTRA-P07 through COTRA-P12 are exited at this frontier. COTRA-P13 is active through SG-000046, which changes documentation, regression tests, dead code, and checksum-file line endings only; SG-000045 changed release supply-chain tooling only. SG-000041 keeps Cotra protected state outside every admitted workspace, and the P12 installer, lifecycle, and update surfaces are human-invoked only. Raw credentials must never be accepted merely because Git or a network transport can consume them.
+COTRA-P07 through COTRA-P13 are exited at this frontier. SG-000045 changed release supply-chain tooling only and SG-000046 changed documentation, regression tests, never-compiled code, and checksum-file line endings only. SG-000041 keeps Cotra protected state outside every admitted workspace, and the P12 installer, lifecycle, and update surfaces are human-invoked only. Raw credentials must never be accepted merely because Git or a network transport can consume them.
 
 Windows public `process.spawn` remains positively restricted to the exact SG-000010-qualified `%SystemRoot%\System32\whoami.exe` target.
 

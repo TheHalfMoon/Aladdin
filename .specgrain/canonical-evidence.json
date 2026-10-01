@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "snapshot_base": "52ab083ef3dfa250d1e1560fe223416596867451",
+  "snapshot_base": "365e4183a0112fa1c9722daaebfe22bc36532b99",
   "state_semantics": {
     "GRAIN": "Authorized or active work packet whose acceptance is not yet canonically proven.",
     "PROVEN": "Acceptance and required qualification are proven, but canonical closeout/governance is not yet complete.",
@@ -551,6 +551,17 @@
       "review_basis": "Exact-head genuine TypeSafe Jev 20/20 hunks with zero findings/blocking findings, Alibaba Open Code Review v1.12.9 exact-range delegation over 11 reviewable files with 1 excluded file (docs/research/DEPENDENCY_LICENSE_REVIEW.md) manually reviewed, exact-diff manual security review, Windows/Ubuntu Rust Node Governance, Supply chain audit, and Release qualification (archive-extracted install and lifecycle qualification plus independent byte-identical rebuild), successful post-merge CI, and zero unresolved review threads (15 resolved).",
       "unresolved_review_threads": 0,
       "authority_boundary": "Release supply-chain tooling only: deterministic archive, CycloneDX SBOM, provenance record, third-party notices in the payload, observed reproducibility, archive-based release qualification, dependency audits, and a draft-only release workflow with a build-provenance attestation. No runtime behavior, MCP tool, agent capability, approval, lifecycle command, network activity, or code-signing claim is added."
+    },
+    "SG-000046": {
+      "implementation_pr": 133,
+      "implementation_base": "90d64654d27e277e7010d3520c6224877a5100e9",
+      "qualified_head": "f1962a423785ae5a51e4ec500621eb05556d94b7",
+      "pre_merge_ci": "36846172030",
+      "merge_sha": "365e4183a0112fa1c9722daaebfe22bc36532b99",
+      "post_merge_ci": "36847294467",
+      "review_basis": "Exact-head genuine TypeSafe Jev 32/32 hunks with zero findings/blocking findings, Alibaba Open Code Review v1.12.9 exact-range delegation over 2 reviewable files with 30 excluded files manually reviewed, Graft 0.21.1 local structural blast-radius and reference analysis, exact-diff manual security review, Windows/Ubuntu Rust Node Governance, Supply chain audit, and Release qualification (independent byte-identical rebuild), successful post-merge CI, and zero unresolved review threads (3 resolved).",
+      "unresolved_review_threads": 0,
+      "authority_boundary": "Documentation, regression tests, removal of never-compiled snapshot files, and checksum-file line endings only. No runtime behavior, MCP tool, agent capability, approval, lifecycle command, network activity, or code-signing claim is added."
     }
   }
 }
