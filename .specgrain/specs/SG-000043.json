@@ -2,7 +2,7 @@
   "id": "SG-000043",
   "title": "Lifecycle runtime: supervision, tunnel setup, and diagnostics",
   "program": "COTRA-P12",
-  "state": "GRAIN",
+  "state": "CLOSED",
   "risk": "high",
   "created": "2026-10-01",
   "base": "fdd1b06d4c3acc7846493cde8df8947d9ea2a672",
@@ -54,15 +54,42 @@
     "configuration and key changes are atomic and a failed tunnel setup leaves the previous configuration and key in place"
   ],
   "acceptance": [
-    {"id": "A1", "claim": "Tests prove configuration schema, id, tunnel-id, and key validation, policy-kernel workspace admission, and atomic round trips."},
-    {"id": "A2", "claim": "Tests prove cotra-mcp-host resolves only the active version and fails closed on inactive versions, foreign locations, and missing workspaces."},
-    {"id": "A3", "claim": "Windows-native tests prove job assignment before resume, job-empty confirmation, identity-based PID-reuse detection, and exclusive stop events."},
-    {"id": "A4", "claim": "Tests prove log redaction of key-like tokens and credential assignments, bounded log rotation, loopback-only health URL parsing, and unreachable-endpoint reporting."},
-    {"id": "A5", "claim": "Tests prove the child environment carries no secret-like variables and normalizes OS variable casing before the closed allowlist."},
-    {"id": "A6", "claim": "Tests prove doctor reports fail or unknown, never pass, for uninstalled roots, unavailable IPC, and corrupt state files."},
-    {"id": "A7", "claim": "A Windows-native test with the real cotra, cotra-mcp-host, cotrad, and Node.js binaries proves unconfigured start fails closed, protected-state workspaces are refused, tunnel setup, start reaching running with verified health, the tunnel-to-MCP-host-to-cotrad path answering, duplicate start refused, status, a healthy doctor with a passing IPC check, verified stop, restart, uninstall stopping first while retaining the key, purge, and that the runtime key appears in no output or log while a redaction canary is logged redacted."},
-    {"id": "A8", "claim": "All closed SG-000001 through SG-000042 regressions pass unchanged."},
-    {"id": "A9", "claim": "Exact-head Windows and Ubuntu Rust, Node, Governance, genuine TypeSafe Jev, Alibaba Open Code Review, exact-diff security review, manual review of excluded files, and zero unresolved blocking review threads all pass."}
+    {
+      "id": "A1",
+      "claim": "Tests prove configuration schema, id, tunnel-id, and key validation, policy-kernel workspace admission, and atomic round trips."
+    },
+    {
+      "id": "A2",
+      "claim": "Tests prove cotra-mcp-host resolves only the active version and fails closed on inactive versions, foreign locations, and missing workspaces."
+    },
+    {
+      "id": "A3",
+      "claim": "Windows-native tests prove job assignment before resume, job-empty confirmation, identity-based PID-reuse detection, and exclusive stop events."
+    },
+    {
+      "id": "A4",
+      "claim": "Tests prove log redaction of key-like tokens and credential assignments, bounded log rotation, loopback-only health URL parsing, and unreachable-endpoint reporting."
+    },
+    {
+      "id": "A5",
+      "claim": "Tests prove the child environment carries no secret-like variables and normalizes OS variable casing before the closed allowlist."
+    },
+    {
+      "id": "A6",
+      "claim": "Tests prove doctor reports fail or unknown, never pass, for uninstalled roots, unavailable IPC, and corrupt state files."
+    },
+    {
+      "id": "A7",
+      "claim": "A Windows-native test with the real cotra, cotra-mcp-host, cotrad, and Node.js binaries proves unconfigured start fails closed, protected-state workspaces are refused, tunnel setup, start reaching running with verified health, the tunnel-to-MCP-host-to-cotrad path answering, duplicate start refused, status, a healthy doctor with a passing IPC check, verified stop, restart, uninstall stopping first while retaining the key, purge, and that the runtime key appears in no output or log while a redaction canary is logged redacted."
+    },
+    {
+      "id": "A8",
+      "claim": "All closed SG-000001 through SG-000042 regressions pass unchanged."
+    },
+    {
+      "id": "A9",
+      "claim": "Exact-head Windows and Ubuntu Rust, Node, Governance, genuine TypeSafe Jev, Alibaba Open Code Review, exact-diff security review, manual review of excluded files, and zero unresolved blocking review threads all pass."
+    }
   ],
   "successor_requirements": {
     "p12_update": "The update grain adds update, rollback, failed-update recovery, the tag release workflow, and a CI job that packages a release and exercises the lifecycle from the packaged artifact.",
@@ -76,5 +103,25 @@
     "exact_head_ci": true,
     "native_windows_qualification": true
   },
-  "done_when": "The lifecycle runtime is specified: supervised, job-bound tunnel client launch; verified stop; observed status and doctor; secret-safe tunnel setup; human-invoked local trust and approval clients; and uninstall that stops first, with no agent-reachable authority."
+  "done_when": "The lifecycle runtime is specified: supervised, job-bound tunnel client launch; verified stop; observed status and doctor; secret-safe tunnel setup; human-invoked local trust and approval clients; and uninstall that stops first, with no agent-reachable authority.",
+  "qualified_head": "7c28aceacef01794596833f4d42c2b7ccdad4927",
+  "implementation_base": "6a86a7e709fd067adff8b03b192cb7851789bf4c",
+  "implementation_merge": "0737ee3f86edfcc2a808625877c3dc8bb8690cc4",
+  "pre_merge_ci": "36800120591",
+  "pre_merge_review_gates": "36800119193",
+  "post_merge_ci": "36801225127",
+  "canonical_evidence": {
+    "implementation_pr": 123,
+    "implementation_base": "6a86a7e709fd067adff8b03b192cb7851789bf4c",
+    "qualified_head": "7c28aceacef01794596833f4d42c2b7ccdad4927",
+    "pre_merge_ci": "36800120591",
+    "pre_merge_review_gates": "36800119193",
+    "merge_sha": "0737ee3f86edfcc2a808625877c3dc8bb8690cc4",
+    "post_merge_ci": "36801225127",
+    "jev": "PASSED: genuine TypeSafe Jev exact-diff review covered 38/38 hunks with zero findings and zero blocking findings, pin 31f89602797fb7bea007f8a480bf368bf564954e",
+    "ocr": "PASSED: Alibaba Open Code Review v1.12.9 exact-range delegation over 21 changed files, 20 reviewable with delegated Rust rules applied and 1 excluded (Cargo.lock) manually reviewed",
+    "security_review": "PASS on exact qualified head: human-invoked CLI and cotra-mcp-host only, no MCP tool or agent capability; the runtime key is stored owner-only, delivered by file reference, and never placed in argv, environment, logs, or output, with tunnel-client output redacted (assignment, option, spaced, quoted, and multi-token forms) before logging; the detached supervisor inherits only NUL and its log through PROC_THREAD_ATTRIBUTE_HANDLE_LIST, assigns the suspended tunnel client to a kill-on-close Job Object before resume, and records pid, creation time, and image; stop acts only on identity-verified processes whose image is an installed versions\\<v>\\cotra.exe and reports verified only on an observed empty job; liveness uses a zero-timeout wait rather than exit code 259; version strings from records are validated before use as path components; cotra-mcp-host and the supervisor re-verify the whole install; the health probe is loopback-only with one overall deadline; trust grant, revoke, and emergency revoke remain STRONG through existing cotrad paths. Exact-head attempts before the qualified head exposed a missing cotrad build in tests, a supervisor handle-inheritance hang, and 28 bot review threads; 27 led to fixes and 1 was answered, and all evidence is for the final head.",
+    "unresolved_review_threads": 0,
+    "authority_boundary": "A human-invoked lifecycle runtime is closed: cotra-mcp-host for the active verified version, workspace configuration with policy-kernel admission, owner-only tunnel key setup with file-reference delivery, a job-bound supervisor of the official tunnel client, identity-verified start, stop, status, and doctor reporting only observed state, redacted bounded logs, and local clients of existing STRONG trust and revoke paths. No MCP tool, agent capability, approval class, or network access beyond a loopback health probe is added."
+  }
 }

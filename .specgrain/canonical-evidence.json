@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "snapshot_base": "fdd1b06d4c3acc7846493cde8df8947d9ea2a672",
+  "snapshot_base": "0737ee3f86edfcc2a808625877c3dc8bb8690cc4",
   "state_semantics": {
     "GRAIN": "Authorized or active work packet whose acceptance is not yet canonically proven.",
     "PROVEN": "Acceptance and required qualification are proven, but canonical closeout/governance is not yet complete.",
@@ -518,6 +518,17 @@
       "review_basis": "Exact-head genuine TypeSafe Jev 12/12 hunks with zero findings/blocking findings, Alibaba Open Code Review v1.12.9 exact-range delegation over 11 reviewable files with 1 excluded file (Cargo.lock) manually reviewed, exact-diff manual security review, Windows/Ubuntu Rust Node Governance qualification including Windows-native ACL, PATH, junction, and real-binary install tests, successful post-merge CI, and zero unresolved review threads.",
       "unresolved_review_threads": 0,
       "authority_boundary": "A human-invoked per-user install foundation is closed: verified manifest-based install under %LOCALAPPDATA%\\Cotra with an owner-only protected DACL, atomic version pointer, optional recorded user PATH entry, same-version repair, and retention-aware uninstall. No MCP tool, agent capability, network access, service, scheduled task, or elevation is added."
+    },
+    "SG-000043": {
+      "implementation_pr": 123,
+      "implementation_base": "6a86a7e709fd067adff8b03b192cb7851789bf4c",
+      "qualified_head": "7c28aceacef01794596833f4d42c2b7ccdad4927",
+      "pre_merge_ci": "36800120591",
+      "merge_sha": "0737ee3f86edfcc2a808625877c3dc8bb8690cc4",
+      "post_merge_ci": "36801225127",
+      "review_basis": "Exact-head genuine TypeSafe Jev 38/38 hunks with zero findings/blocking findings, Alibaba Open Code Review v1.12.9 exact-range delegation over 20 reviewable files with 1 excluded file (Cargo.lock) manually reviewed, exact-diff manual security review, Windows/Ubuntu Rust Node Governance qualification including Windows-native job, identity, stop-event, and real-binary lifecycle end-to-end tests, successful post-merge CI, and zero unresolved review threads (28 resolved).",
+      "unresolved_review_threads": 0,
+      "authority_boundary": "A human-invoked lifecycle runtime is closed: cotra-mcp-host for the active verified version, workspace configuration with policy-kernel admission, owner-only tunnel key setup with file-reference delivery, a job-bound supervisor of the official tunnel client, identity-verified start, stop, status, and doctor reporting only observed state, redacted bounded logs, and local clients of existing STRONG trust and revoke paths. No MCP tool, agent capability, approval class, or network access beyond a loopback health probe is added."
     }
   }
 }
