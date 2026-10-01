@@ -2,7 +2,7 @@
   "id": "SG-000051",
   "title": "Local client packages and configuration",
   "program": "COTRA-P14",
-  "state": "GRAIN",
+  "state": "CLOSED",
   "risk": "low",
   "created": "2026-10-01",
   "base": "276cadd15f47121ad2e9aa84a91a224f4b388f88",
@@ -71,5 +71,25 @@
     "exact_head_ci": true,
     "release_artifact_qualification": true
   },
-  "done_when": "Local client packages are canonical with multi-client qualification and no authority change."
+  "done_when": "Local client packages are canonical with multi-client qualification and no authority change.",
+  "qualified_head": "5a7462f7a19c0d4dd98e7507285877ea0dfde18f",
+  "implementation_base": "37541fc25e96060aed9213cefb467fea56df5e0e",
+  "implementation_merge": "a7002bfd56657fe2aa4f3710d10942031d66a258",
+  "pre_merge_ci": "36916190095",
+  "pre_merge_review_gates": "36916190376",
+  "post_merge_ci": "36916848206",
+  "canonical_evidence": {
+    "implementation_pr": 144,
+    "implementation_base": "37541fc25e96060aed9213cefb467fea56df5e0e",
+    "qualified_head": "5a7462f7a19c0d4dd98e7507285877ea0dfde18f",
+    "pre_merge_ci": "36916190095",
+    "pre_merge_review_gates": "36916190376",
+    "merge_sha": "a7002bfd56657fe2aa4f3710d10942031d66a258",
+    "post_merge_ci": "36916848206",
+    "jev": "PASSED: genuine TypeSafe Jev exact-diff review covered 10/10 hunks with zero findings and zero blocking findings, pin 31f89602797fb7bea007f8a480bf368bf564954e",
+    "ocr": "PASSED: Alibaba Open Code Review v1.12.9 exact-range delegation over 10 changed files, 7 reviewable (Claude Desktop JSON, Desktop Extension manifest, Codex TOML, Vibe Code TOML, generic stdio and HTTP shapes, Inspector script) with delegated rules applied and 3 excluded (README.md and examples/mcp-clients/README.md by unsupported-extension classification and apps/cotra-mcp/src/client-examples.test.ts by default-path classification) manually reviewed",
+    "security_review": "PASS on exact qualified head: tested local client packages (Claude Desktop JSON and Desktop Extension manifest, Codex TOML, Vibe Code TOML, generic stdio and HTTP shapes, Inspector script driving tools/list over three independent client paths with the 20-tool catalog checked on each), contract tests pinning supported installed entrypoints only with no secrets, no tunnel material, no wildcard binds, and no remote endpoints, manifest tool list matching the canonical catalog exactly, bearer credential read from the environment only, and no new MCP tool, schema, capability, approval, lifecycle, network listener, browser, UIA, clipboard, installer, elevation, or provider submission authority. All closed SG-000001 through SG-000050 regressions pass unchanged. Qodo billing-blocked and CodeRabbit skipped-review notices evaluated as non-evidence noise with zero substantive findings; zero unresolved blocking threads.",
+    "unresolved_review_threads": 0,
+    "authority_boundary": "No new MCP tool, schema change, capability, approval, lifecycle, network listener, browser, UIA, clipboard, installer, elevation, or provider submission authority. Tested client configuration, Desktop Extension manifest, contract tests, and Inspector qualification only."
+  }
 }

@@ -1,0 +1,77 @@
+{
+  "id": "SG-000052",
+  "title": "Relay protocol and remote threat contract",
+  "program": "COTRA-P15",
+  "state": "GRAIN",
+  "risk": "medium",
+  "created": "2026-10-01",
+  "base": "a7002bfd56657fe2aa4f3710d10942031d66a258",
+  "dependencies": [
+    "SG-000051"
+  ],
+  "objective": "Freeze the P15 relay protocol and remote threat contract before any network code merges: routing, request and response frames, authenticated identity binding, selected-device binding, request digest binding, replay behavior, sequencing, duplication, reconnect behavior, queue behavior, cancellation, expiry, quotas, privacy, logging, offline semantics, and typed failures. The relay carries only Cotra-defined authenticated MCP traffic and is never a generic proxy.",
+  "scope": {
+    "include": [
+      "relay routing and Cotra-defined authenticated request and response frames",
+      "authenticated identity binding, selected-device binding, and request digest binding",
+      "replay, sequencing, duplication, reconnect, queue, cancellation, and expiry behavior",
+      "quotas, privacy, logging, offline semantics, and typed failures",
+      "remote threat contract: relay compromise must not mint local authority",
+      "contract tests proving the frozen vocabulary before implementation grains proceed"
+    ],
+    "exclude": [
+      "any relay, device uplink, OAuth, or public edge implementation code",
+      "arbitrary TCP forwarding, SOCKS, CONNECT, generic HTTP proxy, arbitrary WebSocket tunnel, arbitrary destination forwarding, or remote shell transport",
+      "any new local MCP tool, tool schema change, capability widening, or approval change",
+      "any P16 tool-surface widening or provider submission",
+      "any public provider submission, directory publication, or availability claim"
+    ]
+  },
+  "authority_delta": {
+    "filesystem": "None.",
+    "process": "None.",
+    "network": "None.",
+    "browser": "None.",
+    "ui_input": "None.",
+    "secrets": "None.",
+    "approval": "None.",
+    "privileged": "None."
+  },
+  "invariants": [
+    "no network code merges until this contract is frozen",
+    "the relay may carry only Cotra-defined authenticated MCP traffic",
+    "relay compromise cannot create local authority",
+    "cotrad remains the local authorization kernel and the relay remains an adapter",
+    "no durable request queue may execute after lease expiration, revoke, lock, logoff, or policy change"
+  ],
+  "acceptance": [
+    {
+      "id": "A1",
+      "claim": "Routing, request and response frames, identity and device and digest bindings, and the typed failure vocabulary including REMOTE_SESSION_INACTIVE are frozen in canonical documents."
+    },
+    {
+      "id": "A2",
+      "claim": "Replay, sequencing, duplication, reconnect, queue, cancellation, expiry, quota, privacy, logging, and offline behavior are specified with fail-closed semantics, and generic proxy shapes are explicitly denied."
+    },
+    {
+      "id": "A3",
+      "claim": "Contract tests prove the frozen vocabulary, and all closed SG-000001 through SG-000051 regressions pass unchanged."
+    },
+    {
+      "id": "A4",
+      "claim": "Exact-head CI including release qualification and supply-chain audit, genuine TypeSafe Jev, Alibaba Open Code Review, manual review of excluded files, and zero unresolved review threads all pass."
+    }
+  ],
+  "successor_requirements": {
+    "sg_000053": "Device identity, pairing, and revocation may proceed only after SG-000052 closes with the relay protocol and remote threat contract frozen."
+  },
+  "review": {
+    "diffcipline": true,
+    "jev_semantic_review": true,
+    "alibaba_open_code_review": "required exact-range qualification where integrated",
+    "security_review": true,
+    "exact_head_ci": true,
+    "release_artifact_qualification": true
+  },
+  "done_when": "The relay protocol and remote threat contract is frozen with denied generic-proxy shapes and no network implementation."
+}
