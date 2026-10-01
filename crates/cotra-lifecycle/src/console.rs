@@ -6,24 +6,30 @@ use crate::LifecycleError;
 /// Fails when stdin is not an interactive console or echo cannot be
 /// disabled, so a secret is never read while it could be echoed or captured
 /// from a pipe; use `--key-file` instead. The original console mode is
-/// restored on return, on error, and on Ctrl+C or Ctrl+Break.
+/// restored on return, on error, and on Ctrl+C or Ctrl+Break. Prompts are
+/// serialized: the saved (handle, mode) pair is process-global, so only one
+/// hidden prompt can be active at a time.
 #[cfg(windows)]
 pub fn read_secret_line(prompt: &str) -> Result<String, LifecycleError> {
-    use std::sync::atomic::{AtomicU32, Ordering};
+    use std::sync::Mutex;
     use windows_sys::Win32::Foundation::BOOL;
     use windows_sys::Win32::System::Console::{
         GetConsoleMode, GetStdHandle, SetConsoleCtrlHandler, SetConsoleMode, ENABLE_ECHO_INPUT,
         STD_INPUT_HANDLE,
     };
 
-    const NO_MODE: u32 = u32::MAX;
-    static SAVED_MODE: AtomicU32 = AtomicU32::new(NO_MODE);
+    /// The console input handle and mode this prompt changed, restored by the
+    /// signal handler and by `Restore`.
+    static SAVED: Mutex<Option<(isize, u32)>> = Mutex::new(None);
+    /// Serializes prompts so `SAVED` always describes the active prompt.
+    static PROMPT: Mutex<()> = Mutex::new(());
 
     unsafe extern "system" fn restore_on_signal(_signal: u32) -> BOOL {
-        let mode = SAVED_MODE.load(Ordering::SeqCst);
-        if mode != NO_MODE {
-            // SAFETY: restores the console input mode saved before reading.
-            unsafe { SetConsoleMode(GetStdHandle(STD_INPUT_HANDLE), mode) };
+        if let Ok(saved) = SAVED.try_lock() {
+            if let Some((handle, mode)) = *saved {
+                // SAFETY: restores the exact handle and mode saved by this prompt.
+                unsafe { SetConsoleMode(handle, mode) };
+            }
         }
         // Not handled: the default handler still terminates the process.
         0
@@ -40,10 +46,15 @@ pub fn read_secret_line(prompt: &str) -> Result<String, LifecycleError> {
                 SetConsoleMode(self.handle, self.mode);
                 SetConsoleCtrlHandler(Some(restore_on_signal), 0);
             }
-            SAVED_MODE.store(NO_MODE, Ordering::SeqCst);
+            if let Ok(mut saved) = SAVED.lock() {
+                *saved = None;
+            }
         }
     }
 
+    let _prompt = PROMPT
+        .lock()
+        .map_err(|_| LifecycleError::internal("hidden prompt lock poisoned"))?;
     // SAFETY: GetStdHandle has no preconditions.
     let handle = unsafe { GetStdHandle(STD_INPUT_HANDLE) };
     let mut mode = 0u32;
@@ -53,10 +64,15 @@ pub fn read_secret_line(prompt: &str) -> Result<String, LifecycleError> {
             "no interactive console for the hidden key prompt; pass --key-file <path>",
         ));
     }
-    SAVED_MODE.store(mode, Ordering::SeqCst);
+    *SAVED
+        .lock()
+        .map_err(|_| LifecycleError::internal("console state lock poisoned"))? =
+        Some((handle, mode));
     // SAFETY: registers a handler with the documented signature.
     if unsafe { SetConsoleCtrlHandler(Some(restore_on_signal), 1) } == 0 {
-        SAVED_MODE.store(NO_MODE, Ordering::SeqCst);
+        if let Ok(mut saved) = SAVED.lock() {
+            *saved = None;
+        }
         return Err(LifecycleError::platform(
             "the console signal handler could not be installed; pass --key-file <path>",
         ));

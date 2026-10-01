@@ -101,12 +101,30 @@ pub fn call(
         .stderr
         .take()
         .ok_or_else(|| LifecycleError::internal("cotrad stderr unavailable"))?;
-    let diagnostics = std::thread::spawn(move || {
-        let mut tail = String::new();
-        for line in BufReader::new(stderr).lines().map_while(Result::ok) {
-            tail = crate::logs::redact_line(&line).chars().take(400).collect();
+    // Drain stderr in fixed-size chunks, keeping only a bounded tail, and hand
+    // it back over a channel so a descendant holding the pipe can never block
+    // this call.
+    let (diagnostics_sender, diagnostics) = mpsc::channel::<String>();
+    std::thread::spawn(move || {
+        let mut stderr = stderr;
+        let mut tail = Vec::<u8>::new();
+        let mut chunk = [0u8; 1024];
+        while let Ok(read) = std::io::Read::read(&mut stderr, &mut chunk) {
+            if read == 0 {
+                break;
+            }
+            tail.extend_from_slice(&chunk[..read]);
+            if tail.len() > 2048 {
+                tail.drain(..tail.len() - 2048);
+            }
         }
-        tail
+        let text = String::from_utf8_lossy(&tail);
+        let last = text
+            .lines()
+            .rev()
+            .find(|line| !line.trim().is_empty())
+            .unwrap_or("");
+        let _ = diagnostics_sender.send(crate::logs::redact_line(last).chars().take(400).collect());
     });
     let mut stdin = child
         .stdin
@@ -160,7 +178,9 @@ pub fn call(
         }
     };
     let tail = if exited {
-        diagnostics.join().unwrap_or_default()
+        diagnostics
+            .recv_timeout(Duration::from_millis(500))
+            .unwrap_or_default()
     } else {
         String::new()
     };

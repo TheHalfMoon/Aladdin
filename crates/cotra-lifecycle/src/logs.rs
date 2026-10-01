@@ -75,6 +75,17 @@ pub fn redact_line(line: &str) -> String {
         out.push(redacted);
         pending = value_follows;
         let bare = lower.trim_matches(|c: char| c == '"' || c == '\'');
+        // An option such as `--api-key` or `--control-plane.api-key` whose
+        // value is the next token.
+        let option_name = bare
+            .strip_prefix('-')
+            .filter(|_| !bare.contains('='))
+            .and_then(|name| name.rsplit(['.', '-', '_']).next());
+        if !pending
+            && option_name.is_some_and(|last| marker_len(last.as_bytes()) == Some(last.len()))
+        {
+            pending = true;
+        }
         awaiting_separator = !pending && marker_len(bare.as_bytes()) == Some(bare.len());
     }
     let joined = out.join(" ");
@@ -130,7 +141,9 @@ fn redact_token(token: &str) -> (String, bool) {
     let mut copied = 0;
     let mut index = 0;
     while index < bytes.len() {
-        let at_boundary = index == 0 || !is_word(bytes[index - 1]);
+        // `_` and `-` separate name parts (OPENAI_API_KEY, --api-key), so only
+        // an alphanumeric predecessor means the match is inside a word.
+        let at_boundary = index == 0 || !bytes[index - 1].is_ascii_alphanumeric();
         if at_boundary {
             if let Some(length) = key_like_len(&bytes[index..]) {
                 out.push_str(&token[copied..index]);
@@ -275,6 +288,22 @@ mod tests {
         assert_hidden("session=s3cr3t-value;path=/", &["s3cr3t-value"]);
         assert_hidden("Authorization: Basic dXNlcjpwYXNz", &["dXNlcjpwYXNz"]);
         assert_hidden("cookie: id=abc", &["id=abc"]);
+        assert_hidden(
+            "OPENAI_API_KEY=sk-proj-abcdef123456",
+            &["sk-proj-abcdef123456"],
+        );
+        assert_hidden("env OPENAI_API_KEY=plainsecret", &["plainsecret"]);
+        assert_hidden("--api-key=plainsecret", &["plainsecret"]);
+        assert_hidden("--api-key plainsecret", &["plainsecret"]);
+        assert_hidden(
+            r"--control-plane.api-key file:C:\keys\k",
+            &[r"file:C:\keys\k"],
+        );
+        assert_eq!(
+            redact_line(r"--health.url-file C:\run\h.url"),
+            r"--health.url-file C:\run\h.url"
+        );
+        assert_hidden("CONTROL_PLANE_TOKEN: plainsecret", &["plainsecret"]);
     }
 
     #[test]

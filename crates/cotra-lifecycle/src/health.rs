@@ -58,7 +58,15 @@ pub fn probe(url: &HealthUrl, timeout: Duration) -> Result<u16, LifecycleError> 
     // a status line split across TCP segments is still parsed.
     let mut buffer = Vec::with_capacity(64);
     let mut chunk = [0u8; 64];
+    let deadline = std::time::Instant::now() + timeout;
     while buffer.len() < 256 && !buffer.windows(2).any(|pair| pair == b"\r\n") {
+        let remaining = deadline.saturating_duration_since(std::time::Instant::now());
+        if remaining.is_zero() {
+            return Err(LifecycleError::state("health probe timed out"));
+        }
+        stream
+            .set_read_timeout(Some(remaining))
+            .map_err(|error| LifecycleError::state(format!("health probe setup: {error}")))?;
         let read = stream
             .read(&mut chunk)
             .map_err(|error| LifecycleError::state(format!("health probe read: {error}")))?;

@@ -331,7 +331,10 @@ impl<'a> Installer<'a> {
     pub fn uninstall(&self, options: &UninstallOptions) -> Result<UninstallReport, LifecycleError> {
         let root_exists = self.layout.root.is_dir();
         let record: Option<InstallRecord> = if root_exists {
-            crate::layout::read_install(&self.layout)?
+            // Tolerant read: uninstall only consults `path_entry_added` and
+            // builds no path from the record, so a malformed record must not
+            // strand the user with an install the CLI refuses to remove.
+            crate::layout::read_json::<InstallRecord>(&self.layout.install_file()).unwrap_or(None)
         } else {
             None
         };
