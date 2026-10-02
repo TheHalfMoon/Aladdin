@@ -1,0 +1,67 @@
+{
+  "id": "SG-000062",
+  "title": "Structured browser MCP exposure qualification",
+  "program": "COTRA-P16",
+  "state": "GRAIN",
+  "risk": "high",
+  "created": "2026-10-02",
+  "base": "7bba94399c1316ac894a654dad41aff6480b3517",
+  "dependencies": [
+    "SG-000061"
+  ],
+  "objective": "Qualify each closed structured browser shape (SG-000021 through SG-000026) against a live browser engine before any MCP exposure, expose only shapes that are qualified against real browser behavior, and record an explicit, test-pinned decision for every shape that is not, with no arbitrary JavaScript executor, generic DevTools, debugger, or hidden network primitive.",
+  "scope": {
+    "include": [
+      "a per-shape qualification of the structured browser layer against live browser behavior, identifying whether each shape drives a real engine or only the policy and page-registry model",
+      "MCP exposure only for shapes qualified against a live engine",
+      "an explicit decision record and contract tests that keep every unqualified shape off the MCP surface and prove the browser layer opens no browser, debugger, or network channel",
+      "updates to the parity inventory and canonical documentation reflecting the decision"
+    ],
+    "exclude": [
+      "exposing model-only shapes as if they controlled a real browser",
+      "arbitrary JavaScript execution, generic DevTools or CDP access, debugger attachment, personal-profile access, or any hidden network primitive",
+      "desktop, clipboard, or network exposure (SG-000063 and SG-000064)"
+    ]
+  },
+  "authority_delta": {
+    "filesystem": "None.",
+    "process": "None.",
+    "network": "None.",
+    "browser": "Only live-qualified structured shapes may be exposed; none is exposed if none qualifies.",
+    "ui_input": "None.",
+    "secrets": "None.",
+    "approval": "None.",
+    "privileged": "None."
+  },
+  "invariants": [
+    "no MCP tool claims browser capability that the implementation does not have",
+    "no arbitrary script, DevTools, debugger, or personal-profile authority",
+    "unqualified browser shapes stay hidden and test-pinned"
+  ],
+  "acceptance": [
+    {
+      "id": "A1",
+      "claim": "Every structured browser shape is qualified as live-engine or model-only with evidence from the implementation."
+    },
+    {
+      "id": "A2",
+      "claim": "Only live-qualified shapes are exposed; every unqualified shape is recorded with its reason and pinned off the MCP surface by contract tests."
+    },
+    {
+      "id": "A3",
+      "claim": "Exact-head CI, genuine TypeSafe Jev, Alibaba Open Code Review, manual review of excluded files, and zero unresolved review threads all pass."
+    }
+  ],
+  "successor_requirements": {
+    "sg_000063": "Structured desktop MCP exposure may proceed only after SG-000062 closes."
+  },
+  "review": {
+    "diffcipline": true,
+    "jev_semantic_review": true,
+    "alibaba_open_code_review": "required exact-range qualification where integrated",
+    "security_review": true,
+    "exact_head_ci": true,
+    "release_artifact_qualification": true
+  },
+  "done_when": "Structured browser exposure is decided per shape on live-engine evidence, with no model-only capability presented as real."
+}

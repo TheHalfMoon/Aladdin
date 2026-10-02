@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "snapshot_base": "41a7808e4fcfc18331e5a1897275384151e6a50c",
+  "snapshot_base": "7bba94399c1316ac894a654dad41aff6480b3517",
   "state_semantics": {
     "GRAIN": "Authorized or active work packet whose acceptance is not yet canonically proven.",
     "PROVEN": "Acceptance and required qualification are proven, but canonical closeout/governance is not yet complete.",
@@ -730,6 +730,18 @@
       "review_basis": "Exact-head genuine TypeSafe Jev 27/27 hunks with zero findings/blocking findings (pin 31f89602797fb7bea007f8a480bf368bf564954e), Alibaba Open Code Review v1.12.9 exact-range delegation over 14 files with 12 reviewable and 2 excluded files (CAPABILITY_PARITY.md and SG-000060_PROTECTED_EXECUTABLE_REGISTRY_NOTE.md) manually reviewed, exact-diff manual security review, Windows/Ubuntu Rust Node Governance, Supply chain audit, Release qualification, and Relay container, successful post-merge CI, and zero unresolved review threads. Qodo billing-blocked and CodeRabbit skipped-review notices evaluated as non-evidence noise with zero substantive findings.",
       "unresolved_review_threads": 0,
       "authority_boundary": "process.spawn may launch locally registered, hash-pinned, non-interpreter native executables with constrained argv inside the unchanged contained, network-less, bounded, per-run-approved path; registry management is local STRONG-gated only. No shell, interpreter, arbitrary path, background process, network, MCP tool, or schema change."
+    },
+    "SG-000061": {
+      "implementation_pr": 164,
+      "implementation_base": "fb4203f9ef1638e32cdf7c9afdb3f9e49b082222",
+      "qualified_head": "5b6106e5c5b94e7d250b164fc0d4cf3f2b4aca48",
+      "pre_merge_ci": "37022199966",
+      "pre_merge_review_gates": "37022199821",
+      "merge_sha": "7bba94399c1316ac894a654dad41aff6480b3517",
+      "post_merge_ci": "37023056930",
+      "review_basis": "Exact-head genuine TypeSafe Jev 32/32 hunks with zero findings/blocking findings (pin 31f89602797fb7bea007f8a480bf368bf564954e), Alibaba Open Code Review v1.12.9 exact-range delegation over 18 files with 13 reviewable and 5 excluded files manually reviewed, exact-diff manual security review, Windows/Ubuntu Rust Node Governance, Supply chain audit, Release qualification, and Relay container, successful post-merge CI, and zero unresolved review threads. Qodo billing-blocked and CodeRabbit skipped-review notices evaluated as non-evidence noise with zero substantive findings.",
+      "unresolved_review_threads": 0,
+      "authority_boundary": "Bounded mkdir, non-overwriting move or rename, single-file or empty-directory removal with STRONG approval, digest-bound exact edit, ranged read, and name search inside trusted workspaces as six static MCP tools. No recursive, wildcard, overwriting, link, attribute, or out-of-workspace filesystem authority."
     }
   }
 }
