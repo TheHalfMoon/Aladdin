@@ -1,0 +1,68 @@
+{
+  "id": "SG-000065",
+  "title": "Tool profiles and metadata contract",
+  "program": "COTRA-P16",
+  "state": "GRAIN",
+  "risk": "high",
+  "created": "2026-10-02",
+  "base": "dadbc5b273c282759501c60f587f80f461a381ea",
+  "dependencies": [
+    "SG-000064"
+  ],
+  "objective": "Pin one authoritative tool metadata contract for every canonical MCP tool: surface profile membership, MCP annotations, OAuth scopes or local-only status, effect class, approval class, output bound, and kernel capability shape; derive tool registration, discovery, and remote authorization from it so that each transport and provider sees exactly its profile, unknown tools, profiles, and provider mappings deny by default, and every profile is regression-tested against the kernel's own scope table.",
+  "scope": {
+    "include": [
+      "a single machine-readable tool contract covering every canonical tool exactly once with profile membership, annotations, scopes or local-only status, effect class, approval class, output bound, and kernel shape",
+      "MCP tool annotations (read-only, destructive, idempotent, open-world hints and titles) emitted from the contract on every transport",
+      "profile-filtered registration so remote discovery lists only remotely mappable tools while local transports list their full local profile",
+      "default deny for unknown tools, unknown profiles, and unmapped provider kinds, with provider-specific allow and deny differences recorded explicitly",
+      "regression tests that pin every profile's exact membership and check the contract against the OAuth matrix, the cotrad remote-session scope table, approval behavior, and the parity inventory"
+    ],
+    "exclude": [
+      "any new tool, kernel shape, scope, or authority",
+      "widening any existing profile or enabling a remote mapping for a local-only tool",
+      "provider directory submission or provider-specific packaging (SG-000067 through SG-000070)"
+    ]
+  },
+  "authority_delta": {
+    "filesystem": "None.",
+    "process": "None.",
+    "network": "None.",
+    "browser": "None.",
+    "ui_input": "None.",
+    "secrets": "None.",
+    "approval": "None; approval classes are recorded, not changed.",
+    "privileged": "None."
+  },
+  "invariants": [
+    "discovery hiding is never authorization: cotrad and the remote ceilings still enforce every call",
+    "no profile, provider, or transport gains a tool it could not call before this grain",
+    "annotations never claim a tool is read-only, non-destructive, or closed-world when it is not"
+  ],
+  "acceptance": [
+    {
+      "id": "A1",
+      "claim": "Every canonical tool has exactly one contract entry whose annotations, scopes, effect class, approval class, output bound, and kernel shape are consistent with its implementation and are emitted on every transport."
+    },
+    {
+      "id": "A2",
+      "claim": "Each profile's membership is exact and regression-tested, remote discovery lists only remotely mappable tools, and unknown tools, profiles, and provider mappings deny."
+    },
+    {
+      "id": "A3",
+      "claim": "Exact-head CI, genuine TypeSafe Jev, Alibaba Open Code Review, manual review of excluded files, and zero unresolved review threads all pass."
+    }
+  ],
+  "successor_requirements": {
+    "sg_000066": "The P16 security and parity exit may proceed only after SG-000065 closes."
+  },
+  "review": {
+    "diffcipline": true,
+    "jev_semantic_review": true,
+    "alibaba_open_code_review": "required exact-range qualification where integrated",
+    "security_review": true,
+    "exact_head_ci": true,
+    "release_artifact_qualification": true
+  },
+  "done_when": "One tested tool contract drives registration, annotations, discovery, and remote ceilings for every profile, with default deny for anything unmapped."
+}
