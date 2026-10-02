@@ -11,7 +11,7 @@ owning grain exposes it under explicit profiles), `missing` (owning grain implem
 
 ## Workflows
 
-Totals: implemented_exposed: 17, implemented_hidden: 6, missing: 1, intentionally_denied: 11.
+Totals: implemented_exposed: 17, implemented_hidden: 5, missing: 2, intentionally_denied: 11.
 
 | Workflow | Status | Tools, owner, or reason |
 | --- | --- | --- |
@@ -32,7 +32,7 @@ Totals: implemented_exposed: 17, implemented_hidden: 6, missing: 1, intentionall
 | `git_read` | implemented_exposed | `git_status`, `git_diff`, `git_log` |
 | `git_local_mutation` | implemented_exposed | `git_branch_create`, `git_stage`, `git_unstage`, `git_commit` |
 | `git_remote` | implemented_exposed | `git_fetch_preview`, `git_fetch`, `git_push_preview`, `git_push` |
-| `browser_structured` | implemented_hidden | SG-000062 |
+| `browser_structured` | missing | outside_v0_2_target (needs a live isolated browser engine qualified shape by shape; the closed policy model is not exposed (docs/p16/BROWSER_QUALIFICATION.md)) |
 | `desktop_observe_and_act` | implemented_hidden | SG-000063 |
 | `screenshots` | implemented_hidden | SG-000063 |
 | `clipboard_read_write` | implemented_hidden | SG-000064 |
@@ -53,7 +53,7 @@ Totals: implemented_exposed: 17, implemented_hidden: 6, missing: 1, intentionall
 
 ## Capability shapes
 
-Totals: implemented_exposed: 26, implemented_hidden: 29, missing: 0, intentionally_denied: 13.
+Totals: implemented_exposed: 26, implemented_hidden: 17, missing: 0, intentionally_denied: 25.
 
 | Shape | Status | MCP tool, owner, or reason |
 | --- | --- | --- |
@@ -83,18 +83,18 @@ Totals: implemented_exposed: 26, implemented_hidden: 29, missing: 0, intentional
 | `git.fetch/fetch` | implemented_exposed | `git_fetch` |
 | `git.push.preview/preview` | implemented_exposed | `git_push_preview` |
 | `git.push/push` | implemented_exposed | `git_push` |
-| `browser.profile/status` | implemented_hidden | SG-000062 |
-| `browser.destination/validate` | implemented_hidden | SG-000062 |
-| `browser.page/open` | implemented_hidden | SG-000062 |
-| `browser.navigation/preview` | implemented_hidden | SG-000062 |
-| `browser.navigation/navigate` | implemented_hidden | SG-000062 |
-| `browser.snapshot/observe` | implemented_hidden | SG-000062 |
-| `browser.dom/click` | implemented_hidden | SG-000062 |
-| `browser.dom/fill` | implemented_hidden | SG-000062 |
-| `browser.download/preview` | implemented_hidden | SG-000062 |
-| `browser.download/download` | implemented_hidden | SG-000062 |
-| `browser.upload/preview` | implemented_hidden | SG-000062 |
-| `browser.upload/submit` | implemented_hidden | SG-000062 |
+| `browser.profile/status` | intentionally_denied | not exposed: the closed structured browser layer is a policy and page-registry model with no live browser engine (SG-000062 qualification) |
+| `browser.destination/validate` | intentionally_denied | not exposed: the closed structured browser layer is a policy and page-registry model with no live browser engine (SG-000062 qualification) |
+| `browser.page/open` | intentionally_denied | not exposed: the closed structured browser layer is a policy and page-registry model with no live browser engine (SG-000062 qualification) |
+| `browser.navigation/preview` | intentionally_denied | not exposed: the closed structured browser layer is a policy and page-registry model with no live browser engine (SG-000062 qualification) |
+| `browser.navigation/navigate` | intentionally_denied | not exposed: the closed structured browser layer is a policy and page-registry model with no live browser engine (SG-000062 qualification) |
+| `browser.snapshot/observe` | intentionally_denied | not exposed: the closed structured browser layer is a policy and page-registry model with no live browser engine (SG-000062 qualification) |
+| `browser.dom/click` | intentionally_denied | not exposed: the closed structured browser layer is a policy and page-registry model with no live browser engine (SG-000062 qualification) |
+| `browser.dom/fill` | intentionally_denied | not exposed: the closed structured browser layer is a policy and page-registry model with no live browser engine (SG-000062 qualification) |
+| `browser.download/preview` | intentionally_denied | not exposed: the closed structured browser layer is a policy and page-registry model with no live browser engine (SG-000062 qualification) |
+| `browser.download/download` | intentionally_denied | not exposed: the closed structured browser layer is a policy and page-registry model with no live browser engine (SG-000062 qualification) |
+| `browser.upload/preview` | intentionally_denied | not exposed: the closed structured browser layer is a policy and page-registry model with no live browser engine (SG-000062 qualification) |
+| `browser.upload/submit` | intentionally_denied | not exposed: the closed structured browser layer is a policy and page-registry model with no live browser engine (SG-000062 qualification) |
 | `uia.process/observe` | implemented_hidden | SG-000063 |
 | `uia.window/list` | implemented_hidden | SG-000063 |
 | `uia.window/observe` | implemented_hidden | SG-000063 |
