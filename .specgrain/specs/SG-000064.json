@@ -1,0 +1,70 @@
+{
+  "id": "SG-000064",
+  "title": "Clipboard and bounded network MCP exposure",
+  "program": "COTRA-P16",
+  "state": "GRAIN",
+  "risk": "high",
+  "created": "2026-10-02",
+  "base": "340fed4ea469366f8d826d8b173b3e1045cbf0c2",
+  "dependencies": [
+    "SG-000063"
+  ],
+  "objective": "Expose only the already-qualified bounded clipboard and destination-scoped network shapes as static reviewed MCP tools: one explicit clipboard read sample and one explicit clipboard write placement under the closed SG-000038 and SG-000039 secret, sequence, bound, and per-operation approval controls, and one HTTPS fetch of a public destination under the closed SG-000040 SSRF, address-set binding, redirect, bound, and approval controls; qualify each against its live native implementation first, and preserve the clipboard surveillance, paste, generic socket, proxy, and unrestricted fetch denials.",
+  "scope": {
+    "include": [
+      "a live qualification of the clipboard read, clipboard write, and network fetch shapes against their native adapters on real Windows before exposure",
+      "static MCP tools for one clipboard read sample, one clipboard write placement, and one destination-scoped HTTPS fetch, each forwarding exactly its closed kernel shape with fresh local approval",
+      "remote reach decided per tool with a default deny for anything unmapped, and the clipboard kept off every remote path unless a reviewed reason permits it",
+      "catalog, scope, parity inventory, release qualification, and client example pins for the new tools",
+      "real Windows evidence for clipboard sequence binding, secret denial, and bounds, and test evidence for network SSRF, redirect, and address-set binding"
+    ],
+    "exclude": [
+      "clipboard monitoring, polling, history, subscriptions, or any standing clipboard session",
+      "paste automation or any input, keyboard, or desktop authority from a clipboard write",
+      "generic sockets, proxies, tunnels, non-HTTPS schemes, request methods other than the closed fetch, caller headers, or request bodies",
+      "any new network destination class beyond the closed public-address HTTPS fetch"
+    ]
+  },
+  "authority_delta": {
+    "filesystem": "None.",
+    "process": "None.",
+    "network": "One approved HTTPS GET to a public destination per call, bound to the approved address set, with same-origin redirects and the closed body bound.",
+    "browser": "None.",
+    "ui_input": "None; a clipboard write never pastes or injects input.",
+    "secrets": "Secret-pattern clipboard content is denied in both directions; responses carry bounded content only.",
+    "approval": "Fresh per-operation local approval for every clipboard read, clipboard write, and fetch, bound to the exact digest.",
+    "privileged": "None."
+  },
+  "invariants": [
+    "no clipboard surveillance: each approval authorizes at most one read or one write",
+    "a clipboard write is never paste or input authority",
+    "network reach is destination-scoped HTTPS to validated public addresses only; no generic socket, proxy, or unrestricted fetch exists",
+    "no MCP tool claims clipboard or network capability the native implementation does not have"
+  ],
+  "acceptance": [
+    {
+      "id": "A1",
+      "claim": "Clipboard read and write tools are live on real Windows with sequence binding, secret denial, bounds, and per-operation approval, and never monitor or paste."
+    },
+    {
+      "id": "A2",
+      "claim": "The network fetch tool reaches only approved public HTTPS destinations with address-set binding, same-origin bounded redirects, and bounded output, and every generic network shape stays denied."
+    },
+    {
+      "id": "A3",
+      "claim": "Exact-head CI, genuine TypeSafe Jev, Alibaba Open Code Review, manual review of excluded files, and zero unresolved review threads all pass."
+    }
+  ],
+  "successor_requirements": {
+    "sg_000065": "Tool profiles and the metadata contract may proceed only after SG-000064 closes."
+  },
+  "review": {
+    "diffcipline": true,
+    "jev_semantic_review": true,
+    "alibaba_open_code_review": "required exact-range qualification where integrated",
+    "security_review": true,
+    "exact_head_ci": true,
+    "release_artifact_qualification": true
+  },
+  "done_when": "Bounded clipboard and destination-scoped network tools are canonical and exposed with their closed controls, and every surveillance, paste, and generic network shape stays denied."
+}

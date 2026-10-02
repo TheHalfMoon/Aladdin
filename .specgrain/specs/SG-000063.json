@@ -2,7 +2,7 @@
   "id": "SG-000063",
   "title": "Structured desktop MCP exposure",
   "program": "COTRA-P16",
-  "state": "GRAIN",
+  "state": "CLOSED",
   "risk": "high",
   "created": "2026-10-02",
   "base": "bce0d3e0a89275d8d9f040fe9f3ea1fc9facf918",
@@ -64,5 +64,25 @@
     "exact_head_ci": true,
     "release_artifact_qualification": true
   },
-  "done_when": "Live read-only desktop observation is canonical and exposed, and every non-live desktop shape is recorded and hidden."
+  "done_when": "Live read-only desktop observation is canonical and exposed, and every non-live desktop shape is recorded and hidden.",
+  "qualified_head": "aae9285a6ff57a6a78277d5a3ca3e1f89511d7ed",
+  "implementation_base": "0f41c0c8f7b5461ee32ecb595d44e6adb43844cf",
+  "implementation_merge": "340fed4ea469366f8d826d8b173b3e1045cbf0c2",
+  "pre_merge_ci": "37046208559",
+  "pre_merge_review_gates": "37046208602",
+  "post_merge_ci": "37047100270",
+  "canonical_evidence": {
+    "implementation_pr": 168,
+    "implementation_base": "0f41c0c8f7b5461ee32ecb595d44e6adb43844cf",
+    "qualified_head": "aae9285a6ff57a6a78277d5a3ca3e1f89511d7ed",
+    "pre_merge_ci": "37046208559",
+    "pre_merge_review_gates": "37046208602",
+    "merge_sha": "340fed4ea469366f8d826d8b173b3e1045cbf0c2",
+    "post_merge_ci": "37047100270",
+    "jev": "PASSED: genuine TypeSafe Jev exact-diff review covered 43/43 hunks with zero findings and zero blocking findings, pin 31f89602797fb7bea007f8a480bf368bf564954e",
+    "ocr": "PASSED: Alibaba Open Code Review v1.12.9 exact-range delegation over 21 changed files, 13 reviewable with delegated rules applied and 8 excluded (apps/cotra-mcp/src/oauth-authorization.test.ts, parity-inventory.test.ts, surface.test.ts, transport-contract.test.ts, and uia.test.ts by default-path classification and docs/p16/CAPABILITY_PARITY.md, docs/p16/DESKTOP_QUALIFICATION.md, and docs/security/SG-000063_DESKTOP_OBSERVATION_NOTE.md by unsupported-extension classification) manually reviewed",
+    "security_review": "PASS on exact qualified head: live read-only desktop observation through Win32 and UI Automation limited to the interactive window station, the caller's session, visible uncloaked titled top-level windows of other processes, with process identity from the image path and creation time; no input, window messages, pattern invocation, focus, activation, or capture; the observing process, Cotra executables, and the Windows credential, consent, and logon prompt hosts excluded; protected Cotra markers omitted and counted; password values never read; handle reuse re-verified before every tree read; bounded depth, nodes, strings, response bytes, and UIA timeouts; every actuation, screenshot, visual, coordinate, and input shape qualified not live, failing closed, recorded intentionally denied, and pinned off the MCP surface; both tools local-only and denied on every remote path. Real Windows evidence on a probe window and end to end through the MCP stdio server and cotrad. All closed SG-000001 through SG-000062 regressions pass. CodeRabbit skipped-review and cubic skipping notices evaluated as non-evidence noise with zero substantive findings; zero unresolved threads.",
+    "unresolved_review_threads": 0,
+    "authority_boundary": "Read-only desktop observation in the caller's interactive session through two local-only MCP tools (desktop_window_list, desktop_window_tree) over the closed SG-000027 shapes. No actuation, capture, input, focus, termination, browser, clipboard, network, or remote desktop authority."
+  }
 }

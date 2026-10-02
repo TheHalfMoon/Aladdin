@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "snapshot_base": "bce0d3e0a89275d8d9f040fe9f3ea1fc9facf918",
+  "snapshot_base": "340fed4ea469366f8d826d8b173b3e1045cbf0c2",
   "state_semantics": {
     "GRAIN": "Authorized or active work packet whose acceptance is not yet canonically proven.",
     "PROVEN": "Acceptance and required qualification are proven, but canonical closeout/governance is not yet complete.",
@@ -754,6 +754,18 @@
       "review_basis": "Exact-head genuine TypeSafe Jev 8/8 hunks with zero findings/blocking findings (pin 31f89602797fb7bea007f8a480bf368bf564954e), Alibaba Open Code Review v1.12.9 exact-range delegation over 4 files with 1 reviewable and 3 excluded files manually reviewed, exact-diff manual security review, Windows/Ubuntu Rust Node Governance, Supply chain audit, Release qualification, and Relay container, successful post-merge CI, and zero unresolved review threads. Qodo billing-blocked and CodeRabbit skipped-review notices evaluated as non-evidence noise with zero substantive findings.",
       "unresolved_review_threads": 0,
       "authority_boundary": "Qualification record, inventory update, and contract tests only. No browser tool is exposed and no authority changes."
+    },
+    "SG-000063": {
+      "implementation_pr": 168,
+      "implementation_base": "0f41c0c8f7b5461ee32ecb595d44e6adb43844cf",
+      "qualified_head": "aae9285a6ff57a6a78277d5a3ca3e1f89511d7ed",
+      "pre_merge_ci": "37046208559",
+      "pre_merge_review_gates": "37046208602",
+      "merge_sha": "340fed4ea469366f8d826d8b173b3e1045cbf0c2",
+      "post_merge_ci": "37047100270",
+      "review_basis": "Exact-head genuine TypeSafe Jev 43/43 hunks with zero findings/blocking findings (pin 31f89602797fb7bea007f8a480bf368bf564954e), Alibaba Open Code Review v1.12.9 exact-range delegation over 21 files with 13 reviewable and 8 excluded files manually reviewed, exact-diff manual security review, real Windows interactive-desktop evidence, Windows/Ubuntu Rust Node Governance, Supply chain audit, Release qualification, and Relay container, successful post-merge CI, and zero unresolved review threads. CodeRabbit skipped-review and cubic skipping notices evaluated as non-evidence noise with zero substantive findings.",
+      "unresolved_review_threads": 0,
+      "authority_boundary": "Read-only desktop observation in the caller's interactive session through two local-only MCP tools (desktop_window_list, desktop_window_tree) over the closed SG-000027 shapes. No actuation, capture, input, focus, termination, browser, clipboard, network, or remote desktop authority."
     }
   }
 }
