@@ -2,10 +2,13 @@
   "name": "cotra",
   "version": "0.1.0",
   "private": true,
-  "workspaces": ["apps/cotra-mcp"],
+  "workspaces": [
+    "apps/cotra-mcp",
+    "apps/cotra-relay"
+  ],
   "scripts": {
-    "build": "npm run build --workspace @cotra/mcp",
-    "typecheck": "npm run typecheck --workspace @cotra/mcp",
-    "test": "npm run test --workspace @cotra/mcp"
+    "build": "npm run build --workspace @cotra/mcp && npm run build --workspace @cotra/relay",
+    "typecheck": "npm run typecheck --workspace @cotra/mcp && npm run build --workspace @cotra/mcp && npm run typecheck --workspace @cotra/relay",
+    "test": "npm run test --workspace @cotra/mcp && npm run test --workspace @cotra/relay"
   }
 }
