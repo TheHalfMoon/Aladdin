@@ -1,5 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/server";
 import * as z from "zod/v4";
+import { registerDesktopTools } from "./desktop.js";
 import { registerFsMutationTools } from "./fs_mutation.js";
 import { registerGitFetchTools } from "./git_fetch.js";
 import { registerGitMutationTools } from "./git_mutation.js";
@@ -38,6 +39,8 @@ export function defaultTransportContext(): TransportContext {
  * register tools independently; they must reuse `registerCotraTools`.
  */
 export const CANONICAL_TOOL_NAMES: readonly string[] = [
+  "desktop_window_list",
+  "desktop_window_tree",
   "fs_edit",
   "fs_find",
   "fs_list",
@@ -399,6 +402,7 @@ export function registerCotraTools(
 
   registerGitMutationTools(server, kernel, defaultWorkspace);
   registerFsMutationTools(server, kernel, defaultWorkspace);
+  registerDesktopTools(server, kernel, defaultWorkspace);
   registerGitFetchTools(server, kernel, defaultWorkspace);
   registerGitPushTools(server, kernel, defaultWorkspace);
 }

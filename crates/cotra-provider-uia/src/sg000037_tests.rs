@@ -565,13 +565,6 @@ fn native_adapter_reports_execution_unavailable_without_fabrication() {
     assert_eq!(registry.interruption_epoch(), 0);
     let binding = grant(&mut registry, &coord_id, derivation_generation);
     let native = NativeAdapter::new();
-    let processes = native.list_processes().expect("native process list");
-    assert!(!processes.is_empty());
-    let windows = native.list_windows(processes[0].pid);
-    assert_eq!(
-        windows.expect_err("live windows must be unavailable").code,
-        FailureCode::ProviderUnavailable
-    );
     let live = registry.execute_input(&native, &binding.lease_id, WORKSPACE, POLICY, NOW + 1);
     assert_eq!(
         live.expect_err("live execution must be unavailable").code,

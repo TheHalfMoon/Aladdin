@@ -9,6 +9,8 @@ const srcDir = join(here, "..", "src");
 
 /** The closed MCP tool set. Adding a tool requires a governed grain. */
 const CANONICAL_TOOLS = [
+  "desktop_window_list",
+  "desktop_window_tree",
   "fs_edit",
   "fs_find",
   "fs_list",

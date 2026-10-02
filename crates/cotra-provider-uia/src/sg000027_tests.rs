@@ -518,26 +518,40 @@ fn uia_shape_catalog_authorizes_only_read_only_observation() {
 #[test]
 fn native_adapter_reports_real_process_without_fabricating_desktop() {
     let adapter = NativeAdapter::new();
-    let processes = adapter.list_processes().expect("native processes");
-    assert_eq!(processes.len(), 1);
-    assert_eq!(processes[0].pid, std::process::id());
-    assert!(!processes[0].exe_name.is_empty());
-    assert!(processes[0]
-        .exe_id
-        .chars()
-        .all(|byte| byte.is_ascii_hexdigit()));
-    let error = adapter
-        .list_windows(processes[0].pid)
-        .expect_err("headless desktop enumeration must fail closed");
-    assert_eq!(error.code, FailureCode::ProviderUnavailable);
-    let error = adapter
-        .read_tree(12345)
-        .expect_err("headless tree enumeration must fail closed");
-    assert_eq!(error.code, FailureCode::ProviderUnavailable);
-    #[cfg(windows)]
+    #[cfg(not(windows))]
     {
-        assert_eq!(processes[0].generation_source, "win32-creation-time");
-        assert!(processes[0].session_verified);
-        assert_ne!(processes[0].start_generation, 0);
+        let processes = adapter.list_processes().expect("native processes");
+        assert_eq!(processes.len(), 1);
+        assert_eq!(processes[0].pid, std::process::id());
+        assert!(!processes[0].exe_name.is_empty());
+        assert!(processes[0]
+            .exe_id
+            .chars()
+            .all(|byte| byte.is_ascii_hexdigit()));
+        let error = adapter
+            .list_windows(processes[0].pid)
+            .expect_err("desktop enumeration off Windows must fail closed");
+        assert_eq!(error.code, FailureCode::ProviderUnavailable);
+        let error = adapter
+            .read_tree(12345)
+            .expect_err("tree enumeration off Windows must fail closed");
+        assert_eq!(error.code, FailureCode::ProviderUnavailable);
+    }
+    // SG-000063: on Windows the adapter reports only real window owners in
+    // the caller's session, never this process, and fails closed as
+    // unavailable outside the interactive window station.
+    #[cfg(windows)]
+    match adapter.list_processes() {
+        Ok(processes) => {
+            for process in &processes {
+                assert_ne!(process.pid, std::process::id());
+                assert!(!process.exe_name.is_empty());
+                assert!(process.exe_id.chars().all(|byte| byte.is_ascii_hexdigit()));
+                assert_eq!(process.generation_source, "win32-creation-time");
+                assert!(process.session_verified);
+                assert_ne!(process.start_generation, 0);
+            }
+        }
+        Err(error) => assert_eq!(error.code, FailureCode::ProviderUnavailable),
     }
 }

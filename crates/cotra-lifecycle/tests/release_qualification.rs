@@ -34,6 +34,8 @@ const CANONICAL_TOOLS: &[&str] = &[
     "fs_move",
     "fs_remove",
     "fs_edit",
+    "desktop_window_list",
+    "desktop_window_tree",
     "process_spawn",
     "git_status",
     "git_diff",

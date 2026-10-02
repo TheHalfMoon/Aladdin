@@ -11,7 +11,7 @@ owning grain exposes it under explicit profiles), `missing` (owning grain implem
 
 ## Workflows
 
-Totals: implemented_exposed: 17, implemented_hidden: 5, missing: 2, intentionally_denied: 11.
+Totals: implemented_exposed: 19, implemented_hidden: 2, missing: 4, intentionally_denied: 11.
 
 | Workflow | Status | Tools, owner, or reason |
 | --- | --- | --- |
@@ -33,11 +33,12 @@ Totals: implemented_exposed: 17, implemented_hidden: 5, missing: 2, intentionall
 | `git_local_mutation` | implemented_exposed | `git_branch_create`, `git_stage`, `git_unstage`, `git_commit` |
 | `git_remote` | implemented_exposed | `git_fetch_preview`, `git_fetch`, `git_push_preview`, `git_push` |
 | `browser_structured` | missing | outside_v0_2_target (needs a live isolated browser engine qualified shape by shape; the closed policy model is not exposed (docs/p16/BROWSER_QUALIFICATION.md)) |
-| `desktop_observe_and_act` | implemented_hidden | SG-000063 |
-| `screenshots` | implemented_hidden | SG-000063 |
+| `desktop_observe` | implemented_exposed | `desktop_window_list`, `desktop_window_tree` (read-only window listing and bounded UI Automation trees in the caller's interactive session (SG-000063)) |
+| `desktop_act` | missing | outside_v0_2_target (structured actuation needs a live native actuation adapter qualified shape by shape; raw synthetic input stays denied (docs/p16/DESKTOP_QUALIFICATION.md)) |
+| `screenshots` | missing | outside_v0_2_target (the native adapter implements no window capture; the closed capture shape is not exposed (docs/p16/DESKTOP_QUALIFICATION.md)) |
 | `clipboard_read_write` | implemented_hidden | SG-000064 |
 | `destination_scoped_web_fetch` | implemented_hidden | SG-000064 |
-| `list_processes` | implemented_hidden | SG-000063 (uia.process observe) |
+| `list_processes` | implemented_exposed | `desktop_window_list` (processes that own visible windows in the caller's session, with image name and typed creation-time identity; no full process table and no termination (SG-000063)) |
 | `shell_command_string` | intentionally_denied | unrestricted shell: arbitrary command strings bypass argv validation, provenance, and containment |
 | `powershell_or_cmd` | intentionally_denied | unrestricted PowerShell or cmd is a general-purpose interpreter with full user authority |
 | `interactive_repl_sessions` | intentionally_denied | interactive interpreter sessions are equivalent to an unrestricted shell |
@@ -53,7 +54,7 @@ Totals: implemented_exposed: 17, implemented_hidden: 5, missing: 2, intentionall
 
 ## Capability shapes
 
-Totals: implemented_exposed: 26, implemented_hidden: 17, missing: 0, intentionally_denied: 25.
+Totals: implemented_exposed: 28, implemented_hidden: 6, missing: 0, intentionally_denied: 34.
 
 | Shape | Status | MCP tool, owner, or reason |
 | --- | --- | --- |
@@ -95,20 +96,20 @@ Totals: implemented_exposed: 26, implemented_hidden: 17, missing: 0, intentional
 | `browser.download/download` | intentionally_denied | not exposed: the closed structured browser layer is a policy and page-registry model with no live browser engine (SG-000062 qualification) |
 | `browser.upload/preview` | intentionally_denied | not exposed: the closed structured browser layer is a policy and page-registry model with no live browser engine (SG-000062 qualification) |
 | `browser.upload/submit` | intentionally_denied | not exposed: the closed structured browser layer is a policy and page-registry model with no live browser engine (SG-000062 qualification) |
-| `uia.process/observe` | implemented_hidden | SG-000063 |
-| `uia.window/list` | implemented_hidden | SG-000063 |
-| `uia.window/observe` | implemented_hidden | SG-000063 |
-| `uia.tree/observe` | implemented_hidden | SG-000063 |
-| `uia.element/observe` | implemented_hidden | SG-000063 |
-| `uia.element/invoke` | implemented_hidden | SG-000063 |
-| `uia.element/set_value` | implemented_hidden | SG-000063 |
-| `uia.element/select` | implemented_hidden | SG-000063 |
-| `uia.element/toggle` | implemented_hidden | SG-000063 |
-| `uia.element/scroll` | implemented_hidden | SG-000063 |
-| `uia.screenshot/capture` | implemented_hidden | SG-000063 |
-| `uia.visual/propose` | implemented_hidden | SG-000063 |
-| `uia.coordinates/propose` | implemented_hidden | SG-000063 |
-| `uia.input/execute` | implemented_hidden | SG-000063 |
+| `uia.process/observe` | implemented_hidden | outside_v0_2_target |
+| `uia.window/list` | implemented_exposed | `desktop_window_list` |
+| `uia.window/observe` | implemented_hidden | outside_v0_2_target |
+| `uia.tree/observe` | implemented_exposed | `desktop_window_tree` |
+| `uia.element/observe` | implemented_hidden | outside_v0_2_target |
+| `uia.element/invoke` | intentionally_denied | not exposed: the native adapter does not implement this shape on the live desktop and fails closed as unavailable (SG-000063 qualification) |
+| `uia.element/set_value` | intentionally_denied | not exposed: the native adapter does not implement this shape on the live desktop and fails closed as unavailable (SG-000063 qualification) |
+| `uia.element/select` | intentionally_denied | not exposed: the native adapter does not implement this shape on the live desktop and fails closed as unavailable (SG-000063 qualification) |
+| `uia.element/toggle` | intentionally_denied | not exposed: the native adapter does not implement this shape on the live desktop and fails closed as unavailable (SG-000063 qualification) |
+| `uia.element/scroll` | intentionally_denied | not exposed: the native adapter does not implement this shape on the live desktop and fails closed as unavailable (SG-000063 qualification) |
+| `uia.screenshot/capture` | intentionally_denied | not exposed: the native adapter does not implement this shape on the live desktop and fails closed as unavailable (SG-000063 qualification) |
+| `uia.visual/propose` | intentionally_denied | not exposed: the native adapter does not implement this shape on the live desktop and fails closed as unavailable (SG-000063 qualification) |
+| `uia.coordinates/propose` | intentionally_denied | not exposed: the native adapter does not implement this shape on the live desktop and fails closed as unavailable (SG-000063 qualification) |
+| `uia.input/execute` | intentionally_denied | not exposed: the native adapter does not implement this shape on the live desktop and fails closed as unavailable (SG-000063 qualification) |
 | `clipboard/read` | implemented_hidden | SG-000064 |
 | `clipboard/write` | implemented_hidden | SG-000064 |
 | `network/fetch` | implemented_hidden | SG-000064 |
