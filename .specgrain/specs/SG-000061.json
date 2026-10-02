@@ -1,0 +1,72 @@
+{
+  "id": "SG-000061",
+  "title": "Filesystem mutation completion",
+  "program": "COTRA-P16",
+  "state": "GRAIN",
+  "risk": "high",
+  "created": "2026-10-02",
+  "base": "41a7808e4fcfc18331e5a1897275384151e6a50c",
+  "dependencies": [
+    "SG-000060"
+  ],
+  "objective": "Close the everyday filesystem gaps recorded by the SG-000059 inventory with individually reviewed, bounded operations inside the workspace ceiling: create directory, move or rename, delete, exact search-and-replace edit bound to the current file digest, ranged text read, and bounded file-name search, each with final Windows path identity, protected-path denial, destructive approval where an operation removes or overwrites, and postcondition verification, exposed as static MCP tools with no unrestricted filesystem primitive.",
+  "scope": {
+    "include": [
+      "fs_mkdir: create one directory (optionally its missing parents) inside a trusted workspace with SOFT approval and postcondition verification",
+      "fs_move: move or rename one file or directory within the same workspace, never overwriting, with SOFT approval bound to source identity and postcondition verification",
+      "fs_delete: delete one file or one empty directory bound to its current digest or identity with STRONG-class destructive approval and postcondition verification; no recursive delete",
+      "fs_edit: exact search-and-replace on one text file bound to its current SHA-256 with a bounded number of replacements and SOFT approval",
+      "fs_read_range: bounded line-range read of one text file",
+      "fs_find: bounded file-name glob search inside a workspace without following links",
+      "final path identity, workspace ceiling, protected-path and reparse-point denial for every operation, typed failures, and regression of every existing filesystem guarantee",
+      "updates to the authoritative catalog, scope matrix, client packages, and parity inventory for the new tools"
+    ],
+    "exclude": [
+      "recursive delete, wildcard mutation, overwrite on move, permission or attribute changes, link creation, or any path outside a trusted workspace",
+      "any unrestricted filesystem primitive",
+      "browser, desktop, clipboard, or network exposure (SG-000062 through SG-000064)"
+    ]
+  },
+  "authority_delta": {
+    "filesystem": "Bounded mkdir, move or rename without overwrite, single-file or empty-directory delete with destructive approval, digest-bound exact edit, ranged read, and name search inside trusted workspaces.",
+    "process": "None.",
+    "network": "None.",
+    "browser": "None.",
+    "ui_input": "None.",
+    "secrets": "None.",
+    "approval": "Mutations require fresh per-action approval; delete requires the destructive approval class.",
+    "privileged": "None."
+  },
+  "invariants": [
+    "no filesystem operation leaves a trusted workspace or touches protected state",
+    "links, junctions, and reparse points are never followed or created",
+    "every mutation is approved, digest- or identity-bound, and postcondition-verified",
+    "no recursive or wildcard mutation exists"
+  ],
+  "acceptance": [
+    {
+      "id": "A1",
+      "claim": "The six operations work inside a trusted workspace with approval, digest or identity binding, and postcondition verification."
+    },
+    {
+      "id": "A2",
+      "claim": "Escapes, protected paths, reparse points, overwrite, recursive delete, stale digests, denied approvals, and oversized inputs fail closed without mutation."
+    },
+    {
+      "id": "A3",
+      "claim": "Exact-head CI including release qualification and supply-chain audit, genuine TypeSafe Jev, Alibaba Open Code Review, manual review of excluded files, and zero unresolved review threads all pass."
+    }
+  ],
+  "successor_requirements": {
+    "sg_000062": "Structured browser MCP exposure may proceed only after SG-000061 closes."
+  },
+  "review": {
+    "diffcipline": true,
+    "jev_semantic_review": true,
+    "alibaba_open_code_review": "required exact-range qualification where integrated",
+    "security_review": true,
+    "exact_head_ci": true,
+    "release_artifact_qualification": true
+  },
+  "done_when": "Bounded filesystem mutation is canonical with workspace ceilings, approvals, identity binding, and postcondition verification and no unrestricted filesystem primitive."
+}

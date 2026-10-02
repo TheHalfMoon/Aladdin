@@ -2,7 +2,7 @@
   "id": "SG-000060",
   "title": "Protected executable registry",
   "program": "COTRA-P16",
-  "state": "GRAIN",
+  "state": "CLOSED",
   "risk": "high",
   "created": "2026-10-02",
   "base": "0e54d0056b7ce07e4688cb4c169c6d32cd915c78",
@@ -68,5 +68,25 @@
     "exact_head_ci": true,
     "release_artifact_qualification": true
   },
-  "done_when": "The protected executable registry is canonical with STRONG-gated management, hash-pinned identity, argv grammars, interpreter denial, and the existing process containment unchanged."
+  "done_when": "The protected executable registry is canonical with STRONG-gated management, hash-pinned identity, argv grammars, interpreter denial, and the existing process containment unchanged.",
+  "qualified_head": "330ef161e09f27c6dacfb4e3a95f931e4dd88816",
+  "implementation_base": "79ba16a3fbe167edb7ddb846f7c7556144bc6abf",
+  "implementation_merge": "41a7808e4fcfc18331e5a1897275384151e6a50c",
+  "pre_merge_ci": "37017272786",
+  "pre_merge_review_gates": "37017272699",
+  "post_merge_ci": "37018875192",
+  "canonical_evidence": {
+    "implementation_pr": 162,
+    "implementation_base": "79ba16a3fbe167edb7ddb846f7c7556144bc6abf",
+    "qualified_head": "330ef161e09f27c6dacfb4e3a95f931e4dd88816",
+    "pre_merge_ci": "37017272786",
+    "pre_merge_review_gates": "37017272699",
+    "merge_sha": "41a7808e4fcfc18331e5a1897275384151e6a50c",
+    "post_merge_ci": "37018875192",
+    "jev": "PASSED: genuine TypeSafe Jev exact-diff review covered 27/27 hunks with zero findings and zero blocking findings, pin 31f89602797fb7bea007f8a480bf368bf564954e",
+    "ocr": "PASSED: Alibaba Open Code Review v1.12.9 exact-range delegation over 14 changed files, 12 reviewable with delegated rules applied and 2 excluded (docs/p16/CAPABILITY_PARITY.md and docs/security/SG-000060_PROTECTED_EXECUTABLE_REGISTRY_NOTE.md by unsupported-extension classification) manually reviewed",
+    "security_review": "PASS on exact qualified head: integrity-checked protected-state executable registry with entries pinning canonical path, size, and SHA-256 plus an argv grammar; shells, script hosts, interpreters, runtime launchers, administration tools including versioned names, every non-.exe file, UNC, relative, and workspace executables never registrable; process.spawn admitting only the baseline or a registered executable with a matching grammar; cotrad re-verifying path, size, and hash immediately before launch with TARGET_STALE on drift; local-only STRONG-gated registration bound to the exact entry with a post-approval re-hash, approval-free removal, read-only listing, and remote contexts denied; containment, argv-only execution, NONE network, bounds, per-run approval, and the MCP schema unchanged; real Windows evidence that a registered executable runs inside the verified AppContainer and job object while unregistered, out-of-grammar, shell, and drifted cases fail closed; an AppContainer profile-name collision between parallel tests fixed at its root. All closed SG-000001 through SG-000059 regressions pass. Qodo billing-blocked and CodeRabbit skipped-review notices evaluated as non-evidence noise with zero substantive findings; zero unresolved threads.",
+    "unresolved_review_threads": 0,
+    "authority_boundary": "process.spawn may launch locally registered, hash-pinned, non-interpreter native executables with constrained argv inside the unchanged contained, network-less, bounded, per-run-approved path; registry management is local STRONG-gated only. No shell, interpreter, arbitrary path, background process, network, MCP tool, or schema change."
+  }
 }
