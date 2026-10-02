@@ -27,20 +27,23 @@
 //!   runtime identity, and they carry the tree generation so disappeared,
 //!   replaced, or role-changed elements fail closed.
 //!
-//! Windows reality: the native adapter proves real process identity against
-//! Windows APIs (process creation time as the start generation and the real
-//! session identity) on Windows. Live desktop window and tree enumeration
-//! requires an interactive session broker, which is successor work, so the
-//! native adapter reports the desktop as unavailable instead of fabricating
-//! windows. Deterministic observation, stale-protection, redaction, and
-//! protected-surface behavior is proven through the injected fake adapter.
-//! These limits are recorded honestly and must not be read as interactive
-//! desktop evidence.
+//! Windows reality: since SG-000063 the native adapter observes the live
+//! interactive desktop read-only through Win32 and UI Automation (see
+//! `native_desktop`): visible top-level windows of other processes in the
+//! caller's session with real process identity (image path and creation
+//! time), and bounded control-view trees with password values never read.
+//! Outside the interactive window station it fails closed as unavailable.
+//! Actuation, capture, and input remain unavailable in the native adapter;
+//! their registry behavior is proven only through the injected fake adapter
+//! and must not be read as interactive desktop evidence.
 
 use cotra_contracts::FailureCode;
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
+
+#[cfg(windows)]
+mod native_desktop;
 
 pub const UIA_SCHEMA: &str = "cotra-uia-observation-v1";
 pub const INVOKE_SCHEMA: &str = "cotra-uia-invoke-v1";
@@ -98,6 +101,80 @@ pub fn is_allowed_uia_shape(capability: &str, operation: &str) -> bool {
             | ("uia.tree", "observe")
             | ("uia.element", "observe")
     )
+}
+
+/// SG-000063 live qualification of one desktop shape against the native
+/// adapter.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DesktopShapeQualification {
+    /// Live on the native adapter and exposed as a read-only MCP tool.
+    LiveExposed,
+    /// Live on the native adapter as a registry read, reachable only through
+    /// the exposed tools' results, and not exposed as its own MCP tool.
+    LiveInternal,
+    /// The native adapter does not implement this shape; it fails closed as
+    /// unavailable and is never exposed.
+    NotLive,
+}
+
+/// The test-pinned per-shape decision for every retained desktop shape. A
+/// shape is exposed on the MCP surface only when the live native adapter
+/// implements it and it never actuates, focuses, captures, or injects input.
+pub const DESKTOP_SHAPE_QUALIFICATIONS: &[(&str, &str, DesktopShapeQualification)] = &[
+    ("uia.window", "list", DesktopShapeQualification::LiveExposed),
+    (
+        "uia.tree",
+        "observe",
+        DesktopShapeQualification::LiveExposed,
+    ),
+    (
+        "uia.process",
+        "observe",
+        DesktopShapeQualification::LiveInternal,
+    ),
+    (
+        "uia.window",
+        "observe",
+        DesktopShapeQualification::LiveInternal,
+    ),
+    (
+        "uia.element",
+        "observe",
+        DesktopShapeQualification::LiveInternal,
+    ),
+    ("uia.element", "invoke", DesktopShapeQualification::NotLive),
+    (
+        "uia.element",
+        "set_value",
+        DesktopShapeQualification::NotLive,
+    ),
+    ("uia.element", "select", DesktopShapeQualification::NotLive),
+    ("uia.element", "toggle", DesktopShapeQualification::NotLive),
+    ("uia.element", "scroll", DesktopShapeQualification::NotLive),
+    (
+        "uia.screenshot",
+        "capture",
+        DesktopShapeQualification::NotLive,
+    ),
+    ("uia.visual", "propose", DesktopShapeQualification::NotLive),
+    (
+        "uia.coordinates",
+        "propose",
+        DesktopShapeQualification::NotLive,
+    ),
+    ("uia.input", "execute", DesktopShapeQualification::NotLive),
+];
+
+/// The desktop shapes the MCP surface may forward: live, read-only, and
+/// non-actuating. Every other desktop shape stays off the MCP surface.
+pub fn is_mcp_exposed_desktop_shape(capability: &str, operation: &str) -> bool {
+    DESKTOP_SHAPE_QUALIFICATIONS
+        .iter()
+        .any(|(shape_capability, shape_operation, qualification)| {
+            *shape_capability == capability
+                && *shape_operation == operation
+                && *qualification == DesktopShapeQualification::LiveExposed
+        })
 }
 
 /// Typed denial catalog for UIA shapes that remain unauthorized. Actuation,
@@ -852,11 +929,12 @@ pub trait UiaAdapter {
     }
 }
 
-/// The native adapter. On Windows it reports the real current process
-/// identity against Windows APIs: the real PID, the real executable digest,
-/// the real session identity, and the real process creation time as the
-/// start generation. Live desktop enumeration requires an interactive
-/// session broker and is reported as unavailable instead of fabricated.
+/// The native adapter. On Windows it observes the live interactive desktop
+/// read-only (`native_desktop`): processes that own visible top-level
+/// windows in the caller's session, with real image identity, session, and
+/// creation time; their windows; and bounded control-view trees. Outside the
+/// interactive window station it fails closed as unavailable. Actuation,
+/// capture, and input are not implemented and fail closed as unavailable.
 pub struct NativeAdapter;
 
 impl NativeAdapter {
@@ -864,6 +942,9 @@ impl NativeAdapter {
         Self
     }
 
+    /// Off Windows there is no desktop to observe; only the current process
+    /// is reported, with explicit unverified markers.
+    #[cfg(not(windows))]
     fn current_process() -> NativeProcess {
         let pid = std::process::id();
         let (exe_name, exe_id) = match std::env::current_exe() {
@@ -879,20 +960,14 @@ impl NativeAdapter {
             }
             Err(_) => ("unknown".to_owned(), "0".repeat(ID_HEX_CHARS)),
         };
-        #[cfg(windows)]
-        let (session_id, session_verified, start_generation, generation_source) =
-            windows_process_facts(pid);
-        #[cfg(not(windows))]
-        let (session_id, session_verified, start_generation, generation_source) =
-            (0u32, false, 0u64, "std-fallback");
         NativeProcess {
             pid,
             exe_name,
             exe_id,
-            session_id,
-            session_verified,
-            start_generation,
-            generation_source,
+            session_id: 0,
+            session_verified: false,
+            start_generation: 0,
+            generation_source: "std-fallback",
         }
     }
 }
@@ -904,73 +979,62 @@ impl Default for NativeAdapter {
 }
 
 impl UiaAdapter for NativeAdapter {
+    /// On Windows: the processes that own visible top-level windows in the
+    /// caller's interactive session, each with a verified image path and
+    /// creation time. Elsewhere: only the current process.
+    #[cfg(windows)]
+    fn list_processes(&self) -> Result<Vec<NativeProcess>, UiaError> {
+        let mut seen: Vec<u32> = Vec::new();
+        let mut processes = Vec::new();
+        for window in native_desktop::visible_windows()? {
+            if seen.contains(&window.pid) {
+                continue;
+            }
+            seen.push(window.pid);
+            if let Some(process) = native_desktop::process_facts(window.pid) {
+                processes.push(process);
+            }
+        }
+        Ok(processes)
+    }
+
+    #[cfg(not(windows))]
     fn list_processes(&self) -> Result<Vec<NativeProcess>, UiaError> {
         Ok(vec![Self::current_process()])
     }
 
+    #[cfg(windows)]
+    fn list_windows(&self, pid: u32) -> Result<Vec<NativeWindow>, UiaError> {
+        let Some(process) = native_desktop::process_facts(pid) else {
+            return Ok(Vec::new());
+        };
+        Ok(native_desktop::visible_windows()?
+            .iter()
+            .filter(|window| window.pid == pid)
+            .map(|window| native_desktop::native_window(window, &process))
+            .collect())
+    }
+
+    #[cfg(not(windows))]
     fn list_windows(&self, _pid: u32) -> Result<Vec<NativeWindow>, UiaError> {
         Err(UiaError::new(
             FailureCode::ProviderUnavailable,
-            "live desktop window enumeration requires an interactive session broker and is unavailable in this context",
+            "live desktop window enumeration is available only on Windows",
         ))
     }
 
+    #[cfg(windows)]
+    fn read_tree(&self, hwnd: u64) -> Result<Vec<NativeElement>, UiaError> {
+        native_desktop::read_tree(hwnd)
+    }
+
+    #[cfg(not(windows))]
     fn read_tree(&self, _hwnd: u64) -> Result<Vec<NativeElement>, UiaError> {
         Err(UiaError::new(
             FailureCode::ProviderUnavailable,
-            "live desktop tree enumeration requires an interactive session broker and is unavailable in this context",
+            "live desktop tree enumeration is available only on Windows",
         ))
     }
-}
-
-/// Read real process facts against Windows APIs. Creation time becomes the
-/// start generation so PID reuse and restarts fail closed. Any failure
-/// degrades to explicit unverified markers rather than fabricated facts.
-#[cfg(windows)]
-fn windows_process_facts(pid: u32) -> (u32, bool, u64, &'static str) {
-    use windows::Win32::Foundation::{CloseHandle, HANDLE};
-    use windows::Win32::System::RemoteDesktop::ProcessIdToSessionId;
-    use windows::Win32::System::Threading::{
-        GetProcessTimes, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION,
-    };
-
-    let (session_id, session_verified) = {
-        let mut session = 0u32;
-        let ok = unsafe { ProcessIdToSessionId(pid, &mut session) }.is_ok();
-        if ok {
-            (session, true)
-        } else {
-            (0u32, false)
-        }
-    };
-    let (start_generation, generation_source) = unsafe {
-        match OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid) {
-            Ok(handle) => {
-                let handle: HANDLE = handle;
-                let mut creation = Default::default();
-                let mut exit = Default::default();
-                let mut kernel = Default::default();
-                let mut user = Default::default();
-                let ok = GetProcessTimes(handle, &mut creation, &mut exit, &mut kernel, &mut user)
-                    .is_ok();
-                let _ = CloseHandle(handle);
-                if ok {
-                    let file_time =
-                        ((creation.dwHighDateTime as u64) << 32) | (creation.dwLowDateTime as u64);
-                    (file_time, "win32-creation-time")
-                } else {
-                    (0u64, "win32-unavailable")
-                }
-            }
-            Err(_) => (0u64, "win32-unavailable"),
-        }
-    };
-    (
-        session_id,
-        session_verified,
-        start_generation,
-        generation_source,
-    )
 }
 
 #[derive(Debug, Clone)]
@@ -1472,8 +1536,11 @@ impl UiaRegistry {
                 entries.push(json!({
                     "process_id": record.process_id,
                     "process_generation": owner_generation,
+                    "exe_name": truncate_owned(&native_process.exe_name, MAX_STRING_CHARS).0,
                     "window_id": record.window_id,
                     "window_generation": record.window_generation,
+                    "title": record.title,
+                    "class": record.class,
                 }));
                 if entries.len() >= MAX_WINDOWS {
                     break;
@@ -1657,6 +1724,36 @@ impl UiaRegistry {
                 "uia tree observation requires at least one node",
             ));
         }
+        // The handle may have been destroyed and reused since listing:
+        // re-verify that the same live window of the same process instance
+        // still owns it before reading anything.
+        let owner_pid = self
+            .processes
+            .get(&record.process_id)
+            .map(|process| process.pid)
+            .ok_or_else(|| {
+                UiaError::new(
+                    FailureCode::TargetStale,
+                    "uia window identity lost its owning process",
+                )
+            })?;
+        let live_windows = adapter.list_windows(owner_pid).map_err(|error| {
+            UiaError::new(
+                FailureCode::ProviderUnavailable,
+                format!("uia window enumeration is unavailable: {}", error.message),
+            )
+        })?;
+        let still_bound = live_windows.iter().any(|live| {
+            live.hwnd == record.hwnd
+                && live.window_nonce == record.window_nonce
+                && truncate_owned(&live.class, MAX_STRING_CHARS).0 == record.class
+        });
+        if !still_bound {
+            return Err(UiaError::new(
+                FailureCode::TargetStale,
+                "uia window identity no longer matches a live window; list windows again",
+            ));
+        }
         let natives = adapter.read_tree(record.hwnd).map_err(|error| {
             UiaError::new(
                 FailureCode::ProviderUnavailable,
@@ -1687,7 +1784,8 @@ impl UiaRegistry {
                 continue;
             }
             let stored = self.store_element(window_id, native, tree_generation);
-            let node = render_element(&stored);
+            let mut node = render_element(&stored);
+            node["depth"] = json!(depth);
             used_bytes += serde_json::to_vec(&node)
                 .map(|bytes| bytes.len())
                 .unwrap_or(0);
@@ -4772,3 +4870,5 @@ mod sg000035_tests;
 mod sg000036_tests;
 #[cfg(test)]
 mod sg000037_tests;
+#[cfg(test)]
+mod sg000063_tests;

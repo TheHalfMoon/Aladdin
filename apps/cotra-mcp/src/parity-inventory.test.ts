@@ -3,7 +3,7 @@ import test from "node:test";
 import { readFileSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { OAUTH_SCOPE_TOOL_MATRIX } from "./oauth_authorization.js";
+import { LOCAL_ONLY_TOOL_NAMES, OAUTH_SCOPE_TOOL_MATRIX } from "./oauth_authorization.js";
 import { CANONICAL_TOOL_NAMES } from "./server.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -68,7 +68,10 @@ test("every capability shape and workflow is classified exactly once", () => {
 test("exposed entries match the authoritative MCP catalog exactly", () => {
   const exposed = inventory.capabilities.filter((c) => c.status === "implemented_exposed");
   assert.deepEqual(exposed.map((c) => c.mcp_tool).sort(), [...CANONICAL_TOOL_NAMES].sort());
-  assert.deepEqual(Object.keys(OAUTH_SCOPE_TOOL_MATRIX).sort(), [...CANONICAL_TOOL_NAMES].sort());
+  assert.deepEqual(
+    Object.keys(OAUTH_SCOPE_TOOL_MATRIX).sort(),
+    CANONICAL_TOOL_NAMES.filter((tool) => !LOCAL_ONLY_TOOL_NAMES.includes(tool)).sort()
+  );
   for (const workflow of inventory.workflows.filter((w) => w.status === "implemented_exposed")) {
     assert.ok(workflow.via !== undefined && workflow.via.length > 0, workflow.id);
     for (const tool of workflow.via ?? []) {

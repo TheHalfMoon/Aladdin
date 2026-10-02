@@ -19,6 +19,8 @@ const here = dirname(fileURLToPath(import.meta.url));
 const srcDir = join(here, "..", "src");
 
 const EXPECTED_TOOLS = [
+  "desktop_window_list",
+  "desktop_window_tree",
   "fs_edit",
   "fs_find",
   "fs_list",

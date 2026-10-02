@@ -18,6 +18,7 @@ import {
   ACCESS_TOKEN_LIFETIME_SECONDS,
   ACCESS_TOKEN_MAX_CHARS,
   AUTHORIZATION_CODE_LIFETIME_SECONDS,
+  LOCAL_ONLY_TOOL_NAMES,
   OAUTH_LOCAL_AUTHORITY_GRANTED,
   OAUTH_PROFILE_TOOL_CEILINGS,
   OAUTH_SCOPE_TOOL_MATRIX,
@@ -907,13 +908,27 @@ test("provider client-identification hooks default-deny", () => {
 });
 
 test("scope to tool matrix covers exactly the canonical catalog with default deny", () => {
-  assert.deepEqual(Object.keys(OAUTH_SCOPE_TOOL_MATRIX).sort(), [...CANONICAL_TOOL_NAMES].sort());
+  assert.deepEqual(
+    Object.keys(OAUTH_SCOPE_TOOL_MATRIX).sort(),
+    CANONICAL_TOOL_NAMES.filter((tool) => !LOCAL_ONLY_TOOL_NAMES.includes(tool)).sort()
+  );
+  assert.deepEqual([...LOCAL_ONLY_TOOL_NAMES].sort(), ["desktop_window_list", "desktop_window_tree"]);
+  for (const tool of LOCAL_ONLY_TOOL_NAMES) {
+    assert.ok(CANONICAL_TOOL_NAMES.includes(tool), `${tool} is canonical`);
+    const all = ["cotra.read", "cotra.write", "cotra.execute"];
+    assert.deepEqual(authorizeToolByScopes(tool, "core", all, all), {
+      ok: false,
+      failure: "TOOL_SURFACE_DENIED",
+      reason: "tool_unmapped"
+    });
+  }
   for (const [tool, scopes] of Object.entries(OAUTH_SCOPE_TOOL_MATRIX)) {
     assert.ok(scopes.length > 0, `${tool} must state required scopes`);
   }
   assert.deepEqual(Object.keys(OAUTH_PROFILE_TOOL_CEILINGS), ["core"]);
   const readOnly = ["system_status", "workspace_get", "fs_stat", "fs_list", "fs_read", "fs_search", "git_status", "git_diff", "git_log", "fs_read_range", "fs_find"];
   for (const tool of CANONICAL_TOOL_NAMES) {
+    if (LOCAL_ONLY_TOOL_NAMES.includes(tool)) continue;
     const readResult = authorizeToolByScopes(tool, "core", ["cotra.read"], ["cotra.read"]);
     assert.equal(readResult.ok, readOnly.includes(tool), `${tool} read-scope decision`);
   }

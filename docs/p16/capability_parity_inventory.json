@@ -240,85 +240,90 @@
       "capability": "uia.process",
       "operation": "observe",
       "status": "implemented_hidden",
-      "owner_grain": "SG-000063"
+      "owner_grain": "outside_v0_2_target",
+      "note": "live registry read; its facts are already returned by desktop_window_list or desktop_window_tree, so it has no separate tool (SG-000063)"
     },
     {
       "capability": "uia.window",
       "operation": "list",
-      "status": "implemented_hidden",
-      "owner_grain": "SG-000063"
+      "status": "implemented_exposed",
+      "mcp_tool": "desktop_window_list",
+      "note": "visible top-level windows of other applications in the caller's interactive session, read-only (SG-000063)"
     },
     {
       "capability": "uia.window",
       "operation": "observe",
       "status": "implemented_hidden",
-      "owner_grain": "SG-000063"
+      "owner_grain": "outside_v0_2_target",
+      "note": "live registry read; its facts are already returned by desktop_window_list or desktop_window_tree, so it has no separate tool (SG-000063)"
     },
     {
       "capability": "uia.tree",
       "operation": "observe",
-      "status": "implemented_hidden",
-      "owner_grain": "SG-000063"
+      "status": "implemented_exposed",
+      "mcp_tool": "desktop_window_tree",
+      "note": "bounded UI Automation control-view tree of one listed window, password values never read (SG-000063)"
     },
     {
       "capability": "uia.element",
       "operation": "observe",
       "status": "implemented_hidden",
-      "owner_grain": "SG-000063"
+      "owner_grain": "outside_v0_2_target",
+      "note": "live registry read; its facts are already returned by desktop_window_list or desktop_window_tree, so it has no separate tool (SG-000063)"
     },
     {
       "capability": "uia.element",
       "operation": "invoke",
-      "status": "implemented_hidden",
-      "owner_grain": "SG-000063"
+      "status": "intentionally_denied",
+      "reason": "not exposed: the native adapter does not implement this shape on the live desktop and fails closed as unavailable (SG-000063 qualification)"
     },
     {
       "capability": "uia.element",
       "operation": "set_value",
-      "status": "implemented_hidden",
-      "owner_grain": "SG-000063"
+      "status": "intentionally_denied",
+      "reason": "not exposed: the native adapter does not implement this shape on the live desktop and fails closed as unavailable (SG-000063 qualification)"
     },
     {
       "capability": "uia.element",
       "operation": "select",
-      "status": "implemented_hidden",
-      "owner_grain": "SG-000063"
+      "status": "intentionally_denied",
+      "reason": "not exposed: the native adapter does not implement this shape on the live desktop and fails closed as unavailable (SG-000063 qualification)"
     },
     {
       "capability": "uia.element",
       "operation": "toggle",
-      "status": "implemented_hidden",
-      "owner_grain": "SG-000063"
+      "status": "intentionally_denied",
+      "reason": "not exposed: the native adapter does not implement this shape on the live desktop and fails closed as unavailable (SG-000063 qualification)"
     },
     {
       "capability": "uia.element",
       "operation": "scroll",
-      "status": "implemented_hidden",
-      "owner_grain": "SG-000063"
+      "status": "intentionally_denied",
+      "reason": "not exposed: the native adapter does not implement this shape on the live desktop and fails closed as unavailable (SG-000063 qualification)"
     },
     {
       "capability": "uia.screenshot",
       "operation": "capture",
-      "status": "implemented_hidden",
-      "owner_grain": "SG-000063"
+      "status": "intentionally_denied",
+      "reason": "not exposed: the native adapter does not implement this shape on the live desktop and fails closed as unavailable (SG-000063 qualification)"
     },
     {
       "capability": "uia.visual",
       "operation": "propose",
-      "status": "implemented_hidden",
-      "owner_grain": "SG-000063"
+      "status": "intentionally_denied",
+      "reason": "not exposed: the native adapter does not implement this shape on the live desktop and fails closed as unavailable (SG-000063 qualification)"
     },
     {
       "capability": "uia.coordinates",
       "operation": "propose",
-      "status": "implemented_hidden",
-      "owner_grain": "SG-000063"
+      "status": "intentionally_denied",
+      "reason": "not exposed: the native adapter does not implement this shape on the live desktop and fails closed as unavailable (SG-000063 qualification)"
     },
     {
       "capability": "uia.input",
       "operation": "execute",
-      "status": "implemented_hidden",
-      "owner_grain": "SG-000063"
+      "status": "intentionally_denied",
+      "reason": "not exposed: the native adapter does not implement this shape on the live desktop and fails closed as unavailable (SG-000063 qualification)"
     },
     {
       "capability": "clipboard",
@@ -562,14 +567,25 @@
       "note": "needs a live isolated browser engine qualified shape by shape; the closed policy model is not exposed (docs/p16/BROWSER_QUALIFICATION.md)"
     },
     {
-      "id": "desktop_observe_and_act",
-      "status": "implemented_hidden",
-      "owner_grain": "SG-000063"
+      "id": "desktop_observe",
+      "status": "implemented_exposed",
+      "via": [
+        "desktop_window_list",
+        "desktop_window_tree"
+      ],
+      "note": "read-only window listing and bounded UI Automation trees in the caller's interactive session (SG-000063)"
+    },
+    {
+      "id": "desktop_act",
+      "status": "missing",
+      "owner_grain": "outside_v0_2_target",
+      "note": "structured actuation needs a live native actuation adapter qualified shape by shape; raw synthetic input stays denied (docs/p16/DESKTOP_QUALIFICATION.md)"
     },
     {
       "id": "screenshots",
-      "status": "implemented_hidden",
-      "owner_grain": "SG-000063"
+      "status": "missing",
+      "owner_grain": "outside_v0_2_target",
+      "note": "the native adapter implements no window capture; the closed capture shape is not exposed (docs/p16/DESKTOP_QUALIFICATION.md)"
     },
     {
       "id": "clipboard_read_write",
@@ -583,9 +599,11 @@
     },
     {
       "id": "list_processes",
-      "status": "implemented_hidden",
-      "owner_grain": "SG-000063",
-      "note": "uia.process observe"
+      "status": "implemented_exposed",
+      "via": [
+        "desktop_window_list"
+      ],
+      "note": "processes that own visible windows in the caller's session, with image name and typed creation-time identity; no full process table and no termination (SG-000063)"
     },
     {
       "id": "shell_command_string",

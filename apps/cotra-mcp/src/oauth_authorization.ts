@@ -1562,6 +1562,15 @@ export const OAUTH_SCOPE_TOOL_MATRIX: Readonly<Record<string, readonly OAuthScop
 };
 
 /**
+ * Canonical tools that are local-only. SG-000063 desktop observation reads
+ * window titles and control trees of every application in the user's
+ * interactive session, so it is never mapped to a remote OAuth scope: it is
+ * absent from the scope matrix and denies as unmapped on every remote path
+ * until a later governed grain maps a locally enabled desktop profile.
+ */
+export const LOCAL_ONLY_TOOL_NAMES: readonly string[] = ["desktop_window_list", "desktop_window_tree"];
+
+/**
  * Tool-surface profiles mapped for remote use. Only `core` is mapped; the
  * `developer`, `desktop_structured`, and `coordinate_fallback` profiles are
  * unmapped until a later governed grain maps them, so they deny.
