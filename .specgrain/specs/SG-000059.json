@@ -1,0 +1,66 @@
+{
+  "id": "SG-000059",
+  "title": "Capability and parity inventory",
+  "program": "COTRA-P16",
+  "state": "GRAIN",
+  "risk": "medium",
+  "created": "2026-10-02",
+  "base": "5f9bc4e402360fbbb47f60971e8c351c8372f0bd",
+  "dependencies": [
+    "SG-000058"
+  ],
+  "objective": "Before any MCP widening, map every intended Desktop Commander-class workstation and development workflow and every implemented Cotra provider capability to exactly one of implemented and exposed, implemented and hidden, missing, or intentionally denied, with the grain that owns each change, and pin the inventory against the authoritative tool catalog and the cotrad capability set in contract tests.",
+  "scope": {
+    "include": [
+      "a machine-readable inventory of intended workflows and implemented capabilities with one of four statuses, the owning successor grain, and the security reason for every denial",
+      "a human-readable parity document derived from the same inventory",
+      "contract tests proving every exposed entry matches the authoritative MCP catalog, every implemented capability shape appears exactly once, every denied entry names its reason, and no entry is unclassified"
+    ],
+    "exclude": [
+      "any MCP tool, schema, capability, approval, or authority change",
+      "any executable registry, filesystem mutation, browser, desktop, clipboard, or network exposure (SG-000060 through SG-000064)",
+      "any provider submission"
+    ]
+  },
+  "authority_delta": {
+    "filesystem": "None.",
+    "process": "None.",
+    "network": "None.",
+    "browser": "None.",
+    "ui_input": "None.",
+    "secrets": "None.",
+    "approval": "None.",
+    "privileged": "None."
+  },
+  "invariants": [
+    "no MCP widening before the inventory is canonical",
+    "intentionally denied authority is a documented security decision",
+    "the authoritative catalog stays unchanged in this grain"
+  ],
+  "acceptance": [
+    {
+      "id": "A1",
+      "claim": "Every intended workflow and implemented capability is classified exactly once with an owning grain or a denial reason."
+    },
+    {
+      "id": "A2",
+      "claim": "Contract tests pin the inventory to the authoritative MCP catalog and the cotrad capability set with no unclassified entry."
+    },
+    {
+      "id": "A3",
+      "claim": "Exact-head CI, genuine TypeSafe Jev, Alibaba Open Code Review, manual review of excluded files, and zero unresolved review threads all pass."
+    }
+  ],
+  "successor_requirements": {
+    "sg_000060": "The protected executable registry may proceed only after SG-000059 closes with the inventory canonical."
+  },
+  "review": {
+    "diffcipline": true,
+    "jev_semantic_review": true,
+    "alibaba_open_code_review": "required exact-range qualification where integrated",
+    "security_review": true,
+    "exact_head_ci": true,
+    "release_artifact_qualification": true
+  },
+  "done_when": "The capability and parity inventory is canonical and pinned by contract tests before any P16 widening."
+}

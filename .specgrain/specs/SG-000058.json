@@ -2,7 +2,7 @@
   "id": "SG-000058",
   "title": "P15 adversarial and chaos exit",
   "program": "COTRA-P15",
-  "state": "GRAIN",
+  "state": "CLOSED",
   "risk": "high",
   "created": "2026-10-02",
   "base": "18a01842dc14f0ed398dd622bd4d69bcbac16266",
@@ -72,5 +72,25 @@
     "exact_head_ci": true,
     "release_artifact_qualification": true
   },
-  "done_when": "COTRA-P15 is exited canonically on adversarial and chaos evidence with every defect fixed at its root and every unverifiable Windows claim recorded honestly."
+  "done_when": "COTRA-P15 is exited canonically on adversarial and chaos evidence with every defect fixed at its root and every unverifiable Windows claim recorded honestly.",
+  "qualified_head": "eb2d1f885e53c5e180cc16108c2289f3c2d205e7",
+  "implementation_base": "bd3db96427ab2f8eb24dd97b3931440f49fcf876",
+  "implementation_merge": "5f9bc4e402360fbbb47f60971e8c351c8372f0bd",
+  "pre_merge_ci": "37012077373",
+  "pre_merge_review_gates": "37012078515",
+  "post_merge_ci": "37012755106",
+  "canonical_evidence": {
+    "implementation_pr": 158,
+    "implementation_base": "bd3db96427ab2f8eb24dd97b3931440f49fcf876",
+    "qualified_head": "eb2d1f885e53c5e180cc16108c2289f3c2d205e7",
+    "pre_merge_ci": "37012077373",
+    "pre_merge_review_gates": "37012078515",
+    "merge_sha": "5f9bc4e402360fbbb47f60971e8c351c8372f0bd",
+    "post_merge_ci": "37012755106",
+    "jev": "PASSED: genuine TypeSafe Jev exact-diff review covered 3/3 hunks with zero findings and zero blocking findings, pin 31f89602797fb7bea007f8a480bf368bf564954e",
+    "ocr": "PASSED: Alibaba Open Code Review v1.12.9 exact-range delegation over 3 changed files, 1 reviewable (crates/cotrad/src/sg000039_main.rs) with delegated rules applied and 2 excluded (apps/cotra-relay/src/adversarial.test.ts by default-path classification and docs/security/SG-000058_P15_ADVERSARIAL_EXIT_NOTE.md by unsupported-extension classification) manually reviewed",
+    "security_review": "PASS on exact qualified head: two-tenant adversarial suite over a real relay with durable state and real uplinks proving no cross-principal, device, route, client, or session use, no identity selection through metadata or arguments, nonexistent management tools, relay restart without session carryover or replay, per-route quota fail-closed before the device, class-only logs, and relay state without tokens, payloads, or device private keys; real cotrad lease-boundary test run on a real Windows 11 Home build 26200 unlocked interactive session proving the exact lease allows a real fs.read and that reconnect, out-of-lease workspace, expiry, revoke, trust revoke, and policy drift are REMOTE_SESSION_INACTIVE, with fail-closed behavior and an explicit UNVERIFIED report on hosts without an unlocked interactive session; full condition-to-evidence matrix; real lock, logoff, and suspend transitions recorded as UNVERIFIED with the owner procedure rather than fabricated. No product code change; all closed SG-000001 through SG-000057 regressions pass. Qodo billing-blocked and CodeRabbit skipped-review notices evaluated as non-evidence noise with zero substantive findings; zero unresolved threads.",
+    "unresolved_review_threads": 0,
+    "authority_boundary": "Adversarial and chaos qualification tests and the P15 exit note only. No MCP tool, schema, capability, approval, lease, network, or provider authority change."
+  }
 }
