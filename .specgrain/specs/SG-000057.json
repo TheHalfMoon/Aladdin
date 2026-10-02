@@ -2,7 +2,7 @@
   "id": "SG-000057",
   "title": "Open-source relay, self-host mode, and zero-cost reference deployment",
   "program": "COTRA-P15",
-  "state": "GRAIN",
+  "state": "CLOSED",
   "risk": "high",
   "created": "2026-10-02",
   "base": "700d6bbbb1f3919f2f02b567117aab027cad202d",
@@ -75,5 +75,25 @@
     "exact_head_ci": true,
     "release_artifact_qualification": true
   },
-  "done_when": "The open-source relay is canonical as a self-hostable zero-cost service with device-backed OAuth enrollment, durable state, hard fail-closed quotas, and documented optional free-tier deployment."
+  "done_when": "The open-source relay is canonical as a self-hostable zero-cost service with device-backed OAuth enrollment, durable state, hard fail-closed quotas, and documented optional free-tier deployment.",
+  "qualified_head": "eacf865ac4f7fff72adc50893c533128108e53a2",
+  "implementation_base": "ca494131070a5cdb9c133bef0db69e6292c2d085",
+  "implementation_merge": "18a01842dc14f0ed398dd622bd4d69bcbac16266",
+  "pre_merge_ci": "37009825156",
+  "pre_merge_review_gates": "37009823186",
+  "post_merge_ci": "37010453680",
+  "canonical_evidence": {
+    "implementation_pr": 156,
+    "implementation_base": "ca494131070a5cdb9c133bef0db69e6292c2d085",
+    "qualified_head": "eacf865ac4f7fff72adc50893c533128108e53a2",
+    "pre_merge_ci": "37009825156",
+    "pre_merge_review_gates": "37009823186",
+    "merge_sha": "18a01842dc14f0ed398dd622bd4d69bcbac16266",
+    "post_merge_ci": "37010453680",
+    "jev": "PASSED: genuine TypeSafe Jev exact-diff review covered 45/45 hunks with zero findings and zero blocking findings, pin 31f89602797fb7bea007f8a480bf368bf564954e",
+    "ocr": "PASSED: Alibaba Open Code Review v1.12.9 exact-range delegation over 25 changed files, 20 reviewable with delegated rules applied and 5 excluded (apps/cotra-mcp/src/device-uplink.test.ts and apps/cotra-relay/src/self-host.test.ts by default-path classification and docs/relay/REFERENCE_DEPLOYMENT.md, docs/relay/SELF_HOSTING.md, and docs/security/SG-000057_OPEN_SOURCE_RELAY_NOTE.md by unsupported-extension classification) manually reviewed",
+    "security_review": "PASS on exact qualified head: RFC 8414 metadata, RFC 7591 public-client registration with strict validation and quotas, authorization endpoint with SG-000054 validation, no redirect for unknown clients or redirects, script-free CSP pages, device-backed pairing with hash-only signed offers, constant-time code entry with 5 attempts per transaction, and typed local confirmation of the exact client, origin, scopes, and route signed with a fresh one-shot challenge before any route or code exists; PKCE code exchange with replay revoking issued tokens; refresh requiring a fresh family-bound device proof over the live channel, failing immediately when the device is offline; RFC 7009 client-bound revocation; durable atomic owner-only integrity-checked bounded state that refuses to start when corrupt; quotas bounded by hard ceilings failing closed with REMOTE_RATE_LIMITED and no paid overflow; strict configuration with loopback listener default; digest-pinned unprivileged container verified in CI; STRONG-gated local enable and pair through cotrad, never reachable remotely; device proof signing only for its own device and epoch. All closed SG-000001 through SG-000056 regressions pass. The commit message lost two backticked command names to shell substitution; history was not rewritten. Qodo billing-blocked and CodeRabbit skipped-review notices evaluated as non-evidence noise with zero substantive findings; zero unresolved threads.",
+    "unresolved_review_threads": 0,
+    "authority_boundary": "Self-hostable open-source relay with authorization server, device-backed pairing, device-proof refresh, durable payload-free state, hard fail-closed quotas, and container packaging, plus STRONG-gated local enrollment. No outbound requests from the relay, no proxy, executor, MCP tool, schema, capability, approval, or lease authority, and no paid dependency or paid overflow."
+  }
 }
