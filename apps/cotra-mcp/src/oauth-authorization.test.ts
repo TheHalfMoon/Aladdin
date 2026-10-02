@@ -230,6 +230,13 @@ test("issuer, resource, redirect, and client metadata URL shapes are strict", ()
   assert.ok(isResourceIdentifier(RESOURCE));
   assert.ok(!isResourceIdentifier("https://relay.cotra.example/mcp#x"));
   assert.ok(!isResourceIdentifier("http://relay.cotra.example/mcp"));
+  assert.ok(isResourceIdentifier("http://127.0.0.1:8787/mcp"), "exact loopback self-host");
+  assert.ok(isIssuerIdentifier("http://127.0.0.1:8787"));
+  assert.ok(isIssuerIdentifier("http://[::1]:8787"));
+  for (const notLoopback of ["http://localhost:8787", "http://127.0.0.2:8787", "http://10.0.0.1:8787", "http://127.0.0.1.nip.io:8787"]) {
+    assert.ok(!isIssuerIdentifier(notLoopback), notLoopback);
+    assert.ok(!isResourceIdentifier(notLoopback + "/mcp"), notLoopback);
+  }
   assert.ok(isAcceptableRedirectUri(REDIRECT));
   assert.ok(isAcceptableRedirectUri("http://127.0.0.1:43123/callback"));
   assert.ok(!isAcceptableRedirectUri("http://localhost:43123/callback"));

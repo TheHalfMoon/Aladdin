@@ -294,12 +294,24 @@ function parseUrl(value: unknown): URL | null {
 }
 
 /**
- * Issuer identifier: https, no query, no fragment, no credentials, and no
- * trailing slash so exact comparison is unambiguous.
+ * https, or plain http only on an exact loopback IP literal (SG-000056) so a
+ * self-hosted relay can serve on the same machine. Host names, including
+ * `localhost`, never qualify for plain http.
+ */
+function isHttpsOrLoopbackHttp(url: URL): boolean {
+  if (url.protocol === "https:") {
+    return true;
+  }
+  return url.protocol === "http:" && (url.hostname === "127.0.0.1" || url.hostname === "[::1]");
+}
+
+/**
+ * Issuer identifier: https (or exact-loopback http), no query, no fragment,
+ * no credentials, and no trailing slash so exact comparison is unambiguous.
  */
 export function isIssuerIdentifier(value: unknown): value is string {
   const url = parseUrl(value);
-  if (url === null || url.protocol !== "https:") {
+  if (url === null || !isHttpsOrLoopbackHttp(url)) {
     return false;
   }
   if (url.search !== "" || url.hash !== "" || url.username !== "" || url.password !== "") {
@@ -311,10 +323,10 @@ export function isIssuerIdentifier(value: unknown): value is string {
   return url.href === value || url.href === `${value as string}/`;
 }
 
-/** Protected resource identifier: https, no query, no fragment, no credentials. */
+/** Protected resource identifier: https (or exact-loopback http), no query, no fragment, no credentials. */
 export function isResourceIdentifier(value: unknown): value is string {
   const url = parseUrl(value);
-  if (url === null || url.protocol !== "https:") {
+  if (url === null || !isHttpsOrLoopbackHttp(url)) {
     return false;
   }
   if (url.search !== "" || url.hash !== "" || url.username !== "" || url.password !== "") {
@@ -453,7 +465,7 @@ function isStringArray(value: unknown): value is readonly string[] {
 function sameOrigin(endpoint: unknown, issuer: string): boolean {
   const url = parseUrl(endpoint);
   const base = parseUrl(issuer);
-  return url !== null && base !== null && url.protocol === "https:" && url.origin === base.origin;
+  return url !== null && base !== null && isHttpsOrLoopbackHttp(url) && url.origin === base.origin;
 }
 
 /**
