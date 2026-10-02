@@ -2,7 +2,7 @@
   "id": "SG-000053",
   "title": "Device identity, pairing, and revocation",
   "program": "COTRA-P15",
-  "state": "GRAIN",
+  "state": "CLOSED",
   "risk": "high",
   "created": "2026-10-01",
   "base": "52552b4a49ffdf0859712a5b10751f77fc8fb309",
@@ -76,5 +76,25 @@
     "exact_head_ci": true,
     "release_artifact_qualification": true
   },
-  "done_when": "Device identity, pairing, and revocation are canonical with remap-proof envelope tests and no remote authority."
+  "done_when": "Device identity, pairing, and revocation are canonical with remap-proof envelope tests and no remote authority.",
+  "qualified_head": "17ae5d4bd7af92b67c63d714210c06d45aa30c5b",
+  "implementation_base": "1aa23642ff877bc8cb2243673c34142950c1f120",
+  "implementation_merge": "518406cffdd2cd37625f35a87580c0e2c49483c5",
+  "pre_merge_ci": "36987088953",
+  "pre_merge_review_gates": "36987089071",
+  "post_merge_ci": "36987792952",
+  "canonical_evidence": {
+    "implementation_pr": 148,
+    "implementation_base": "1aa23642ff877bc8cb2243673c34142950c1f120",
+    "qualified_head": "17ae5d4bd7af92b67c63d714210c06d45aa30c5b",
+    "pre_merge_ci": "36987088953",
+    "pre_merge_review_gates": "36987089071",
+    "merge_sha": "518406cffdd2cd37625f35a87580c0e2c49483c5",
+    "post_merge_ci": "36987792952",
+    "jev": "PASSED: genuine TypeSafe Jev exact-diff review covered 3/3 hunks with zero findings and zero blocking findings, pin 31f89602797fb7bea007f8a480bf368bf564954e",
+    "ocr": "PASSED: Alibaba Open Code Review v1.12.9 exact-range delegation over 3 changed files, 1 reviewable (apps/cotra-mcp/src/device_identity.ts) with delegated rules applied and 2 excluded (apps/cotra-mcp/src/device-identity.test.ts by default-path classification and docs/security/SG-000053_DEVICE_IDENTITY_NOTE.md by unsupported-extension classification) manually reviewed",
+    "security_review": "PASS on exact qualified head: protected local Ed25519 device identity with public projection and private key never leaving the device, challenge and response bound to device and epoch with rotation and connection epochs, one-time pairing with 256-bit entropy, 300-second expiry, one-shot consumption, and 5-attempt rate limiting granting no trust or approval, hard device, principal-wide, all-route, and emergency revocation invalidating active and refreshable sessions, device-verifiable authorization envelope proving no principal-A-to-device-B remap with ROUTE_MISMATCH, frozen 17-code failure subset conformance, redacted logs and evidence, and 13 contract tests with the relay device transport remaining a fail-closed skeleton. No OAuth, device uplink, public edge, relay deployment, MCP tool, schema, capability, approval, lifecycle, browser, UIA, clipboard, installer, elevation, or provider submission code. All closed SG-000001 through SG-000052 regressions pass unchanged. Qodo billing-blocked and CodeRabbit skipped-review notices evaluated as non-evidence noise with zero substantive findings; zero unresolved blocking threads.",
+    "unresolved_review_threads": 0,
+    "authority_boundary": "No OAuth, device uplink, public edge, relay deployment, MCP tool, schema change, capability, approval, lifecycle, network listener, browser, UIA, clipboard, installer, elevation, or provider submission authority. Pure device identity vocabulary module, contract tests, and security note only."
+  }
 }
