@@ -1,16 +1,16 @@
 # SG-000038 - Bounded clipboard read security note
 
 Status: IMPLEMENTATION CANDIDATE
-Program: COTRA-P11
+Program: QUNTAL-P11
 Grain: SG-000038
 
 ## Purpose
 
-SG-000038 establishes the first narrow COTRA-P11 clipboard grain on top
-of the closed COTRA-P10 vision registry, the closed COTRA-P09
+SG-000038 establishes the first narrow QUNTAL-P11 clipboard grain on top
+of the closed QUNTAL-P10 vision registry, the closed QUNTAL-P09
 structured-UIA registry, the SG-000018 replay-resistant foundation,
 SG-000019 class enforcement, SG-000020 trust and revoke records, and
-the closed COTRA-P08 registry: a single explicit bounded
+the closed QUNTAL-P08 registry: a single explicit bounded
 clipboard-read shape returning Unicode text only, with a hard size
 bound, independent content-type verification, deterministic
 secret-pattern denial, clipboard-sequence binding, fresh SOFT approval
@@ -35,7 +35,7 @@ or otherwise unreadable clipboard fails closed as unavailable.
 ## Deterministic secret denial
 
 Clipboard text matching a documented credential, token, key, seed, or
-Cotra-protected family is denied before any return path and never
+Quntal-protected family is denied before any return path and never
 enters results, evidence, prompts, logs, or MCP responses. Denial
 messages never quote the matched bytes. Detection is deterministic
 pattern matching, honestly documented as imperfect: novel
@@ -66,9 +66,9 @@ are explicit denials mapped to the STRONG gate, which has no execution
 authority for them. No MCP clipboard tool exists, and the agent cannot
 reach reads through its own tool surface.
 
-## Protected Cotra content and secrets
+## Protected Quntal content and secrets
 
-Clipboard text carrying Cotra approval, trust, emergency-revoke, or
+Clipboard text carrying Quntal approval, trust, emergency-revoke, or
 secret markers is denied like any other secret family. No password,
 credential, Windows Hello, cookie, token, session, private-key, or
 seed material enters prompts beyond the bounded approval summary

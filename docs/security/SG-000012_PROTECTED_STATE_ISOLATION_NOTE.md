@@ -1,18 +1,18 @@
 # SG-000012 — Restricted-child protected-state isolation qualification
 
-SG-000012 qualifies a negative-access boundary for the existing contained Windows process path before Cotra widens executable or PowerShell authority.
+SG-000012 qualifies a negative-access boundary for the existing contained Windows process path before Quntal widens executable or PowerShell authority.
 
 ## What is qualified
 
-The native Windows integration fixture creates a Cotra-owned sentinel beneath the parent user's LocalAppData `Cotra` state boundary. The parent verifies that the sentinel exists, builds the execution plan through the production sanitizer, and launches the integration-test child through the existing zero-capability AppContainer + kill-on-close Job executor.
+The native Windows integration fixture creates a Quntal-owned sentinel beneath the parent user's LocalAppData `Quntal` state boundary. The parent verifies that the sentinel exists, builds the execution plan through the production sanitizer, and launches the integration-test child through the existing zero-capability AppContainer + kill-on-close Job executor.
 
 The contained child succeeds only when all of the following are true:
 
-- `COTRA_TUNNEL_KEY_FILE` is absent;
+- `QUNTAL_TUNNEL_KEY_FILE` is absent;
 - `OPENAI_API_KEY` is absent;
-- `COTRA_DAEMON` is absent;
+- `QUNTAL_DAEMON` is absent;
 - stdin is NUL/EOF rather than a readable inherited authority channel;
-- reading the Cotra-owned protected-state sentinel fails.
+- reading the Quntal-owned protected-state sentinel fails.
 
 The parent then requires:
 
@@ -27,15 +27,15 @@ The sentinel bytes are never emitted to stdout, stderr, logs, or model-visible e
 
 SG-000012 does not add a new launch implementation. It deliberately traverses the already-qualified contained executor. That executor constructs a dedicated NUL stdin handle plus dedicated stdout/stderr pipe writers and passes only those explicit standard handles through `PROC_THREAD_ATTRIBUTE_HANDLE_LIST`.
 
-The current request-scoped `cotra-mcp -> cotrad` authority path uses the daemon's own stdio. It is not one of the child handles. The native fixture additionally proves the contained child's stdin is EOF/NUL, so the daemon request channel was not inherited as readable child stdin.
+The current request-scoped `quntal-mcp -> quntald` authority path uses the daemon's own stdio. It is not one of the child handles. The native fixture additionally proves the contained child's stdin is EOF/NUL, so the daemon request channel was not inherited as readable child stdin.
 
 This grain does not introduce service-mode named-pipe IPC and does not claim qualification of a future IPC architecture.
 
 ## Filesystem boundary
 
-The qualification target is Cotra-owned state under LocalAppData, not a trusted workspace and not a user-selected file. SG-000012 does not change workspace ACLs or arbitrary user-file permissions.
+The qualification target is Quntal-owned state under LocalAppData, not a trusted workspace and not a user-selected file. SG-000012 does not change workspace ACLs or arbitrary user-file permissions.
 
-If native Windows evidence shows that the default Cotra-owned state ACL permits the AppContainer read, the grain must fail closed. Any repair must be limited to Cotra-owned protected state and must be requalified natively before the grain can close.
+If native Windows evidence shows that the default Quntal-owned state ACL permits the AppContainer read, the grain must fail closed. Any repair must be limited to Quntal-owned protected state and must be requalified natively before the grain can close.
 
 ## Authority boundary
 

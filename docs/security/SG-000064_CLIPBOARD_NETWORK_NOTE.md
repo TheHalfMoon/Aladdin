@@ -1,14 +1,14 @@
 # SG-000064 Clipboard and Bounded Network Exposure Note
 
-Status: IMPLEMENTATION FOR COTRA-P16
+Status: IMPLEMENTATION FOR QUNTAL-P16
 SpecGrain: SG-000064
 Base: `2463c02cf875b736ecbda913ffccf7a09807cee3`
 Date: 2026-10-02
-Code: `apps/cotra-mcp/src/clipboard_network.ts`,
-`apps/cotra-mcp/src/oauth_authorization.ts` (`LOCAL_ONLY_TOOL_NAMES`),
-`crates/cotrad/src/clipboard.rs` (pre-approval refusal), unchanged closed
-kernel paths `crates/cotra-provider-clipboard` (SG-000038, SG-000039) and
-`crates/cotra-provider-network` with `crates/cotrad/src/git_fetch.rs`
+Code: `apps/quntal-mcp/src/clipboard_network.ts`,
+`apps/quntal-mcp/src/oauth_authorization.ts` (`LOCAL_ONLY_TOOL_NAMES`),
+`crates/quntald/src/clipboard.rs` (pre-approval refusal), unchanged closed
+kernel paths `crates/quntal-provider-clipboard` (SG-000038, SG-000039) and
+`crates/quntal-provider-network` with `crates/quntald/src/git_fetch.rs`
 (SG-000040).
 
 ## 1. New MCP tools
@@ -70,7 +70,7 @@ projection only removes data; it never adds authority.
 
 All three tools are local-only (`LOCAL_ONLY_TOOL_NAMES`): absent from the
 OAuth scope matrix, denied as unmapped by the relay edge and the device
-uplink, and absent from cotrad's remote-session scope table. A remote
+uplink, and absent from quntald's remote-session scope table. A remote
 clipboard read would hand a remote principal whatever the user last
 copied, and a device-side fetch would make the user's machine an egress
 point for a remote principal that can fetch public URLs itself. A later
@@ -79,9 +79,9 @@ governed grain may map them under a locally enabled profile.
 ## 6. Evidence
 
 - Real Windows 11: the live clipboard and network tests above.
-- cotrad: `refused_write_text_never_reaches_the_approval_prompt` and the
+- quntald: `refused_write_text_never_reaches_the_approval_prompt` and the
   closed SG-000038, SG-000039, and SG-000040 dispatch tests.
-- Contract tests: `apps/cotra-mcp/src/clipboard.test.ts`, `network.test.ts`
+- Contract tests: `apps/quntal-mcp/src/clipboard.test.ts`, `network.test.ts`
   (only `clipboard_network.ts` forwards these shapes; no socket, HTTP
   client, method, header, or proxy primitive in the MCP source; URL schema;
   body projection), `oauth-authorization.test.ts`, `parity-inventory.test.ts`,

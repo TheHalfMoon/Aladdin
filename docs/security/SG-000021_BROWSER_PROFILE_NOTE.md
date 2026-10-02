@@ -1,15 +1,15 @@
 # SG-000021 — Isolated browser profile with typed provider contract and origin binding security note
 
 Status: IMPLEMENTATION CANDIDATE
-Program: COTRA-P08
+Program: QUNTAL-P08
 Grain: SG-000021
 
 ## Purpose
 
-SG-000021 establishes the first COTRA-P08 structured-browser foundation on
+SG-000021 establishes the first QUNTAL-P08 structured-browser foundation on
 top of the SG-000018 replay-resistant foundation, SG-000019 STRONG
 enforcement, and SG-000020 trust and revoke records: a dedicated isolated
-Cotra automation browser profile with a typed provider contract and strict
+Quntal automation browser profile with a typed provider contract and strict
 origin binding, so destination policy, SSRF defenses, and redirect-widening
 denial are proven before any navigation or DOM actuation authority exists.
 
@@ -21,9 +21,9 @@ remain absent.
 
 ## Profile isolation
 
-The automation profile lives under Cotra protected local state
-(`LOCALAPPDATA/Cotra/browser-profile` on Windows, with a
-`COTRA_BROWSER_STATE_DIR` override for tests), never inside a workspace and
+The automation profile lives under Quntal protected local state
+(`LOCALAPPDATA/Quntal/browser-profile` on Windows, with a
+`QUNTAL_BROWSER_STATE_DIR` override for tests), never inside a workspace and
 never inside a personal browser directory. Creation writes a marker file
 with fixed expected content; reopening verifies the marker and refuses
 foreign storage fail-closed instead of reusing it.
@@ -39,7 +39,7 @@ any `profile_root`, `root`, `path`, `argv`, `personal`, credential, or
 scripting field is rejected. The agent cannot point automation at the
 user's normal browser profile because no such input surface exists.
 
-The profile carries fresh Cotra-owned storage only. No personal cookies,
+The profile carries fresh Quntal-owned storage only. No personal cookies,
 passwords, sessions, extensions, or history are imported, and no secret,
 cookie, or credential material enters prompts, records, history, logs, MCP
 responses, or evidence packets. Profile status evidence binds the

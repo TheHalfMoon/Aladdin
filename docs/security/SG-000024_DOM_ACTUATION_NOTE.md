@@ -1,7 +1,7 @@
 # SG-000024 - Structured DOM actuation security note
 
 Status: IMPLEMENTATION CANDIDATE
-Program: COTRA-P08
+Program: QUNTAL-P08
 Grain: SG-000024
 
 ## Purpose
@@ -19,7 +19,7 @@ mode, debugging, scripting, credential access, MCP browser tools, and
 network egress absent.
 
 No browser is launched or attached in this grain. Actuation records
-authorized transitions in the Cotra registry only. Actual page rendering or
+authorized transitions in the Quntal registry only. Actual page rendering or
 page loading by a browser engine remains absent and is successor work.
 
 ## Node consumption
@@ -27,7 +27,7 @@ page loading by a browser engine remains absent and is successor work.
 Actuation consumes SG-000023 server-allocated `nd-` node identities. Every
 snapshot persists server-side node records (identity, page, workspace,
 profile, origin, page and document generation, index, role, input type,
-state, policy revision) under Cotra protected local state. Dispatch
+state, policy revision) under Quntal protected local state. Dispatch
 resolves caller-supplied identities through this registry: unknown
 identities fail closed with `TargetStale`.
 
@@ -50,7 +50,7 @@ Each invoke and each fill requires a fresh SOFT approval with exact digest
 binding over workspace, policy revision, profile identity, page identity,
 expected origin and generation, document generation, node identity,
 expected role and state, requested action, and bounded value material under
-the `COTRA_BROWSER_ACTUATION_V1` domain. The digest uses length-prefixed
+the `QUNTAL_BROWSER_ACTUATION_V1` domain. The digest uses length-prefixed
 SHA-256 fields. Any material drift invalidates the approval. One-shot
 consumption applies: a consumed approval never authorizes a second action.
 

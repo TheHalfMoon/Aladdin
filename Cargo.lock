@@ -18,154 +18,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4e7648175b45a9a48536d676f68d918270699102aa8dab5496df06904c914600"
 
 [[package]]
-name = "cotra-approval"
-version = "0.1.0"
-dependencies = [
- "cotra-contracts",
- "serde",
- "serde_json",
- "sha2",
- "windows 0.52.0",
-]
-
-[[package]]
-name = "cotra-audit"
-version = "0.1.0"
-dependencies = [
- "cotra-contracts",
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "cotra-contracts"
-version = "0.1.0"
-dependencies = [
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "cotra-lifecycle"
-version = "0.1.0"
-dependencies = [
- "cotra-approval",
- "cotra-policy",
- "cotra-tunnel",
- "serde",
- "serde_json",
- "sha2",
- "windows-sys",
-]
-
-[[package]]
-name = "cotra-policy"
-version = "0.1.0"
-dependencies = [
- "cotra-approval",
- "cotra-contracts",
- "cotra-provider-browser",
- "cotra-provider-clipboard",
- "cotra-provider-network",
- "cotra-provider-uia",
- "serde",
- "serde_json",
- "sha2",
-]
-
-[[package]]
-name = "cotra-provider-browser"
-version = "0.1.0"
-dependencies = [
- "cotra-contracts",
- "serde",
- "serde_json",
- "sha2",
-]
-
-[[package]]
-name = "cotra-provider-clipboard"
-version = "0.1.0"
-dependencies = [
- "cotra-contracts",
- "serde",
- "serde_json",
- "sha2",
- "windows 0.58.0",
-]
-
-[[package]]
-name = "cotra-provider-fs"
-version = "0.1.0"
-dependencies = [
- "cotra-contracts",
- "serde_json",
- "sha2",
-]
-
-[[package]]
-name = "cotra-provider-git"
-version = "0.1.0"
-dependencies = [
- "cotra-contracts",
- "serde_json",
-]
-
-[[package]]
-name = "cotra-provider-network"
-version = "0.1.0"
-dependencies = [
- "cotra-contracts",
- "serde_json",
- "sha2",
- "windows-sys",
-]
-
-[[package]]
-name = "cotra-provider-process"
-version = "0.1.0"
-
-[[package]]
-name = "cotra-provider-uia"
-version = "0.1.0"
-dependencies = [
- "cotra-contracts",
- "serde",
- "serde_json",
- "sha2",
- "windows 0.58.0",
-]
-
-[[package]]
-name = "cotra-tunnel"
-version = "0.1.0"
-dependencies = [
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "cotrad"
-version = "0.1.0"
-dependencies = [
- "cotra-approval",
- "cotra-audit",
- "cotra-contracts",
- "cotra-policy",
- "cotra-provider-browser",
- "cotra-provider-clipboard",
- "cotra-provider-fs",
- "cotra-provider-git",
- "cotra-provider-network",
- "cotra-provider-process",
- "cotra-provider-uia",
- "serde",
- "serde_json",
- "sha2",
- "windows-sys",
-]
-
-[[package]]
 name = "cpufeatures"
 version = "0.2.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -229,6 +81,154 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "985e7ec9bb745e6ce6535b544d84d6cd6f7ad8bd711c398938ae983b91a766d9"
 dependencies = [
  "unicode-ident",
+]
+
+[[package]]
+name = "quntal-approval"
+version = "0.1.0"
+dependencies = [
+ "quntal-contracts",
+ "serde",
+ "serde_json",
+ "sha2",
+ "windows 0.52.0",
+]
+
+[[package]]
+name = "quntal-audit"
+version = "0.1.0"
+dependencies = [
+ "quntal-contracts",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "quntal-contracts"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "quntal-lifecycle"
+version = "0.1.0"
+dependencies = [
+ "quntal-approval",
+ "quntal-policy",
+ "quntal-tunnel",
+ "serde",
+ "serde_json",
+ "sha2",
+ "windows-sys",
+]
+
+[[package]]
+name = "quntal-policy"
+version = "0.1.0"
+dependencies = [
+ "quntal-approval",
+ "quntal-contracts",
+ "quntal-provider-browser",
+ "quntal-provider-clipboard",
+ "quntal-provider-network",
+ "quntal-provider-uia",
+ "serde",
+ "serde_json",
+ "sha2",
+]
+
+[[package]]
+name = "quntal-provider-browser"
+version = "0.1.0"
+dependencies = [
+ "quntal-contracts",
+ "serde",
+ "serde_json",
+ "sha2",
+]
+
+[[package]]
+name = "quntal-provider-clipboard"
+version = "0.1.0"
+dependencies = [
+ "quntal-contracts",
+ "serde",
+ "serde_json",
+ "sha2",
+ "windows 0.58.0",
+]
+
+[[package]]
+name = "quntal-provider-fs"
+version = "0.1.0"
+dependencies = [
+ "quntal-contracts",
+ "serde_json",
+ "sha2",
+]
+
+[[package]]
+name = "quntal-provider-git"
+version = "0.1.0"
+dependencies = [
+ "quntal-contracts",
+ "serde_json",
+]
+
+[[package]]
+name = "quntal-provider-network"
+version = "0.1.0"
+dependencies = [
+ "quntal-contracts",
+ "serde_json",
+ "sha2",
+ "windows-sys",
+]
+
+[[package]]
+name = "quntal-provider-process"
+version = "0.1.0"
+
+[[package]]
+name = "quntal-provider-uia"
+version = "0.1.0"
+dependencies = [
+ "quntal-contracts",
+ "serde",
+ "serde_json",
+ "sha2",
+ "windows 0.58.0",
+]
+
+[[package]]
+name = "quntal-tunnel"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "quntald"
+version = "0.1.0"
+dependencies = [
+ "quntal-approval",
+ "quntal-audit",
+ "quntal-contracts",
+ "quntal-policy",
+ "quntal-provider-browser",
+ "quntal-provider-clipboard",
+ "quntal-provider-fs",
+ "quntal-provider-git",
+ "quntal-provider-network",
+ "quntal-provider-process",
+ "quntal-provider-uia",
+ "serde",
+ "serde_json",
+ "sha2",
+ "windows-sys",
 ]
 
 [[package]]

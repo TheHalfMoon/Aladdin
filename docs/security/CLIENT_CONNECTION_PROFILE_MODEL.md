@@ -1,4 +1,4 @@
-# Cotra Client Connection Profile Model
+# Quntal Client Connection Profile Model
 
 Status: IMPLEMENTATION-READY PROPOSAL
 Date: 2026-10-01
@@ -12,13 +12,13 @@ Companions:
 
 Provider-neutral transport is not sufficient for least privilege.
 
-If every local or remote MCP client receives the same Cotra tool surface and workspace access, adding multiple clients silently creates authority equivalence between ChatGPT, Claude, Mistral, Codex, IDEs, and generic MCP applications.
+If every local or remote MCP client receives the same Quntal tool surface and workspace access, adding multiple clients silently creates authority equivalence between ChatGPT, Claude, Mistral, Codex, IDEs, and generic MCP applications.
 
-Cotra therefore needs a local **client connection profile** that is independent of provider OAuth scopes and independent of the transport implementation.
+Quntal therefore needs a local **client connection profile** that is independent of provider OAuth scopes and independent of the transport implementation.
 
 ## 2. Security role
 
-A client connection profile is a local policy object that identifies one configured Cotra integration and places a ceiling on what that integration may request.
+A client connection profile is a local policy object that identifies one configured Quntal integration and places a ceiling on what that integration may request.
 
 It is not an approval token and is not proof that the AI host is trustworthy.
 
@@ -29,7 +29,7 @@ client connection profile
 AND transport-specific authentication / remote OAuth scope
 AND locally enabled tool-surface profile
 AND workspace policy
-AND cotrad capability/provider ceiling
+AND quntald capability/provider ceiling
 AND remote-session lease when transport is remote
 AND required per-action approval
 ```
@@ -63,12 +63,12 @@ Profile creation, widening, deletion, or provider/transport rebinding is a local
 A command family may resemble:
 
 ```text
-cotra client add
-cotra client show <alias>
-cotra client list
-cotra client disable <alias>
-cotra client revoke <alias>
-cotra client remove <alias>
+quntal client add
+quntal client show <alias>
+quntal client list
+quntal client disable <alias>
+quntal client revoke <alias>
+quntal client remove <alias>
 ```
 
 Widening a profile requires STRONG local user presence.
@@ -79,21 +79,21 @@ Removing access may use a lower-friction local path when it is strictly authorit
 
 ## 5. Local stdio mode
 
-A configured local integration launches Cotra for one exact client profile, for example conceptually:
+A configured local integration launches Quntal for one exact client profile, for example conceptually:
 
 ```text
-cotra mcp stdio --client-profile <opaque-or-local-alias>
+quntal mcp stdio --client-profile <opaque-or-local-alias>
 ```
 
 The implementation should avoid placing bearer secrets directly in command-line arguments.
 
 The profile ID itself is not a secret.
 
-The stdio profile selector is caller-controlled, so the implementation must not trust an ID or alias alone. stdio must bind the selected profile to a protected per-profile launch credential, manifest, or OS-managed identity, and a malicious MCP host must not be able to launch Cotra under a higher-authority profile by supplying a different selector.
+The stdio profile selector is caller-controlled, so the implementation must not trust an ID or alias alone. stdio must bind the selected profile to a protected per-profile launch credential, manifest, or OS-managed identity, and a malicious MCP host must not be able to launch Quntal under a higher-authority profile by supplying a different selector.
 
 The direct stdio process relationship supplies the transport path, while the local profile supplies the policy ceiling and audit identity.
 
-Cotra does not claim cryptographic isolation from arbitrary malicious code already running unrestricted under the same Windows user. A same-user attacker may be able to inspect process configuration or invoke installed executables. Cotra's protected-state, workspace, capability, and approval controls remain the security boundary against effects, but confidentiality from an already-unrestricted same-user process is outside the strict model.
+Quntal does not claim cryptographic isolation from arbitrary malicious code already running unrestricted under the same Windows user. A same-user attacker may be able to inspect process configuration or invoke installed executables. Quntal's protected-state, workspace, capability, and approval controls remain the security boundary against effects, but confidentiality from an already-unrestricted same-user process is outside the strict model.
 
 This limitation must be documented honestly.
 
@@ -129,7 +129,7 @@ Changing the profile bound to an existing remote connection requires local autho
 
 ## 8. Workspace behavior
 
-A client profile must not automatically inherit every workspace registered with Cotra.
+A client profile must not automatically inherit every workspace registered with Quntal.
 
 New workspaces default to **not admitted** to existing client profiles.
 
@@ -137,7 +137,7 @@ Adding a workspace to a client profile is an explicit local action.
 
 Workspace trust and client-profile admission are separate:
 
-- workspace trust answers whether Cotra may perform the relevant operation in that workspace;
+- workspace trust answers whether Quntal may perform the relevant operation in that workspace;
 - client-profile admission answers whether this configured AI integration may request that workspace at all.
 
 Both must allow the request.
@@ -153,7 +153,7 @@ The profile references an explicit surface ceiling such as:
 
 A profile may use a narrower generated manifest than the maximum surface profile.
 
-Clients should ideally see only tools they are allowed to call, but server-side `cotrad` enforcement remains mandatory because discovery hiding is not authorization.
+Clients should ideally see only tools they are allowed to call, but server-side `quntald` enforcement remains mandatory because discovery hiding is not authorization.
 
 A transport adapter cannot register extra tools outside the single reviewed registry.
 
@@ -163,7 +163,7 @@ A transport adapter cannot register extra tools outside the single reviewed regi
 
 For remote mode, provider/client identity is derived from the authenticated OAuth/client path and must match the profile's allowed provider kind.
 
-For local mode, the provider kind is configured by the user and remains metadata/policy context. Cotra must not claim it cryptographically proves that a local process is Claude, Codex, Mistral, or another named host.
+For local mode, the provider kind is configured by the user and remains metadata/policy context. Quntal must not claim it cryptographically proves that a local process is Claude, Codex, Mistral, or another named host.
 
 ## 11. Cross-provider isolation
 
@@ -179,7 +179,7 @@ Tests must prove:
 
 ## 12. Default profiles and onboarding
 
-Cotra may generate a minimal profile during an integration setup assistant, but defaults must be least privilege.
+Quntal may generate a minimal profile during an integration setup assistant, but defaults must be least privilege.
 
 Recommended defaults:
 
@@ -192,11 +192,11 @@ Recommended defaults:
 
 ## 13. Lifecycle and update
 
-Profiles live in protected Cotra configuration and participate in policy revision/evidence.
+Profiles live in protected Quntal configuration and participate in policy revision/evidence.
 
 Updates must preserve them without silently widening them.
 
-If a new Cotra release adds tools to a named surface profile, existing client profiles must not silently inherit new authority unless the profile/versioning design explicitly proves that behavior safe. Prefer versioned surface manifests or an explicit local migration/approval for widening.
+If a new Quntal release adds tools to a named surface profile, existing client profiles must not silently inherit new authority unless the profile/versioning design explicitly proves that behavior safe. Prefer versioned surface manifests or an explicit local migration/approval for widening.
 
 Rollback must not interpret a newer unknown profile field as allow.
 
@@ -240,5 +240,5 @@ Before P17 exit:
 - protection against arbitrary unrestricted same-user malware;
 - remote profile administration;
 - provider-managed workspace trust;
-- implicit access to every Cotra workspace;
+- implicit access to every Quntal workspace;
 - one global profile shared by all AI integrations.

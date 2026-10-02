@@ -1,13 +1,13 @@
 # SG-000013 — Private bounded PowerShell containment qualification
 
 Status: IMPLEMENTATION CANDIDATE
-Program: COTRA-P05
+Program: QUNTAL-P05
 
-SG-000013 qualifies Windows PowerShell inside Cotra's already-proven contained process engine without exposing a public PowerShell capability.
+SG-000013 qualifies Windows PowerShell inside Quntal's already-proven contained process engine without exposing a public PowerShell capability.
 
 ## Qualification boundary
 
-The native Windows integration qualification invokes the exact inbox Windows PowerShell executable under `System32\WindowsPowerShell\v1.0\powershell.exe` directly through `cotra-provider-process`.
+The native Windows integration qualification invokes the exact inbox Windows PowerShell executable under `System32\WindowsPowerShell\v1.0\powershell.exe` directly through `quntal-provider-process`.
 
 Every fixture uses a fixed test-owned script and the exact prefix:
 
@@ -26,14 +26,14 @@ The Windows suite proves:
 2. typed `ProcessTimeout` only after verified Job termination/quiescence;
 3. stream-typed stdout `OutputLimit` only after verified termination;
 4. stream-typed stderr `OutputLimit` only after verified termination;
-5. Cotra/tunnel/API secret-like source environment values are removed from the child plan;
+5. Quntal/tunnel/API secret-like source environment values are removed from the child plan;
 6. existing SG-000011 descendant-aware lifecycle and SG-000012 protected-state/authority-channel tests remain part of the full Windows regression suite.
 
 ## Authority boundary
 
 This grain changes tests and security documentation only.
 
-It does not register `powershell.run` in MCP, does not authorize PowerShell in `cotrad` policy, and does not add PowerShell to the public `process.spawn` executable policy.
+It does not register `powershell.run` in MCP, does not authorize PowerShell in `quntald` policy, and does not add PowerShell to the public `process.spawn` executable policy.
 
 Windows public `process.spawn` therefore remains restricted to the SG-000010-qualified `%SystemRoot%\System32\whoami.exe` target.
 

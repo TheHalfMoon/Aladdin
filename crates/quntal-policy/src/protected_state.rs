@@ -1,0 +1,229 @@
+//! SG-000041 protected Quntal state isolation.
+//!
+//! Quntal protected state (trust records, approval history, audit records, the
+//! browser profile, and later installer configuration and secrets) lives under
+//! the Quntal state root or under explicit environment overrides. A workspace
+//! whose resolved root overlaps any of those locations would let workspace-scoped
+//! providers reach protected state, so such workspaces are refused when the
+//! policy engine is constructed.
+
+use std::ffi::OsString;
+use std::path::{Component, Path, PathBuf};
+
+/// Overrides that relocate protected state. They must stay identical to the
+/// overrides honored by `quntal_audit::default_audit_path`,
+/// `quntald` `trust::default_trust_path`,
+/// `quntal_approval::default_approval_history_path`,
+/// `quntal_provider_browser::default_profile_root`, and
+/// `remote_session::default_lease_store_path`, and
+/// `executable_registry::default_registry_path`.
+pub const PROTECTED_STATE_OVERRIDES: &[&str] = &[
+    "QUNTAL_AUDIT_PATH",
+    "QUNTAL_TRUST_PATH",
+    "QUNTAL_APPROVAL_HISTORY_PATH",
+    "QUNTAL_BROWSER_STATE_DIR",
+    "QUNTAL_REMOTE_LEASE_PATH",
+    "QUNTAL_EXECUTABLE_REGISTRY_PATH",
+];
+
+/// Returns the unresolved protected state roots derived from the process
+/// environment.
+pub fn protected_state_roots() -> Vec<PathBuf> {
+    protected_state_roots_from(&|name| std::env::var_os(name))
+}
+
+/// Returns the unresolved protected state roots derived from `lookup`: the
+/// Quntal state root followed by every configured override.
+pub fn protected_state_roots_from(lookup: &dyn Fn(&str) -> Option<OsString>) -> Vec<PathBuf> {
+    let mut roots = vec![match lookup("LOCALAPPDATA") {
+        Some(local_app_data) => PathBuf::from(local_app_data).join("Quntal"),
+        None => std::env::temp_dir().join("quntal"),
+    }];
+    for name in PROTECTED_STATE_OVERRIDES {
+        if let Some(value) = lookup(name) {
+            roots.push(PathBuf::from(value));
+        }
+    }
+    roots
+}
+
+/// Resolves a protected root to its final path: the nearest existing ancestor
+/// is canonicalized and the remaining components are appended unchanged.
+/// Empty paths and parent-directory components fail closed.
+pub fn resolve_protected_root(path: &Path) -> Result<PathBuf, String> {
+    if path.as_os_str().is_empty() {
+        return Err("protected state location is empty".into());
+    }
+    // Verbatim (`\?\`) Windows paths parse `.` and `..` as normal components,
+    // so they are rejected by name as well as by component kind.
+    if path.components().any(|component| {
+        matches!(component, Component::ParentDir | Component::CurDir)
+            || component.as_os_str() == ".."
+            || component.as_os_str() == "."
+    }) {
+        return Err("protected state location contains a relative-directory component".into());
+    }
+    let absolute = if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        std::env::current_dir()
+            .map_err(|error| format!("resolve current directory: {error}"))?
+            .join(path)
+    };
+
+    let mut existing = absolute.as_path();
+    let mut suffix: Vec<OsString> = Vec::new();
+    loop {
+        if let Ok(resolved) = std::fs::canonicalize(existing) {
+            let mut out = resolved;
+            for part in suffix.iter().rev() {
+                out.push(part);
+            }
+            return Ok(out);
+        }
+        let name = existing
+            .file_name()
+            .ok_or_else(|| "protected state location could not be resolved".to_string())?;
+        suffix.push(name.to_os_string());
+        existing = existing
+            .parent()
+            .ok_or_else(|| "protected state location could not be resolved".to_string())?;
+    }
+}
+
+/// Returns true when `path` equals `base` or lies beneath it, comparing whole
+/// components (case-insensitively on Windows) rather than string prefixes.
+pub fn path_within(path: &Path, base: &Path) -> bool {
+    let mut remaining = path.components();
+    for base_component in base.components() {
+        match remaining.next() {
+            Some(component) if components_equal(component, base_component) => {}
+            _ => return false,
+        }
+    }
+    true
+}
+
+/// Returns true when either path equals or contains the other.
+pub fn paths_overlap(first: &Path, second: &Path) -> bool {
+    path_within(first, second) || path_within(second, first)
+}
+
+#[cfg(windows)]
+fn components_equal(first: Component<'_>, second: Component<'_>) -> bool {
+    first.as_os_str().to_string_lossy().to_lowercase()
+        == second.as_os_str().to_string_lossy().to_lowercase()
+}
+
+#[cfg(not(windows))]
+fn components_equal(first: Component<'_>, second: Component<'_>) -> bool {
+    first == second
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::BTreeMap;
+    use std::sync::atomic::{AtomicU64, Ordering};
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    static SEQUENCE: AtomicU64 = AtomicU64::new(0);
+
+    fn temp_root(label: &str) -> PathBuf {
+        let suffix = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("clock")
+            .as_nanos();
+        let sequence = SEQUENCE.fetch_add(1, Ordering::Relaxed);
+        let root = std::env::temp_dir().join(format!(
+            "quntal-sg41-{label}-{}-{suffix}-{sequence}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&root).expect("create temp root");
+        std::fs::canonicalize(root).expect("canonical temp root")
+    }
+
+    fn lookup(values: BTreeMap<&'static str, OsString>) -> impl Fn(&str) -> Option<OsString> {
+        move |name| values.get(name).cloned()
+    }
+
+    #[test]
+    fn state_root_follows_local_app_data_and_every_override() {
+        let roots = protected_state_roots_from(&lookup(BTreeMap::from([
+            ("LOCALAPPDATA", OsString::from("/lad")),
+            ("QUNTAL_AUDIT_PATH", OsString::from("/a/audit.jsonl")),
+            ("QUNTAL_TRUST_PATH", OsString::from("/t/trust.jsonl")),
+            (
+                "QUNTAL_APPROVAL_HISTORY_PATH",
+                OsString::from("/h/history.jsonl"),
+            ),
+            ("QUNTAL_BROWSER_STATE_DIR", OsString::from("/b")),
+        ])));
+        assert_eq!(
+            roots,
+            vec![
+                PathBuf::from("/lad").join("Quntal"),
+                PathBuf::from("/a/audit.jsonl"),
+                PathBuf::from("/t/trust.jsonl"),
+                PathBuf::from("/h/history.jsonl"),
+                PathBuf::from("/b"),
+            ]
+        );
+    }
+
+    #[test]
+    fn state_root_falls_back_to_temp_quntal_without_local_app_data() {
+        let roots = protected_state_roots_from(&lookup(BTreeMap::new()));
+        assert_eq!(roots, vec![std::env::temp_dir().join("quntal")]);
+    }
+
+    #[test]
+    fn overlap_is_component_wise_not_string_prefix() {
+        let base = PathBuf::from("/x/Quntal");
+        assert!(paths_overlap(&base, &PathBuf::from("/x/Quntal/state")));
+        assert!(paths_overlap(&base, &PathBuf::from("/x")));
+        assert!(paths_overlap(&base, &PathBuf::from("/x/Quntal")));
+        assert!(!paths_overlap(&base, &PathBuf::from("/x/Quntal-work")));
+        assert!(!paths_overlap(&base, &PathBuf::from("/x/Cotr")));
+        assert!(!paths_overlap(&base, &PathBuf::from("/y/Quntal")));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_overlap_is_case_insensitive() {
+        assert!(paths_overlap(
+            Path::new(r"C:\Users\u\AppData\Local\Quntal"),
+            Path::new(r"c:\users\U\appdata\local\quntal\state")
+        ));
+        assert!(paths_overlap(
+            Path::new(r"C:\Users\u\AppData\Local\Quntal"),
+            Path::new(r"C:\USERS\U")
+        ));
+    }
+
+    #[test]
+    fn parent_components_and_empty_locations_fail_closed() {
+        assert!(resolve_protected_root(Path::new("")).is_err());
+        // Built from strings: `PathBuf::push` collapses `..` on verbatim paths.
+        let sep = std::path::MAIN_SEPARATOR;
+        let parent = PathBuf::from(format!(
+            "{}{sep}a{sep}..{sep}b",
+            std::env::temp_dir().display()
+        ));
+        assert!(resolve_protected_root(&parent).is_err());
+        assert!(resolve_protected_root(Path::new("a/../b")).is_err());
+        #[cfg(windows)]
+        assert!(resolve_protected_root(Path::new(r"\\?\C:\x\..\y")).is_err());
+        #[cfg(windows)]
+        assert!(resolve_protected_root(Path::new(r"\\?\C:\x\.\y")).is_err());
+    }
+
+    #[test]
+    fn missing_suffix_is_appended_to_canonical_existing_ancestor() {
+        let root = temp_root("suffix");
+        let resolved =
+            resolve_protected_root(&root.join("missing").join("audit.jsonl")).expect("resolve");
+        assert_eq!(resolved, root.join("missing").join("audit.jsonl"));
+        let _ = std::fs::remove_dir_all(root);
+    }
+}

@@ -1,18 +1,18 @@
 # SG-000037 - Human-interruption invalidation security note
 
 Status: IMPLEMENTATION CANDIDATE
-Program: COTRA-P10
+Program: QUNTAL-P10
 Grain: SG-000037
 
 ## Purpose
 
-SG-000037 establishes the fifth narrow COTRA-P10 vision grain on top
+SG-000037 establishes the fifth narrow QUNTAL-P10 vision grain on top
 of the closed SG-000036 bounded execution registry, the closed
 SG-000035 coordinate registry, the closed SG-000034 visual proposal
 registry, the closed SG-000033 window-scoped capture registry, the
-closed COTRA-P09 structured-UIA registry, the SG-000018
+closed QUNTAL-P09 structured-UIA registry, the SG-000018
 replay-resistant foundation, SG-000019 class enforcement, SG-000020
-trust and revoke records, and the closed COTRA-P08 registry:
+trust and revoke records, and the closed QUNTAL-P08 registry:
 human-interruption handling bound to the explicit single-use input
 lease through a monotonic interruption epoch, where any material
 human physical interaction revokes live lease material so old leases,
@@ -20,7 +20,7 @@ pending approvals bound to old epochs, and queued continuations fail
 closed.
 
 This grain adds no actuating input authority. It only revokes. Human
-physical interaction always wins over Cotra automation: the system
+physical interaction always wins over Quntal automation: the system
 never fights the user for control, never reclaims mouse position
 against the user, never refocuses windows against the user, never
 replays an interrupted action, and never continues queued, drag, or
@@ -56,9 +56,9 @@ shape still accepts only `coord_id`,
 `expected_derivation_generation`, and `operation`, and the policy layer
 denies epoch and interruption forgery fields explicitly.
 
-## Cotra synthetic exclusion with fail-closed ambiguity
+## Quntal synthetic exclusion with fail-closed ambiguity
 
-Input-origin classification distinguishes Cotra synthetic execution
+Input-origin classification distinguishes Quntal synthetic execution
 (which never interrupts itself and never revokes its own lease), OS
 or other synthetic input, real human physical input, and unknown
 input. Human physical input always interrupts. Unknown or ambiguous
@@ -82,11 +82,11 @@ emergency-stop path), never from input content. The emergency stop
 cannot be suppressed, delayed, or bypassed through any interruption
 path.
 
-## Protected Cotra surfaces and secrets
+## Protected Quntal surfaces and secrets
 
 Interruption handling never exposes approval dialogs, STRONG presence
 surfaces, workspace trust controls, emergency revoke, or
-security-sensitive Cotra UI as automation targets, and protected
+security-sensitive Quntal UI as automation targets, and protected
 surfaces remain denied regardless of epoch state. No password,
 credential, Windows Hello, cookie, token, or session material enters
 prompts, records, history, logs, MCP responses, snapshots, or

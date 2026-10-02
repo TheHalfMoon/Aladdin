@@ -1,4 +1,4 @@
 {
-  "command": "cotra",
+  "command": "quntal",
   "args": ["mcp", "stdio"]
 }

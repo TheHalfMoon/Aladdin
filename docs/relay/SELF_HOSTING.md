@@ -1,8 +1,8 @@
-# Self-Hosting the Cotra Relay
+# Self-Hosting the Quntal Relay
 
 Status: OPERATOR GUIDE (SG-000057)
 
-The Cotra relay is open source (Apache-2.0) and self-hosting is the canonical,
+The Quntal relay is open source (Apache-2.0) and self-hosting is the canonical,
 zero-cost way to give a hosted AI client remote access to your own computer.
 Nothing in this guide requires a paid API, paid cloud, paid database, paid
 identity provider, or paid relay.
@@ -12,12 +12,12 @@ identity provider, or paid relay.
 - It terminates the public MCP endpoint (`/mcp`), runs the OAuth 2.1
   authorization server for device-backed pairing, and holds the outbound-only
   channel that your computer opens to it.
-- Your computer never opens an inbound port. `cotra remote connect` only makes
+- Your computer never opens an inbound port. `quntal remote connect` only makes
   outbound HTTPS requests to the relay.
 - The relay sees MCP requests and results in transit while it forwards them.
   It never stores payloads, and logs carry route and status classes only.
 - The relay cannot grant anything on your computer. Every remote call still
-  needs an active local remote-session lease (`cotra remote allow`, Windows
+  needs an active local remote-session lease (`quntal remote allow`, Windows
   Hello, at most 15 minutes) plus the normal workspace policy and approvals.
 - When a quota is exhausted the relay fails closed with
   `REMOTE_RATE_LIMITED`. It never scales out or spends money.
@@ -34,16 +34,16 @@ identity provider, or paid relay.
 ## Run with Docker
 
 ```sh
-docker build -f apps/cotra-relay/Dockerfile -t cotra-relay .
-mkdir -p /srv/cotra-relay/config /srv/cotra-relay/state
-cp apps/cotra-relay/relay.example.json /srv/cotra-relay/config/relay.json
+docker build -f apps/quntal-relay/Dockerfile -t quntal-relay .
+mkdir -p /srv/quntal-relay/config /srv/quntal-relay/state
+cp apps/quntal-relay/relay.example.json /srv/quntal-relay/config/relay.json
 # edit publicOrigin to your HTTPS origin; keep listenHost 127.0.0.1 behind a proxy,
 # or set it to 0.0.0.0 inside the container and publish only to 127.0.0.1.
-docker run -d --name cotra-relay --restart unless-stopped \
+docker run -d --name quntal-relay --restart unless-stopped \
   -p 127.0.0.1:8787:8787 \
-  -v /srv/cotra-relay/config:/etc/cotra-relay:ro \
-  -v /srv/cotra-relay/state:/var/lib/cotra-relay \
-  cotra-relay
+  -v /srv/quntal-relay/config:/etc/quntal-relay:ro \
+  -v /srv/quntal-relay/state:/var/lib/quntal-relay \
+  quntal-relay
 ```
 
 The image is built from a digest-pinned `node:24.19.0-alpine3.23` base and
@@ -54,7 +54,7 @@ runs as the unprivileged `node` user.
 ```sh
 npm ci --ignore-scripts
 npm run build
-node apps/cotra-relay/dist/main.js --config /etc/cotra-relay/relay.json
+node apps/quntal-relay/dist/main.js --config /etc/quntal-relay/relay.json
 ```
 
 ## TLS termination (example: Caddy)
@@ -98,20 +98,20 @@ for this relay (they still cannot act on a computer without a local lease).
 
 ## Linking a computer and an AI client
 
-1. On the computer: `cotra remote enable --relay https://relay.example.com`
+1. On the computer: `quntal remote enable --relay https://relay.example.com`
    (Windows Hello).
 2. In the AI client, add a custom MCP connector with the URL
    `https://relay.example.com/mcp`. The client discovers the authorization
    server, registers, and opens the authorization page.
-3. On the computer: `cotra remote pair` (Windows Hello). Enter the code it
+3. On the computer: `quntal remote pair` (Windows Hello). Enter the code it
    prints on the authorization page, then type `yes` on the computer after
    checking the client name, return address, and scopes.
-4. On the computer: `cotra remote connect` (keep it running) and
-   `cotra remote allow --connection <rc-...>` whenever you want to allow a
+4. On the computer: `quntal remote connect` (keep it running) and
+   `quntal remote allow --connection <rc-...>` whenever you want to allow a
    finite remote session.
 
-Revoke at any time with `cotra remote revoke`, or everything at once with
-`cotra emergency-revoke`.
+Revoke at any time with `quntal remote revoke`, or everything at once with
+`quntal emergency-revoke`.
 
 ## Health
 

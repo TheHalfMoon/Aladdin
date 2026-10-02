@@ -1,4 +1,4 @@
-name: Build, package, archive, and qualify a Cotra release
+name: Build, package, archive, and qualify a Quntal release
 description: >-
   Builds the release binaries with deterministic flags and the MCP app from
   the locked dependency graph, packages a release directory (including
@@ -25,16 +25,16 @@ runs:
       shell: pwsh
       run: |
         $cargoHome = if ($env:CARGO_HOME) { $env:CARGO_HOME } else { Join-Path $HOME ".cargo" }
-        "RUSTFLAGS=-C link-arg=/Brepro --remap-path-prefix=$env:GITHUB_WORKSPACE=C:\cotra --remap-path-prefix=$cargoHome=C:\cargo" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+        "RUSTFLAGS=-C link-arg=/Brepro --remap-path-prefix=$env:GITHUB_WORKSPACE=C:\quntal --remap-path-prefix=$cargoHome=C:\cargo" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
     - name: Build the shipped release binaries
       shell: pwsh
       # Binaries only: building examples in the same invocation would unify
       # dev-dependency features (including test-only approval support) into
       # the shipped binaries.
-      run: cargo build --release --locked -p cotrad -p cotra-lifecycle --bins
+      run: cargo build --release --locked -p quntald -p quntal-lifecycle --bins
     - name: Build the tunnel test fixture separately
       shell: pwsh
-      run: cargo build --release --locked -p cotra-lifecycle --example fake_tunnel_client
+      run: cargo build --release --locked -p quntal-lifecycle --example fake_tunnel_client
     - name: Package release
       shell: pwsh
       run: node scripts/package-release.mjs --out "${{ inputs.release-dir }}"
@@ -47,5 +47,5 @@ runs:
     - name: Qualify the release extracted from the archive
       shell: pwsh
       env:
-        COTRA_RELEASE_DIR: ${{ inputs.release-dir }}-from-archive
-      run: cargo test --release --locked -p cotra-lifecycle --test release_qualification -- --ignored --nocapture
+        QUNTAL_RELEASE_DIR: ${{ inputs.release-dir }}-from-archive
+      run: cargo test --release --locked -p quntal-lifecycle --test release_qualification -- --ignored --nocapture

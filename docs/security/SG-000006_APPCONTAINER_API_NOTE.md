@@ -2,7 +2,7 @@
 
 Date: 2026-09-24
 
-Cotra uses the documented Windows desktop AppContainer profile APIs directly for a narrow qualification probe:
+Quntal uses the documented Windows desktop AppContainer profile APIs directly for a narrow qualification probe:
 
 - CreateAppContainerProfile — Userenv.dll / Userenv.lib
 - DeriveAppContainerSidFromAppContainerName — Userenv.dll / Userenv.lib

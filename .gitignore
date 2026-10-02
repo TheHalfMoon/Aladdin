@@ -8,4 +8,4 @@
 !.env.example
 .DS_Store
 Thumbs.db
-.cotra-local/
+.quntal-local/

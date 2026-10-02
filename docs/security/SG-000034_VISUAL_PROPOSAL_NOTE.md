@@ -1,21 +1,21 @@
 # SG-000034 - Non-actuating visual target proposals security note
 
 Status: IMPLEMENTATION CANDIDATE
-Program: COTRA-P10
+Program: QUNTAL-P10
 Grain: SG-000034
 
 ## Purpose
 
-SG-000034 establishes the second narrow COTRA-P10 vision grain on top
+SG-000034 establishes the second narrow QUNTAL-P10 vision grain on top
 of the closed SG-000033 window-scoped capture registry, the closed
-COTRA-P09 structured-UIA registry, the SG-000018 replay-resistant
+QUNTAL-P09 structured-UIA registry, the SG-000018 replay-resistant
 foundation, SG-000019 class enforcement, SG-000020 trust and revoke
-records, and the closed COTRA-P08 registry: a single approved
+records, and the closed QUNTAL-P08 registry: a single approved
 non-actuating proposal shape bound to server-derived frame identity,
 expected capture generation, and a bounded region inside the exact
 frame geometry, with server-allocated typed proposal identity, fresh
 SOFT approval digest binding, immediate pre-proposal stale-frame
-revalidation, and protected Cotra approval-surface exclusion.
+revalidation, and protected Quntal approval-surface exclusion.
 
 No other new vision or input authority exists in this grain. Coordinate
 proposals, coordinate derivation, bounded input execution, input
@@ -84,10 +84,10 @@ occurred. A successful proposal never mutates frame, window, tree, or
 process state because proposing is non-actuating; frame and element
 identities are unaffected.
 
-## Protected Cotra surfaces and secrets
+## Protected Quntal surfaces and secrets
 
 Proposals can never target approval dialogs, STRONG presence surfaces,
-workspace trust controls, emergency revoke, or security-sensitive Cotra
+workspace trust controls, emergency revoke, or security-sensitive Quntal
 UI, because frames of protected surfaces can never be captured and
 direct proposal paths re-check protected status. Fail closed on
 uncertainty. No password, credential, Windows Hello, cookie, token, or

@@ -1,4 +1,4 @@
-# Cotra Remote Session Authorization
+# Quntal Remote Session Authorization
 
 Status: IMPLEMENTATION-READY PROPOSAL
 Date: 2026-10-01
@@ -15,15 +15,15 @@ A shared relay terminates the hosted provider's HTTPS connection and necessarily
 
 Even with correct OAuth and device pairing, a compromised relay process that receives a valid remote connection can attempt additional MCP calls while that connection is valid.
 
-Per-action SOFT/STRONG approval limits write/execute authority, but many useful read-only Cotra tools intentionally require no per-call approval in local mode. Without another local boundary, a compromised remote relay could invoke those read tools and exfiltrate data from an already-admitted workspace.
+Per-action SOFT/STRONG approval limits write/execute authority, but many useful read-only Quntal tools intentionally require no per-call approval in local mode. Without another local boundary, a compromised remote relay could invoke those read tools and exfiltrate data from an already-admitted workspace.
 
 Therefore remote connectivity requires a **local remote-session authorization lease** in addition to remote OAuth, pairing, workspace policy, and per-action approval.
 
-Cotra must not claim that relay compromise is harmless. The goal is to bound the period, workspace, profile, and remote connection for which remote requests are locally dispatchable.
+Quntal must not claim that relay compromise is harmless. The goal is to bound the period, workspace, profile, and remote connection for which remote requests are locally dispatchable.
 
 ## 2. Remote session lease
 
-A remote session lease is a local `cotrad` authorization object created only through local user interaction.
+A remote session lease is a local `quntald` authorization object created only through local user interaction.
 
 It binds at minimum:
 
@@ -54,7 +54,7 @@ AND active local remote-session lease
 AND tool included in the leased local surface profile
 AND workspace included in the lease
 AND current policy revision still matches or locally controlled revalidation succeeds through a local presence-based step the remote model cannot satisfy
-AND normal cotrad capability/provider-ceiling checks
+AND normal quntald capability/provider-ceiling checks
 AND required per-action SOFT/STRONG approval
 ```
 
@@ -67,12 +67,12 @@ A valid remote OAuth token without a local lease produces a typed local denial s
 A command/UX such as:
 
 ```text
-cotra remote allow <connection>
+quntal remote allow <connection>
 ```
 
 shows locally:
 
-- provider/client identity known to Cotra;
+- provider/client identity known to Quntal;
 - user-chosen device/connection alias;
 - requested remote scopes;
 - local tool-surface profile;
@@ -110,8 +110,8 @@ The remote session lease follows this deterministic state machine on every obser
 
 - user logoff: lease invalidated immediately; in-flight remote calls fail closed; reconnect requires a new STRONG-gated lease;
 - workstation lock: dispatch suspended immediately and in-flight calls fail closed; unlock alone does not resume dispatch without an active unexpired lease, and never extends expiry;
-- suspend/hibernate: lease suspended on suspend; on resume the lease remains expired if its deadline passed, otherwise dispatch stays suspended until Cotra revalidates device, connection, and policy epochs locally;
-- Cotra shutdown, emergency revoke, or device key/connection revoke: lease invalidated immediately with no retry window that outlives the original request/lease expiry.
+- suspend/hibernate: lease suspended on suspend; on resume the lease remains expired if its deadline passed, otherwise dispatch stays suspended until Quntal revalidates device, connection, and policy epochs locally;
+- Quntal shutdown, emergency revoke, or device key/connection revoke: lease invalidated immediately with no retry window that outlives the original request/lease expiry.
 
 Unlock/resume does not silently widen or extend an expired lease. Race handling is fail closed: if a transition and a dispatch race, the transition wins.
 
@@ -179,7 +179,7 @@ Mitigations are:
 
 Users who require stronger trust can use local stdio/loopback mode or self-host the relay.
 
-Cotra documentation and marketing must state this residual risk rather than claim the shared relay is outside the confidentiality boundary.
+Quntal documentation and marketing must state this residual risk rather than claim the shared relay is outside the confidentiality boundary.
 
 ## 11. Audit
 
@@ -209,7 +209,7 @@ The following invalidate the lease immediately:
 - lease expiry;
 - relevant interruption/security epoch change.
 
-Revocation is checked immediately before provider dispatch, not only when the remote request first reaches Cotra.
+Revocation is checked immediately before provider dispatch, not only when the remote request first reaches Quntal.
 
 ## 13. Threats addressed
 

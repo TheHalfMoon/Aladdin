@@ -1,7 +1,7 @@
 # SG-000019 — Strong user-presence approval class security note
 
 Status: IMPLEMENTATION CANDIDATE
-Program: COTRA-P07
+Program: QUNTAL-P07
 Grain: SG-000019
 
 ## Purpose
@@ -100,7 +100,7 @@ granting new authority:
   SOFT.
 
 Authorization still denies PRIVILEGED and selected DESTRUCTIVE shapes.
-Classification does not widen authority. The cotrad dispatch layer
+Classification does not widen authority. The quntald dispatch layer
 additionally denies any STRONG-class request fail-closed, so no STRONG
 execution path is authorized in this grain. STRONG success is proven at
 the broker layer with test verifiers, not by granting new production
@@ -108,7 +108,7 @@ capabilities.
 
 ## History and redaction
 
-The ledger schema is `cotra-approval-ledger-v2`. First run with this
+The ledger schema is `quntal-approval-ledger-v2`. First run with this
 grain creates a new ledger. Version one records are not read and do not
 authorize execution. Records carry class,
 presence outcome, and presence method in addition to the SG-000018

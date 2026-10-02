@@ -1,7 +1,7 @@
 # SG-000010 — Approved bounded argv `process.spawn`
 
 Status: IMPLEMENTATION CANDIDATE
-Program: COTRA-P05
+Program: QUNTAL-P05
 
 ## Authority delta
 
@@ -27,7 +27,7 @@ Unknown process argument fields fail closed. In particular, `command`, `env`, st
 
 ## Normalization and approval
 
-`cotrad` builds an `ExecutionPlan` before approval. The plan canonicalizes the executable and cwd, preserves argv order, applies the fixed inherited-environment allowlist, removes Cotra/tunnel and secret-like variables, and validates execution limits.
+`quntald` builds an `ExecutionPlan` before approval. The plan canonicalizes the executable and cwd, preserves argv order, applies the fixed inherited-environment allowlist, removes Quntal/tunnel and secret-like variables, and validates execution limits.
 
 Every execution requires a fresh independent local approval. The approval digest is SHA-256 over length-prefixed normalized fields with domain separation. It binds:
 - workspace identity;
@@ -44,9 +44,9 @@ Material plan drift therefore changes the approval digest. Denied or unavailable
 
 ## MCP request lifecycle
 
-`process_spawn` does not share the long-lived read/write/Git daemon. Each EXECUTE request creates a request-scoped `KernelClient` / `cotrad` process, performs the approval and contained execution through that daemon, and closes it in a `finally` block.
+`process_spawn` does not share the long-lived read/write/Git daemon. Each EXECUTE request creates a request-scoped `KernelClient` / `quntald` process, performs the approval and contained execution through that daemon, and closes it in a `finally` block.
 
-The MCP-side deadline is the requested provider runtime bound plus a five-minute local-approval window. If that deadline expires, the promise rejects and the `finally` block closes the request-scoped daemon. Closing `cotrad` drops its contained Job handle, so an execution cannot later start or continue silently after the MCP caller has already observed timeout. Other Cotra tools keep their independent long-lived daemon and are not interrupted by this fail-closed EXECUTE lifecycle.
+The MCP-side deadline is the requested provider runtime bound plus a five-minute local-approval window. If that deadline expires, the promise rejects and the `finally` block closes the request-scoped daemon. Closing `quntald` drops its contained Job handle, so an execution cannot later start or continue silently after the MCP caller has already observed timeout. Other Quntal tools keep their independent long-lived daemon and are not interrupted by this fail-closed EXECUTE lifecycle.
 
 This is the SG-000010 cancellation boundary. A future durable-operation protocol may provide richer cancellation/reconnect semantics, but this grain must not leave an approval or contained process running after its request-scoped client has ended.
 

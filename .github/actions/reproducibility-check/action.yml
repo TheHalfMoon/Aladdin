@@ -30,13 +30,13 @@ runs:
       working-directory: second-checkout
       run: |
         $cargoHome = if ($env:CARGO_HOME) { $env:CARGO_HOME } else { Join-Path $HOME ".cargo" }
-        $env:RUSTFLAGS = "-C link-arg=/Brepro --remap-path-prefix=$PWD=C:\cotra --remap-path-prefix=$cargoHome=C:\cargo"
+        $env:RUSTFLAGS = "-C link-arg=/Brepro --remap-path-prefix=$PWD=C:\quntal --remap-path-prefix=$cargoHome=C:\cargo"
         $second = "${{ inputs.release-dir }}-second"
         npm ci --ignore-scripts
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         npm run build
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-        cargo build --release --locked -p cotrad -p cotra-lifecycle --bins
+        cargo build --release --locked -p quntald -p quntal-lifecycle --bins
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         node scripts/package-release.mjs --out $second
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -51,7 +51,7 @@ runs:
         New-Item -ItemType Directory -Force $out | Out-Null
         $identical = $true
         $binaries = [ordered]@{}
-        foreach ($name in "cotra.exe", "cotra-mcp-host.exe", "cotrad.exe") {
+        foreach ($name in "quntal.exe", "quntal-mcp-host.exe", "quntald.exe") {
           $a = (Get-FileHash (Join-Path $first $name) -Algorithm SHA256).Hash.ToLower()
           $b = (Get-FileHash (Join-Path $second $name) -Algorithm SHA256).Hash.ToLower()
           $binaries[$name] = [ordered]@{ first = $a; second = $b; identical = ($a -eq $b) }

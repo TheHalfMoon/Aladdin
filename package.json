@@ -1,14 +1,14 @@
 {
-  "name": "cotra",
+  "name": "quntal",
   "version": "0.1.0",
   "private": true,
   "workspaces": [
-    "apps/cotra-mcp",
-    "apps/cotra-relay"
+    "apps/quntal-mcp",
+    "apps/quntal-relay"
   ],
   "scripts": {
-    "build": "npm run build --workspace @cotra/mcp && npm run build --workspace @cotra/relay",
-    "typecheck": "npm run typecheck --workspace @cotra/mcp && npm run build --workspace @cotra/mcp && npm run typecheck --workspace @cotra/relay",
-    "test": "npm run test --workspace @cotra/mcp && npm run test --workspace @cotra/relay"
+    "build": "npm run build --workspace @quntal/mcp && npm run build --workspace @quntal/relay",
+    "typecheck": "npm run typecheck --workspace @quntal/mcp && npm run build --workspace @quntal/mcp && npm run typecheck --workspace @quntal/relay",
+    "test": "npm run test --workspace @quntal/mcp && npm run test --workspace @quntal/relay"
   }
 }

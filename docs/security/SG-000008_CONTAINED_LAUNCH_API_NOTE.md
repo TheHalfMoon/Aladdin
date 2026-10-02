@@ -38,7 +38,7 @@ Official Microsoft references:
 - https://learn.microsoft.com/en-us/windows/win32/api/securitybaseapi/nf-securitybaseapi-gettokeninformation
 - https://learn.microsoft.com/en-us/windows/win32/secauthz/appcontainer-for-legacy-applications-
 
-Current Windows documentation also describes Experimental_CreateProcessInSandbox. Cotra does not use it as the v1 foundation because Microsoft explicitly marks that API experimental and subject to change. It remains a future evaluation candidate.
+Current Windows documentation also describes Experimental_CreateProcessInSandbox. Quntal does not use it as the v1 foundation because Microsoft explicitly marks that API experimental and subject to change. It remains a future evaluation candidate.
 
 ABI provenance:
 - PROC_THREAD_ATTRIBUTE_SECURITY_CAPABILITIES value cross-checked against Microsoft windows-rs / Win32 metadata.
@@ -52,7 +52,7 @@ The first native Windows runs reached CreateProcessW but failed with Win32 error
 
 Microsoft's AppContainer documentation identifies LOCALAPPDATA as the profile root exposed to the AppContainer and states that LOCALAPPDATA, TEMP, and TMP are rerouted into AppContainer-accessible profile directories. A system-only environment omits user variables such as LOCALAPPDATA, so it is not sufficient for this launch path.
 
-Cotra now constructs a sorted Unicode environment from a fixed safe-name allowlist. It includes Windows/system paths plus the user-directory variables required for AppContainer profile redirection. Arbitrary parent variables are not copied.
+Quntal now constructs a sorted Unicode environment from a fixed safe-name allowlist. It includes Windows/system paths plus the user-directory variables required for AppContainer profile redirection. Arbitrary parent variables are not copied.
 
 Required before launch:
 - LOCALAPPDATA
