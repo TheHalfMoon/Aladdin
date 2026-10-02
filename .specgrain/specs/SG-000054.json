@@ -2,7 +2,7 @@
   "id": "SG-000054",
   "title": "OAuth 2.1 authorization",
   "program": "COTRA-P15",
-  "state": "GRAIN",
+  "state": "CLOSED",
   "risk": "high",
   "created": "2026-10-02",
   "base": "518406cffdd2cd37625f35a87580c0e2c49483c5",
@@ -76,5 +76,25 @@
     "exact_head_ci": true,
     "release_artifact_qualification": true
   },
-  "done_when": "OAuth 2.1 authorization is canonical with default-deny scope ceilings and no authority beyond remote principal identity."
+  "done_when": "OAuth 2.1 authorization is canonical with default-deny scope ceilings and no authority beyond remote principal identity.",
+  "qualified_head": "7b78f6eec753f34429896e6f954f948c6285b44d",
+  "implementation_base": "26075a9966535f029053d379ca3ef1b910b633c2",
+  "implementation_merge": "3282f2481a7bb51a7e2334a46b8c480df8ace40b",
+  "pre_merge_ci": "36992323388",
+  "pre_merge_review_gates": "36992321876",
+  "post_merge_ci": "36992754562",
+  "canonical_evidence": {
+    "implementation_pr": 150,
+    "implementation_base": "26075a9966535f029053d379ca3ef1b910b633c2",
+    "qualified_head": "7b78f6eec753f34429896e6f954f948c6285b44d",
+    "pre_merge_ci": "36992323388",
+    "pre_merge_review_gates": "36992321876",
+    "merge_sha": "3282f2481a7bb51a7e2334a46b8c480df8ace40b",
+    "post_merge_ci": "36992754562",
+    "jev": "PASSED: genuine TypeSafe Jev exact-diff review covered 4/4 hunks with zero findings and zero blocking findings, pin 31f89602797fb7bea007f8a480bf368bf564954e",
+    "ocr": "PASSED: Alibaba Open Code Review v1.12.9 exact-range delegation over 4 changed files, 1 reviewable (apps/cotra-mcp/src/oauth_authorization.ts) with delegated rules applied and 3 excluded (apps/cotra-mcp/src/oauth-authorization.test.ts and apps/cotra-mcp/src/surface.test.ts by default-path classification and docs/security/SG-000054_OAUTH_AUTHORIZATION_NOTE.md by unsupported-extension classification) manually reviewed",
+    "security_review": "PASS on exact qualified head: OAuth 2.1 authorization code with PKCE S256 only, exact registered redirect, CSRF state, one-shot hashed 60-second codes bound to client, redirect, resource, PKCE, and the post-pairing remote binding with replay signalling family revocation, RFC 8414 and RFC 9728 metadata with exact issuer and resource validation and RFC 9207 issuer identification, EdDSA-pinned JWS access tokens rejecting none, symmetric, RSA, embedded and remote key headers, crit, and extra claims, with signature, issuer, single audience equal to the exact resource, 600-second lifetime cap, iat, nbf, and exp with 30-second skew, scope, token, family, SG-000053 route revocation, and current device epoch checks, rotating refresh families with reuse detection, 7-day absolute lifetime, scope narrowing only, and a fresh family-bound one-shot SG-000053 device-key proof on every renewal so a stolen refresh token cannot renew while the device is offline, minting that refuses foreign resources and widened scopes, RFC 7009 revocation, default-deny provider client-identification hooks, and the default-deny scope to tool and profile ceiling covering exactly the 20 canonical tools with only core mapped. OAuth yields remote identity only and grants no workspace trust, approval, STRONG presence, capability, filesystem, process, browser, UI, or lease authority. One scanner regex made word-bounded so the cotra.execute scope is not mistaken for the cotra.exe lifecycle executable; every other closed SG-000001 through SG-000053 regression passes unchanged. Qodo billing-blocked, CodeRabbit skipped-review, and cubic skipped notices evaluated as non-evidence noise with zero substantive findings; zero unresolved threads. Post-merge CI 36992754562 attempt 1 failed only in Release qualification on the pre-existing Windows lifecycle tree-ACL verification race (a sibling atomic-write temporary file vanished between walk and DACL read; also seen in run 36897477978 and unrelated to SG-000054) and attempt 2 re-ran the failed job to SUCCESS; the root-cause fix is authorized in SG-000055.",
+    "unresolved_review_threads": 0,
+    "authority_boundary": "No device uplink, public edge, relay deployment, listener, outbound request, MCP tool, schema change, capability, approval, lifecycle, browser, UIA, clipboard, installer, elevation, or provider submission authority. Pure OAuth 2.1 validation module, contract and negative tests, and security note only; OAuth proves remote principal identity only."
+  }
 }

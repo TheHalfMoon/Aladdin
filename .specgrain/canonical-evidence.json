@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "snapshot_base": "518406cffdd2cd37625f35a87580c0e2c49483c5",
+  "snapshot_base": "3282f2481a7bb51a7e2334a46b8c480df8ace40b",
   "state_semantics": {
     "GRAIN": "Authorized or active work packet whose acceptance is not yet canonically proven.",
     "PROVEN": "Acceptance and required qualification are proven, but canonical closeout/governance is not yet complete.",
@@ -646,6 +646,18 @@
       "review_basis": "Exact-head genuine TypeSafe Jev 3/3 hunks with zero findings/blocking findings (pin 31f89602797fb7bea007f8a480bf368bf564954e), Alibaba Open Code Review v1.12.9 exact-range delegation over 3 files with 1 reviewable and 2 excluded files (device-identity.test.ts and SG-000053_DEVICE_IDENTITY_NOTE.md) manually reviewed, exact-diff manual security review, Windows/Ubuntu Rust Node Governance, Supply chain audit, and Release qualification, successful post-merge CI, and zero unresolved review threads. Qodo billing-blocked and CodeRabbit skipped-review notices evaluated as non-evidence noise with zero substantive findings.",
       "unresolved_review_threads": 0,
       "authority_boundary": "No OAuth, device uplink, public edge, relay deployment, MCP tool, schema change, capability, approval, lifecycle, network listener, browser, UIA, clipboard, installer, elevation, or provider submission authority. Pure device identity vocabulary module, contract tests, and security note only."
+    },
+    "SG-000054": {
+      "implementation_pr": 150,
+      "implementation_base": "26075a9966535f029053d379ca3ef1b910b633c2",
+      "qualified_head": "7b78f6eec753f34429896e6f954f948c6285b44d",
+      "pre_merge_ci": "36992323388",
+      "pre_merge_review_gates": "36992321876",
+      "merge_sha": "3282f2481a7bb51a7e2334a46b8c480df8ace40b",
+      "post_merge_ci": "36992754562",
+      "review_basis": "Exact-head genuine TypeSafe Jev 4/4 hunks with zero findings/blocking findings (pin 31f89602797fb7bea007f8a480bf368bf564954e), Alibaba Open Code Review v1.12.9 exact-range delegation over 4 files with 1 reviewable and 3 excluded files (oauth-authorization.test.ts, surface.test.ts, and SG-000054_OAUTH_AUTHORIZATION_NOTE.md) manually reviewed, exact-diff manual security review, Windows/Ubuntu Rust Node Governance, Supply chain audit, and Release qualification, successful post-merge CI, and zero unresolved review threads. Qodo billing-blocked, CodeRabbit skipped-review, and cubic skipped notices evaluated as non-evidence noise with zero substantive findings. Post-merge CI 36992754562 attempt 1 failed only in Release qualification on the pre-existing Windows lifecycle tree-ACL verification race (a sibling atomic-write temporary file vanished between walk and DACL read; also seen in run 36897477978 and unrelated to SG-000054) and attempt 2 re-ran the failed job to SUCCESS; the root-cause fix is authorized in SG-000055.",
+      "unresolved_review_threads": 0,
+      "authority_boundary": "No device uplink, public edge, relay deployment, listener, outbound request, MCP tool, schema change, capability, approval, lifecycle, browser, UIA, clipboard, installer, elevation, or provider submission authority. Pure OAuth 2.1 validation module, contract and negative tests, and security note only; OAuth proves remote principal identity only."
     }
   }
 }

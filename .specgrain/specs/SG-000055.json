@@ -1,0 +1,82 @@
+{
+  "id": "SG-000055",
+  "title": "Outbound-only device uplink and remote-session lease",
+  "program": "COTRA-P15",
+  "state": "GRAIN",
+  "risk": "high",
+  "created": "2026-10-02",
+  "base": "3282f2481a7bb51a7e2334a46b8c480df8ace40b",
+  "dependencies": [
+    "SG-000054"
+  ],
+  "objective": "Implement the outbound-only authenticated device channel that carries frozen SG-000052 frames between a relay and one paired device, plus the local remote-session lease that cotrad checks on every remote dispatch: route, principal, connection, and device binding, sequence and replay protection, duplicate suppression, bounded reconnect, bounded queues, backpressure, timeouts, and expiry, with no inbound port and no generic proxy semantics, and with no remote request, read or write, executing without an active finite STRONG-created local lease.",
+  "scope": {
+    "include": [
+      "outbound-only device channel client that opens no listener and accepts no inbound connection",
+      "device channel authentication with the SG-000053 device key and route, principal, connection, and device binding",
+      "frozen SG-000052 frame validation with connection-scoped sequence, single-use replay nonces, duplicate suppression, expiry, payload bounds, and the device-verifiable authorization envelope",
+      "bounded reconnect grace, bounded queue of at most 16 frames with 60-second life, concurrency of at most 4 per connection, backpressure, timeouts, and no durable offline queue",
+      "remote-session lease object in cotrad protected state binding remote connection, short-lived connection, device, provider kind, client profile, tool-surface profile, workspaces, OAuth scope ceiling, policy revision, epochs, creation, and hard expiry of at most 15 minutes",
+      "lease creation and widening through a local STRONG-gated command only, with local revoke and status",
+      "cotrad dispatch gate that denies any remote-context request without an exact active lease with typed REMOTE_SESSION_INACTIVE, rechecked immediately before dispatch",
+      "lease invalidation on expiry, revoke, device revoke, workspace revoke, profile narrowing, policy revision change, emergency revoke, lock, logoff, and security transitions, with no extension on reconnect, refresh, relay restart, or provider retry",
+      "root-cause fix for the pre-existing Windows lifecycle tree-ACL verification race where a sibling atomic-write temporary file renamed between the directory walk and the DACL read fails verification spuriously (observed in release qualification runs 36897477978 and 36992754562), without weakening owner-only ACL enforcement for any entry that exists"
+    ],
+    "exclude": [
+      "any inbound listener on the device or any router port",
+      "SOCKS, CONNECT, arbitrary TCP, generic HTTP proxy, arbitrary WebSocket forwarding, raw shell tunnel, or any generic dispatch",
+      "the public Streamable HTTP /mcp edge (SG-000056)",
+      "relay deployment, hosting, or quotas beyond the frozen device-side bounds (SG-000057)",
+      "any new local MCP tool, tool schema change, capability widening, or approval change",
+      "any lease creation, widening, renewal, or extension by the relay or provider",
+      "any P16 tool-surface widening or provider submission"
+    ]
+  },
+  "authority_delta": {
+    "filesystem": "None beyond the cotrad-owned lease store under existing protected state.",
+    "process": "None.",
+    "network": "Outbound-only HTTPS from the device to one configured relay origin carrying frozen MCP frames only; no listener and no proxy.",
+    "browser": "None.",
+    "ui_input": "None.",
+    "secrets": "Device key use for channel authentication only; no token, key, or payload logging.",
+    "approval": "Lease creation and widening require STRONG local presence; the lease never substitutes for per-action approval.",
+    "privileged": "Lease creation is a local PRIVILEGED operation never exposed as an MCP tool."
+  },
+  "invariants": [
+    "every remote dispatch requires remote authentication and an active finite local lease checked by cotrad",
+    "the relay and provider cannot create, widen, renew, or extend a lease",
+    "no durable queued request executes after lease expiry, revoke, or any security transition",
+    "the device opens no inbound port and the channel carries frozen MCP frames only",
+    "the SG-000052, SG-000053, and SG-000054 vocabulary stays frozen"
+  ],
+  "acceptance": [
+    {
+      "id": "A1",
+      "claim": "The outbound-only device channel authenticates with the device key, binds route, principal, connection, and device, and enforces sequence, replay, duplicate, expiry, bound, reconnect, queue, concurrency, and backpressure rules with no listener and no generic proxy semantics."
+    },
+    {
+      "id": "A2",
+      "claim": "cotrad denies every remote-context request without an exact active lease with REMOTE_SESSION_INACTIVE, leases require STRONG local presence to create or widen, expire within 15 minutes, and are invalidated by every listed transition without extension."
+    },
+    {
+      "id": "A3",
+      "claim": "Negative tests prove replay, duplicate, reorder, expired, oversized, malformed, cross-route, queue-after-revoke, queue-after-expiry, and no-lease cases fail closed without local dispatch. The tree-ACL verification race is fixed at its root with a deterministic regression test."
+    },
+    {
+      "id": "A4",
+      "claim": "Exact-head CI including release qualification and supply-chain audit, genuine TypeSafe Jev, Alibaba Open Code Review, manual review of excluded files, and zero unresolved review threads all pass."
+    }
+  ],
+  "successor_requirements": {
+    "sg_000056": "The public Streamable HTTP MCP edge may proceed only after SG-000055 closes with the device uplink and remote-session lease qualified."
+  },
+  "review": {
+    "diffcipline": true,
+    "jev_semantic_review": true,
+    "alibaba_open_code_review": "required exact-range qualification where integrated",
+    "security_review": true,
+    "exact_head_ci": true,
+    "release_artifact_qualification": true
+  },
+  "done_when": "The outbound-only device uplink and the cotrad-enforced remote-session lease are canonical with no inbound port, no generic proxy, and no remote dispatch without an active local lease."
+}
