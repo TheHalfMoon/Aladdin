@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "snapshot_base": "3282f2481a7bb51a7e2334a46b8c480df8ace40b",
+  "snapshot_base": "6114ecae6baa649f74081a48962aaf30644c6897",
   "state_semantics": {
     "GRAIN": "Authorized or active work packet whose acceptance is not yet canonically proven.",
     "PROVEN": "Acceptance and required qualification are proven, but canonical closeout/governance is not yet complete.",
@@ -658,6 +658,18 @@
       "review_basis": "Exact-head genuine TypeSafe Jev 4/4 hunks with zero findings/blocking findings (pin 31f89602797fb7bea007f8a480bf368bf564954e), Alibaba Open Code Review v1.12.9 exact-range delegation over 4 files with 1 reviewable and 3 excluded files (oauth-authorization.test.ts, surface.test.ts, and SG-000054_OAUTH_AUTHORIZATION_NOTE.md) manually reviewed, exact-diff manual security review, Windows/Ubuntu Rust Node Governance, Supply chain audit, and Release qualification, successful post-merge CI, and zero unresolved review threads. Qodo billing-blocked, CodeRabbit skipped-review, and cubic skipped notices evaluated as non-evidence noise with zero substantive findings. Post-merge CI 36992754562 attempt 1 failed only in Release qualification on the pre-existing Windows lifecycle tree-ACL verification race (a sibling atomic-write temporary file vanished between walk and DACL read; also seen in run 36897477978 and unrelated to SG-000054) and attempt 2 re-ran the failed job to SUCCESS; the root-cause fix is authorized in SG-000055.",
       "unresolved_review_threads": 0,
       "authority_boundary": "No device uplink, public edge, relay deployment, listener, outbound request, MCP tool, schema change, capability, approval, lifecycle, browser, UIA, clipboard, installer, elevation, or provider submission authority. Pure OAuth 2.1 validation module, contract and negative tests, and security note only; OAuth proves remote principal identity only."
+    },
+    "SG-000055": {
+      "implementation_pr": 152,
+      "implementation_base": "21d85fc94d3fd6fa2875bc7a599c13e20f4bdf5b",
+      "qualified_head": "aff6e79785afb4671e07c93ead5d61580c76bbba",
+      "pre_merge_ci": "36997060223",
+      "pre_merge_review_gates": "36997058647",
+      "merge_sha": "6114ecae6baa649f74081a48962aaf30644c6897",
+      "post_merge_ci": "36997563582",
+      "review_basis": "Exact-head genuine TypeSafe Jev 40/40 hunks with zero findings/blocking findings (pin 31f89602797fb7bea007f8a480bf368bf564954e), Alibaba Open Code Review v1.12.9 exact-range delegation over 22 files with 19 reviewable and 3 excluded files (Cargo.lock, device-uplink.test.ts, and SG-000055_DEVICE_UPLINK_LEASE_NOTE.md) manually reviewed, exact-diff manual security review, Windows/Ubuntu Rust Node Governance, Supply chain audit, and Release qualification, successful post-merge CI, and zero unresolved review threads. Qodo billing-blocked and CodeRabbit skipped-review notices evaluated as non-evidence noise with zero substantive findings.",
+      "unresolved_review_threads": 0,
+      "authority_boundary": "Outbound-only device channel to one configured relay origin carrying frozen MCP frames into the authoritative tool catalog, and the cotrad-enforced finite STRONG-created local remote-session lease. No listener, public edge, relay server, proxy, new MCP tool, schema change, or approval change for existing capabilities; the relay and provider cannot create, widen, renew, or extend a lease."
     }
   }
 }
