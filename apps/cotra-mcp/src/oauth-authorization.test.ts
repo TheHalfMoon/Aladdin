@@ -455,6 +455,17 @@ test("a valid access token yields remote principal identity only", () => {
   }
 });
 
+test("minting refuses a foreign resource, widened or empty scopes, and revoked families", () => {
+  const h = harness();
+  const fam = family(h).family;
+  assert.throws(() => mintAccessTokenClaims(ISSUER, "https://other.example/mcp", fam, fam.scopes, NOW));
+  assert.throws(() => mintAccessTokenClaims(ISSUER, RESOURCE, fam, ["cotra.read", "cotra.execute"], NOW));
+  assert.throws(() => mintAccessTokenClaims(ISSUER, RESOURCE, fam, [], NOW));
+  assert.throws(() => mintAccessTokenClaims(ISSUER, RESOURCE, revokeRefreshFamily(fam), fam.scopes, NOW));
+  assert.throws(() => mintAccessTokenClaims(ISSUER, RESOURCE, fam, fam.scopes, -1));
+  assert.ok(mintAccessTokenClaims(ISSUER, RESOURCE, fam, ["cotra.read"], NOW).scope === "cotra.read");
+});
+
 test("negative: expired, not-yet-valid, and over-long tokens fail closed", () => {
   const h = harness();
   const { token, claims } = tokenFor(h);

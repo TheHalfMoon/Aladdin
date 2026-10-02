@@ -1020,6 +1020,15 @@ export function mintAccessTokenClaims(
   scopes: readonly OAuthScope[],
   nowMs: number
 ): AccessTokenClaims {
+  if (resource !== family.resource || family.revoked) {
+    throw new Error("REMOTE_AUTH_INVALID: access token must bind the family resource");
+  }
+  if (scopes.length === 0 || !scopes.every((scope) => family.scopes.includes(scope))) {
+    throw new Error("REMOTE_SCOPE_DENIED: access token scopes must not widen the family");
+  }
+  if (!isValidNow(nowMs)) {
+    throw new Error("REMOTE_AUTH_INVALID: invalid issue time");
+  }
   const iat = nowSeconds(nowMs);
   return {
     iss: issuer,
