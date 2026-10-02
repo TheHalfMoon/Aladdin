@@ -1,16 +1,102 @@
 /**
- * Relay device transport — reserved skeleton for COTRA-P15.
+ * Relay device transport (COTRA-P15, SG-000055).
  *
- * SG-000048 establishes the transport-neutral structure only. No relay
- * connection, no outbound channel, no device-key use, no OAuth handling,
- * and no tool authority are introduced here. Any call fails closed with
- * TRANSPORT_UNAVAILABLE until the P15 device identity, pairing, OAuth,
- * and outbound-only uplink grains are canonical.
+ * Starts the outbound-only device uplink from protected local state: the
+ * uplink configuration (relay origin, default workspace, locally paired
+ * connections), the SG-000053 device key, and the local route revocation
+ * list. It opens no listener and registers no tools; every MCP message is
+ * served by the authoritative builder with a remote-context kernel, so
+ * `cotrad` enforces the local remote-session lease on each request.
+ * Missing or malformed state fails closed with PAIRING_REQUIRED.
  */
+import { readFileSync } from "node:fs";
+import {
+  createMcpFrameDispatcher,
+  isPairedConnection,
+  isRelayOrigin,
+  runDeviceUplink,
+  type UplinkConfig
+} from "../device_uplink.js";
+import { loadDeviceKey, loadRevocations } from "../uplink_state.js";
+
 export const RELAY_TRANSPORT_RESERVED = "COTRA-P15";
 
-export function startRelayTransport(): never {
-  throw new Error(
-    "TRANSPORT_UNAVAILABLE: relay device transport is reserved for COTRA-P15 and is not yet implemented"
-  );
+const UPLINK_SCHEMA = "cotra-uplink/1";
+
+export interface UplinkFile {
+  readonly relayOrigin: string;
+  readonly defaultWorkspace: string;
+  readonly connections: UplinkConfig["connections"];
+}
+
+export function parseUplinkFile(text: string): UplinkFile {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    throw new Error("PAIRING_REQUIRED: uplink configuration is not valid JSON");
+  }
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    throw new Error("PAIRING_REQUIRED: uplink configuration must be an object");
+  }
+  const record = parsed as Record<string, unknown>;
+  const keys = Object.keys(record).sort().join(",");
+  if (keys !== "connections,defaultWorkspace,relayOrigin,schema" || record.schema !== UPLINK_SCHEMA) {
+    throw new Error("PAIRING_REQUIRED: uplink configuration has an unexpected shape");
+  }
+  if (!isRelayOrigin(record.relayOrigin)) {
+    throw new Error("PAIRING_REQUIRED: relay origin must be https or an exact loopback origin");
+  }
+  if (typeof record.defaultWorkspace !== "string" || !/^[A-Za-z0-9._-]{1,64}$/.test(record.defaultWorkspace)) {
+    throw new Error("PAIRING_REQUIRED: default workspace is invalid");
+  }
+  const connections = record.connections;
+  if (
+    !Array.isArray(connections) ||
+    connections.length === 0 ||
+    connections.length > 8 ||
+    !connections.every(isPairedConnection)
+  ) {
+    throw new Error("PAIRING_REQUIRED: no valid paired remote connection");
+  }
+  return {
+    relayOrigin: record.relayOrigin,
+    defaultWorkspace: record.defaultWorkspace,
+    connections
+  };
+}
+
+function requiredEnv(name: string): string {
+  const value = process.env[name];
+  if (value === undefined || value.length === 0) {
+    throw new Error(`PAIRING_REQUIRED: ${name} is not configured`);
+  }
+  return value;
+}
+
+export function startRelayTransport(): void {
+  const uplink = parseUplinkFile(readFileSync(requiredEnv("COTRA_UPLINK_CONFIG"), "utf8"));
+  const device = loadDeviceKey(requiredEnv("COTRA_DEVICE_KEY_PATH"));
+  const revocationsPath = requiredEnv("COTRA_DEVICE_REVOCATIONS_PATH");
+  const controller = new AbortController();
+  for (const signal of ["SIGINT", "SIGTERM"] as const) {
+    process.once(signal, () => controller.abort());
+  }
+  const config: UplinkConfig = {
+    relayOrigin: uplink.relayOrigin,
+    identity: { deviceId: device.deviceId, deviceEpoch: device.epoch },
+    privateKeyJwkBase64: device.privateKeyJwkBase64,
+    connections: uplink.connections
+  };
+  void runDeviceUplink(config, {
+    fetch: (url, init) => fetch(url, init),
+    dispatcher: createMcpFrameDispatcher({ defaultWorkspace: uplink.defaultWorkspace }),
+    revocations: () => loadRevocations(revocationsPath),
+    signal: controller.signal,
+    log: (event) => process.stderr.write(`[cotra-uplink] ${event}\n`)
+  }).catch((error: unknown) => {
+    const message = error instanceof Error ? error.message.split(":")[0] : "TRANSPORT_UNAVAILABLE";
+    process.stderr.write(`[cotra-uplink] stopped: ${message}\n`);
+    process.exitCode = 1;
+  });
 }

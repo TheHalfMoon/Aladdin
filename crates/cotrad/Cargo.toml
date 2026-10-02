@@ -27,5 +27,12 @@ serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
 
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.52", features = [
+  "Win32_Foundation",
+  "Win32_System_RemoteDesktop",
+  "Win32_System_Threading",
+] }
+
 [dev-dependencies]
 cotra-approval = { path = "../cotra-approval", features = ["test-support"] }

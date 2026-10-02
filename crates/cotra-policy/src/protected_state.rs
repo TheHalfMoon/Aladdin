@@ -13,13 +13,15 @@ use std::path::{Component, Path, PathBuf};
 /// Overrides that relocate protected state. They must stay identical to the
 /// overrides honored by `cotra_audit::default_audit_path`,
 /// `cotrad` `trust::default_trust_path`,
-/// `cotra_approval::default_approval_history_path`, and
-/// `cotra_provider_browser::default_profile_root`.
+/// `cotra_approval::default_approval_history_path`,
+/// `cotra_provider_browser::default_profile_root`, and
+/// `remote_session::default_lease_store_path`.
 pub const PROTECTED_STATE_OVERRIDES: &[&str] = &[
     "COTRA_AUDIT_PATH",
     "COTRA_TRUST_PATH",
     "COTRA_APPROVAL_HISTORY_PATH",
     "COTRA_BROWSER_STATE_DIR",
+    "COTRA_REMOTE_LEASE_PATH",
 ];
 
 /// Returns the unresolved protected state roots derived from the process

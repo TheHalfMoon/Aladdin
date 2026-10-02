@@ -68,7 +68,9 @@ dependencies = [
  "cotra-provider-clipboard",
  "cotra-provider-network",
  "cotra-provider-uia",
+ "serde",
  "serde_json",
+ "sha2",
 ]
 
 [[package]]
@@ -160,6 +162,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
+ "windows-sys",
 ]
 
 [[package]]

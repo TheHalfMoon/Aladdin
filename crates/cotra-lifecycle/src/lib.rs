@@ -16,6 +16,7 @@ pub mod manifest;
 pub mod mcp;
 pub mod mcp_host;
 pub mod platform;
+pub mod remote;
 #[cfg(windows)]
 pub mod runtime;
 pub mod update;

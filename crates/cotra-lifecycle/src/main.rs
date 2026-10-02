@@ -59,7 +59,17 @@ Local MCP (no tunnel required):
 
 Approvals:
   cotra approvals [--limit <n>]           Show recent approval decisions.
-  cotra emergency-revoke                  Invalidate all pending approvals (Windows Hello).
+  cotra emergency-revoke                  Invalidate all pending approvals and every
+      remote session lease (Windows Hello).
+
+Remote sessions (outbound-only; no inbound port is opened):
+  cotra remote connect                    Run the device uplink to the paired relay.
+  cotra remote allow --connection <rc-id> [--workspaces <id,...>] [--scopes <s,...>]
+      [--minutes <1-15>] [--read-mode session|per_request|disabled]
+      Allow one paired remote connection for at most 15 minutes (Windows Hello).
+      Without an active lease every remote request fails with REMOTE_SESSION_INACTIVE.
+  cotra remote revoke [--connection <rc-id>]  End one or every remote session lease.
+  cotra remote status                     Show remote session leases.
 
 Every command accepts --json for machine-readable output.
 ";
@@ -125,6 +135,17 @@ fn main() {
             Err(error) => {
                 eprintln!("cotra supervise: {}", error.message);
                 2
+            }
+        };
+        std::process::exit(code);
+    }
+    if args.command == "remote" && args.rest.first().map(String::as_str) == Some("connect") {
+        args.rest.remove(0);
+        let code = match commands::remote_connect(&mut args) {
+            Ok(code) => code,
+            Err(error) => {
+                eprintln!("cotra: {}", error.message);
+                error.kind.exit_code()
             }
         };
         std::process::exit(code);
@@ -210,6 +231,7 @@ fn run(args: &mut Args) -> Result<Output, LifecycleError> {
         "doctor" => commands::doctor(args),
         "approvals" => commands::approvals(args),
         "emergency-revoke" => commands::emergency_revoke(args),
+        "remote" => commands::remote(args),
         "update" => commands::update(args),
         "rollback" => commands::rollback(args),
         "self-check" => commands::self_check(args),

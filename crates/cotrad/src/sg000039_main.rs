@@ -1,6 +1,9 @@
 use cotra_approval::{ApprovalBroker, ApprovalClass, LocalApprovalBroker};
 use cotra_audit::{default_audit_path, AuditLogger};
-use cotra_contracts::{FailureCode, RequestEnvelope, ResponseEnvelope, INTERNAL_PROTOCOL_VERSION};
+use cotra_contracts::{
+    FailureCode, RemoteRequestEnvelope, RequestEnvelope, ResponseEnvelope,
+    INTERNAL_PROTOCOL_VERSION,
+};
 use cotra_policy::{PolicyEngine, Workspace, POLICY_REVISION};
 use cotra_provider_fs::ProviderError;
 use serde_json::{json, Value};
@@ -13,8 +16,10 @@ mod clipboard;
 mod git_fetch;
 mod git_mutation;
 mod git_push;
+mod remote_lease;
 mod trust;
 mod uia;
+mod workstation;
 
 #[allow(dead_code)]
 mod legacy {
@@ -46,6 +51,7 @@ fn run() -> Result<(), String> {
     let audit = AuditLogger::new(default_audit_path())
         .map_err(|error| format!("initialize audit log: {error}"))?;
     let approval = LocalApprovalBroker::new();
+    let workspace_set = remote_lease::WorkspaceSet::from_environment();
 
     eprintln!(
         "cotrad ready: protocol={} audit={} mode=SG-000039_CLIPBOARD_WRITE",
@@ -68,8 +74,8 @@ fn run() -> Result<(), String> {
             continue;
         }
 
-        let response = match serde_json::from_str::<RequestEnvelope>(&line) {
-            Ok(request) => handle_request(&policy, &audit, &approval, request),
+        let response = match serde_json::from_str::<RemoteRequestEnvelope>(&line) {
+            Ok(envelope) => handle_envelope(&policy, &audit, &approval, &workspace_set, envelope),
             Err(error) => ResponseEnvelope::failure(
                 "unknown",
                 FailureCode::InvalidRequest,
@@ -88,6 +94,67 @@ fn run() -> Result<(), String> {
     }
 
     Ok(())
+}
+
+/// SG-000055 entry: remote-context requests must pass the local
+/// remote-session lease gate before any policy or dispatch step, and local
+/// remote-lease management never reaches workspace dispatch.
+fn handle_envelope(
+    policy: &PolicyEngine,
+    audit: &AuditLogger,
+    approval: &impl ApprovalBroker,
+    workspace_set: &remote_lease::WorkspaceSet,
+    envelope: RemoteRequestEnvelope,
+) -> ResponseEnvelope {
+    let RemoteRequestEnvelope { request, remote } = envelope;
+    let lease_path = cotra_policy::remote_session::default_lease_store_path();
+    let probe = workstation::current;
+    let clock = cotra_approval::now_ms;
+    let ctx = remote_lease::LeaseContext {
+        lease_path: &lease_path,
+        workspaces: workspace_set,
+        workstation: &probe,
+        now_ms: &clock,
+    };
+    if let Some(remote) = &remote {
+        let trust_store = trust::TrustStore::load_or_create(trust::default_trust_path());
+        if let Err(error) =
+            remote_lease::gate_remote(&ctx, approval, &trust_store, &request, remote)
+        {
+            let _ = audit.record(&request, POLICY_REVISION, "REMOTE_DENIED");
+            return ResponseEnvelope::failure(request.request_id, error.code, error.message);
+        }
+        return handle_request(policy, audit, approval, request);
+    }
+    if remote_lease::is_lease_management(&request.capability) {
+        if policy.workspace(&request.workspace_id).is_none() {
+            let _ = audit.record(&request, POLICY_REVISION, "DENIED");
+            return ResponseEnvelope::failure(
+                request.request_id,
+                FailureCode::WorkspaceDenied,
+                "requested workspace is not configured",
+            );
+        }
+        let trust_store = trust::TrustStore::load_or_create(trust::default_trust_path());
+        return match remote_lease::dispatch_lease_management(&ctx, approval, &trust_store, &request)
+        {
+            Ok(value) => {
+                if let Err(error) = audit.record(&request, POLICY_REVISION, "SUCCESS") {
+                    return ResponseEnvelope::failure(
+                        request.request_id,
+                        FailureCode::InternalError,
+                        format!("audit write failed: {error}"),
+                    );
+                }
+                ResponseEnvelope::success(&request, value, POLICY_REVISION)
+            }
+            Err(error) => {
+                let _ = audit.record(&request, POLICY_REVISION, "FAILED");
+                ResponseEnvelope::failure(request.request_id, error.code, error.message)
+            }
+        };
+    }
+    handle_request(policy, audit, approval, request)
 }
 
 fn handle_request(
@@ -255,9 +322,22 @@ fn dispatch_trust(
             let epoch = approval
                 .emergency_revoke(&prompt)
                 .map_err(|error| ProviderError::new(error.code, error.message))?;
+            let leases_revoked = remote_lease::revoke_all(
+                &cotra_policy::remote_session::default_lease_store_path(),
+            )
+            .map_err(|error| {
+                ProviderError::new(
+                    FailureCode::InternalError,
+                    format!(
+                        "emergency revoke advanced the approval epoch but remote-session leases could not be revoked: {}",
+                        error.message
+                    ),
+                )
+            })?;
             Ok(Some(json!({
                 "workspace_id": request.workspace_id,
                 "revoke_epoch": epoch,
+                "remote_leases_revoked": leases_revoked,
                 "policy_revision": POLICY_REVISION,
             })))
         }
