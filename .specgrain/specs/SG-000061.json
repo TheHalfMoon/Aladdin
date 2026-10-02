@@ -2,7 +2,7 @@
   "id": "SG-000061",
   "title": "Filesystem mutation completion",
   "program": "COTRA-P16",
-  "state": "GRAIN",
+  "state": "CLOSED",
   "risk": "high",
   "created": "2026-10-02",
   "base": "41a7808e4fcfc18331e5a1897275384151e6a50c",
@@ -68,5 +68,25 @@
     "exact_head_ci": true,
     "release_artifact_qualification": true
   },
-  "done_when": "Bounded filesystem mutation is canonical with workspace ceilings, approvals, identity binding, and postcondition verification and no unrestricted filesystem primitive."
+  "done_when": "Bounded filesystem mutation is canonical with workspace ceilings, approvals, identity binding, and postcondition verification and no unrestricted filesystem primitive.",
+  "qualified_head": "5b6106e5c5b94e7d250b164fc0d4cf3f2b4aca48",
+  "implementation_base": "fb4203f9ef1638e32cdf7c9afdb3f9e49b082222",
+  "implementation_merge": "7bba94399c1316ac894a654dad41aff6480b3517",
+  "pre_merge_ci": "37022199966",
+  "pre_merge_review_gates": "37022199821",
+  "post_merge_ci": "37023056930",
+  "canonical_evidence": {
+    "implementation_pr": 164,
+    "implementation_base": "fb4203f9ef1638e32cdf7c9afdb3f9e49b082222",
+    "qualified_head": "5b6106e5c5b94e7d250b164fc0d4cf3f2b4aca48",
+    "pre_merge_ci": "37022199966",
+    "pre_merge_review_gates": "37022199821",
+    "merge_sha": "7bba94399c1316ac894a654dad41aff6480b3517",
+    "post_merge_ci": "37023056930",
+    "jev": "PASSED: genuine TypeSafe Jev exact-diff review covered 32/32 hunks with zero findings and zero blocking findings, pin 31f89602797fb7bea007f8a480bf368bf564954e",
+    "ocr": "PASSED: Alibaba Open Code Review v1.12.9 exact-range delegation over 18 changed files, 13 reviewable with delegated rules applied and 5 excluded (oauth-authorization.test.ts, surface.test.ts, and transport-contract.test.ts by default-path classification and CAPABILITY_PARITY.md and SG-000061_FILESYSTEM_MUTATION_NOTE.md by unsupported-extension classification) manually reviewed",
+    "security_review": "PASS on exact qualified head: six bounded filesystem tools inside trusted workspaces with final Windows path identity, links, junctions, and reparse points never followed, moved, or removed, fs_read_range and fs_find bounded reads, fs_mkdir with per-component final-path verification, fs_move never overwriting through MoveFileExW without replace and identity-bound SOFT approval, fs_remove limited to one file or empty directory with identity-bound STRONG approval and no recursion, fs_edit exact replacement bound to SHA-256 and occurrence count, postconditions verified, strict per-shape policy argument schemas, the legacy generic fs.delete shape still denied, scope tables updated, and the 26-tool catalog pinned everywhere; real Windows junction escape test. All closed SG-000001 through SG-000060 regressions pass. Qodo billing-blocked and CodeRabbit skipped-review notices evaluated as non-evidence noise with zero substantive findings; zero unresolved threads.",
+    "unresolved_review_threads": 0,
+    "authority_boundary": "Bounded mkdir, non-overwriting move or rename, single-file or empty-directory removal with STRONG approval, digest-bound exact edit, ranged read, and name search inside trusted workspaces as six static MCP tools. No recursive, wildcard, overwriting, link, attribute, or out-of-workspace filesystem authority."
+  }
 }
