@@ -2,7 +2,7 @@
   "id": "SG-000064",
   "title": "Clipboard and bounded network MCP exposure",
   "program": "COTRA-P16",
-  "state": "GRAIN",
+  "state": "CLOSED",
   "risk": "high",
   "created": "2026-10-02",
   "base": "340fed4ea469366f8d826d8b173b3e1045cbf0c2",
@@ -66,5 +66,25 @@
     "exact_head_ci": true,
     "release_artifact_qualification": true
   },
-  "done_when": "Bounded clipboard and destination-scoped network tools are canonical and exposed with their closed controls, and every surveillance, paste, and generic network shape stays denied."
+  "done_when": "Bounded clipboard and destination-scoped network tools are canonical and exposed with their closed controls, and every surveillance, paste, and generic network shape stays denied.",
+  "qualified_head": "531e6204352d2f24e811824348b29c384388906d",
+  "implementation_base": "2463c02cf875b736ecbda913ffccf7a09807cee3",
+  "implementation_merge": "dadbc5b273c282759501c60f587f80f461a381ea",
+  "pre_merge_ci": "37049329509",
+  "pre_merge_review_gates": "37049329728",
+  "post_merge_ci": "37050174242",
+  "canonical_evidence": {
+    "implementation_pr": 170,
+    "implementation_base": "2463c02cf875b736ecbda913ffccf7a09807cee3",
+    "qualified_head": "531e6204352d2f24e811824348b29c384388906d",
+    "pre_merge_ci": "37049329509",
+    "pre_merge_review_gates": "37049329728",
+    "merge_sha": "dadbc5b273c282759501c60f587f80f461a381ea",
+    "post_merge_ci": "37050174242",
+    "jev": "PASSED: genuine TypeSafe Jev exact-diff review covered 32/32 hunks with zero findings and zero blocking findings, pin 31f89602797fb7bea007f8a480bf368bf564954e",
+    "ocr": "PASSED: Alibaba Open Code Review v1.12.9 exact-range delegation over 17 changed files, 10 reviewable with delegated rules applied and 7 excluded (apps/cotra-mcp/src/clipboard.test.ts, network.test.ts, oauth-authorization.test.ts, surface.test.ts, and transport-contract.test.ts by default-path classification and docs/p16/CAPABILITY_PARITY.md and docs/security/SG-000064_CLIPBOARD_NETWORK_NOTE.md by unsupported-extension classification) manually reviewed",
+    "security_review": "PASS on exact qualified head: three static MCP tools each forward exactly one closed kernel shape with fresh per-operation local approval: clipboard_read (one Unicode-text sample bound to the pre-approval clipboard sequence, secret, empty, oversized, and changed content refused, no monitoring), clipboard_write (one placement bound to the text digest, secret, empty, and oversized text now refused before the approval prompt and again after approval, never paste or input), and web_fetch (one HTTPS GET to a public destination bound to the approved address set with same-origin bounded redirects and a 1 MiB body, projected to UTF-8 text or binary metadata only); no MCP socket, HTTP client, method, header, or proxy primitive; all three local-only and denied on every remote path. Live real Windows clipboard round trip with stale and secret refusals, a live WinHTTP fetch of a public destination, and always-on refusal of non-HTTPS, loopback, private, metadata, localhost, and userinfo destinations. All closed SG-000001 through SG-000063 regressions pass. CodeRabbit skipped-review and cubic skipping notices evaluated as non-evidence noise with zero substantive findings; zero unresolved threads.",
+    "unresolved_review_threads": 0,
+    "authority_boundary": "Three local-only MCP tools over the closed SG-000038, SG-000039, and SG-000040 shapes (one approved clipboard read, one approved clipboard write, one approved public HTTPS GET). No clipboard surveillance, paste, input, generic socket, proxy, or remote clipboard or network authority."
+  }
 }
