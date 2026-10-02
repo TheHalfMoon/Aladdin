@@ -19,6 +19,8 @@ const here = dirname(fileURLToPath(import.meta.url));
 const srcDir = join(here, "..", "src");
 
 const EXPECTED_TOOLS = [
+  "clipboard_read",
+  "clipboard_write",
   "desktop_window_list",
   "desktop_window_tree",
   "fs_edit",
@@ -46,6 +48,7 @@ const EXPECTED_TOOLS = [
   "git_unstage",
   "process_spawn",
   "system_status",
+  "web_fetch",
   "workspace_get"
 ];
 

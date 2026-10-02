@@ -147,6 +147,27 @@ fn write_with_approval(
                 "clipboard/write requires arguments.text as a string",
             )
         })?;
+    // SG-000064: refuse text that the provider would refuse anyway before
+    // asking the human, so no approval prompt is shown for a placement
+    // that can never happen. The provider revalidates after approval.
+    if text.is_empty() {
+        return Err(ProviderError::new(
+            FailureCode::InvalidRequest,
+            "clipboard write text must not be empty",
+        ));
+    }
+    if text.len() > MAX_CLIPBOARD_BYTES {
+        return Err(ProviderError::new(
+            FailureCode::OutputLimit,
+            "clipboard write text exceeds the bounded placement size",
+        ));
+    }
+    if cotra_provider_clipboard::contains_secret_material(text) {
+        return Err(ProviderError::new(
+            FailureCode::CapabilityDenied,
+            "clipboard write holds secret material which bounded writes never place",
+        ));
+    }
     // The approval summary carries the digest and bounds only, never the
     // caller text, so secret-bearing text cannot leak through prompts.
     let text_digest = clipboard_write_content_digest(text);
@@ -484,6 +505,25 @@ mod tests {
         let error = approved_write(&adapter, &write_request("token=tok_live_999"))
             .expect_err("secret write must fail");
         assert!(matches!(error.code, FailureCode::CapabilityDenied));
+        assert_eq!(adapter.writes.get(), 0);
+    }
+
+    #[test]
+    fn refused_write_text_never_reaches_the_approval_prompt() {
+        // A denying broker would turn any prompted request into an approval
+        // failure; these refusals keep their own codes, so no prompt ran.
+        let adapter = FakeClipboard::with_text(11, "old clipboard text");
+        let denied = FixedApprovalBroker(ApprovalDecision::Denied);
+        let big = "a".repeat(cotra_provider_clipboard::MAX_CLIPBOARD_BYTES + 1);
+        for (text, code) in [
+            ("", FailureCode::InvalidRequest),
+            (big.as_str(), FailureCode::OutputLimit),
+            ("token=tok_live_999", FailureCode::CapabilityDenied),
+        ] {
+            let error = write_with_approval(&workspace(), &denied, &write_request(text), &adapter)
+                .expect_err("refused text must fail before approval");
+            assert_eq!(error.code, code);
+        }
         assert_eq!(adapter.writes.get(), 0);
     }
 

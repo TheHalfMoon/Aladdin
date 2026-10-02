@@ -4,8 +4,8 @@
   "name": "cotra",
   "display_name": "Cotra",
   "version": "0.1.0",
-  "description": "Local-first MCP gateway with 28 bounded tools and local approval for computer changes.",
-  "long_description": "Cotra exposes 28 bounded tools (workspace files and bounded file changes, local Git, registered argv-only processes, read-only desktop window observation) through a local policy kernel with per-action approval. This extension launches the installed Cotra entrypoint over stdio. It requires Cotra 0.1.0 installed and at least one configured workspace. No tunnel is required.",
+  "description": "Local-first MCP gateway with 31 bounded tools and local approval for computer changes.",
+  "long_description": "Cotra exposes 31 bounded tools (workspace files and bounded file changes, local Git, registered argv-only processes, read-only desktop window observation, approved single clipboard reads and writes, approved public HTTPS fetches) through a local policy kernel with per-action approval. This extension launches the installed Cotra entrypoint over stdio. It requires Cotra 0.1.0 installed and at least one configured workspace. No tunnel is required.",
   "author": {
     "name": "TheHalfMoon",
     "url": "https://github.com/TheHalfMoon/Cotra"
@@ -115,6 +115,18 @@
     {
       "name": "git_push",
       "description": "Push one validated branch after approval."
+    },
+    {
+      "name": "clipboard_read",
+      "description": "Read the clipboard text once after local approval; secrets are refused."
+    },
+    {
+      "name": "clipboard_write",
+      "description": "Place text on the clipboard once after local approval; never pastes."
+    },
+    {
+      "name": "web_fetch",
+      "description": "Fetch one public HTTPS URL with GET after local approval of the destination."
     },
     {
       "name": "desktop_window_list",

@@ -912,7 +912,13 @@ test("scope to tool matrix covers exactly the canonical catalog with default den
     Object.keys(OAUTH_SCOPE_TOOL_MATRIX).sort(),
     CANONICAL_TOOL_NAMES.filter((tool) => !LOCAL_ONLY_TOOL_NAMES.includes(tool)).sort()
   );
-  assert.deepEqual([...LOCAL_ONLY_TOOL_NAMES].sort(), ["desktop_window_list", "desktop_window_tree"]);
+  assert.deepEqual([...LOCAL_ONLY_TOOL_NAMES].sort(), [
+    "clipboard_read",
+    "clipboard_write",
+    "desktop_window_list",
+    "desktop_window_tree",
+    "web_fetch"
+  ]);
   for (const tool of LOCAL_ONLY_TOOL_NAMES) {
     assert.ok(CANONICAL_TOOL_NAMES.includes(tool), `${tool} is canonical`);
     const all = ["cotra.read", "cotra.write", "cotra.execute"];

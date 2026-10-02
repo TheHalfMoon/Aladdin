@@ -9,6 +9,8 @@ const srcDir = join(here, "..", "src");
 
 /** The closed MCP tool set. Adding a tool requires a governed grain. */
 const CANONICAL_TOOLS = [
+  "clipboard_read",
+  "clipboard_write",
   "desktop_window_list",
   "desktop_window_tree",
   "fs_edit",
@@ -36,6 +38,7 @@ const CANONICAL_TOOLS = [
   "git_unstage",
   "process_spawn",
   "system_status",
+  "web_fetch",
   "workspace_get"
 ];
 
