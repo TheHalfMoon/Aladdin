@@ -57,13 +57,30 @@ export type PendingOutcome =
   | { readonly kind: "response"; readonly payload: string }
   | { readonly kind: "failure"; readonly failure: RelayFailureCode };
 
+interface Delivery {
+  readonly frames: Record<string, unknown>[];
+  readonly proofs: DeviceChallenge[];
+}
+
 interface Channel {
   readonly token: string;
   readonly deviceId: string;
   lastPollMs: number;
   frames: Record<string, unknown>[];
-  waiter: ((frames: Record<string, unknown>[]) => void) | null;
+  proofs: DeviceChallenge[];
+  waiter: ((delivery: Delivery) => void) | null;
 }
+
+interface PendingProof {
+  readonly deviceId: string;
+  readonly resolve: (response: ChallengeResponse | null) => void;
+  readonly timer: NodeJS.Timeout;
+}
+
+/** At most this many refresh proofs wait for one device. */
+export const MAX_PENDING_PROOFS = 16;
+
+const EMPTY: Delivery = { frames: [], proofs: [] };
 
 interface Pending {
   readonly deviceId: string;
@@ -91,6 +108,7 @@ export class DeviceChannelHub {
   private readonly channels = new Map<string, Channel>();
   private readonly byToken = new Map<string, Channel>();
   private readonly pending = new Map<string, Pending>();
+  private readonly pendingProofs = new Map<string, PendingProof>();
   private readonly nonces = new Map<string, number>();
 
   constructor(
@@ -138,6 +156,7 @@ export class DeviceChannelHub {
       deviceId: record.identity.deviceId,
       lastPollMs: this.clock(),
       frames: [],
+      proofs: [],
       waiter: null
     };
     this.channels.set(channel.deviceId, channel);
@@ -168,23 +187,24 @@ export class DeviceChannelHub {
       return DENIED;
     }
     channel.lastPollMs = this.clock();
-    channel.waiter?.([]);
+    channel.waiter?.(EMPTY);
     channel.waiter = null;
     const now = this.clock();
     channel.frames = channel.frames.filter((frame) => (frame.expiresAt as number) > now);
-    if (channel.frames.length > 0) {
+    channel.proofs = channel.proofs.filter((challenge) => challenge.expiresAtMs > now);
+    if (channel.frames.length > 0 || channel.proofs.length > 0) {
       const ready = channel.frames.splice(0, RELAY_BOUNDS.maxQueuedFrames);
       this.markDelivered(ready);
-      return { status: 200, json: { frames: ready } };
+      return { status: 200, json: { frames: ready, proofs: channel.proofs.splice(0, MAX_PENDING_PROOFS) } };
     }
-    const frames = await new Promise<Record<string, unknown>[]>((resolve) => {
+    const delivery = await new Promise<Delivery>((resolve) => {
       const timer = setTimeout(() => {
         if (channel.waiter === finish) {
           channel.waiter = null;
         }
-        resolve([]);
+        resolve(EMPTY);
       }, this.pollWaitMs);
-      const finish = (ready: Record<string, unknown>[]): void => {
+      const finish = (ready: Delivery): void => {
         clearTimeout(timer);
         resolve(ready);
       };
@@ -193,11 +213,11 @@ export class DeviceChannelHub {
         if (channel.waiter === finish) {
           channel.waiter = null;
         }
-        finish([]);
+        finish(EMPTY);
       });
     });
     channel.lastPollMs = this.clock();
-    return { status: 200, json: { frames } };
+    return { status: 200, json: { frames: delivery.frames, proofs: delivery.proofs } };
   }
 
   /** Step 4: accept response frames that correlate to pending requests. */
@@ -209,11 +229,29 @@ export class DeviceChannelHub {
     if (!isPlainObject(body) || !Array.isArray(body.frames) || body.frames.length > RELAY_BOUNDS.maxQueuedFrames) {
       return { status: 400, json: { error: "malformed_push" } };
     }
+    const proofs = body.proofs ?? [];
+    if (!Array.isArray(proofs) || proofs.length > MAX_PENDING_PROOFS) {
+      return { status: 400, json: { error: "malformed_push" } };
+    }
     let accepted = 0;
     for (const frame of body.frames) {
       if (this.acceptResponse(channel, frame)) {
         accepted += 1;
       }
+    }
+    for (const proof of proofs) {
+      if (!isPlainObject(proof) || proof.deviceId !== channel.deviceId || typeof proof.nonceBase64 !== "string") {
+        continue;
+      }
+      const pending = this.pendingProofs.get(proof.nonceBase64);
+      if (pending === undefined || pending.deviceId !== channel.deviceId) {
+        continue;
+      }
+      this.pendingProofs.delete(proof.nonceBase64);
+      clearTimeout(pending.timer);
+      // The token endpoint verifies the signature against the registered key.
+      pending.resolve(proof as unknown as ChallengeResponse);
+      accepted += 1;
     }
     return { status: 200, json: { accepted } };
   }
@@ -357,6 +395,37 @@ export class DeviceChannelHub {
     return true;
   }
 
+  /**
+   * Ask the live device to sign a refresh-proof challenge. Resolves with the
+   * device's response, or null when the device is offline, has too many
+   * pending proofs, or does not answer in time. The caller verifies it.
+   */
+  requestProof(challenge: DeviceChallenge, timeoutMs: number): Promise<ChallengeResponse | null> {
+    const channel = this.channels.get(challenge.deviceId);
+    if (channel === undefined || !this.isOnline(challenge.deviceId)) {
+      return Promise.resolve(null);
+    }
+    const waiting = [...this.pendingProofs.values()].filter((p) => p.deviceId === challenge.deviceId).length;
+    if (waiting >= MAX_PENDING_PROOFS) {
+      return Promise.resolve(null);
+    }
+    const answer = new Promise<ChallengeResponse | null>((resolve) => {
+      const timer = setTimeout(() => {
+        this.pendingProofs.delete(challenge.nonceBase64);
+        resolve(null);
+      }, timeoutMs);
+      this.pendingProofs.set(challenge.nonceBase64, { deviceId: challenge.deviceId, resolve, timer });
+    });
+    if (channel.waiter !== null) {
+      const waiter = channel.waiter;
+      channel.waiter = null;
+      waiter({ frames: [], proofs: [challenge] });
+    } else {
+      channel.proofs.push(challenge);
+    }
+    return answer;
+  }
+
   /** Why a request cannot be handed to the device now, or null. */
   refusal(deviceId: string): RelayFailureCode | null {
     const channel = this.channels.get(deviceId);
@@ -417,7 +486,7 @@ export class DeviceChannelHub {
       const waiter = channel.waiter;
       channel.waiter = null;
       this.markDelivered([signed]);
-      waiter([signed]);
+      waiter({ frames: [signed], proofs: [] });
     } else {
       channel.frames.push(signed);
     }
@@ -435,9 +504,17 @@ export class DeviceChannelHub {
     }
     this.channels.delete(deviceId);
     this.byToken.delete(channel.token);
-    channel.waiter?.([]);
+    channel.waiter?.(EMPTY);
     channel.waiter = null;
     channel.frames = [];
+    channel.proofs = [];
+    for (const [nonce, proof] of this.pendingProofs) {
+      if (proof.deviceId === deviceId) {
+        this.pendingProofs.delete(nonce);
+        clearTimeout(proof.timer);
+        proof.resolve(null);
+      }
+    }
     for (const [key, pending] of this.pending) {
       if (pending.deviceId === deviceId) {
         this.pending.delete(key);

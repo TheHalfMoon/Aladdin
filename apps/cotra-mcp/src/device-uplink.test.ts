@@ -727,3 +727,29 @@ test("the relay transport fails closed with PAIRING_REQUIRED when protected pair
     }
   }
 });
+
+test("refresh proofs are signed only for this exact device, epoch, and a fresh bounded challenge", async () => {
+  const { signRefreshProofs } = await import("./device_uplink.js");
+  const { createDeviceChallenge: challengeFor } = await import("./device_identity.js");
+  const pair = generateDeviceKeyPair(DEVICE, NOW, 1);
+  const config = { relayOrigin: "https://relay.cotra.example", identity: { deviceId: DEVICE, deviceEpoch: 1 }, privateKeyJwkBase64: pair.privateKeyJwkBase64, connections: [PAIRED] };
+  const good = challengeFor(DEVICE, 1, NOW);
+  const signed = signRefreshProofs(config, [good], NOW + 1000);
+  assert.equal(signed.length, 1);
+  assert.ok(verifyChallengeResponse(publicDeviceIdentity(pair), good, signed[0] as ChallengeResponse, NOW + 1000).ok);
+  const rejected = signRefreshProofs(
+    config,
+    [
+      challengeFor("dev-" + "d".repeat(32), 1, NOW),
+      challengeFor(DEVICE, 2, NOW),
+      { ...good, expiresAtMs: good.createdAtMs + 10 * 60_000 },
+      { ...good, nonceBase64: "x" },
+      "not a challenge"
+    ],
+    NOW + 1000
+  );
+  assert.equal(rejected.length, 0);
+  assert.equal(signRefreshProofs(config, [good], good.expiresAtMs + 1).length, 0, "expired challenges are never signed");
+  assert.equal(signRefreshProofs(config, "nope", NOW).length, 0);
+  assert.equal(signRefreshProofs(config, new Array(40).fill(good), NOW + 1).length, 16, "bounded per poll");
+});

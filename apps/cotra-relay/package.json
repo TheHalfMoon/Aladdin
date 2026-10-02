@@ -10,7 +10,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "npm run build && node --test dist/*.test.js"
+    "test": "npm run build && node --test --test-timeout=120000 dist/*.test.js"
   },
   "dependencies": {
     "@cotra/mcp": "0.1.0",

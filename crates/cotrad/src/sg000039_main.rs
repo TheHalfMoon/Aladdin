@@ -126,6 +126,26 @@ fn handle_envelope(
         }
         return handle_request(policy, audit, approval, request);
     }
+    if request.capability == "remote.enrollment.authorize" && request.operation == "authorize" {
+        if policy.workspace(&request.workspace_id).is_none() {
+            let _ = audit.record(&request, POLICY_REVISION, "DENIED");
+            return ResponseEnvelope::failure(
+                request.request_id,
+                FailureCode::WorkspaceDenied,
+                "requested workspace is not configured",
+            );
+        }
+        return match remote_lease::authorize_enrollment(approval, &request) {
+            Ok(value) => {
+                let _ = audit.record(&request, POLICY_REVISION, "SUCCESS");
+                ResponseEnvelope::success(&request, value, POLICY_REVISION)
+            }
+            Err(error) => {
+                let _ = audit.record(&request, POLICY_REVISION, "FAILED");
+                ResponseEnvelope::failure(request.request_id, error.code, error.message)
+            }
+        };
+    }
     if remote_lease::is_lease_management(&request.capability) {
         if policy.workspace(&request.workspace_id).is_none() {
             let _ = audit.record(&request, POLICY_REVISION, "DENIED");

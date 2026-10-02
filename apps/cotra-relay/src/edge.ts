@@ -30,6 +30,7 @@ import {
   type RelayFailureCode
 } from "@cotra/mcp/dist/relay_contract.js";
 import type { DeviceChannelHub } from "./device_channel.js";
+import type { QuotaGuard } from "./quotas.js";
 import type { RelayConnectionRecord, RelayStore } from "./store.js";
 
 export const MAX_SESSIONS_PER_ROUTE = RELAY_BOUNDS.maxConnectionsPerDevice;
@@ -125,7 +126,8 @@ export class McpEdge {
     private readonly config: EdgeConfig,
     private readonly store: RelayStore,
     private readonly hub: DeviceChannelHub,
-    private readonly clock: () => number = Date.now
+    private readonly clock: () => number = Date.now,
+    private readonly quotas: QuotaGuard | null = null
   ) {}
 
   get resource(): string {
@@ -228,6 +230,15 @@ export class McpEdge {
       return auth;
     }
     const { identity, route } = auth;
+    if (this.quotas !== null) {
+      const quota = this.quotas.mcpRequest(route.remoteConnectionId);
+      if (!quota.ok) {
+        // No-billing overflow: exhaustion fails closed and never scales.
+        return this.respond(429, jsonRpcError(null, -32000, "quota exhausted", "REMOTE_RATE_LIMITED"), {
+          "retry-after": String(quota.retryAfterSeconds)
+        });
+      }
+    }
     const sessionHeader = request.headers["mcp-session-id"];
     if (request.method === "DELETE") {
       const session = sessionHeader === undefined ? undefined : this.sessions.get(sessionHeader);

@@ -1017,6 +1017,46 @@ export async function openChannel(
   return sessionReply.json.channelToken;
 }
 
+/** At most this many refresh-proof challenges are answered per poll. */
+export const UPLINK_MAX_PROOFS = 16;
+
+/**
+ * SG-000057: sign refresh-proof challenges delivered on the live channel.
+ * Only challenges that bind this exact device and epoch, carry a lifetime of
+ * at most 120 seconds, and have not expired are signed; anything else is
+ * ignored. Signing proves only that this device is online now; the relay
+ * binds the proof to one refresh family and verifies it.
+ */
+export function signRefreshProofs(
+  config: UplinkConfig,
+  raw: unknown,
+  nowMs: number
+): ReturnType<typeof signDeviceChallenge>[] {
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+  const signed: ReturnType<typeof signDeviceChallenge>[] = [];
+  for (const challenge of raw.slice(0, UPLINK_MAX_PROOFS)) {
+    if (
+      !isPlainObject(challenge) ||
+      challenge.deviceId !== config.identity.deviceId ||
+      challenge.epoch !== config.identity.deviceEpoch ||
+      typeof challenge.nonceBase64 !== "string" ||
+      challenge.nonceBase64.length < 16 ||
+      challenge.nonceBase64.length > 128 ||
+      !isSafeInt(challenge.createdAtMs) ||
+      !isSafeInt(challenge.expiresAtMs) ||
+      challenge.expiresAtMs <= challenge.createdAtMs ||
+      challenge.expiresAtMs - challenge.createdAtMs > RELAY_BOUNDS.maxFrameLifetimeSeconds * 1000 ||
+      nowMs > challenge.expiresAtMs
+    ) {
+      continue;
+    }
+    signed.push(signDeviceChallenge(config.privateKeyJwkBase64, challenge as unknown as DeviceChallenge));
+  }
+  return signed;
+}
+
 export function backoffMs(attempt: number, random: () => number = Math.random): number {
   const base = Math.min(UPLINK_MAX_BACKOFF_MS, UPLINK_MIN_BACKOFF_MS * 2 ** Math.min(attempt, 10));
   return Math.floor(base / 2 + random() * (base / 2));
@@ -1062,16 +1102,20 @@ export async function runDeviceUplink(
     now
   );
   let attempt = 0;
+  let proofs: ReturnType<typeof signDeviceChallenge>[] = [];
   const pushOutbox = async (token: string): Promise<void> => {
     const frames = core.drainOutbox(now());
-    if (frames.length === 0) {
+    const signedProofs = proofs.splice(0, proofs.length);
+    if (frames.length === 0 && signedProofs.length === 0) {
       return;
     }
     const reply = await postJson(
       deps.fetch,
       config.relayOrigin,
       UPLINK_PATHS.push,
-      { channelToken: token, frames },
+      signedProofs.length === 0
+        ? { channelToken: token, frames }
+        : { channelToken: token, frames, proofs: signedProofs },
       UPLINK_REQUEST_TIMEOUT_MS,
       deps.signal
     );
@@ -1113,6 +1157,7 @@ export async function runDeviceUplink(
           throw new Error("REMOTE_RATE_LIMITED: relay exceeded the frame bound");
         }
         core.receive(reply.json.frames, now());
+        proofs.push(...signRefreshProofs(config, reply.json.proofs, now()));
         await pushOutbox(token);
         const running = core.pump(now());
         if (running.length > 0) {

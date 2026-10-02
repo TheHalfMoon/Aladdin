@@ -1,0 +1,16 @@
+{
+  "publicOrigin": "https://relay.example.com",
+  "listenHost": "127.0.0.1",
+  "listenPort": 8787,
+  "stateDir": "/var/lib/cotra-relay",
+  "allowedOrigins": [],
+  "quotas": {
+    "maxDevices": 10,
+    "maxClients": 20,
+    "registrationsPerHour": 20,
+    "authorizeAttemptsPerMinute": 30,
+    "tokenRequestsPerMinute": 120,
+    "mcpRequestsPerMinutePerRoute": 60,
+    "dailyRequestBudget": 20000
+  }
+}
