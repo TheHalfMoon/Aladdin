@@ -2,7 +2,7 @@
   "id": "SG-000055",
   "title": "Outbound-only device uplink and remote-session lease",
   "program": "COTRA-P15",
-  "state": "GRAIN",
+  "state": "CLOSED",
   "risk": "high",
   "created": "2026-10-02",
   "base": "3282f2481a7bb51a7e2334a46b8c480df8ace40b",
@@ -78,5 +78,25 @@
     "exact_head_ci": true,
     "release_artifact_qualification": true
   },
-  "done_when": "The outbound-only device uplink and the cotrad-enforced remote-session lease are canonical with no inbound port, no generic proxy, and no remote dispatch without an active local lease."
+  "done_when": "The outbound-only device uplink and the cotrad-enforced remote-session lease are canonical with no inbound port, no generic proxy, and no remote dispatch without an active local lease.",
+  "qualified_head": "aff6e79785afb4671e07c93ead5d61580c76bbba",
+  "implementation_base": "21d85fc94d3fd6fa2875bc7a599c13e20f4bdf5b",
+  "implementation_merge": "6114ecae6baa649f74081a48962aaf30644c6897",
+  "pre_merge_ci": "36997060223",
+  "pre_merge_review_gates": "36997058647",
+  "post_merge_ci": "36997563582",
+  "canonical_evidence": {
+    "implementation_pr": 152,
+    "implementation_base": "21d85fc94d3fd6fa2875bc7a599c13e20f4bdf5b",
+    "qualified_head": "aff6e79785afb4671e07c93ead5d61580c76bbba",
+    "pre_merge_ci": "36997060223",
+    "pre_merge_review_gates": "36997058647",
+    "merge_sha": "6114ecae6baa649f74081a48962aaf30644c6897",
+    "post_merge_ci": "36997563582",
+    "jev": "PASSED: genuine TypeSafe Jev exact-diff review covered 40/40 hunks with zero findings and zero blocking findings, pin 31f89602797fb7bea007f8a480bf368bf564954e",
+    "ocr": "PASSED: Alibaba Open Code Review v1.12.9 exact-range delegation over 22 changed files, 19 reviewable with delegated rules applied and 3 excluded (Cargo.lock and docs/security/SG-000055_DEVICE_UPLINK_LEASE_NOTE.md by unsupported-extension classification and apps/cotra-mcp/src/device-uplink.test.ts by default-path classification) manually reviewed",
+    "security_review": "PASS on exact qualified head: outbound-only device channel with no listener or inbound port, outbound POST only to one https or exact loopback relay origin with refused redirects, timeouts, and bounded bodies, challenge-response channel authentication bound to the exact device and epoch, strict frozen SG-000052 frame validation with route, principal, connection, and device binding, recomputed envelope digest and epoch, route revocation, connection-scoped sequence, single-use nonces, duplicate suppression, expiry, 1 MiB bounds, paired scope ceilings, and the SG-000054 scope to tool ceiling, bounded queue, concurrency, connection count, rate, reconnect grace, cancel, and no durable queue; dispatch through the authoritative MCP builder with a server-supplied remote kernel context; cotrad remote-session lease gate before policy and dispatch with typed REMOTE_SESSION_INACTIVE, local-only lease, trust, approval, and lifecycle management denied remotely, STRONG-gated lease creation bound to a digest of every field with a 15-minute hard maximum, authority-reducing revoke, emergency revoke of every lease, invalidation on expiry, revoke, epoch, trust, profile, policy, workspace-set, lock, logoff, unknown session, and reconnect, per_request and disabled read modes, and a tamper-evident lease store; lifecycle tree-ACL race fixed at its root with existing entries still enforced. Cargo.lock adds dependency edges to existing packages only. All closed SG-000001 through SG-000054 regressions pass. Qodo billing-blocked and CodeRabbit skipped-review notices evaluated as non-evidence noise with zero substantive findings; zero unresolved threads.",
+    "unresolved_review_threads": 0,
+    "authority_boundary": "Outbound-only device channel to one configured relay origin carrying frozen MCP frames into the authoritative tool catalog, and the cotrad-enforced finite STRONG-created local remote-session lease. No listener, public edge, relay server, proxy, new MCP tool, schema change, or approval change for existing capabilities; the relay and provider cannot create, widen, renew, or extend a lease."
+  }
 }

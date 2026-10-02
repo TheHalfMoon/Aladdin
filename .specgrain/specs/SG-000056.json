@@ -1,0 +1,78 @@
+{
+  "id": "SG-000056",
+  "title": "Public Streamable HTTP MCP edge",
+  "program": "COTRA-P15",
+  "state": "GRAIN",
+  "risk": "high",
+  "created": "2026-10-02",
+  "base": "6114ecae6baa649f74081a48962aaf30644c6897",
+  "dependencies": [
+    "SG-000055"
+  ],
+  "objective": "Implement the relay-side public Streamable HTTP MCP edge and the relay side of the SG-000055 device channel in a separate open-source relay package: a standards-compliant `/mcp` endpoint with protected-resource metadata and bearer challenges, SG-000054 access token verification and default-deny scope enforcement on every request, exact mapping of each authenticated MCP session onto one paired device route through frozen SG-000052 frames, bounded requests, responses, streams, and sessions, backpressure, correct session semantics, and fail-closed offline behavior, with no provider-specific hidden authority and no generic executor.",
+  "scope": {
+    "include": [
+      "separate open-source relay workspace package that reuses the frozen SG-000052, SG-000053, SG-000054, and SG-000055 vocabulary instead of redefining it",
+      "public `/mcp` Streamable HTTP endpoint (JSON-RPC over POST, session management with `Mcp-Session-Id`, explicit 405 for unsupported methods) and RFC 9728 protected-resource metadata with RFC 6750 bearer challenges",
+      "SG-000054 access token verification, issuer, audience, expiry, revocation, and device-epoch checks on every request and the default-deny scope to tool ceiling before any frame is created",
+      "authenticated remote context derived only from the verified token and the stored paired route, never from MCP payload or tool arguments",
+      "relay side of the device channel: challenge, channel session, long-poll, and push endpoints with device-key verification, route binding, outbound frame validation, and correlation to pending requests",
+      "bounded request and response bodies, bounded sessions per principal and in total, bounded pending requests, timeouts, backpressure, Origin validation, and typed fail-closed behavior when the device is offline",
+      "class-only logging with no token, payload, argument, or result material"
+    ],
+    "exclude": [
+      "the authorization server endpoints, pairing enrollment, durable relay storage, quotas configuration, self-host packaging, and reference deployment (SG-000057)",
+      "SOCKS, CONNECT, arbitrary TCP, generic HTTP proxying, arbitrary WebSocket forwarding, raw shell tunnels, or any generic executor",
+      "any provider-specific authority, hidden tool, or tool outside the authoritative catalog",
+      "any change to the local tool registry, schemas, capabilities, approvals, or the cotrad remote-session lease",
+      "any provider submission or public availability claim"
+    ]
+  },
+  "authority_delta": {
+    "filesystem": "None on the device. The relay process holds only its own in-memory state.",
+    "process": "None.",
+    "network": "The relay listens for the public `/mcp` edge and device channel endpoints only; it forwards nothing anywhere except frozen MCP frames to the one paired device route.",
+    "browser": "None.",
+    "ui_input": "None.",
+    "secrets": "Access tokens and channel tokens are verified transiently and never logged.",
+    "approval": "None. The relay cannot create, widen, renew, or extend a remote-session lease or satisfy any approval.",
+    "privileged": "None."
+  },
+  "invariants": [
+    "every remote MCP request is authenticated and scope-checked at the edge and re-checked on the device and by cotrad",
+    "the relay derives remote context only from the verified token and the stored paired route",
+    "an offline device fails closed with a typed error and nothing is durably queued",
+    "the edge exposes exactly the authoritative tool catalog through the device and no other operation",
+    "the SG-000052 through SG-000055 vocabulary stays frozen"
+  ],
+  "acceptance": [
+    {
+      "id": "A1",
+      "claim": "A standards-compliant Streamable HTTP `/mcp` edge with protected-resource metadata and bearer challenges reaches one paired device through the outbound-only channel and returns the authoritative catalog and typed results."
+    },
+    {
+      "id": "A2",
+      "claim": "Every request is token-verified and scope-checked before framing; missing, expired, revoked, wrong-audience, wrong-scope, and unknown-tool requests fail closed without reaching the device."
+    },
+    {
+      "id": "A3",
+      "claim": "Requests, responses, sessions, pending work, and streams are bounded with backpressure; an offline device, a channel without valid device proof, malformed or cross-route device frames, and oversized payloads fail closed."
+    },
+    {
+      "id": "A4",
+      "claim": "Exact-head CI including release qualification and supply-chain audit, genuine TypeSafe Jev, Alibaba Open Code Review, manual review of excluded files, and zero unresolved review threads all pass."
+    }
+  ],
+  "successor_requirements": {
+    "sg_000057": "The open-source relay with authorization server, pairing enrollment, durable state, quotas, self-host mode, and zero-cost reference deployment may proceed only after SG-000056 closes with the public edge qualified."
+  },
+  "review": {
+    "diffcipline": true,
+    "jev_semantic_review": true,
+    "alibaba_open_code_review": "required exact-range qualification where integrated",
+    "security_review": true,
+    "exact_head_ci": true,
+    "release_artifact_qualification": true
+  },
+  "done_when": "The public Streamable HTTP MCP edge is canonical with per-request authentication, default-deny scopes, exact device mapping, bounded resources, and fail-closed offline behavior."
+}
