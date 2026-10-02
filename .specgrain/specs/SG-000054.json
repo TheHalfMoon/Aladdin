@@ -1,0 +1,80 @@
+{
+  "id": "SG-000054",
+  "title": "OAuth 2.1 authorization",
+  "program": "COTRA-P15",
+  "state": "GRAIN",
+  "risk": "high",
+  "created": "2026-10-02",
+  "base": "518406cffdd2cd37625f35a87580c0e2c49483c5",
+  "dependencies": [
+    "SG-000053"
+  ],
+  "objective": "Implement standards-based OAuth 2.1 authorization for remote principal identity against the frozen SG-000052 relay contract and the SG-000053 device identity without granting workspace trust, approval, presence, or capability authority: authorization code with PKCE S256, protected-resource metadata, authorization-server metadata, resource binding, issuer verification, signature verification, audience validation, expiry and not-before enforcement, scopes, token revocation, refresh family controls with fresh device-key proof, provider client-identification hooks, and the default-deny scope to tool ceiling mapping.",
+  "scope": {
+    "include": [
+      "OAuth 2.1 authorization code flow with PKCE S256",
+      "protected-resource metadata and authorization-server metadata",
+      "resource binding, issuer verification, signature verification, and audience validation",
+      "expiry and not-before enforcement, scopes, and token revocation",
+      "refresh family controls requiring fresh device-key proof so a stolen refresh token cannot renew forever while the bound device is offline",
+      "provider client-identification hooks reverified against current provider requirements before provider-specific work",
+      "default-deny normative mapping from OAuth scopes to tool and profile ceilings with unknown mapping denied"
+    ],
+    "exclude": [
+      "any device uplink networking beyond the frozen contract vocabulary (SG-000055)",
+      "any public edge implementation (SG-000056)",
+      "any relay deployment (SG-000057)",
+      "any new local MCP tool, tool schema change, capability widening, or approval change",
+      "any workspace trust, local approval, local presence, or local capability authority derived from OAuth alone",
+      "any P16 tool-surface widening or provider submission",
+      "any public provider submission, directory publication, or availability claim"
+    ]
+  },
+  "authority_delta": {
+    "filesystem": "None.",
+    "process": "None.",
+    "network": "None beyond the OAuth metadata and token validation vocabulary defined here; no listener and no proxy.",
+    "browser": "None.",
+    "ui_input": "None.",
+    "secrets": "OAuth token material is validated transiently and never logged; no new secret class is exposed to tools.",
+    "approval": "None.",
+    "privileged": "None."
+  },
+  "invariants": [
+    "OAuth proves remote principal identity and nothing else",
+    "unknown scope mapping denies by default",
+    "a stolen refresh token cannot renew forever while the bound device is offline",
+    "the SG-000052 frame, envelope, failure, and bound vocabulary stays frozen",
+    "the SG-000053 device identity, pairing, revocation, and envelope binding stays frozen"
+  ],
+  "acceptance": [
+    {
+      "id": "A1",
+      "claim": "OAuth 2.1 authorization code with PKCE S256, metadata, resource binding, issuer, signature, audience, expiry, scope, revocation, and refresh family controls works with fresh device-key proof."
+    },
+    {
+      "id": "A2",
+      "claim": "Default-deny scope to tool ceiling mapping denies unknown scopes and OAuth alone grants no workspace trust, approval, presence, or capability."
+    },
+    {
+      "id": "A3",
+      "claim": "Negative tests prove expired, revoked, wrong-audience, wrong-resource, and stolen-refresh cases fail closed without local dispatch."
+    },
+    {
+      "id": "A4",
+      "claim": "Exact-head CI including release qualification and supply-chain audit, genuine TypeSafe Jev, Alibaba Open Code Review, manual review of excluded files, and zero unresolved review threads all pass."
+    }
+  ],
+  "successor_requirements": {
+    "sg_000055": "Outbound-only device uplink may proceed only after SG-000054 closes with OAuth 2.1 authorization qualified."
+  },
+  "review": {
+    "diffcipline": true,
+    "jev_semantic_review": true,
+    "alibaba_open_code_review": "required exact-range qualification where integrated",
+    "security_review": true,
+    "exact_head_ci": true,
+    "release_artifact_qualification": true
+  },
+  "done_when": "OAuth 2.1 authorization is canonical with default-deny scope ceilings and no authority beyond remote principal identity."
+}
