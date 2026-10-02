@@ -9,6 +9,7 @@ import { registerGitPushTools } from "./git_push.js";
 import { KernelClient } from "./kernel.js";
 import { processSpawnInputSchema } from "./process.js";
 import { projectKernelResult } from "./result.js";
+import { TOOL_CONTRACT, profileTools, remoteProfileForProvider, type ToolSurfaceProfile } from "./tool_contract.js";
 
 /**
  * Transport identity for the local MCP edge.
@@ -23,15 +24,69 @@ export type TransportKind = "stdio" | "loopback_http" | "relay";
 export interface TransportContext {
   readonly transportKind: TransportKind;
   readonly providerKind: string;
-  readonly toolSurfaceProfile: "core";
+  readonly toolSurfaceProfile: ToolSurfaceProfile;
 }
 
+/**
+ * Local transports (stdio and loopback HTTP) serve the `desktop_structured`
+ * profile, which adds the local-only tools to `core`. The relay transport
+ * serves `core` only.
+ */
 export function defaultTransportContext(): TransportContext {
   return {
     transportKind: "stdio",
     providerKind: "generic",
-    toolSurfaceProfile: "core"
+    toolSurfaceProfile: "desktop_structured"
   };
+}
+
+/**
+ * Resolve the tools a transport context may register. The relay transport
+ * may serve only the profile mapped for its provider kind, which is `core`
+ * for every known provider; unknown provider kinds and unmapped profiles
+ * fail closed.
+ */
+export function allowedToolsFor(context: TransportContext): ReadonlySet<string> {
+  if (context.transportKind === "relay") {
+    const mapped = remoteProfileForProvider(context.providerKind);
+    if (mapped === null || mapped !== context.toolSurfaceProfile) {
+      throw new Error("TOOL_SURFACE_DENIED: the remote provider kind or tool surface profile is not mapped");
+    }
+  }
+  return profileTools(context.toolSurfaceProfile);
+}
+
+/**
+ * Wrap the server so every registration is checked against the tool
+ * contract: a tool without a contract entry fails startup, a tool outside
+ * the profile is not registered, and the contract's title and annotations
+ * are attached on every transport.
+ */
+function contractGatedServer(server: McpServer, allowed: ReadonlySet<string>): McpServer {
+  const registerTool = (name: string, config: Record<string, unknown>, handler: unknown): unknown => {
+    const entry = TOOL_CONTRACT[name];
+    if (entry === undefined) {
+      throw new Error(`tool ${name} has no SG-000065 contract entry`);
+    }
+    if (!allowed.has(name)) {
+      return undefined;
+    }
+    const { title, ...hints } = entry.annotations;
+    return (server.registerTool as unknown as (n: string, c: Record<string, unknown>, h: unknown) => unknown).call(
+      server,
+      name,
+      { ...config, title, annotations: { title, ...hints } },
+      handler
+    );
+  };
+  return new Proxy(server, {
+    get(target, property, receiver) {
+      if (property === "registerTool") {
+        return registerTool;
+      }
+      return Reflect.get(target, property, receiver) as unknown;
+    }
+  });
 }
 
 /**
@@ -110,8 +165,9 @@ export function registerCotraTools(
   server: McpServer,
   kernel: KernelClient,
   defaultWorkspace: string,
-  _context: TransportContext = defaultTransportContext()
+  context: TransportContext = defaultTransportContext()
 ): void {
+  server = contractGatedServer(server, allowedToolsFor(context));
   const workspaceSchema = z.object({
     workspace_id: z.string().min(1).default(defaultWorkspace)
   });

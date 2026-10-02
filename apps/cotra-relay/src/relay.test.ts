@@ -29,6 +29,7 @@ import {
 } from "@cotra/mcp/dist/oauth_authorization.js";
 import { DENIED_RELAY_CAPABILITIES } from "@cotra/mcp/dist/relay_contract.js";
 import { CANONICAL_TOOL_NAMES } from "@cotra/mcp/dist/server.js";
+import { REMOTE_TOOL_NAMES } from "@cotra/mcp/dist/tool_contract.js";
 import { createRelayServer, type RelayServer } from "./server.js";
 import { MemoryRelayStore } from "./store.js";
 
@@ -229,7 +230,9 @@ test("an authenticated MCP client reaches the paired device through the outbound
     const list = await post(h, { jsonrpc: "2.0", id: 2, method: "tools/list" }, auth);
     assert.equal(list.status, 200, list.text);
     const tools = ((list.json?.result as { tools: Array<{ name: string }> }).tools).map((t) => t.name).sort();
-    assert.deepEqual(tools, [...CANONICAL_TOOL_NAMES].sort());
+    // SG-000065: remote discovery lists exactly the core profile.
+    assert.deepEqual(tools, [...REMOTE_TOOL_NAMES].sort());
+    assert.ok(CANONICAL_TOOL_NAMES.length > REMOTE_TOOL_NAMES.length);
     const call = await post(h, { jsonrpc: "2.0", id: 3, method: "tools/call", params: { name: "fs_read", arguments: { path: "README.md" } } }, auth);
     assert.equal(call.status, 200, call.text);
     assert.ok(call.text.includes("REMOTE_SESSION_INACTIVE"), "the local lease decision reaches the remote client as a typed result");
