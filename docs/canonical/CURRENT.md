@@ -2,7 +2,7 @@
 
 Status: COMPLETE_CANONICAL
 Date: 2026-10-01
-Governance snapshot base: 18a01842dc14f0ed398dd622bd4d69bcbac16266
+Governance snapshot base: 5f9bc4e402360fbbb47f60971e8c351c8372f0bd
 Evidence ledger: `.specgrain/canonical-evidence.json`
 
 `Governance snapshot base` records the exact canonical parent from which this activation snapshot was authored. It deliberately does not claim the eventual merge SHA of the commit containing this file.
@@ -384,7 +384,7 @@ All P12 closeouts (SG-000041 PR `#120`, SG-000042 PR `#122`, SG-000043 PR `#124`
 
 ## Successor frontier
 
-SG-000047 - Universal-access architecture and transport contract - is CLOSED canonical. SG-000048 - Transport-neutral MCP server builder - is CLOSED canonical. SG-000049 - Supported local stdio entrypoint - is CLOSED canonical. SG-000050 - Loopback Streamable HTTP transport - is CLOSED canonical. SG-000051 - Local client packages and configuration - is CLOSED canonical. SG-000052 - Relay protocol and remote threat contract - is CLOSED canonical. SG-000053 - Device identity, pairing, and revocation - is CLOSED canonical. SG-000054 - OAuth 2.1 authorization - is CLOSED canonical. SG-000055 - Outbound-only device uplink and remote-session lease - is CLOSED canonical. SG-000056 - Public Streamable HTTP MCP edge - is CLOSED canonical. SG-000057 - Open-source relay, self-host mode, and zero-cost reference deployment - is CLOSED canonical. SG-000058 - P15 adversarial and chaos exit - is the sole active COTRA-P15 grain.
+SG-000047 - Universal-access architecture and transport contract - is CLOSED canonical. SG-000048 - Transport-neutral MCP server builder - is CLOSED canonical. SG-000049 - Supported local stdio entrypoint - is CLOSED canonical. SG-000050 - Loopback Streamable HTTP transport - is CLOSED canonical. SG-000051 - Local client packages and configuration - is CLOSED canonical. SG-000052 - Relay protocol and remote threat contract - is CLOSED canonical. SG-000053 - Device identity, pairing, and revocation - is CLOSED canonical. SG-000054 - OAuth 2.1 authorization - is CLOSED canonical. SG-000055 - Outbound-only device uplink and remote-session lease - is CLOSED canonical. SG-000056 - Public Streamable HTTP MCP edge - is CLOSED canonical. SG-000057 - Open-source relay, self-host mode, and zero-cost reference deployment - is CLOSED canonical. SG-000058 - P15 adversarial and chaos exit - is CLOSED canonical. SG-000059 - Capability and parity inventory - is the sole active COTRA-P16 grain.
 
 SG-000050 closed canonically on implementation PR `#142` (implementation base `46f92d0add5447893d19176aa0827860f741d88e`, qualified head `1298915ec2ddd9d243d599fc05094c4f30d95ce2`, CI `36910345831`, Review Gates `36910345950`, genuine TypeSafe Jev `10/10` hunk coverage with zero findings and zero blocking findings, Alibaba Open Code Review v1.12.9 exact-range delegation over `8` files with `5` reviewable and `3` excluded files manually reviewed, merge `276cadd15f47121ad2e9aa84a91a224f4b388f88`, post-merge CI `36911084305`) with zero unresolved review threads. The implementation added the loopback-only Streamable HTTP transport with per-user bearer credential, Host and Origin validation, DNS-rebinding tests, bounded bodies and sessions, strict CORS, and `cotra mcp serve`, with all closed SG-000001 through SG-000049 regressions passing unchanged and no new tool authority.
 
@@ -402,11 +402,13 @@ SG-000056 closed canonically on implementation PR `#154` (implementation base `d
 
 SG-000057 closed canonically on implementation PR `#156` (implementation base `ca494131070a5cdb9c133bef0db69e6292c2d085`, qualified head `eacf865ac4f7fff72adc50893c533128108e53a2`, CI `37009825156`, Review Gates `37009823186`, genuine TypeSafe Jev `45/45` hunk coverage with zero findings and zero blocking findings, Alibaba Open Code Review v1.12.9 exact-range delegation over `25` files with `20` reviewable and `5` excluded files manually reviewed, merge `18a01842dc14f0ed398dd622bd4d69bcbac16266`, post-merge CI `37010453680`) with zero unresolved review threads. The implementation completed the open-source relay with the authorization server (metadata, public-client registration, device-backed pairing authorization, PKCE code exchange, device-proof refresh over the live channel, revocation), durable integrity-checked state, hard fail-closed quotas with no paid overflow, a strict self-host runtime and digest-pinned container verified by a new CI job, self-host and optional reference deployment documentation, and STRONG-gated `cotra remote enable` and `cotra remote pair`, with every closed SG-000001 through SG-000056 regression passing.
 
-SG-000058 now authorizes the COTRA-P15 adversarial and chaos exit: an adversarial end-to-end suite over the real relay, uplink, authoritative MCP builder, and cotrad lease gate covering cross-tenant, cross-principal, cross-device, cross-connection, cross-client, and cross-provider isolation, replay, duplicate, reorder, delay, late response, reconnect, relay restart, relay compromise, queue-after-revoke, queue-after-lease-expiry, lock, logoff, suspend, workspace, profile, policy, and device revocation, quota exhaustion, oversized and malformed input, malicious metadata, and privacy and log leakage, with root-cause fixes, real Windows evidence or explicit UNVERIFIED records, and the COTRA-P15 exit record.
+SG-000058 closed canonically on implementation PR `#158` (implementation base `bd3db96427ab2f8eb24dd97b3931440f49fcf876`, qualified head `eb2d1f885e53c5e180cc16108c2289f3c2d205e7`, CI `37012077373`, Review Gates `37012078515`, genuine TypeSafe Jev `3/3` hunk coverage with zero findings and zero blocking findings, Alibaba Open Code Review v1.12.9 exact-range delegation over `3` files with `1` reviewable and `2` excluded files manually reviewed, merge `5f9bc4e402360fbbb47f60971e8c351c8372f0bd`, post-merge CI `37012755106`) with zero unresolved review threads. The qualification added a two-tenant adversarial suite over a real relay and real uplinks, a real cotrad lease-boundary test run on a real unlocked Windows 11 session, and the P15 condition-to-evidence matrix with real lock, logoff, and suspend transitions recorded as UNVERIFIED owner procedures, with every closed SG-000001 through SG-000057 regression passing and no product code change.
+
+SG-000059 now authorizes the COTRA-P16 capability and parity inventory: a machine-readable and human-readable classification of every intended Desktop Commander-class workflow and implemented capability as implemented and exposed, implemented and hidden, missing, or intentionally denied, with owning grains and denial reasons, pinned by contract tests to the authoritative catalog, before any MCP widening.
 
 ## Active acceptance frontier
 
-SG-000058 must prove a remote authenticated MCP client reaching one paired device without inbound PC ports while every cross-tenant, cross-principal, cross-device, cross-connection, cross-client, and cross-provider attempt fails closed; every remote dispatch requiring remote authentication and an active local lease with replay, duplicate, reorder, delay, late response, reconnect, relay restart, queue-after-revoke, and queue-after-lease-expiry never executing or extending authority and a compromised relay unable to mint local authority or exceed lease scope and time; quota, oversized, malformed, malicious-metadata, and privacy checks failing closed or staying clean; Windows workstation-state behavior evidenced on real Windows or recorded as UNVERIFIED with the owner procedure; the COTRA-P15 exit record; and every closed SG-000001 through SG-000057 regression passing unchanged.
+SG-000059 must prove every intended workflow and implemented capability classified exactly once with an owning grain or a denial reason; contract tests pinning the inventory to the authoritative MCP catalog and the cotrad capability set with no unclassified entry; no MCP widening in this grain; and every closed SG-000001 through SG-000058 regression passing unchanged.
 
 No P15 relay, device uplink, OAuth, or public edge implementation code may merge before the SG-000052 contract is canonical. No P16 authority widening may merge before the capability/parity inventory is canonical. No public provider submission may occur before the remote threat model, auth, cross-tenant isolation, privacy policy, and production endpoint are qualified.
 
@@ -653,9 +655,47 @@ SG-000057 proved the self-hostable relay in `apps/cotra-relay` (`authorization.t
 
 The canonical SG-000057 authority adds a self-hostable open-source relay with authorization server, device-backed pairing, device-proof refresh, durable payload-free state, hard fail-closed quotas, and container packaging, plus STRONG-gated local enrollment, with no outbound requests from the relay, no proxy, executor, MCP tool, schema, capability, approval, or lease authority, and no paid dependency or paid overflow.
 
+## Closed SG-000058 P15 adversarial and chaos exit
+
+SG-000058 closed canonically: implementation PR `#158` (implementation base `bd3db96427ab2f8eb24dd97b3931440f49fcf876`, qualified head `eb2d1f885e53c5e180cc16108c2289f3c2d205e7`, CI `37012077373`, Review Gates `37012078515`, genuine TypeSafe Jev `3/3` hunks with zero findings and zero blocking findings, Alibaba Open Code Review v1.12.9 exact-range delegation over `3` files with `1` reviewable and `2` excluded files manually reviewed, merge `5f9bc4e402360fbbb47f60971e8c351c8372f0bd`, post-merge CI `37012755106`), all with zero unresolved review threads.
+
+SG-000058 proved, in `apps/cotra-relay/src/adversarial.test.ts`, `crates/cotrad/src/sg000039_main.rs` (`sg000058_real_lease_boundary_on_this_workstation`), and `docs/security/SG-000058_P15_ADVERSARIAL_EXIT_NOTE.md`, that two tenants on one relay never cross principal, device, route, client, or session; that metadata and tool arguments cannot select remote identity and that lease, trust, and emergency management tools do not exist remotely; that a relay restart drops sessions without replay while the local lease still decides; that per-route quota exhaustion fails closed before the device; that relay and uplink logs carry class strings only and relay state holds no tokens, payloads, or device private keys; and, on a real Windows 11 Home build 26200 unlocked interactive session, that the real cotrad gate allows an exact active lease and denies reconnect, out-of-lease workspaces, expiry, revoke, trust revoke, and policy drift with `REMOTE_SESSION_INACTIVE`. Real lock, logoff, and suspend transitions were not exercised automatically and are recorded as UNVERIFIED with the owner procedure. All closed SG-000001 through SG-000057 regressions pass.
+
+The canonical SG-000058 authority adds adversarial and chaos qualification tests and the P15 exit note only, with no MCP tool, schema, capability, approval, lease, network, or provider authority change.
+
+## COTRA-P15 exit
+
+COTRA-P15 is exited at this frontier. Remote relay, identity, and web access is closed under SG-000052 relay protocol and remote threat contract, SG-000053 device identity, pairing, and revocation, SG-000054 OAuth 2.1 authorization, SG-000055 outbound-only device uplink and remote-session lease, SG-000056 public Streamable HTTP MCP edge, SG-000057 open-source relay, self-host mode, and zero-cost reference deployment, and SG-000058 adversarial and chaos exit.
+
+This program-exit snapshot records SG-000058 as merged and canonical. The `CLOSED` classification above becomes part of the canonical frontier only after this program-exit change itself merges and the resulting canonical main passes post-merge CI.
+
+Exit matrix (each criterion is COMPLETE with canonical evidence in `.specgrain/canonical-evidence.json` and the grain blocks above):
+
+Remote MCP reaches one paired device without inbound PC ports - COMPLETE:
+- a standards OAuth 2.1 client links through device-backed pairing and reaches exactly one paired device through the public `/mcp` edge and the outbound-only device channel, and source scans prove the device opens no listener (SG-000055 PR `#152`, SG-000056 PR `#154`, SG-000057 PR `#156`, SG-000058 PR `#158`).
+
+Every dispatch requires remote authentication and an active local lease - COMPLETE:
+- the edge verifies every token and scope before framing, and the real cotrad lease gate, run on a real Windows 11 Home build 26200 unlocked interactive session, allows only an exact active lease and denies no lease, reconnect, out-of-lease workspace, expiry, revoke, trust revoke, and policy drift with `REMOTE_SESSION_INACTIVE` (SG-000055, SG-000056, SG-000058).
+
+Relay and provider cannot mint local authority - COMPLETE:
+- lease creation and enrollment require local STRONG presence, remote contexts can never reach `remote.*`, trust, approval, or lifecycle capabilities, the kernel remote context comes only from the local pairing record, and metadata or arguments cannot select remote identity (SG-000055, SG-000057, SG-000058).
+
+Compromised-relay read exposure is bounded by lease scope and time - COMPLETE:
+- leases bind workspaces, scope ceiling, profile, policy, workstation session, and a 15-minute hard maximum, two-tenant tests prove no cross-tenant use, and the residual risk inside an active lease is documented (SG-000055, SG-000058).
+
+Self-host mode works independently - COMPLETE:
+- the self-host end-to-end test and the CI relay container job prove the open-source relay runs from a validated configuration with durable state and no Cotra-operated service (SG-000057).
+
+Quota behavior fails closed - COMPLETE:
+- quotas are bounded by hard ceilings and exhaustion returns `REMOTE_RATE_LIMITED` with no paid overflow, including per-route exhaustion before the device (SG-000057, SG-000058).
+
+Recorded honestly: real Windows lock, logoff, and suspend transitions were not exercised automatically and remain UNVERIFIED with the owner procedure in `docs/security/SG-000058_P15_ADVERSARIAL_EXIT_NOTE.md`; the lease model fails closed for locked, unknown, and re-logged-on sessions. No hosted Cotra relay is operated or claimed live; self-hosting is the canonical zero-cost path.
+
+All P15 grains (SG-000052 PR `#146`, SG-000053 PR `#148`, SG-000054 PR `#150`, SG-000055 PR `#152`, SG-000056 PR `#154`, SG-000057 PR `#156`, SG-000058 PR `#158`) merged normally with zero unresolved blocking review threads and successful post-merge CI.
+
 ## Final canonical state
 
-The authorized Cotra roadmap through COTRA-P13 is complete at this frontier: every grain authorized for COTRA-P00 through COTRA-P13 (SG-000001 through SG-000046) is `CLOSED` with machine-checked evidence in `.specgrain/canonical-evidence.json`, COTRA-P06 through COTRA-P13 carry explicit exit records above, and the earlier phases' grains closed under the governance current at the time. COTRA-P14 universal access is exited at this frontier with SG-000047 `CLOSED`, SG-000048 `CLOSED`, SG-000049 `CLOSED`, SG-000050 `CLOSED`, and SG-000051 `CLOSED` carrying the explicit exit record above; COTRA-P15 remote relay, identity, and web access is authorized with SG-000052 `CLOSED`, SG-000053 `CLOSED`, SG-000054 `CLOSED`, SG-000055 `CLOSED`, SG-000056 `CLOSED`, SG-000057 `CLOSED`, and SG-000058 as the sole active grain. As recorded for SG-000004, the live ChatGPT tunnel end-to-end path of COTRA-P03 remains UNPROVEN because it requires the owner's OpenAI credentials.
+The authorized Cotra roadmap through COTRA-P13 is complete at this frontier: every grain authorized for COTRA-P00 through COTRA-P13 (SG-000001 through SG-000046) is `CLOSED` with machine-checked evidence in `.specgrain/canonical-evidence.json`, COTRA-P06 through COTRA-P13 carry explicit exit records above, and the earlier phases' grains closed under the governance current at the time. COTRA-P14 universal access is exited at this frontier with SG-000047 `CLOSED`, SG-000048 `CLOSED`, SG-000049 `CLOSED`, SG-000050 `CLOSED`, and SG-000051 `CLOSED` carrying the explicit exit record above; COTRA-P15 remote relay, identity, and web access is exited at this frontier with SG-000052 `CLOSED`, SG-000053 `CLOSED`, SG-000054 `CLOSED`, SG-000055 `CLOSED`, SG-000056 `CLOSED`, SG-000057 `CLOSED`, and SG-000058 `CLOSED` carrying the explicit exit record above; COTRA-P16 safe Desktop Commander replacement is authorized with SG-000059 as the sole active grain. As recorded for SG-000004, the live ChatGPT tunnel end-to-end path of COTRA-P03 remains UNPROVEN because it requires the owner's OpenAI credentials.
 
 Release state:
 - every change to `main` builds, packages, archives, and qualifies the Windows x64 release from the extracted archive on a fresh runner, verifies an independent byte-identical rebuild, audits dependencies, and uploads a release candidate (`cotra-release-candidate-<sha>`) with the archive, manifest, CycloneDX SBOM, provenance record, reproducibility record, third-party notices, and `SHA256SUMS.txt`;
@@ -667,7 +707,7 @@ Residual limitations, recorded honestly:
 - public `process.spawn` on Windows is restricted to `whoami.exe`, and `git_fetch`/`git_push` destination policies are not configurable through the `cotra` CLI, so those tools fail closed in an installed Cotra;
 - no paid or human third-party security audit was performed; review relied on genuine TypeSafe Jev, Alibaba Open Code Review, exact-diff manual security review, and local Graft structural analysis.
 
-Any further capability, release, or audit work beyond the active SG-000058 requires a new, explicitly authorized SpecGrain.
+Any further capability, release, or audit work beyond the active SG-000059 requires a new, explicitly authorized SpecGrain.
 
 ## Canonical public authority boundary retained
 

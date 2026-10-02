@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "snapshot_base": "18a01842dc14f0ed398dd622bd4d69bcbac16266",
+  "snapshot_base": "5f9bc4e402360fbbb47f60971e8c351c8372f0bd",
   "state_semantics": {
     "GRAIN": "Authorized or active work packet whose acceptance is not yet canonically proven.",
     "PROVEN": "Acceptance and required qualification are proven, but canonical closeout/governance is not yet complete.",
@@ -694,6 +694,18 @@
       "review_basis": "Exact-head genuine TypeSafe Jev 45/45 hunks with zero findings/blocking findings (pin 31f89602797fb7bea007f8a480bf368bf564954e), Alibaba Open Code Review v1.12.9 exact-range delegation over 25 files with 20 reviewable and 5 excluded files (device-uplink.test.ts, self-host.test.ts, REFERENCE_DEPLOYMENT.md, SELF_HOSTING.md, SG-000057_OPEN_SOURCE_RELAY_NOTE.md) manually reviewed, exact-diff manual security review, Windows/Ubuntu Rust Node Governance, Supply chain audit, Release qualification, and Relay container, successful post-merge CI, and zero unresolved review threads. Qodo billing-blocked and CodeRabbit skipped-review notices evaluated as non-evidence noise with zero substantive findings.",
       "unresolved_review_threads": 0,
       "authority_boundary": "Self-hostable open-source relay with authorization server, device-backed pairing, device-proof refresh, durable payload-free state, hard fail-closed quotas, and container packaging, plus STRONG-gated local enrollment. No outbound requests from the relay, no proxy, executor, MCP tool, schema, capability, approval, or lease authority, and no paid dependency or paid overflow."
+    },
+    "SG-000058": {
+      "implementation_pr": 158,
+      "implementation_base": "bd3db96427ab2f8eb24dd97b3931440f49fcf876",
+      "qualified_head": "eb2d1f885e53c5e180cc16108c2289f3c2d205e7",
+      "pre_merge_ci": "37012077373",
+      "pre_merge_review_gates": "37012078515",
+      "merge_sha": "5f9bc4e402360fbbb47f60971e8c351c8372f0bd",
+      "post_merge_ci": "37012755106",
+      "review_basis": "Exact-head genuine TypeSafe Jev 3/3 hunks with zero findings/blocking findings (pin 31f89602797fb7bea007f8a480bf368bf564954e), Alibaba Open Code Review v1.12.9 exact-range delegation over 3 files with 1 reviewable and 2 excluded files (adversarial.test.ts and SG-000058_P15_ADVERSARIAL_EXIT_NOTE.md) manually reviewed, exact-diff manual security review, Windows/Ubuntu Rust Node Governance, Supply chain audit, Release qualification, and Relay container, successful post-merge CI, and zero unresolved review threads. Qodo billing-blocked and CodeRabbit skipped-review notices evaluated as non-evidence noise with zero substantive findings.",
+      "unresolved_review_threads": 0,
+      "authority_boundary": "Adversarial and chaos qualification tests and the P15 exit note only. No MCP tool, schema, capability, approval, lease, network, or provider authority change."
     }
   }
 }
