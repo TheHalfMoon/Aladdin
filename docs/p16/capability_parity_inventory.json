@@ -167,74 +167,74 @@
     {
       "capability": "browser.profile",
       "operation": "status",
-      "status": "implemented_hidden",
-      "owner_grain": "SG-000062"
+      "status": "intentionally_denied",
+      "reason": "not exposed: the closed structured browser layer is a policy and page-registry model with no live browser engine (SG-000062 qualification)"
     },
     {
       "capability": "browser.destination",
       "operation": "validate",
-      "status": "implemented_hidden",
-      "owner_grain": "SG-000062"
+      "status": "intentionally_denied",
+      "reason": "not exposed: the closed structured browser layer is a policy and page-registry model with no live browser engine (SG-000062 qualification)"
     },
     {
       "capability": "browser.page",
       "operation": "open",
-      "status": "implemented_hidden",
-      "owner_grain": "SG-000062"
+      "status": "intentionally_denied",
+      "reason": "not exposed: the closed structured browser layer is a policy and page-registry model with no live browser engine (SG-000062 qualification)"
     },
     {
       "capability": "browser.navigation",
       "operation": "preview",
-      "status": "implemented_hidden",
-      "owner_grain": "SG-000062"
+      "status": "intentionally_denied",
+      "reason": "not exposed: the closed structured browser layer is a policy and page-registry model with no live browser engine (SG-000062 qualification)"
     },
     {
       "capability": "browser.navigation",
       "operation": "navigate",
-      "status": "implemented_hidden",
-      "owner_grain": "SG-000062"
+      "status": "intentionally_denied",
+      "reason": "not exposed: the closed structured browser layer is a policy and page-registry model with no live browser engine (SG-000062 qualification)"
     },
     {
       "capability": "browser.snapshot",
       "operation": "observe",
-      "status": "implemented_hidden",
-      "owner_grain": "SG-000062"
+      "status": "intentionally_denied",
+      "reason": "not exposed: the closed structured browser layer is a policy and page-registry model with no live browser engine (SG-000062 qualification)"
     },
     {
       "capability": "browser.dom",
       "operation": "click",
-      "status": "implemented_hidden",
-      "owner_grain": "SG-000062"
+      "status": "intentionally_denied",
+      "reason": "not exposed: the closed structured browser layer is a policy and page-registry model with no live browser engine (SG-000062 qualification)"
     },
     {
       "capability": "browser.dom",
       "operation": "fill",
-      "status": "implemented_hidden",
-      "owner_grain": "SG-000062"
+      "status": "intentionally_denied",
+      "reason": "not exposed: the closed structured browser layer is a policy and page-registry model with no live browser engine (SG-000062 qualification)"
     },
     {
       "capability": "browser.download",
       "operation": "preview",
-      "status": "implemented_hidden",
-      "owner_grain": "SG-000062"
+      "status": "intentionally_denied",
+      "reason": "not exposed: the closed structured browser layer is a policy and page-registry model with no live browser engine (SG-000062 qualification)"
     },
     {
       "capability": "browser.download",
       "operation": "download",
-      "status": "implemented_hidden",
-      "owner_grain": "SG-000062"
+      "status": "intentionally_denied",
+      "reason": "not exposed: the closed structured browser layer is a policy and page-registry model with no live browser engine (SG-000062 qualification)"
     },
     {
       "capability": "browser.upload",
       "operation": "preview",
-      "status": "implemented_hidden",
-      "owner_grain": "SG-000062"
+      "status": "intentionally_denied",
+      "reason": "not exposed: the closed structured browser layer is a policy and page-registry model with no live browser engine (SG-000062 qualification)"
     },
     {
       "capability": "browser.upload",
       "operation": "submit",
-      "status": "implemented_hidden",
-      "owner_grain": "SG-000062"
+      "status": "intentionally_denied",
+      "reason": "not exposed: the closed structured browser layer is a policy and page-registry model with no live browser engine (SG-000062 qualification)"
     },
     {
       "capability": "uia.process",
@@ -557,8 +557,9 @@
     },
     {
       "id": "browser_structured",
-      "status": "implemented_hidden",
-      "owner_grain": "SG-000062"
+      "status": "missing",
+      "owner_grain": "outside_v0_2_target",
+      "note": "needs a live isolated browser engine qualified shape by shape; the closed policy model is not exposed (docs/p16/BROWSER_QUALIFICATION.md)"
     },
     {
       "id": "desktop_observe_and_act",
