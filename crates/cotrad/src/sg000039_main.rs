@@ -1992,3 +1992,188 @@ mod sg000055_envelope_tests {
         let _ = std::fs::remove_dir_all(root);
     }
 }
+
+#[cfg(test)]
+mod sg000058_lease_boundary_tests {
+    use super::*;
+    use cotra_approval::test_support::FixedApprovalBroker;
+    use cotra_approval::ApprovalDecision;
+    use cotra_contracts::RemoteContext;
+    use cotra_policy::remote_session::{
+        build_lease, revoke_leases, save_leases, GateEnvironment, LeaseRequest, ReadMode,
+        WorkstationState,
+    };
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn remote(connection: &str) -> RemoteContext {
+        RemoteContext {
+            principal: format!("rp-{}", "5".repeat(32)),
+            remote_connection_id: format!("rc-{}", "6".repeat(32)),
+            connection_id: connection.into(),
+            device_id: format!("dev-{}", "7".repeat(32)),
+            device_epoch: 1,
+            provider_kind: "generic".into(),
+            client_profile_id: "remote-default".into(),
+            client_profile_revision: 1,
+            tool_surface_profile: "core".into(),
+            scopes: vec!["cotra.read".into()],
+        }
+    }
+
+    fn read(workspace: &str) -> RemoteRequestEnvelope {
+        RemoteRequestEnvelope {
+            request: RequestEnvelope {
+                version: INTERNAL_PROTOCOL_VERSION,
+                request_id: "sg58".into(),
+                client_session_id: "remote".into(),
+                workspace_id: workspace.into(),
+                capability: "fs.read".into(),
+                operation: "read".into(),
+                target: Some("README.md".into()),
+                arguments: json!({}),
+            },
+            remote: Some(remote("conn-sg58-a")),
+        }
+    }
+
+    fn code(response: &ResponseEnvelope) -> Option<FailureCode> {
+        response.error.as_ref().map(|error| error.code.clone())
+    }
+
+    /// Real cotrad lease boundary on this host: the real workstation probe,
+    /// the real lease store, trust store, policy, and dispatch.
+    #[test]
+    fn sg000058_real_lease_boundary_on_this_workstation() {
+        let suffix = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("clock")
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!("cotra-sg58-{}-{suffix}", std::process::id()));
+        std::fs::create_dir_all(root.join("workspace")).expect("workspace");
+        std::fs::write(
+            root.join("workspace").join("README.md"),
+            b"sg58 lease boundary",
+        )
+        .expect("file");
+        let workspace_root = std::fs::canonicalize(root.join("workspace")).expect("canonical");
+        let trust_path = root.join("trust.jsonl");
+        let lease_path = root.join("remote_leases.json");
+        std::env::set_var("COTRA_TRUST_PATH", &trust_path);
+        std::env::set_var("COTRA_REMOTE_LEASE_PATH", &lease_path);
+        let mut trust_store = trust::TrustStore::load_or_create(trust_path.clone());
+        trust_store
+            .grant("default", POLICY_REVISION, "test", cotra_approval::now_ms())
+            .expect("grant");
+        let policy = PolicyEngine::new(vec![Workspace {
+            id: "default".into(),
+            root: workspace_root.clone(),
+        }])
+        .expect("policy");
+        let audit = AuditLogger::new(root.join("audit.jsonl")).expect("audit");
+        let workspaces =
+            remote_lease::WorkspaceSet::from_pairs(&[("default".into(), workspace_root.clone())]);
+        let approval = FixedApprovalBroker(ApprovalDecision::Approved);
+
+        // No lease: denied before policy and dispatch.
+        let denied = handle_envelope(&policy, &audit, &approval, &workspaces, read("default"));
+        assert_eq!(code(&denied), Some(FailureCode::RemoteSessionInactive));
+
+        let state = workstation::current();
+        let trust_revision = |id: &str| {
+            let status = trust::TrustStore::load_or_create(trust_path.clone()).get(id);
+            status.trusted.then_some(status.revision)
+        };
+        let env = GateEnvironment {
+            now_ms: cotra_approval::now_ms(),
+            policy_revision: POLICY_REVISION,
+            workspace_set_digest: &workspaces.digest,
+            workstation: state.clone(),
+            trust_revision: &trust_revision,
+        };
+        let request = LeaseRequest {
+            principal: remote("x").principal,
+            remote_connection_id: remote("x").remote_connection_id,
+            device_id: remote("x").device_id,
+            device_epoch: 1,
+            provider_kind: "generic".into(),
+            client_profile_id: "remote-default".into(),
+            client_profile_revision: 1,
+            tool_surface_profile: "core".into(),
+            scope_ceiling: vec!["cotra.read".into()],
+            workspace_ids: vec!["default".into()],
+            read_mode: ReadMode::Session,
+            duration_ms: 5 * 60 * 1000,
+        };
+        let WorkstationState::Unlocked(_) = state else {
+            assert!(build_lease(&request, "lease-sg58".into(), &env, &workspaces.ids).is_err());
+            eprintln!("SG-000058 lease boundary: workstation is not an unlocked interactive session on this host ({state:?}); lease creation and every remote dispatch fail closed; allowed path UNVERIFIED here");
+            let _ = std::fs::remove_dir_all(&root);
+            return;
+        };
+        let lease =
+            build_lease(&request, "lease-sg58".into(), &env, &workspaces.ids).expect("lease");
+        save_leases(&lease_path, std::slice::from_ref(&lease)).expect("save");
+
+        // Exact active lease on this real unlocked session: dispatch runs.
+        let allowed = handle_envelope(&policy, &audit, &approval, &workspaces, read("default"));
+        assert!(allowed.ok, "{:?}", allowed.error);
+        assert!(allowed
+            .result
+            .as_ref()
+            .expect("result")
+            .to_string()
+            .contains("sg58 lease boundary"));
+
+        // Reconnect (different short-lived connection) never extends the lease.
+        let mut reconnect = read("default");
+        if let Some(remote) = reconnect.remote.as_mut() {
+            remote.connection_id = "conn-sg58-b".into();
+        }
+        let reconnected = handle_envelope(&policy, &audit, &approval, &workspaces, reconnect);
+        assert_eq!(code(&reconnected), Some(FailureCode::RemoteSessionInactive));
+
+        // A workspace outside the lease is never reachable.
+        let outside = handle_envelope(&policy, &audit, &approval, &workspaces, read("other"));
+        assert!(!outside.ok);
+
+        // Expired lease (queue-after-lease-expiry): denied.
+        let mut expired = lease.clone();
+        expired.created_at_ms -= 10 * 60 * 1000;
+        expired.expires_at_ms = cotra_approval::now_ms() - 1;
+        save_leases(&lease_path, &[expired]).expect("save");
+        let late = handle_envelope(&policy, &audit, &approval, &workspaces, read("default"));
+        assert_eq!(code(&late), Some(FailureCode::RemoteSessionInactive));
+
+        // Revoked lease (queue-after-revoke): denied.
+        let (revoked, _) = revoke_leases(std::slice::from_ref(&lease), None);
+        save_leases(&lease_path, &revoked).expect("save");
+        let after_revoke =
+            handle_envelope(&policy, &audit, &approval, &workspaces, read("default"));
+        assert_eq!(
+            code(&after_revoke),
+            Some(FailureCode::RemoteSessionInactive)
+        );
+
+        // Workspace trust revoke invalidates an otherwise active lease.
+        save_leases(&lease_path, std::slice::from_ref(&lease)).expect("save");
+        assert!(handle_envelope(&policy, &audit, &approval, &workspaces, read("default")).ok);
+        trust::TrustStore::load_or_create(trust_path.clone())
+            .revoke_workspace("default", POLICY_REVISION, "test", cotra_approval::now_ms())
+            .expect("revoke trust");
+        let untrusted = handle_envelope(&policy, &audit, &approval, &workspaces, read("default"));
+        assert_eq!(code(&untrusted), Some(FailureCode::RemoteSessionInactive));
+
+        // Policy drift (a different workspace set) invalidates the lease.
+        let drifted = remote_lease::WorkspaceSet::from_pairs(&[
+            ("default".into(), workspace_root.clone()),
+            ("added".into(), root.clone()),
+        ]);
+        let policy_change = handle_envelope(&policy, &audit, &approval, &drifted, read("default"));
+        assert_eq!(
+            code(&policy_change),
+            Some(FailureCode::RemoteSessionInactive)
+        );
+        eprintln!("SG-000058 lease boundary: allowed, reconnect, outside-workspace, expiry, revoke, trust-revoke, and policy-drift paths exercised on a real unlocked interactive Windows session");
+        let _ = std::fs::remove_dir_all(&root);
+    }
+}
