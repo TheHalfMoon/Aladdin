@@ -74,8 +74,16 @@ function requiredEnv(name: string): string {
   return value;
 }
 
+function readUplinkFile(path: string): string {
+  try {
+    return readFileSync(path, "utf8");
+  } catch {
+    throw new Error("PAIRING_REQUIRED: uplink configuration is missing or unreadable");
+  }
+}
+
 export function startRelayTransport(): void {
-  const uplink = parseUplinkFile(readFileSync(requiredEnv("COTRA_UPLINK_CONFIG"), "utf8"));
+  const uplink = parseUplinkFile(readUplinkFile(requiredEnv("COTRA_UPLINK_CONFIG")));
   const device = loadDeviceKey(requiredEnv("COTRA_DEVICE_KEY_PATH"));
   const revocationsPath = requiredEnv("COTRA_DEVICE_REVOCATIONS_PATH");
   const controller = new AbortController();

@@ -1825,3 +1825,150 @@ mod tests {
         "/dev/null"
     }
 }
+
+#[cfg(test)]
+mod sg000055_envelope_tests {
+    use super::*;
+    use cotra_approval::test_support::FixedApprovalBroker;
+    use cotra_approval::ApprovalDecision;
+    use cotra_contracts::RemoteContext;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn fixture() -> (PolicyEngine, AuditLogger, std::path::PathBuf) {
+        let suffix = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("clock")
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!(
+            "cotra-sg55-envelope-{}-{suffix}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(root.join("workspace")).expect("workspace");
+        let workspace = Workspace {
+            id: "default".into(),
+            root: std::fs::canonicalize(root.join("workspace")).expect("canonical"),
+        };
+        let policy = PolicyEngine::new(vec![workspace]).expect("policy");
+        let audit = AuditLogger::new(root.join("audit.jsonl")).expect("audit");
+        (policy, audit, root)
+    }
+
+    fn request(capability: &str, operation: &str, workspace: &str) -> RequestEnvelope {
+        RequestEnvelope {
+            version: INTERNAL_PROTOCOL_VERSION,
+            request_id: "sg55".into(),
+            client_session_id: "remote".into(),
+            workspace_id: workspace.into(),
+            capability: capability.into(),
+            operation: operation.into(),
+            target: Some("README.md".into()),
+            arguments: json!({}),
+        }
+    }
+
+    fn remote() -> RemoteContext {
+        RemoteContext {
+            principal: format!("rp-{}", "1".repeat(32)),
+            remote_connection_id: format!("rc-{}", "2".repeat(32)),
+            connection_id: "conn-sg55-test".into(),
+            device_id: format!("dev-{}", "3".repeat(32)),
+            device_epoch: 1,
+            provider_kind: "generic".into(),
+            client_profile_id: "profile-test".into(),
+            client_profile_revision: 1,
+            tool_surface_profile: "core".into(),
+            scopes: vec!["cotra.read".into()],
+        }
+    }
+
+    fn code(response: &ResponseEnvelope) -> FailureCode {
+        response.error.as_ref().expect("failure").code.clone()
+    }
+
+    #[test]
+    fn remote_requests_without_an_exact_active_lease_never_reach_dispatch() {
+        let (policy, audit, root) = fixture();
+        let workspaces =
+            remote_lease::WorkspaceSet::from_pairs(&[("default".into(), root.join("workspace"))]);
+        let approval = FixedApprovalBroker(ApprovalDecision::Approved);
+        for (capability, operation) in [
+            ("fs.read", "read"),
+            ("system.status", "get"),
+            ("fs.write", "write"),
+            ("process.spawn", "spawn"),
+        ] {
+            let response = handle_envelope(
+                &policy,
+                &audit,
+                &approval,
+                &workspaces,
+                RemoteRequestEnvelope {
+                    request: request(capability, operation, "default"),
+                    remote: Some(remote()),
+                },
+            );
+            assert!(!response.ok);
+            assert_eq!(code(&response), FailureCode::RemoteSessionInactive);
+        }
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn remote_requests_can_never_manage_leases_trust_or_approvals() {
+        let (policy, audit, root) = fixture();
+        let workspaces =
+            remote_lease::WorkspaceSet::from_pairs(&[("default".into(), root.join("workspace"))]);
+        let approval = FixedApprovalBroker(ApprovalDecision::Approved);
+        for (capability, operation) in [
+            ("remote.lease.create", "create"),
+            ("remote.lease.revoke", "revoke"),
+            ("workspace.trust.grant", "grant"),
+            ("trust.revoke_emergency", "revoke"),
+            ("approval.history.query", "query"),
+        ] {
+            let response = handle_envelope(
+                &policy,
+                &audit,
+                &approval,
+                &workspaces,
+                RemoteRequestEnvelope {
+                    request: request(capability, operation, "default"),
+                    remote: Some(remote()),
+                },
+            );
+            assert_eq!(code(&response), FailureCode::CapabilityDenied);
+        }
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn local_lease_management_requires_a_configured_workspace() {
+        let (policy, audit, root) = fixture();
+        let workspaces =
+            remote_lease::WorkspaceSet::from_pairs(&[("default".into(), root.join("workspace"))]);
+        let approval = FixedApprovalBroker(ApprovalDecision::Approved);
+        let response = handle_envelope(
+            &policy,
+            &audit,
+            &approval,
+            &workspaces,
+            RemoteRequestEnvelope {
+                request: request("remote.lease.status", "get", "missing"),
+                remote: None,
+            },
+        );
+        assert_eq!(code(&response), FailureCode::WorkspaceDenied);
+        let unknown = handle_envelope(
+            &policy,
+            &audit,
+            &approval,
+            &workspaces,
+            RemoteRequestEnvelope {
+                request: request("remote.lease.extend", "extend", "default"),
+                remote: None,
+            },
+        );
+        assert_eq!(code(&unknown), FailureCode::CapabilityDenied);
+        let _ = std::fs::remove_dir_all(root);
+    }
+}

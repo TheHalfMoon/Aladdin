@@ -694,3 +694,36 @@ test("uplink sources open no listener and carry no generic proxy capability", ()
     }
   }
 });
+
+test("the relay transport fails closed with PAIRING_REQUIRED when protected pairing state is absent", async () => {
+  const { startRelayTransport } = await import("./transports/relay_device.js");
+  const saved = {
+    config: process.env.COTRA_UPLINK_CONFIG,
+    key: process.env.COTRA_DEVICE_KEY_PATH,
+    revocations: process.env.COTRA_DEVICE_REVOCATIONS_PATH
+  };
+  const dir = mkdtempSync(join(tmpdir(), "cotra-relay-transport-"));
+  try {
+    delete process.env.COTRA_UPLINK_CONFIG;
+    assert.throws(() => startRelayTransport(), /PAIRING_REQUIRED/);
+    process.env.COTRA_UPLINK_CONFIG = join(dir, "missing.json");
+    assert.throws(() => startRelayTransport(), /PAIRING_REQUIRED/);
+    writeFileSync(join(dir, "uplink.json"), JSON.stringify({ schema: "cotra-uplink/1", relayOrigin: "https://relay.cotra.example", defaultWorkspace: "default", connections: [PAIRED] }));
+    process.env.COTRA_UPLINK_CONFIG = join(dir, "uplink.json");
+    process.env.COTRA_DEVICE_KEY_PATH = join(dir, "no-key.json");
+    process.env.COTRA_DEVICE_REVOCATIONS_PATH = join(dir, "revocations.json");
+    assert.throws(() => startRelayTransport(), /PAIRING_REQUIRED/);
+  } finally {
+    for (const [name, value] of [
+      ["COTRA_UPLINK_CONFIG", saved.config],
+      ["COTRA_DEVICE_KEY_PATH", saved.key],
+      ["COTRA_DEVICE_REVOCATIONS_PATH", saved.revocations]
+    ] as const) {
+      if (value === undefined) {
+        delete process.env[name];
+      } else {
+        process.env[name] = value;
+      }
+    }
+  }
+});
