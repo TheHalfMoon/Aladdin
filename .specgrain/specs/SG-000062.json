@@ -2,7 +2,7 @@
   "id": "SG-000062",
   "title": "Structured browser MCP exposure qualification",
   "program": "COTRA-P16",
-  "state": "GRAIN",
+  "state": "CLOSED",
   "risk": "high",
   "created": "2026-10-02",
   "base": "7bba94399c1316ac894a654dad41aff6480b3517",
@@ -63,5 +63,25 @@
     "exact_head_ci": true,
     "release_artifact_qualification": true
   },
-  "done_when": "Structured browser exposure is decided per shape on live-engine evidence, with no model-only capability presented as real."
+  "done_when": "Structured browser exposure is decided per shape on live-engine evidence, with no model-only capability presented as real.",
+  "qualified_head": "1cf37237a8be122dcbadf6bd5489a87a07d7ba70",
+  "implementation_base": "0822a7a6aae3f3129a819cbb08efc6bbffa42173",
+  "implementation_merge": "bce0d3e0a89275d8d9f040fe9f3ea1fc9facf918",
+  "pre_merge_ci": "37025179349",
+  "pre_merge_review_gates": "37025179536",
+  "post_merge_ci": "37026134837",
+  "canonical_evidence": {
+    "implementation_pr": 166,
+    "implementation_base": "0822a7a6aae3f3129a819cbb08efc6bbffa42173",
+    "qualified_head": "1cf37237a8be122dcbadf6bd5489a87a07d7ba70",
+    "pre_merge_ci": "37025179349",
+    "pre_merge_review_gates": "37025179536",
+    "merge_sha": "bce0d3e0a89275d8d9f040fe9f3ea1fc9facf918",
+    "post_merge_ci": "37026134837",
+    "jev": "PASSED: genuine TypeSafe Jev exact-diff review covered 8/8 hunks with zero findings and zero blocking findings, pin 31f89602797fb7bea007f8a480bf368bf564954e",
+    "ocr": "PASSED: Alibaba Open Code Review v1.12.9 exact-range delegation over 4 changed files, 1 reviewable (docs/p16/capability_parity_inventory.json) with delegated rules applied and 3 excluded (apps/cotra-mcp/src/browser-qualification.test.ts by default-path classification and docs/p16/BROWSER_QUALIFICATION.md and docs/p16/CAPABILITY_PARITY.md by unsupported-extension classification) manually reviewed",
+    "security_review": "PASS on exact qualified head: every closed structured browser shape qualified against a live engine with implementation evidence (no browser launch, attachment, DevTools, debugger, WebSocket, or socket outside test helpers; template snapshots); none qualifies, so none is exposed; shapes recorded as intentionally denied with that reason and live browser automation as missing outside the v0.2 target; contract tests pin no browser-named MCP tool, no launch or connection in production browser sources, and the recorded decisions. No authority change. All closed SG-000001 through SG-000061 regressions pass. Qodo billing-blocked and CodeRabbit skipped-review notices evaluated as non-evidence noise with zero substantive findings; zero unresolved threads.",
+    "unresolved_review_threads": 0,
+    "authority_boundary": "Qualification record, inventory update, and contract tests only. No browser tool is exposed and no authority changes."
+  }
 }
