@@ -2,7 +2,7 @@
   "id": "SG-000059",
   "title": "Capability and parity inventory",
   "program": "COTRA-P16",
-  "state": "GRAIN",
+  "state": "CLOSED",
   "risk": "medium",
   "created": "2026-10-02",
   "base": "5f9bc4e402360fbbb47f60971e8c351c8372f0bd",
@@ -62,5 +62,25 @@
     "exact_head_ci": true,
     "release_artifact_qualification": true
   },
-  "done_when": "The capability and parity inventory is canonical and pinned by contract tests before any P16 widening."
+  "done_when": "The capability and parity inventory is canonical and pinned by contract tests before any P16 widening.",
+  "qualified_head": "6c70f8165bdc21d91ee29305b8415325fd6a21c0",
+  "implementation_base": "c7d14db2b3140bf7e9e71187cbd9aeae0e32120a",
+  "implementation_merge": "0e54d0056b7ce07e4688cb4c169c6d32cd915c78",
+  "pre_merge_ci": "37014307536",
+  "pre_merge_review_gates": "37014307349",
+  "post_merge_ci": "37014876381",
+  "canonical_evidence": {
+    "implementation_pr": 160,
+    "implementation_base": "c7d14db2b3140bf7e9e71187cbd9aeae0e32120a",
+    "qualified_head": "6c70f8165bdc21d91ee29305b8415325fd6a21c0",
+    "pre_merge_ci": "37014307536",
+    "pre_merge_review_gates": "37014307349",
+    "merge_sha": "0e54d0056b7ce07e4688cb4c169c6d32cd915c78",
+    "post_merge_ci": "37014876381",
+    "jev": "PASSED: genuine TypeSafe Jev exact-diff review covered 4/4 hunks with zero findings and zero blocking findings, pin 31f89602797fb7bea007f8a480bf368bf564954e",
+    "ocr": "PASSED: Alibaba Open Code Review v1.12.9 exact-range delegation over 4 changed files, 2 reviewable (docs/p16/capability_parity_inventory.json and scripts/generate-parity-doc.mjs) with delegated rules applied and 2 excluded (apps/cotra-mcp/src/parity-inventory.test.ts by default-path classification and docs/p16/CAPABILITY_PARITY.md by unsupported-extension classification) manually reviewed",
+    "security_review": "PASS on exact qualified head: machine-readable inventory classifying 60 capability shapes (20 exposed equal to the authoritative catalog, 29 implemented and hidden with owning grains SG-000062 through SG-000064, 10 local authority management shapes intentionally denied with reasons) and 35 workflows (10 exposed, 6 hidden, 8 missing with owning grains SG-000060 and SG-000061 or outside the v0.2 target, 11 intentionally denied with security reasons including shell strings, PowerShell and cmd, interactive interpreters, background processes, arbitrary process termination, elevation, outside-workspace reads, raw sockets, browser scripting, agent self-policy, and installers); generated human-readable document; contract tests pinning exposed entries to the catalog, scope matrix, and the capability each tool sends, proving hidden and denied shapes exist in cotrad sources and are not MCP tools, and requiring owners and reasons. No MCP, schema, capability, or approval change. All closed SG-000001 through SG-000058 regressions pass. Qodo billing-blocked and CodeRabbit skipped-review notices evaluated as non-evidence noise with zero substantive findings; zero unresolved threads.",
+    "unresolved_review_threads": 0,
+    "authority_boundary": "Inventory, generated parity document, generator script, and contract tests only. No MCP tool, schema, capability, approval, or provider change."
+  }
 }

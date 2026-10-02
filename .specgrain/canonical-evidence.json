@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "snapshot_base": "5f9bc4e402360fbbb47f60971e8c351c8372f0bd",
+  "snapshot_base": "0e54d0056b7ce07e4688cb4c169c6d32cd915c78",
   "state_semantics": {
     "GRAIN": "Authorized or active work packet whose acceptance is not yet canonically proven.",
     "PROVEN": "Acceptance and required qualification are proven, but canonical closeout/governance is not yet complete.",
@@ -706,6 +706,18 @@
       "review_basis": "Exact-head genuine TypeSafe Jev 3/3 hunks with zero findings/blocking findings (pin 31f89602797fb7bea007f8a480bf368bf564954e), Alibaba Open Code Review v1.12.9 exact-range delegation over 3 files with 1 reviewable and 2 excluded files (adversarial.test.ts and SG-000058_P15_ADVERSARIAL_EXIT_NOTE.md) manually reviewed, exact-diff manual security review, Windows/Ubuntu Rust Node Governance, Supply chain audit, Release qualification, and Relay container, successful post-merge CI, and zero unresolved review threads. Qodo billing-blocked and CodeRabbit skipped-review notices evaluated as non-evidence noise with zero substantive findings.",
       "unresolved_review_threads": 0,
       "authority_boundary": "Adversarial and chaos qualification tests and the P15 exit note only. No MCP tool, schema, capability, approval, lease, network, or provider authority change."
+    },
+    "SG-000059": {
+      "implementation_pr": 160,
+      "implementation_base": "c7d14db2b3140bf7e9e71187cbd9aeae0e32120a",
+      "qualified_head": "6c70f8165bdc21d91ee29305b8415325fd6a21c0",
+      "pre_merge_ci": "37014307536",
+      "pre_merge_review_gates": "37014307349",
+      "merge_sha": "0e54d0056b7ce07e4688cb4c169c6d32cd915c78",
+      "post_merge_ci": "37014876381",
+      "review_basis": "Exact-head genuine TypeSafe Jev 4/4 hunks with zero findings/blocking findings (pin 31f89602797fb7bea007f8a480bf368bf564954e), Alibaba Open Code Review v1.12.9 exact-range delegation over 4 files with 2 reviewable and 2 excluded files (parity-inventory.test.ts and CAPABILITY_PARITY.md) manually reviewed, exact-diff manual security review, Windows/Ubuntu Rust Node Governance, Supply chain audit, Release qualification, and Relay container, successful post-merge CI, and zero unresolved review threads. Qodo billing-blocked and CodeRabbit skipped-review notices evaluated as non-evidence noise with zero substantive findings.",
+      "unresolved_review_threads": 0,
+      "authority_boundary": "Inventory, generated parity document, generator script, and contract tests only. No MCP tool, schema, capability, approval, or provider change."
     }
   }
 }

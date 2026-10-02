@@ -1,0 +1,72 @@
+{
+  "id": "SG-000060",
+  "title": "Protected executable registry",
+  "program": "COTRA-P16",
+  "state": "GRAIN",
+  "risk": "high",
+  "created": "2026-10-02",
+  "base": "0e54d0056b7ce07e4688cb4c169c6d32cd915c78",
+  "dependencies": [
+    "SG-000059"
+  ],
+  "objective": "Replace the single-executable public process ceiling with a STRONG-gated local registry of protected executables so everyday build and test tools can run through the existing argv-only, contained, network-less, bounded, per-run-approved process path, with executable identity bound to canonical path, content hash, size, and file identity re-verified immediately before every launch, a per-entry argv grammar, and shells, script hosts, interpreters, and script files denied outright.",
+  "scope": {
+    "include": [
+      "integrity-checked protected-state registry of executables with canonical path, SHA-256, size, file identity, allowed first-argument subcommands, and denied flags",
+      "registry changes only through a local STRONG-gated command, never through MCP or a remote context",
+      "hard denial of shells, script hosts, interpreters, package-runner scripts, and script or shortcut file types regardless of registration",
+      "process.spawn admitting only registered executables whose identity and content still match, re-verified immediately before launch, with argv constrained by the entry grammar",
+      "retention of argv-only execution, workspace-relative cwd, AppContainer containment, NONE network class, timeouts, output bounds, descendant containment, and fresh per-run approval",
+      "discoverability of registered executable identifiers through existing read-only status without a schema change"
+    ],
+    "exclude": [
+      "`run_anything`, unrestricted shell, unrestricted PowerShell, unrestricted cmd, or arbitrary executable paths",
+      "interpreter or script-engine execution of any kind",
+      "background or detached processes, stdin interaction, or network access for spawned processes",
+      "any new MCP tool or schema change",
+      "filesystem mutation, browser, desktop, clipboard, or network exposure (SG-000061 through SG-000064)"
+    ]
+  },
+  "authority_delta": {
+    "filesystem": "None beyond the cotrad-owned registry file under protected state.",
+    "process": "process.spawn may launch locally registered, hash-pinned, non-interpreter executables with constrained argv inside the existing containment.",
+    "network": "None; spawned processes keep the NONE network class.",
+    "browser": "None.",
+    "ui_input": "None.",
+    "secrets": "None.",
+    "approval": "Registry changes require STRONG local presence; every launch keeps its per-run approval.",
+    "privileged": "Registry management is a local PRIVILEGED operation never exposed as an MCP tool."
+  },
+  "invariants": [
+    "no unrestricted shell, PowerShell, cmd, interpreter, or arbitrary executable path",
+    "executable identity is never path-only",
+    "a modified registered executable fails closed",
+    "an agent or remote client can never change the registry"
+  ],
+  "acceptance": [
+    {
+      "id": "A1",
+      "claim": "Registered, hash-pinned executables run through the existing contained, bounded, approved process path with argv constrained by their grammar, and unregistered, modified, interpreter, shell, and script targets fail closed."
+    },
+    {
+      "id": "A2",
+      "claim": "Registry changes require STRONG local presence and are unreachable from MCP and remote contexts, and the registry fails closed when missing, corrupt, or tampered."
+    },
+    {
+      "id": "A3",
+      "claim": "Exact-head CI including release qualification and supply-chain audit, genuine TypeSafe Jev, Alibaba Open Code Review, manual review of excluded files, and zero unresolved review threads all pass."
+    }
+  ],
+  "successor_requirements": {
+    "sg_000061": "Filesystem mutation exposure may proceed only after SG-000060 closes."
+  },
+  "review": {
+    "diffcipline": true,
+    "jev_semantic_review": true,
+    "alibaba_open_code_review": "required exact-range qualification where integrated",
+    "security_review": true,
+    "exact_head_ci": true,
+    "release_artifact_qualification": true
+  },
+  "done_when": "The protected executable registry is canonical with STRONG-gated management, hash-pinned identity, argv grammars, interpreter denial, and the existing process containment unchanged."
+}
