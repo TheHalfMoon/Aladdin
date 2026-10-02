@@ -32,6 +32,7 @@ import {
 import { attachRemoteContext, buildRequest, type KernelClient, type KernelRequest, type RemoteDispatchContext } from "./kernel.js";
 import { DENIED_RELAY_CAPABILITIES, RELAY_BOUNDS, RELAY_PROTOCOL_VERSION } from "./relay_contract.js";
 import { CANONICAL_TOOL_NAMES } from "./server.js";
+import { REMOTE_TOOL_NAMES } from "./tool_contract.js";
 import { parseUplinkFile } from "./transports/relay_device.js";
 import { loadDeviceKey, loadRevocations } from "./uplink_state.js";
 
@@ -543,7 +544,9 @@ test("the MCP frame dispatcher serves the authoritative catalog and surfaces typ
   const out = uplink.drainOutbox(NOW);
   assert.deepEqual(out.map((f) => f.messageKind), ["mcp_response", "mcp_response", "mcp_response"]);
   const tools = (JSON.parse(out[1]?.payload ?? "{}") as { result: { tools: Array<{ name: string }> } }).result.tools;
-  assert.deepEqual(tools.map((t) => t.name).sort(), [...CANONICAL_TOOL_NAMES].sort());
+  // SG-000065: the relay advertises only the remote `core` profile.
+  assert.deepEqual(tools.map((t) => t.name).sort(), [...REMOTE_TOOL_NAMES].sort());
+  assert.ok(CANONICAL_TOOL_NAMES.length > REMOTE_TOOL_NAMES.length);
   assert.ok((out[2]?.payload ?? "").includes("REMOTE_SESSION_INACTIVE"));
   assert.equal(remotes.length, 1);
   assert.equal(remotes[0]?.connectionId, "conn-0001");

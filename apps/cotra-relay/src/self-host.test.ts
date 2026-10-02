@@ -14,6 +14,7 @@ import { generatePkceVerifier, pkceS256Challenge } from "@cotra/mcp/dist/oauth_a
 import { enableRemote, pairRemote } from "@cotra/mcp/dist/remote_enrollment.js";
 import { loadDeviceKey } from "@cotra/mcp/dist/uplink_state.js";
 import { CANONICAL_TOOL_NAMES } from "@cotra/mcp/dist/server.js";
+import { REMOTE_TOOL_NAMES } from "@cotra/mcp/dist/tool_contract.js";
 import { parseRelayConfig } from "./config.js";
 import { FileRelayStore, RelayStateError, STATE_FILE } from "./file_store.js";
 import { DEFAULT_QUOTAS, QUOTA_CEILINGS, validateQuotas } from "./quotas.js";
@@ -253,7 +254,9 @@ test("a standards OAuth client links through device pairing and reaches the devi
     assert.equal((await mcp(r, linked.accessToken, { jsonrpc: "2.0", method: "notifications/initialized" }, session)).status, 202);
     const list = await mcp(r, linked.accessToken, { jsonrpc: "2.0", id: 2, method: "tools/list" }, session);
     const tools = ((await list.json()) as { result: { tools: Array<{ name: string }> } }).result.tools.map((t) => t.name).sort();
-    assert.deepEqual(tools, [...CANONICAL_TOOL_NAMES].sort());
+    // SG-000065: remote discovery lists exactly the core profile.
+    assert.deepEqual(tools, [...REMOTE_TOOL_NAMES].sort());
+    assert.ok(CANONICAL_TOOL_NAMES.length > REMOTE_TOOL_NAMES.length);
 
     // Refresh requires a fresh device proof over the live channel and rotates.
     const refreshed = await form(r.origin, "/oauth/token", { grant_type: "refresh_token", refresh_token: linked.refreshToken, client_id: linked.clientId, resource: `${r.origin}/mcp` });

@@ -13,6 +13,9 @@ const DEFAULT_MAX_SEARCH_FILES: usize = 2_000;
 const DEFAULT_MAX_SEARCH_RESULTS: usize = 200;
 const MAX_SEARCH_FILE_BYTES: usize = 512 * 1024;
 const MAX_WRITE_BYTES: usize = 2 * 1024 * 1024;
+/// SG-000065 output bound for one directory listing. Entries are sorted by
+/// name before truncation so the bounded result is deterministic.
+pub const MAX_LIST_ENTRIES: usize = 5_000;
 
 #[derive(Debug)]
 pub struct ProviderError {
@@ -135,8 +138,10 @@ impl FsProvider {
                 .and_then(Value::as_str)
                 .cmp(&b.get("name").and_then(Value::as_str))
         });
+        let truncated = entries.len() > MAX_LIST_ENTRIES;
+        entries.truncate(MAX_LIST_ENTRIES);
 
-        Ok(json!({"path": relative, "entries": entries}))
+        Ok(json!({"path": relative, "entries": entries, "truncated": truncated}))
     }
 
     pub fn read_text(&self, relative: &str) -> Result<Value, ProviderError> {
@@ -716,6 +721,25 @@ mod tests {
         let base = preview.approval_digest("workspace-a", "policy-1");
         assert_ne!(base, preview.approval_digest("workspace-b", "policy-1"));
         assert_ne!(base, preview.approval_digest("workspace-a", "policy-2"));
+    }
+
+    #[test]
+    fn directory_listing_is_bounded_sorted_and_reports_truncation() {
+        let root = temp_root("list-bound");
+        for index in 0..=MAX_LIST_ENTRIES {
+            fs::write(root.join(format!("f{index:05}.txt")), "").unwrap();
+        }
+        let provider = FsProvider::new(&root).unwrap();
+        let listing = provider.list(".").unwrap();
+        let entries = listing["entries"].as_array().unwrap();
+        assert_eq!(entries.len(), MAX_LIST_ENTRIES);
+        assert_eq!(listing["truncated"], true);
+        assert_eq!(entries[0]["name"], "f00000.txt");
+        assert_eq!(entries[MAX_LIST_ENTRIES - 1]["name"], "f04999.txt");
+        fs::remove_file(root.join("f05000.txt")).unwrap();
+        let listing = provider.list(".").unwrap();
+        assert_eq!(listing["truncated"], false);
+        let _ = fs::remove_dir_all(root);
     }
 
     #[test]

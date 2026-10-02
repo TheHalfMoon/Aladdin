@@ -179,7 +179,7 @@ test("transport context is server-supplied metadata, never a tool field", () => 
   const context = defaultTransportContext();
   assert.equal(context.transportKind, "stdio");
   assert.equal(context.providerKind, "generic");
-  assert.equal(context.toolSurfaceProfile, "core");
+  assert.equal(context.toolSurfaceProfile, "desktop_structured");
 
   for (const [name, text] of allSources()) {
     if (name.endsWith(".test.ts")) {

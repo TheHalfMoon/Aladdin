@@ -48,6 +48,7 @@ import {
   type RevocationRecord
 } from "./device_identity.js";
 import { RELAY_FAILURE_CODES, type RelayFailureCode } from "./relay_contract.js";
+import { LOCAL_ONLY_TOOL_NAMES, REMOTE_TOOL_NAMES, TOOL_CONTRACT } from "./tool_contract.js";
 
 /** Initial remote OAuth scope vocabulary. Any other scope is unknown. */
 export const OAUTH_SCOPES = ["cotra.read", "cotra.write", "cotra.execute"] as const;
@@ -1527,56 +1528,24 @@ export function applyTokenRevocation(
 // Default-deny OAuth scope to tool and profile ceiling
 
 /**
- * Normative scope requirements for every canonical tool. A tool absent from
- * this matrix is unmapped and denies. Preview tools that exist only to
- * prepare a write require the write scope. Process execution requires the
- * execute scope.
+ * Normative scope requirements for every remotely mappable canonical tool,
+ * derived from the SG-000065 tool contract. A tool absent from this matrix
+ * is unmapped and denies. Preview tools that exist only to prepare a write
+ * require the write scope. Process execution requires the execute scope.
+ * Local-only tools (`LOCAL_ONLY_TOOL_NAMES`) are never mapped: SG-000063
+ * desktop observation reads every application's window titles and control
+ * trees, a remote clipboard read would hand a remote principal whatever the
+ * user last copied, and a device-side fetch would make the user's machine an
+ * egress point for a remote principal that can fetch public URLs itself.
  */
-export const OAUTH_SCOPE_TOOL_MATRIX: Readonly<Record<string, readonly OAuthScope[]>> = {
-  system_status: ["cotra.read"],
-  workspace_get: ["cotra.read"],
-  fs_stat: ["cotra.read"],
-  fs_list: ["cotra.read"],
-  fs_read: ["cotra.read"],
-  fs_search: ["cotra.read"],
-  git_status: ["cotra.read"],
-  git_diff: ["cotra.read"],
-  git_log: ["cotra.read"],
-  fs_read_range: ["cotra.read"],
-  fs_find: ["cotra.read"],
-  fs_write_preview: ["cotra.write"],
-  fs_write: ["cotra.write"],
-  git_branch_create: ["cotra.write"],
-  git_stage: ["cotra.write"],
-  git_unstage: ["cotra.write"],
-  git_commit: ["cotra.write"],
-  git_fetch_preview: ["cotra.write"],
-  git_fetch: ["cotra.write"],
-  git_push_preview: ["cotra.write"],
-  git_push: ["cotra.write"],
-  fs_mkdir: ["cotra.write"],
-  fs_move: ["cotra.write"],
-  fs_remove: ["cotra.write"],
-  fs_edit: ["cotra.write"],
-  process_spawn: ["cotra.execute"]
-};
+export const OAUTH_SCOPE_TOOL_MATRIX: Readonly<Record<string, readonly OAuthScope[]>> = Object.fromEntries(
+  REMOTE_TOOL_NAMES.map((name) => {
+    const remote = TOOL_CONTRACT[name]?.remote;
+    return [name, Array.isArray(remote) ? [...remote] : []];
+  })
+);
 
-/**
- * Canonical tools that are local-only: absent from the scope matrix, so they
- * deny as unmapped on every remote path until a later governed grain maps a
- * locally enabled profile. SG-000063 desktop observation reads window titles
- * and control trees of every application in the user's session. SG-000064
- * clipboard reads would hand a remote principal whatever the user last
- * copied, and a device-side fetch would make the user's machine an egress
- * point for a remote principal that can fetch public URLs itself.
- */
-export const LOCAL_ONLY_TOOL_NAMES: readonly string[] = [
-  "desktop_window_list",
-  "desktop_window_tree",
-  "clipboard_read",
-  "clipboard_write",
-  "web_fetch"
-];
+export { LOCAL_ONLY_TOOL_NAMES };
 
 /**
  * Tool-surface profiles mapped for remote use. Only `core` is mapped; the

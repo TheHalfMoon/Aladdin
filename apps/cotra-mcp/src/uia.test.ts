@@ -9,9 +9,10 @@ const here = dirname(fileURLToPath(import.meta.url));
 const srcDir = join(here, "..", "src");
 const repo = join(here, "..", "..", "..");
 
+/** Tool sources; the SG-000065 contract declares metadata and forwards nothing. */
 function toolSources(): string[] {
   return readdirSync(srcDir).filter(
-    (name) => name.endsWith(".ts") && !name.endsWith(".test.ts")
+    (name) => name.endsWith(".ts") && !name.endsWith(".test.ts") && name !== "tool_contract.ts"
   );
 }
 
