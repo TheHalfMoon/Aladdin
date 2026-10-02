@@ -332,8 +332,10 @@ fn fetch_rejects_unsafe_repository_local_network_config() {
 
 #[test]
 fn real_https_qualification_against_pinned_public_source() {
+    // The repository itself is renamed only after this PR merges. Keep the live
+    // qualification fetch on the currently reachable public repository until then.
     let destination =
-        parse_destination("qualification", "https://github.com/TheHalfMoon/Quntal.git")
+        parse_destination("qualification", "https://github.com/TheHalfMoon/Cotra.git")
             .expect("qualification destination");
     let resolver = StableSystemResolver::new();
     let resolved = resolver
