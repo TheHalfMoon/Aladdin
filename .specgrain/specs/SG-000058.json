@@ -1,0 +1,76 @@
+{
+  "id": "SG-000058",
+  "title": "P15 adversarial and chaos exit",
+  "program": "COTRA-P15",
+  "state": "GRAIN",
+  "risk": "high",
+  "created": "2026-10-02",
+  "base": "18a01842dc14f0ed398dd622bd4d69bcbac16266",
+  "dependencies": [
+    "SG-000057"
+  ],
+  "objective": "Qualify COTRA-P15 against adversarial and chaos conditions rather than happy paths, fix every defect found at its root, and record the P15 exit: cross-tenant, cross-principal, cross-device, cross-connection, cross-provider, OAuth, replay, duplicate, reorder, delay, late response, reconnect, relay restart, queue-after-revoke, queue-after-lease-expiry, cross-route exfiltration and mutation, workspace, profile, policy, device, lock, logoff, suspend, quota, oversized, malformed, malicious metadata, and privacy and log leakage, with real Windows evidence where the claim is about Windows behavior and explicit UNVERIFIED records where it cannot be produced.",
+  "scope": {
+    "include": [
+      "an adversarial end-to-end suite over the real relay, real device uplink, authoritative MCP builder, and the real cotrad lease gate where the platform allows",
+      "two-tenant and two-device topologies proving no token, session, route, frame, response, or lease crosses principal, device, connection, client, or provider",
+      "replay, duplicate, reorder, delayed, late-response, reconnect, relay-restart, and relay-compromise scenarios including a relay that forges frames, envelopes, or routes",
+      "queue-after-revoke, queue-after-lease-expiry, lock, logoff, suspend, workspace revoke, profile narrowing, policy revision, and device revoke scenarios at the cotrad lease boundary",
+      "quota exhaustion, oversized payloads, malformed frames and protocol messages, malicious metadata, and log and payload privacy checks",
+      "root-cause fixes for any defect the suite finds",
+      "the COTRA-P15 exit record in the canonical frontier"
+    ],
+    "exclude": [
+      "any new capability, MCP tool, schema change, or approval change",
+      "any P16 tool-surface widening or provider submission",
+      "fabricated Windows workstation-state evidence; lock, logoff, and suspend transitions that cannot be exercised safely are recorded as UNVERIFIED with the exact owner procedure"
+    ]
+  },
+  "authority_delta": {
+    "filesystem": "None.",
+    "process": "None.",
+    "network": "None beyond test-local loopback relays.",
+    "browser": "None.",
+    "ui_input": "None.",
+    "secrets": "None.",
+    "approval": "None.",
+    "privileged": "None."
+  },
+  "invariants": [
+    "every remote dispatch requires remote authentication and an active local lease",
+    "the relay and provider cannot mint local authority",
+    "read exposure through a compromised relay is bounded by lease scope and time",
+    "self-host mode works independently",
+    "quota behavior fails closed"
+  ],
+  "acceptance": [
+    {
+      "id": "A1",
+      "claim": "A remote authenticated MCP client reaches one paired device without inbound PC ports, and every listed cross-tenant, cross-principal, cross-device, cross-connection, cross-client, and cross-provider attempt fails closed."
+    },
+    {
+      "id": "A2",
+      "claim": "Every remote dispatch requires remote authentication and an active local lease; replay, duplicate, reorder, delay, late response, reconnect, relay restart, queue-after-revoke, and queue-after-lease-expiry never execute or extend authority, and a compromised relay cannot mint local authority or exceed lease scope and time."
+    },
+    {
+      "id": "A3",
+      "claim": "Quota exhaustion, oversized and malformed input, malicious metadata, and privacy and log checks fail closed or stay clean; Windows workstation-state behavior is evidenced on real Windows or explicitly recorded as UNVERIFIED with the owner procedure."
+    },
+    {
+      "id": "A4",
+      "claim": "Exact-head CI including release qualification, the relay container, and supply-chain audit, genuine TypeSafe Jev, Alibaba Open Code Review, manual review of excluded files, and zero unresolved review threads all pass, and the COTRA-P15 exit is recorded."
+    }
+  ],
+  "successor_requirements": {
+    "sg_000059": "COTRA-P16 capability and parity inventory may proceed only after SG-000058 closes and COTRA-P15 is exited canonically."
+  },
+  "review": {
+    "diffcipline": true,
+    "jev_semantic_review": true,
+    "alibaba_open_code_review": "required exact-range qualification where integrated",
+    "security_review": true,
+    "exact_head_ci": true,
+    "release_artifact_qualification": true
+  },
+  "done_when": "COTRA-P15 is exited canonically on adversarial and chaos evidence with every defect fixed at its root and every unverifiable Windows claim recorded honestly."
+}

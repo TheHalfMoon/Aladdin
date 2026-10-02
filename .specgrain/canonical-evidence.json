@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "snapshot_base": "700d6bbbb1f3919f2f02b567117aab027cad202d",
+  "snapshot_base": "18a01842dc14f0ed398dd622bd4d69bcbac16266",
   "state_semantics": {
     "GRAIN": "Authorized or active work packet whose acceptance is not yet canonically proven.",
     "PROVEN": "Acceptance and required qualification are proven, but canonical closeout/governance is not yet complete.",
@@ -682,6 +682,18 @@
       "review_basis": "Exact-head genuine TypeSafe Jev 16/16 hunks with zero findings/blocking findings (pin 31f89602797fb7bea007f8a480bf368bf564954e), Alibaba Open Code Review v1.12.9 exact-range delegation over 13 files with 8 reviewable and 5 excluded files (oauth-authorization.test.ts, device-channel.test.ts, relay.test.ts, package-lock.json, and SG-000056_PUBLIC_MCP_EDGE_NOTE.md) manually reviewed, exact-diff manual security review, Windows/Ubuntu Rust Node Governance, Supply chain audit, and Release qualification, successful post-merge CI, and zero unresolved review threads. Qodo billing-blocked and CodeRabbit skipped-review notices evaluated as non-evidence noise with zero substantive findings.",
       "unresolved_review_threads": 0,
       "authority_boundary": "Separate open-source relay package with the public Streamable HTTP /mcp edge, protected-resource metadata, and the relay side of the device channel, forwarding frozen MCP frames only to one paired device route after per-request token and scope verification. No outbound requests from the relay, no proxy, executor, MCP tool, schema, capability, approval, or lease authority; no change to the device tool registry."
+    },
+    "SG-000057": {
+      "implementation_pr": 156,
+      "implementation_base": "ca494131070a5cdb9c133bef0db69e6292c2d085",
+      "qualified_head": "eacf865ac4f7fff72adc50893c533128108e53a2",
+      "pre_merge_ci": "37009825156",
+      "pre_merge_review_gates": "37009823186",
+      "merge_sha": "18a01842dc14f0ed398dd622bd4d69bcbac16266",
+      "post_merge_ci": "37010453680",
+      "review_basis": "Exact-head genuine TypeSafe Jev 45/45 hunks with zero findings/blocking findings (pin 31f89602797fb7bea007f8a480bf368bf564954e), Alibaba Open Code Review v1.12.9 exact-range delegation over 25 files with 20 reviewable and 5 excluded files (device-uplink.test.ts, self-host.test.ts, REFERENCE_DEPLOYMENT.md, SELF_HOSTING.md, SG-000057_OPEN_SOURCE_RELAY_NOTE.md) manually reviewed, exact-diff manual security review, Windows/Ubuntu Rust Node Governance, Supply chain audit, Release qualification, and Relay container, successful post-merge CI, and zero unresolved review threads. Qodo billing-blocked and CodeRabbit skipped-review notices evaluated as non-evidence noise with zero substantive findings.",
+      "unresolved_review_threads": 0,
+      "authority_boundary": "Self-hostable open-source relay with authorization server, device-backed pairing, device-proof refresh, durable payload-free state, hard fail-closed quotas, and container packaging, plus STRONG-gated local enrollment. No outbound requests from the relay, no proxy, executor, MCP tool, schema, capability, approval, or lease authority, and no paid dependency or paid overflow."
     }
   }
 }
