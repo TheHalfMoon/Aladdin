@@ -57,6 +57,42 @@
       "mcp_tool": "fs_write"
     },
     {
+      "capability": "fs.edit",
+      "operation": "edit",
+      "status": "implemented_exposed",
+      "mcp_tool": "fs_edit"
+    },
+    {
+      "capability": "fs.remove",
+      "operation": "remove",
+      "status": "implemented_exposed",
+      "mcp_tool": "fs_remove"
+    },
+    {
+      "capability": "fs.move",
+      "operation": "move",
+      "status": "implemented_exposed",
+      "mcp_tool": "fs_move"
+    },
+    {
+      "capability": "fs.mkdir",
+      "operation": "mkdir",
+      "status": "implemented_exposed",
+      "mcp_tool": "fs_mkdir"
+    },
+    {
+      "capability": "fs.find",
+      "operation": "find",
+      "status": "implemented_exposed",
+      "mcp_tool": "fs_find"
+    },
+    {
+      "capability": "fs.read_range",
+      "operation": "read",
+      "status": "implemented_exposed",
+      "mcp_tool": "fs_read_range"
+    },
+    {
       "capability": "process.spawn",
       "operation": "spawn",
       "status": "implemented_exposed",
@@ -399,9 +435,11 @@
     },
     {
       "id": "read_file_range",
-      "status": "missing",
-      "owner_grain": "SG-000061",
-      "note": "offset and length window over a bounded text read"
+      "status": "implemented_exposed",
+      "via": [
+        "fs_read_range"
+      ],
+      "note": "bounded line window of a UTF-8 file (SG-000061)"
     },
     {
       "id": "write_file",
@@ -413,9 +451,11 @@
     },
     {
       "id": "edit_block",
-      "status": "missing",
-      "owner_grain": "SG-000061",
-      "note": "exact search-and-replace bound to the current file digest"
+      "status": "implemented_exposed",
+      "via": [
+        "fs_edit"
+      ],
+      "note": "exact search-and-replace bound to the current SHA-256 and occurrence count (SG-000061)"
     },
     {
       "id": "list_directory",
@@ -440,26 +480,35 @@
     },
     {
       "id": "search_file_names",
-      "status": "missing",
-      "owner_grain": "SG-000061",
-      "note": "bounded name glob inside the workspace"
+      "status": "implemented_exposed",
+      "via": [
+        "fs_find"
+      ],
+      "note": "bounded name glob without following links (SG-000061)"
     },
     {
       "id": "create_directory",
-      "status": "missing",
-      "owner_grain": "SG-000061"
+      "status": "implemented_exposed",
+      "via": [
+        "fs_mkdir"
+      ],
+      "note": "SOFT approval and postcondition verification (SG-000061)"
     },
     {
       "id": "move_or_rename",
-      "status": "missing",
-      "owner_grain": "SG-000061",
-      "note": "final-path identity, workspace ceiling, approval"
+      "status": "implemented_exposed",
+      "via": [
+        "fs_move"
+      ],
+      "note": "same workspace, never overwrites, identity-bound SOFT approval (SG-000061)"
     },
     {
       "id": "delete_file",
-      "status": "missing",
-      "owner_grain": "SG-000061",
-      "note": "destructive approval and postcondition verification"
+      "status": "implemented_exposed",
+      "via": [
+        "fs_remove"
+      ],
+      "note": "one file or empty directory, identity-bound STRONG approval, no recursion (SG-000061)"
     },
     {
       "id": "run_bounded_program",

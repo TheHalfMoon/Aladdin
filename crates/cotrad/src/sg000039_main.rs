@@ -14,6 +14,7 @@ use std::path::Path;
 mod browser;
 mod clipboard;
 mod executable_admin;
+mod fs_mutation;
 mod git_fetch;
 mod git_mutation;
 mod git_push;
@@ -265,6 +266,9 @@ fn dispatch(
     browser_resolver: &impl cotra_provider_browser::DnsResolver,
     browser_root: &Path,
 ) -> Result<Value, ProviderError> {
+    if let Some(result) = fs_mutation::dispatch_fs_mutation(workspace, approval, request)? {
+        return Ok(result);
+    }
     if let Some(result) = dispatch_trust(workspace, approval, trust_store, request)? {
         return Ok(result);
     }

@@ -912,7 +912,7 @@ test("scope to tool matrix covers exactly the canonical catalog with default den
     assert.ok(scopes.length > 0, `${tool} must state required scopes`);
   }
   assert.deepEqual(Object.keys(OAUTH_PROFILE_TOOL_CEILINGS), ["core"]);
-  const readOnly = ["system_status", "workspace_get", "fs_stat", "fs_list", "fs_read", "fs_search", "git_status", "git_diff", "git_log"];
+  const readOnly = ["system_status", "workspace_get", "fs_stat", "fs_list", "fs_read", "fs_search", "git_status", "git_diff", "git_log", "fs_read_range", "fs_find"];
   for (const tool of CANONICAL_TOOL_NAMES) {
     const readResult = authorizeToolByScopes(tool, "core", ["cotra.read"], ["cotra.read"]);
     assert.equal(readResult.ok, readOnly.includes(tool), `${tool} read-scope decision`);

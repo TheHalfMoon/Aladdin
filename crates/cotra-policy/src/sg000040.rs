@@ -61,6 +61,28 @@ impl PolicyEngine {
     }
 
     pub fn authorize(&self, request: &RequestEnvelope) -> Result<PolicyDecision, PolicyError> {
+        if is_fs_mutation_shape(&request.capability, &request.operation) {
+            if request.version != INTERNAL_PROTOCOL_VERSION {
+                return Err(policy_error(
+                    FailureCode::InvalidRequest,
+                    "unsupported internal protocol version",
+                ));
+            }
+            validate_fs_mutation(request)?;
+            let workspace = self
+                .legacy
+                .workspace(&request.workspace_id)
+                .ok_or_else(|| {
+                    policy_error(
+                        FailureCode::WorkspaceDenied,
+                        "requested workspace is not configured",
+                    )
+                })?;
+            return Ok(PolicyDecision {
+                workspace: workspace.clone(),
+                policy_revision: POLICY_REVISION,
+            });
+        }
         if cotra_provider_network::is_network_fetch_shape(&request.capability, &request.operation) {
             self.validate_network_fetch(request)?;
             let workspace = self
@@ -142,7 +164,88 @@ impl PolicyEngine {
     }
 }
 
+/// SG-000061 bounded filesystem shapes. The legacy generic `fs.delete`
+/// shape stays denied; `fs.remove` is the reviewed single-entry removal.
+pub fn is_fs_mutation_shape(capability: &str, operation: &str) -> bool {
+    matches!(
+        (capability, operation),
+        ("fs.read_range", "read")
+            | ("fs.find", "find")
+            | ("fs.mkdir", "mkdir")
+            | ("fs.move", "move")
+            | ("fs.remove", "remove")
+            | ("fs.edit", "edit")
+    )
+}
+
+fn validate_fs_mutation(request: &RequestEnvelope) -> Result<(), PolicyError> {
+    let target = request.target.as_deref().ok_or_else(|| {
+        policy_error(
+            FailureCode::InvalidRequest,
+            "workspace-relative target is required",
+        )
+    })?;
+    validate_relative_target(target)?;
+    let arguments = request
+        .arguments
+        .as_object()
+        .ok_or_else(|| policy_error(FailureCode::InvalidRequest, "arguments must be an object"))?;
+    let allowed: &[&str] = match request.capability.as_str() {
+        "fs.read_range" => &["start_line", "max_lines"],
+        "fs.find" => &["pattern", "max_results", "max_depth"],
+        "fs.mkdir" => &["parents"],
+        "fs.move" => &["to"],
+        "fs.remove" => &[],
+        "fs.edit" => &["old", "new", "expected_sha256", "replacements"],
+        _ => &[],
+    };
+    if let Some(key) = arguments
+        .keys()
+        .find(|key| !allowed.contains(&key.as_str()))
+    {
+        return Err(policy_error(
+            FailureCode::InvalidRequest,
+            format!(
+                "{} does not accept argument field: {key}",
+                request.capability
+            ),
+        ));
+    }
+    if request.capability == "fs.move" {
+        let to = arguments
+            .get("to")
+            .and_then(serde_json::Value::as_str)
+            .ok_or_else(|| {
+                policy_error(FailureCode::InvalidRequest, "fs.move requires arguments.to")
+            })?;
+        validate_relative_target(to)?;
+        if to == "." || to.is_empty() {
+            return Err(policy_error(
+                FailureCode::InvalidRequest,
+                "fs.move destination must name an entry",
+            ));
+        }
+    }
+    if matches!(
+        request.capability.as_str(),
+        "fs.mkdir" | "fs.move" | "fs.remove" | "fs.edit"
+    ) && (target == "." || target.is_empty())
+    {
+        return Err(policy_error(
+            FailureCode::InvalidRequest,
+            "the workspace root itself cannot be mutated",
+        ));
+    }
+    Ok(())
+}
+
 pub fn approval_class_for(capability: &str, operation: &str) -> ApprovalClass {
+    if (capability, operation) == ("fs.remove", "remove") {
+        return ApprovalClass::Strong;
+    }
+    if is_fs_mutation_shape(capability, operation) {
+        return ApprovalClass::Soft;
+    }
     if cotra_provider_network::is_network_fetch_shape(capability, operation) {
         return ApprovalClass::Soft;
     }

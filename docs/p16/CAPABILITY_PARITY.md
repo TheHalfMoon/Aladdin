@@ -11,22 +11,22 @@ owning grain exposes it under explicit profiles), `missing` (owning grain implem
 
 ## Workflows
 
-Totals: implemented_exposed: 11, implemented_hidden: 6, missing: 7, intentionally_denied: 11.
+Totals: implemented_exposed: 17, implemented_hidden: 6, missing: 1, intentionally_denied: 11.
 
 | Workflow | Status | Tools, owner, or reason |
 | --- | --- | --- |
 | `read_file` | implemented_exposed | `fs_read` |
 | `read_multiple_files` | implemented_exposed | `fs_read` (one bounded fs_read per file) |
-| `read_file_range` | missing | SG-000061 (offset and length window over a bounded text read) |
+| `read_file_range` | implemented_exposed | `fs_read_range` (bounded line window of a UTF-8 file (SG-000061)) |
 | `write_file` | implemented_exposed | `fs_write_preview`, `fs_write` |
-| `edit_block` | missing | SG-000061 (exact search-and-replace bound to the current file digest) |
+| `edit_block` | implemented_exposed | `fs_edit` (exact search-and-replace bound to the current SHA-256 and occurrence count (SG-000061)) |
 | `list_directory` | implemented_exposed | `fs_list` |
 | `file_info` | implemented_exposed | `fs_stat` |
 | `search_file_content` | implemented_exposed | `fs_search` |
-| `search_file_names` | missing | SG-000061 (bounded name glob inside the workspace) |
-| `create_directory` | missing | SG-000061 |
-| `move_or_rename` | missing | SG-000061 (final-path identity, workspace ceiling, approval) |
-| `delete_file` | missing | SG-000061 (destructive approval and postcondition verification) |
+| `search_file_names` | implemented_exposed | `fs_find` (bounded name glob without following links (SG-000061)) |
+| `create_directory` | implemented_exposed | `fs_mkdir` (SOFT approval and postcondition verification (SG-000061)) |
+| `move_or_rename` | implemented_exposed | `fs_move` (same workspace, never overwrites, identity-bound SOFT approval (SG-000061)) |
+| `delete_file` | implemented_exposed | `fs_remove` (one file or empty directory, identity-bound STRONG approval, no recursion (SG-000061)) |
 | `run_bounded_program` | implemented_exposed | `process_spawn` (argv-only; the built-in baseline plus locally registered protected executables (SG-000060)) |
 | `run_build_and_test_tools` | implemented_exposed | `process_spawn` (native executables registered locally with STRONG presence (cotra exec add), hash-pinned, argv grammar, contained, no network; interpreters denied (SG-000060)) |
 | `git_read` | implemented_exposed | `git_status`, `git_diff`, `git_log` |
@@ -53,7 +53,7 @@ Totals: implemented_exposed: 11, implemented_hidden: 6, missing: 7, intentionall
 
 ## Capability shapes
 
-Totals: implemented_exposed: 20, implemented_hidden: 29, missing: 0, intentionally_denied: 13.
+Totals: implemented_exposed: 26, implemented_hidden: 29, missing: 0, intentionally_denied: 13.
 
 | Shape | Status | MCP tool, owner, or reason |
 | --- | --- | --- |
@@ -65,6 +65,12 @@ Totals: implemented_exposed: 20, implemented_hidden: 29, missing: 0, intentional
 | `fs.search/search` | implemented_exposed | `fs_search` |
 | `fs.write/preview` | implemented_exposed | `fs_write_preview` |
 | `fs.write/write` | implemented_exposed | `fs_write` |
+| `fs.edit/edit` | implemented_exposed | `fs_edit` |
+| `fs.remove/remove` | implemented_exposed | `fs_remove` |
+| `fs.move/move` | implemented_exposed | `fs_move` |
+| `fs.mkdir/mkdir` | implemented_exposed | `fs_mkdir` |
+| `fs.find/find` | implemented_exposed | `fs_find` |
+| `fs.read_range/read` | implemented_exposed | `fs_read_range` |
 | `process.spawn/spawn` | implemented_exposed | `process_spawn` |
 | `git.status/status` | implemented_exposed | `git_status` |
 | `git.diff/diff` | implemented_exposed | `git_diff` |

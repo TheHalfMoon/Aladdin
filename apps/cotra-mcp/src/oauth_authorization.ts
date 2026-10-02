@@ -1542,6 +1542,8 @@ export const OAUTH_SCOPE_TOOL_MATRIX: Readonly<Record<string, readonly OAuthScop
   git_status: ["cotra.read"],
   git_diff: ["cotra.read"],
   git_log: ["cotra.read"],
+  fs_read_range: ["cotra.read"],
+  fs_find: ["cotra.read"],
   fs_write_preview: ["cotra.write"],
   fs_write: ["cotra.write"],
   git_branch_create: ["cotra.write"],
@@ -1552,6 +1554,10 @@ export const OAUTH_SCOPE_TOOL_MATRIX: Readonly<Record<string, readonly OAuthScop
   git_fetch: ["cotra.write"],
   git_push_preview: ["cotra.write"],
   git_push: ["cotra.write"],
+  fs_mkdir: ["cotra.write"],
+  fs_move: ["cotra.write"],
+  fs_remove: ["cotra.write"],
+  fs_edit: ["cotra.write"],
   process_spawn: ["cotra.execute"]
 };
 
