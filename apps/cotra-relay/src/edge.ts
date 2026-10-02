@@ -96,6 +96,15 @@ function jsonRpcError(
   });
 }
 
+const SESSION_BREAKING_FAILURES: readonly RelayFailureCode[] = [
+  "DEVICE_OFFLINE",
+  "TRANSPORT_UNAVAILABLE",
+  "RELAY_SEQUENCE_INVALID",
+  "RELAY_REPLAY_DETECTED",
+  "ROUTE_MISMATCH",
+  "DEVICE_REVOKED"
+];
+
 const FAILURE_STATUS: Partial<Record<RelayFailureCode, number>> = {
   DEVICE_OFFLINE: 503,
   TRANSPORT_UNAVAILABLE: 503,
@@ -315,8 +324,10 @@ export class McpEdge {
     if (session.inFlight >= RELAY_BOUNDS.maxConcurrentRequestsPerConnection) {
       return this.respond(429, jsonRpcError(id, -32000, "too many concurrent requests", "REMOTE_RATE_LIMITED"));
     }
-    if (!this.hub.isOnline(session.deviceId)) {
-      return this.respond(503, jsonRpcError(id, -32000, "DEVICE_OFFLINE", "DEVICE_OFFLINE"));
+    const refusal = this.hub.refusal(session.deviceId);
+    if (refusal !== null) {
+      // Refused before a sequence is allocated, so the session stays contiguous.
+      return this.respond(FAILURE_STATUS[refusal] ?? 503, jsonRpcError(id, -32000, refusal, refusal));
     }
     const payload = request.body;
     const sequence = session.nextSequence;
@@ -368,7 +379,9 @@ export class McpEdge {
       session.lastUsedMs = this.clock();
     }
     if (outcome.kind === "failure") {
-      if (method === "initialize") {
+      if (method === "initialize" || SESSION_BREAKING_FAILURES.includes(outcome.failure)) {
+        // Continuity with the device connection is lost or unknown; the
+        // client must re-initialize rather than continue a broken sequence.
         this.sessions.delete(session.id);
       }
       return this.respond(

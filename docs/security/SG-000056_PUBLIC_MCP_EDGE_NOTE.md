@@ -100,10 +100,24 @@ and revocation failures 403, authentication failures 401.
   concurrently, so response order is not required; correlations are
   one-shot.
 - A device is online only while it has polled within 35 seconds. Requests to
-  an offline device fail immediately with `DEVICE_OFFLINE`; at most 16
-  frames wait for an online device and each pending request times out with
-  `REMOTE_QUEUE_EXPIRED`. Nothing is persisted or replayed. A revoked device
-  loses its channel on its next poll or push.
+  an offline device, or beyond the 16-frame queue, are refused before a
+  connection sequence is allocated, so a session's sequence stays
+  contiguous. Nothing is persisted or replayed. A revoked device loses its
+  channel on its next poll or push.
+- Pending requests time out after 55 seconds, below the 60-second frame
+  lifetime. A request that was never delivered is converted in place into a
+  `cancel` for the same correlation and sequence (fresh nonce, recomputed
+  digest), so the device can never execute it late and the connection stays
+  contiguous; the client receives `REMOTE_QUEUE_EXPIRED`. A request already
+  delivered has an unknown outcome and is reported as
+  `TRANSPORT_UNAVAILABLE`, never as not executed. Closing a channel reports
+  `DEVICE_OFFLINE` for undelivered and `TRANSPORT_UNAVAILABLE` for delivered
+  requests.
+- Failures that break or obscure sequence continuity (`DEVICE_OFFLINE`,
+  `TRANSPORT_UNAVAILABLE`, `RELAY_SEQUENCE_INVALID`,
+  `RELAY_REPLAY_DETECTED`, `ROUTE_MISMATCH`, `DEVICE_REVOKED`) end the MCP
+  session, so the client re-initializes instead of continuing a broken
+  connection.
 
 ## 6. Resource bounds and logging
 
@@ -145,3 +159,11 @@ client responses, bad JSON, content type, Origin, protocol version, body
 size, Host, and unknown paths; and unknown devices, wrong epochs, forged and
 replayed challenge responses, bad channel tokens, and revoked devices on the
 channel endpoints. None of the rejected requests reaches the device kernel.
+
+`apps/cotra-relay/src/device-channel.test.ts` proves refusals precede
+sequence allocation, a request timing out before delivery becomes a
+`cancel` that the real SG-000055 device core accepts without executing it
+while executing the next request, timeouts after delivery and channel
+closure report unknown outcomes honestly, push accepts only exact,
+correlated, single-use responses for the channel's device and route, and
+revoked or unproven devices never hold a channel.

@@ -10,6 +10,7 @@
  * pending request on a session bound to the same device.
  */
 import { randomBytes, timingSafeEqual } from "node:crypto";
+import { computeRequestDigest } from "@cotra/mcp/dist/device_uplink.js";
 import {
   createDeviceChallenge,
   isDeviceId,
@@ -67,8 +68,10 @@ interface Channel {
 interface Pending {
   readonly deviceId: string;
   readonly remoteConnectionId: string;
+  readonly frame: Record<string, unknown>;
   readonly resolve: (outcome: PendingOutcome) => void;
   readonly timer: NodeJS.Timeout;
+  delivered: boolean;
 }
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -170,7 +173,9 @@ export class DeviceChannelHub {
     const now = this.clock();
     channel.frames = channel.frames.filter((frame) => (frame.expiresAt as number) > now);
     if (channel.frames.length > 0) {
-      return { status: 200, json: { frames: channel.frames.splice(0, RELAY_BOUNDS.maxQueuedFrames) } };
+      const ready = channel.frames.splice(0, RELAY_BOUNDS.maxQueuedFrames);
+      this.markDelivered(ready);
+      return { status: 200, json: { frames: ready } };
     }
     const frames = await new Promise<Record<string, unknown>[]>((resolve) => {
       const timer = setTimeout(() => {
@@ -299,6 +304,71 @@ export class DeviceChannelHub {
     return true;
   }
 
+  private markDelivered(frames: readonly Record<string, unknown>[]): void {
+    for (const frame of frames) {
+      const pending = this.pending.get(`${String(frame.connectionId)}:${String(frame.correlationId)}`);
+      if (pending !== undefined) {
+        pending.delivered = true;
+      }
+    }
+  }
+
+  /**
+   * Turn an undelivered request frame into a `cancel` for the same
+   * correlation, keeping its sequence so the connection stays contiguous
+   * while guaranteeing the request is never executed.
+   */
+  private cancelQueued(deviceId: string, frame: Record<string, unknown>): boolean {
+    const channel = this.channels.get(deviceId);
+    if (channel === undefined) {
+      return false;
+    }
+    const index = channel.frames.findIndex(
+      (queued) => queued.connectionId === frame.connectionId && queued.correlationId === frame.correlationId
+    );
+    if (index < 0) {
+      return false;
+    }
+    const envelope = frame.authorizationEnvelope as Record<string, unknown>;
+    const now = this.clock();
+    channel.frames[index] = {
+      ...frame,
+      channelAuth: channel.token,
+      replayNonce: randomBytes(24).toString("base64url"),
+      messageKind: "cancel",
+      payloadLength: 0,
+      payload: "",
+      createdAt: now,
+      expiresAt: now + RELAY_BOUNDS.maxFrameLifetimeSeconds * 1000,
+      authorizationEnvelope: {
+        ...envelope,
+        requestDigest: computeRequestDigest({
+          principal: String(envelope.principal),
+          remoteConnectionId: String(frame.remoteConnectionId),
+          connectionId: String(frame.connectionId),
+          deviceId: String(frame.routeDeviceId),
+          correlationId: String(frame.correlationId),
+          sequence: Number(frame.sequence),
+          method: "",
+          payload: ""
+        })
+      }
+    };
+    return true;
+  }
+
+  /** Why a request cannot be handed to the device now, or null. */
+  refusal(deviceId: string): RelayFailureCode | null {
+    const channel = this.channels.get(deviceId);
+    if (channel === undefined || !this.isOnline(deviceId)) {
+      return "DEVICE_OFFLINE";
+    }
+    if (channel.frames.length >= RELAY_BOUNDS.maxQueuedFrames) {
+      return "REMOTE_RATE_LIMITED";
+    }
+    return null;
+  }
+
   isOnline(deviceId: string): boolean {
     const channel = this.channels.get(deviceId);
     return channel !== undefined && this.clock() - channel.lastPollMs <= CHANNEL_LIVENESS_MS;
@@ -306,7 +376,12 @@ export class DeviceChannelHub {
 
   /**
    * Hand one request frame to an online device and wait for its response.
-   * Offline devices fail immediately; nothing is queued for later.
+   * Offline devices fail immediately; nothing is queued for later. Callers
+   * check `refusal` and build the frame in the same synchronous step so a
+   * refused request never consumes a connection sequence. A request that
+   * times out before delivery is converted to a `cancel` and reported as
+   * `REMOTE_QUEUE_EXPIRED` (never executed); after delivery its outcome is
+   * unknown and reported as `TRANSPORT_UNAVAILABLE`.
    */
   dispatch(
     deviceId: string,
@@ -315,12 +390,10 @@ export class DeviceChannelHub {
     timeoutMs: number,
     expectResponse: boolean
   ): Promise<PendingOutcome> {
+    const refused = this.refusal(deviceId);
     const channel = this.channels.get(deviceId);
-    if (channel === undefined || !this.isOnline(deviceId)) {
-      return Promise.resolve({ kind: "failure", failure: "DEVICE_OFFLINE" });
-    }
-    if (channel.frames.length >= RELAY_BOUNDS.maxQueuedFrames) {
-      return Promise.resolve({ kind: "failure", failure: "REMOTE_RATE_LIMITED" });
+    if (refused !== null || channel === undefined) {
+      return Promise.resolve({ kind: "failure", failure: refused ?? "DEVICE_OFFLINE" });
     }
     const signed = { ...frame, channelAuth: channel.token };
     const delivered = new Promise<PendingOutcome>((resolve) => {
@@ -330,14 +403,20 @@ export class DeviceChannelHub {
       }
       const key = `${String(frame.connectionId)}:${String(frame.correlationId)}`;
       const timer = setTimeout(() => {
+        const entry = this.pending.get(key);
         this.pending.delete(key);
-        resolve({ kind: "failure", failure: "REMOTE_QUEUE_EXPIRED" });
+        if (entry !== undefined && !entry.delivered && this.cancelQueued(deviceId, signed)) {
+          resolve({ kind: "failure", failure: "REMOTE_QUEUE_EXPIRED" });
+          return;
+        }
+        resolve({ kind: "failure", failure: "TRANSPORT_UNAVAILABLE" });
       }, timeoutMs);
-      this.pending.set(key, { deviceId, remoteConnectionId, resolve, timer });
+      this.pending.set(key, { deviceId, remoteConnectionId, frame: signed, resolve, timer, delivered: false });
     });
     if (channel.waiter !== null) {
       const waiter = channel.waiter;
       channel.waiter = null;
+      this.markDelivered([signed]);
       waiter([signed]);
     } else {
       channel.frames.push(signed);
@@ -363,7 +442,9 @@ export class DeviceChannelHub {
       if (pending.deviceId === deviceId) {
         this.pending.delete(key);
         clearTimeout(pending.timer);
-        pending.resolve({ kind: "failure", failure: "DEVICE_OFFLINE" });
+        // Undelivered requests were never executed; delivered ones have an
+        // unknown outcome and are never reported as not executed.
+        pending.resolve({ kind: "failure", failure: pending.delivered ? "TRANSPORT_UNAVAILABLE" : "DEVICE_OFFLINE" });
       }
     }
   }
