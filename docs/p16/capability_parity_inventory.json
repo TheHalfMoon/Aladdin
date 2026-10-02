@@ -328,20 +328,23 @@
     {
       "capability": "clipboard",
       "operation": "read",
-      "status": "implemented_hidden",
-      "owner_grain": "SG-000064"
+      "status": "implemented_exposed",
+      "mcp_tool": "clipboard_read",
+      "note": "one approved Unicode-text sample bound to the clipboard sequence; secrets refused; no monitoring (SG-000064)"
     },
     {
       "capability": "clipboard",
       "operation": "write",
-      "status": "implemented_hidden",
-      "owner_grain": "SG-000064"
+      "status": "implemented_exposed",
+      "mcp_tool": "clipboard_write",
+      "note": "one approved placement bound to the text digest; secrets refused; never pastes (SG-000064)"
     },
     {
       "capability": "network",
       "operation": "fetch",
-      "status": "implemented_hidden",
-      "owner_grain": "SG-000064"
+      "status": "implemented_exposed",
+      "mcp_tool": "web_fetch",
+      "note": "one approved HTTPS GET to a public destination bound to its address set (SG-000064)"
     },
     {
       "capability": "workspace.trust.get",
@@ -589,13 +592,20 @@
     },
     {
       "id": "clipboard_read_write",
-      "status": "implemented_hidden",
-      "owner_grain": "SG-000064"
+      "status": "implemented_exposed",
+      "via": [
+        "clipboard_read",
+        "clipboard_write"
+      ],
+      "note": "single approved reads and placements; no surveillance, no paste (SG-000064)"
     },
     {
       "id": "destination_scoped_web_fetch",
-      "status": "implemented_hidden",
-      "owner_grain": "SG-000064"
+      "status": "implemented_exposed",
+      "via": [
+        "web_fetch"
+      ],
+      "note": "approved public HTTPS GET with address-set binding and same-origin redirects (SG-000064)"
     },
     {
       "id": "list_processes",

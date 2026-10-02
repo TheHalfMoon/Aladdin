@@ -569,3 +569,64 @@ fn native_write_path_reports_honest_typed_results() {
         }
     }
 }
+
+/// SG-000064 live qualification on real Windows: one approved-pipeline
+/// placement of benign marker text, then one sequence-bound read of the
+/// same text, a stale-sequence read that fails closed, and a secret
+/// placement refused before the operating system is touched. Outside an
+/// interactive session every step must fail closed as unavailable.
+#[test]
+fn sg000064_live_clipboard_round_trip_is_sequence_bound_and_secret_safe() {
+    let _guard = native_clipboard_test_lock();
+    let native = NativeAdapter::new();
+    let marker = "cotra-sg000064-live-qualification-marker";
+    let placed = match write_bounded_text(&native, marker, WORKSPACE, POLICY) {
+        Ok(placed) => placed,
+        Err(error) => {
+            assert!(matches!(
+                error.code,
+                FailureCode::ProviderUnavailable | FailureCode::CapabilityDenied
+            ));
+            eprintln!(
+                "SG-000064 live clipboard evidence: UNAVAILABLE ({})",
+                error.message
+            );
+            return;
+        }
+    };
+    // Windows may advance the sequence after placement (clipboard history
+    // and synthesized formats), so a read binds the sequence it observes
+    // immediately before reading, exactly as dispatch binds the sequence
+    // observed before approval.
+    let placed_sequence = placed.resulting_sequence;
+    let mut sampled = None;
+    for _ in 0..20 {
+        let observed = native.sequence_number().unwrap();
+        assert!(observed >= placed_sequence);
+        match read_bounded_text(&native, Some(observed), WORKSPACE, POLICY) {
+            Ok(outcome) => {
+                sampled = Some((observed, outcome));
+                break;
+            }
+            Err(error) => {
+                assert_eq!(error.code, FailureCode::TargetStale);
+                std::thread::sleep(std::time::Duration::from_millis(50));
+            }
+        }
+    }
+    let (sequence, sampled) = sampled.expect("a sequence-bound read of the placed text");
+    assert_eq!(sampled.text, marker);
+    assert_eq!(sampled.evidence["sequence"], sequence);
+    let stale = read_bounded_text(&native, Some(sequence.wrapping_sub(1)), WORKSPACE, POLICY)
+        .expect_err("a stale sequence must fail closed");
+    assert_eq!(stale.code, FailureCode::TargetStale);
+    let refused = write_bounded_text(&native, "token=tok_live_sg64", WORKSPACE, POLICY)
+        .expect_err("secret placement must be refused");
+    assert_eq!(refused.code, FailureCode::CapabilityDenied);
+    let still = read_bounded_text(&native, None, WORKSPACE, POLICY).unwrap();
+    assert_eq!(
+        still.text, marker,
+        "a refused secret never reaches the clipboard"
+    );
+    eprintln!("SG-000064 live clipboard evidence: placed at sequence {placed_sequence}, read back at sequence {sequence}; stale read and secret placement refused");
+}

@@ -1562,13 +1562,21 @@ export const OAUTH_SCOPE_TOOL_MATRIX: Readonly<Record<string, readonly OAuthScop
 };
 
 /**
- * Canonical tools that are local-only. SG-000063 desktop observation reads
- * window titles and control trees of every application in the user's
- * interactive session, so it is never mapped to a remote OAuth scope: it is
- * absent from the scope matrix and denies as unmapped on every remote path
- * until a later governed grain maps a locally enabled desktop profile.
+ * Canonical tools that are local-only: absent from the scope matrix, so they
+ * deny as unmapped on every remote path until a later governed grain maps a
+ * locally enabled profile. SG-000063 desktop observation reads window titles
+ * and control trees of every application in the user's session. SG-000064
+ * clipboard reads would hand a remote principal whatever the user last
+ * copied, and a device-side fetch would make the user's machine an egress
+ * point for a remote principal that can fetch public URLs itself.
  */
-export const LOCAL_ONLY_TOOL_NAMES: readonly string[] = ["desktop_window_list", "desktop_window_tree"];
+export const LOCAL_ONLY_TOOL_NAMES: readonly string[] = [
+  "desktop_window_list",
+  "desktop_window_tree",
+  "clipboard_read",
+  "clipboard_write",
+  "web_fetch"
+];
 
 /**
  * Tool-surface profiles mapped for remote use. Only `core` is mapped; the

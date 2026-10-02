@@ -11,7 +11,7 @@ owning grain exposes it under explicit profiles), `missing` (owning grain implem
 
 ## Workflows
 
-Totals: implemented_exposed: 19, implemented_hidden: 2, missing: 4, intentionally_denied: 11.
+Totals: implemented_exposed: 21, implemented_hidden: 0, missing: 4, intentionally_denied: 11.
 
 | Workflow | Status | Tools, owner, or reason |
 | --- | --- | --- |
@@ -36,8 +36,8 @@ Totals: implemented_exposed: 19, implemented_hidden: 2, missing: 4, intentionall
 | `desktop_observe` | implemented_exposed | `desktop_window_list`, `desktop_window_tree` (read-only window listing and bounded UI Automation trees in the caller's interactive session (SG-000063)) |
 | `desktop_act` | missing | outside_v0_2_target (structured actuation needs a live native actuation adapter qualified shape by shape; raw synthetic input stays denied (docs/p16/DESKTOP_QUALIFICATION.md)) |
 | `screenshots` | missing | outside_v0_2_target (the native adapter implements no window capture; the closed capture shape is not exposed (docs/p16/DESKTOP_QUALIFICATION.md)) |
-| `clipboard_read_write` | implemented_hidden | SG-000064 |
-| `destination_scoped_web_fetch` | implemented_hidden | SG-000064 |
+| `clipboard_read_write` | implemented_exposed | `clipboard_read`, `clipboard_write` (single approved reads and placements; no surveillance, no paste (SG-000064)) |
+| `destination_scoped_web_fetch` | implemented_exposed | `web_fetch` (approved public HTTPS GET with address-set binding and same-origin redirects (SG-000064)) |
 | `list_processes` | implemented_exposed | `desktop_window_list` (processes that own visible windows in the caller's session, with image name and typed creation-time identity; no full process table and no termination (SG-000063)) |
 | `shell_command_string` | intentionally_denied | unrestricted shell: arbitrary command strings bypass argv validation, provenance, and containment |
 | `powershell_or_cmd` | intentionally_denied | unrestricted PowerShell or cmd is a general-purpose interpreter with full user authority |
@@ -54,7 +54,7 @@ Totals: implemented_exposed: 19, implemented_hidden: 2, missing: 4, intentionall
 
 ## Capability shapes
 
-Totals: implemented_exposed: 28, implemented_hidden: 6, missing: 0, intentionally_denied: 34.
+Totals: implemented_exposed: 31, implemented_hidden: 3, missing: 0, intentionally_denied: 34.
 
 | Shape | Status | MCP tool, owner, or reason |
 | --- | --- | --- |
@@ -110,9 +110,9 @@ Totals: implemented_exposed: 28, implemented_hidden: 6, missing: 0, intentionall
 | `uia.visual/propose` | intentionally_denied | not exposed: the native adapter does not implement this shape on the live desktop and fails closed as unavailable (SG-000063 qualification) |
 | `uia.coordinates/propose` | intentionally_denied | not exposed: the native adapter does not implement this shape on the live desktop and fails closed as unavailable (SG-000063 qualification) |
 | `uia.input/execute` | intentionally_denied | not exposed: the native adapter does not implement this shape on the live desktop and fails closed as unavailable (SG-000063 qualification) |
-| `clipboard/read` | implemented_hidden | SG-000064 |
-| `clipboard/write` | implemented_hidden | SG-000064 |
-| `network/fetch` | implemented_hidden | SG-000064 |
+| `clipboard/read` | implemented_exposed | `clipboard_read` |
+| `clipboard/write` | implemented_exposed | `clipboard_write` |
+| `network/fetch` | implemented_exposed | `web_fetch` |
 | `workspace.trust.get/get` | intentionally_denied | local authority management: trust is read and changed only through the local CLI; an agent must never inspect or move its own trust boundary |
 | `workspace.trust.grant/grant` | intentionally_denied | agent self-grant of workspace trust; STRONG local presence only |
 | `workspace.trust.revoke/revoke` | intentionally_denied | trust changes are local STRONG decisions, never MCP tools |
