@@ -157,7 +157,7 @@ mod windows {
     use std::os::windows::ffi::OsStrExt;
     use std::ptr;
     use windows_sys::Win32::Foundation::{
-        CloseHandle, LocalFree, ERROR_FILE_NOT_FOUND, ERROR_SUCCESS, HANDLE,
+        CloseHandle, LocalFree, ERROR_FILE_NOT_FOUND, ERROR_PATH_NOT_FOUND, ERROR_SUCCESS, HANDLE,
     };
     use windows_sys::Win32::Security::Authorization::{
         ConvertSecurityDescriptorToStringSecurityDescriptorW, ConvertSidToStringSidW,
@@ -333,6 +333,21 @@ mod windows {
     }
 
     fn dacl_sddl(path: &Path) -> Result<String, LifecycleError> {
+        dacl_sddl_if_present(path)?.ok_or_else(|| {
+            win32_error(
+                &format!("read ACL of {}", path.display()),
+                ERROR_FILE_NOT_FOUND,
+            )
+        })
+    }
+
+    /// Reads the DACL of `path`, or `None` when the entry no longer exists.
+    ///
+    /// A tree walk and the per-entry DACL reads are not atomic: a sibling
+    /// atomic write (`write_bytes_atomic`) may rename its temporary file away
+    /// in between. An entry that no longer exists carries no ACL to enforce,
+    /// so it is skipped; every entry that does exist is still checked.
+    fn dacl_sddl_if_present(path: &Path) -> Result<Option<String>, LifecycleError> {
         let name = wide(path.as_os_str());
         let mut descriptor: PSECURITY_DESCRIPTOR = ptr::null_mut();
         let status = unsafe {
@@ -347,6 +362,9 @@ mod windows {
                 &mut descriptor,
             )
         };
+        if status == ERROR_FILE_NOT_FOUND || status == ERROR_PATH_NOT_FOUND {
+            return Ok(None);
+        }
         if status != ERROR_SUCCESS {
             return Err(win32_error(
                 &format!("read ACL of {}", path.display()),
@@ -371,23 +389,64 @@ mod windows {
         }
         let sddl = from_wide_ptr(text);
         unsafe { LocalFree(text as _) };
-        Ok(sddl)
+        Ok(Some(sddl))
     }
 
     fn walk(path: &Path, out: &mut Vec<std::path::PathBuf>) -> Result<(), LifecycleError> {
-        let entries = std::fs::read_dir(path)
-            .map_err(|error| LifecycleError::io(format!("read {}", path.display()), error))?;
+        walk_dir(path, out, true)
+    }
+
+    fn walk_dir(
+        path: &Path,
+        out: &mut Vec<std::path::PathBuf>,
+        is_root: bool,
+    ) -> Result<(), LifecycleError> {
+        let entries = match std::fs::read_dir(path) {
+            Ok(entries) => entries,
+            // A subdirectory removed after its parent was listed has nothing left to check.
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound && !is_root => return Ok(()),
+            Err(error) => {
+                return Err(LifecycleError::io(
+                    format!("read {}", path.display()),
+                    error,
+                ))
+            }
+        };
         for entry in entries {
             let entry = entry
                 .map_err(|error| LifecycleError::io(format!("read {}", path.display()), error))?;
             let child = entry.path();
-            let metadata = std::fs::symlink_metadata(&child).map_err(|error| {
-                LifecycleError::io(format!("inspect {}", child.display()), error)
-            })?;
+            let metadata = match std::fs::symlink_metadata(&child) {
+                Ok(metadata) => metadata,
+                // Renamed away by a concurrent atomic write after the listing.
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+                Err(error) => {
+                    return Err(LifecycleError::io(
+                        format!("inspect {}", child.display()),
+                        error,
+                    ))
+                }
+            };
             out.push(child.clone());
             if metadata.is_dir() && !metadata.file_type().is_symlink() {
-                walk(&child, out)?;
+                walk_dir(&child, out, false)?;
             }
+        }
+        Ok(())
+    }
+
+    /// Checks the DACL of every listed entry that still exists.
+    fn verify_entries(
+        entries: &[std::path::PathBuf],
+        tokens: &[&str],
+    ) -> Result<(), LifecycleError> {
+        for child in entries {
+            let Some(sddl) = dacl_sddl_if_present(child)? else {
+                continue;
+            };
+            check_sddl(&sddl, tokens, false).map_err(|reason| {
+                LifecycleError::platform(format!("{}: {reason}", child.display()))
+            })?;
         }
         Ok(())
     }
@@ -472,12 +531,7 @@ mod windows {
             })?;
             let mut children = Vec::new();
             walk(root, &mut children)?;
-            for child in children {
-                check_sddl(&dacl_sddl(&child)?, &tokens, false).map_err(|reason| {
-                    LifecycleError::platform(format!("{}: {reason}", child.display()))
-                })?;
-            }
-            Ok(())
+            verify_entries(&children, &tokens)
         }
 
         fn add_user_path(&self, dir: &Path) -> Result<bool, LifecycleError> {
@@ -629,6 +683,82 @@ mod windows {
                 &mut result,
             )
         };
+    }
+
+    #[cfg(test)]
+    mod acl_race_tests {
+        use super::*;
+        use crate::test_support::temp_dir;
+        use std::fs;
+
+        fn owner_tokens() -> (String, String) {
+            let sid = current_user_sid().unwrap();
+            let rendered = sddl_token_for(&sid).unwrap();
+            (sid, rendered)
+        }
+
+        #[test]
+        fn entries_renamed_away_after_the_walk_are_skipped_not_failed() {
+            let platform = WindowsPlatform::default();
+            let root = temp_dir("acl-race");
+            fs::create_dir_all(root.join("run")).unwrap();
+            fs::write(root.join("run").join("supervisor.json"), b"{}").unwrap();
+            let temp = root.join("run").join(".supervisor.json.tmp-1");
+            fs::write(&temp, b"{}").unwrap();
+            platform.protect_tree(&root).unwrap();
+
+            let mut children = Vec::new();
+            walk(&root, &mut children).unwrap();
+            assert!(children.contains(&temp));
+            // Simulate the concurrent atomic rename that completes between
+            // the directory walk and the per-entry DACL read.
+            fs::remove_file(&temp).unwrap();
+            let (sid, rendered) = owner_tokens();
+            verify_entries(&children, &[sid.as_str(), rendered.as_str()]).unwrap();
+            assert!(dacl_sddl_if_present(&temp).unwrap().is_none());
+            assert!(
+                dacl_sddl(&temp).is_err(),
+                "a required entry that is missing still fails"
+            );
+            let _ = fs::remove_dir_all(root);
+        }
+
+        #[test]
+        fn existing_entries_with_foreign_aces_still_fail_after_the_fix() {
+            let platform = WindowsPlatform::default();
+            let root = temp_dir("acl-race-foreign");
+            fs::create_dir_all(root.join("run")).unwrap();
+            let file = root.join("run").join("supervisor.json");
+            fs::write(&file, b"{}").unwrap();
+            platform.protect_tree(&root).unwrap();
+            let status = std::process::Command::new("icacls")
+                .args([file.to_str().unwrap(), "/grant", "*S-1-1-0:R"])
+                .status()
+                .unwrap();
+            assert!(status.success());
+            let mut children = Vec::new();
+            walk(&root, &mut children).unwrap();
+            let (sid, rendered) = owner_tokens();
+            let error = verify_entries(&children, &[sid.as_str(), rendered.as_str()]).unwrap_err();
+            assert!(
+                error.message.contains("unexpected principal"),
+                "{}",
+                error.message
+            );
+            assert!(platform.verify_tree_acl(&root).is_err());
+            let _ = fs::remove_dir_all(root);
+        }
+
+        #[test]
+        fn a_missing_root_still_fails_and_a_vanished_subdirectory_is_skipped() {
+            let root = temp_dir("acl-race-root");
+            let missing = root.join("absent");
+            let mut out = Vec::new();
+            assert!(walk(&missing, &mut out).is_err());
+            assert!(walk_dir(&missing, &mut out, false).is_ok());
+            assert!(out.is_empty());
+            let _ = fs::remove_dir_all(root);
+        }
     }
 }
 

@@ -2,6 +2,25 @@ import { randomUUID } from "node:crypto";
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { createInterface } from "node:readline";
 
+/**
+ * SG-000055 remote dispatch context. Supplied only by the device uplink
+ * from a verified relay route at kernel construction; never derived from
+ * tool arguments. `cotrad` requires an exact active local remote-session
+ * lease for every request that carries it.
+ */
+export interface RemoteDispatchContext {
+  readonly principal: string;
+  readonly remoteConnectionId: string;
+  readonly connectionId: string;
+  readonly deviceId: string;
+  readonly deviceEpoch: number;
+  readonly providerKind: string;
+  readonly clientProfileId: string;
+  readonly clientProfileRevision: number;
+  readonly toolSurfaceProfile: "core";
+  readonly scopes: readonly string[];
+}
+
 export interface KernelRequest {
   version: 1;
   request_id: string;
@@ -11,6 +30,7 @@ export interface KernelRequest {
   operation: string;
   target?: string;
   arguments: Record<string, unknown>;
+  remote?: RemoteDispatchContext;
 }
 
 export interface KernelResponse {
@@ -98,12 +118,33 @@ export function buildRequest(input: {
   return request;
 }
 
+/**
+ * Attach the server-supplied remote context to a kernel request. Tool
+ * arguments never reach this field; `cotrad` requires an exact active
+ * local remote-session lease whenever it is present.
+ */
+export function attachRemoteContext(
+  request: KernelRequest,
+  remote: RemoteDispatchContext | null
+): KernelRequest {
+  if (remote !== null) {
+    request.remote = remote;
+  }
+  return request;
+}
+
 export class KernelClient {
   readonly sessionId = randomUUID();
   readonly child: ChildProcessWithoutNullStreams;
   readonly pending = new Map<string, Pending>();
 
-  constructor(command = process.env.COTRA_DAEMON ?? "cotrad") {
+  readonly remote: RemoteDispatchContext | null;
+
+  constructor(
+    command = process.env.COTRA_DAEMON ?? "cotrad",
+    remote: RemoteDispatchContext | null = null
+  ) {
+    this.remote = remote === null ? null : Object.freeze({ ...remote, scopes: [...remote.scopes] });
     this.child = spawn(command, [], {
       stdio: ["pipe", "pipe", "pipe"],
       windowsHide: true,
@@ -149,6 +190,7 @@ export class KernelClient {
       target: input.target,
       arguments: input.arguments
     });
+    attachRemoteContext(request, this.remote);
 
     const timeoutMs = input.timeoutMs ?? 30_000;
     const response = new Promise<KernelResponse>((resolve, reject) => {

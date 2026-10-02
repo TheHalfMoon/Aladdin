@@ -1,6 +1,9 @@
 use cotra_approval::{ApprovalBroker, ApprovalClass, LocalApprovalBroker};
 use cotra_audit::{default_audit_path, AuditLogger};
-use cotra_contracts::{FailureCode, RequestEnvelope, ResponseEnvelope, INTERNAL_PROTOCOL_VERSION};
+use cotra_contracts::{
+    FailureCode, RemoteRequestEnvelope, RequestEnvelope, ResponseEnvelope,
+    INTERNAL_PROTOCOL_VERSION,
+};
 use cotra_policy::{PolicyEngine, Workspace, POLICY_REVISION};
 use cotra_provider_fs::ProviderError;
 use serde_json::{json, Value};
@@ -13,8 +16,10 @@ mod clipboard;
 mod git_fetch;
 mod git_mutation;
 mod git_push;
+mod remote_lease;
 mod trust;
 mod uia;
+mod workstation;
 
 #[allow(dead_code)]
 mod legacy {
@@ -46,6 +51,7 @@ fn run() -> Result<(), String> {
     let audit = AuditLogger::new(default_audit_path())
         .map_err(|error| format!("initialize audit log: {error}"))?;
     let approval = LocalApprovalBroker::new();
+    let workspace_set = remote_lease::WorkspaceSet::from_environment();
 
     eprintln!(
         "cotrad ready: protocol={} audit={} mode=SG-000039_CLIPBOARD_WRITE",
@@ -68,8 +74,8 @@ fn run() -> Result<(), String> {
             continue;
         }
 
-        let response = match serde_json::from_str::<RequestEnvelope>(&line) {
-            Ok(request) => handle_request(&policy, &audit, &approval, request),
+        let response = match serde_json::from_str::<RemoteRequestEnvelope>(&line) {
+            Ok(envelope) => handle_envelope(&policy, &audit, &approval, &workspace_set, envelope),
             Err(error) => ResponseEnvelope::failure(
                 "unknown",
                 FailureCode::InvalidRequest,
@@ -88,6 +94,67 @@ fn run() -> Result<(), String> {
     }
 
     Ok(())
+}
+
+/// SG-000055 entry: remote-context requests must pass the local
+/// remote-session lease gate before any policy or dispatch step, and local
+/// remote-lease management never reaches workspace dispatch.
+fn handle_envelope(
+    policy: &PolicyEngine,
+    audit: &AuditLogger,
+    approval: &impl ApprovalBroker,
+    workspace_set: &remote_lease::WorkspaceSet,
+    envelope: RemoteRequestEnvelope,
+) -> ResponseEnvelope {
+    let RemoteRequestEnvelope { request, remote } = envelope;
+    let lease_path = cotra_policy::remote_session::default_lease_store_path();
+    let probe = workstation::current;
+    let clock = cotra_approval::now_ms;
+    let ctx = remote_lease::LeaseContext {
+        lease_path: &lease_path,
+        workspaces: workspace_set,
+        workstation: &probe,
+        now_ms: &clock,
+    };
+    if let Some(remote) = &remote {
+        let trust_store = trust::TrustStore::load_or_create(trust::default_trust_path());
+        if let Err(error) =
+            remote_lease::gate_remote(&ctx, approval, &trust_store, &request, remote)
+        {
+            let _ = audit.record(&request, POLICY_REVISION, "REMOTE_DENIED");
+            return ResponseEnvelope::failure(request.request_id, error.code, error.message);
+        }
+        return handle_request(policy, audit, approval, request);
+    }
+    if remote_lease::is_lease_management(&request.capability) {
+        if policy.workspace(&request.workspace_id).is_none() {
+            let _ = audit.record(&request, POLICY_REVISION, "DENIED");
+            return ResponseEnvelope::failure(
+                request.request_id,
+                FailureCode::WorkspaceDenied,
+                "requested workspace is not configured",
+            );
+        }
+        let trust_store = trust::TrustStore::load_or_create(trust::default_trust_path());
+        return match remote_lease::dispatch_lease_management(&ctx, approval, &trust_store, &request)
+        {
+            Ok(value) => {
+                if let Err(error) = audit.record(&request, POLICY_REVISION, "SUCCESS") {
+                    return ResponseEnvelope::failure(
+                        request.request_id,
+                        FailureCode::InternalError,
+                        format!("audit write failed: {error}"),
+                    );
+                }
+                ResponseEnvelope::success(&request, value, POLICY_REVISION)
+            }
+            Err(error) => {
+                let _ = audit.record(&request, POLICY_REVISION, "FAILED");
+                ResponseEnvelope::failure(request.request_id, error.code, error.message)
+            }
+        };
+    }
+    handle_request(policy, audit, approval, request)
 }
 
 fn handle_request(
@@ -255,9 +322,22 @@ fn dispatch_trust(
             let epoch = approval
                 .emergency_revoke(&prompt)
                 .map_err(|error| ProviderError::new(error.code, error.message))?;
+            let leases_revoked = remote_lease::revoke_all(
+                &cotra_policy::remote_session::default_lease_store_path(),
+            )
+            .map_err(|error| {
+                ProviderError::new(
+                    FailureCode::InternalError,
+                    format!(
+                        "emergency revoke advanced the approval epoch but remote-session leases could not be revoked: {}",
+                        error.message
+                    ),
+                )
+            })?;
             Ok(Some(json!({
                 "workspace_id": request.workspace_id,
                 "revoke_epoch": epoch,
+                "remote_leases_revoked": leases_revoked,
                 "policy_revision": POLICY_REVISION,
             })))
         }
@@ -1743,5 +1823,152 @@ mod tests {
     #[cfg(not(windows))]
     fn null_device() -> &'static str {
         "/dev/null"
+    }
+}
+
+#[cfg(test)]
+mod sg000055_envelope_tests {
+    use super::*;
+    use cotra_approval::test_support::FixedApprovalBroker;
+    use cotra_approval::ApprovalDecision;
+    use cotra_contracts::RemoteContext;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn fixture() -> (PolicyEngine, AuditLogger, std::path::PathBuf) {
+        let suffix = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("clock")
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!(
+            "cotra-sg55-envelope-{}-{suffix}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(root.join("workspace")).expect("workspace");
+        let workspace = Workspace {
+            id: "default".into(),
+            root: std::fs::canonicalize(root.join("workspace")).expect("canonical"),
+        };
+        let policy = PolicyEngine::new(vec![workspace]).expect("policy");
+        let audit = AuditLogger::new(root.join("audit.jsonl")).expect("audit");
+        (policy, audit, root)
+    }
+
+    fn request(capability: &str, operation: &str, workspace: &str) -> RequestEnvelope {
+        RequestEnvelope {
+            version: INTERNAL_PROTOCOL_VERSION,
+            request_id: "sg55".into(),
+            client_session_id: "remote".into(),
+            workspace_id: workspace.into(),
+            capability: capability.into(),
+            operation: operation.into(),
+            target: Some("README.md".into()),
+            arguments: json!({}),
+        }
+    }
+
+    fn remote() -> RemoteContext {
+        RemoteContext {
+            principal: format!("rp-{}", "1".repeat(32)),
+            remote_connection_id: format!("rc-{}", "2".repeat(32)),
+            connection_id: "conn-sg55-test".into(),
+            device_id: format!("dev-{}", "3".repeat(32)),
+            device_epoch: 1,
+            provider_kind: "generic".into(),
+            client_profile_id: "profile-test".into(),
+            client_profile_revision: 1,
+            tool_surface_profile: "core".into(),
+            scopes: vec!["cotra.read".into()],
+        }
+    }
+
+    fn code(response: &ResponseEnvelope) -> FailureCode {
+        response.error.as_ref().expect("failure").code.clone()
+    }
+
+    #[test]
+    fn remote_requests_without_an_exact_active_lease_never_reach_dispatch() {
+        let (policy, audit, root) = fixture();
+        let workspaces =
+            remote_lease::WorkspaceSet::from_pairs(&[("default".into(), root.join("workspace"))]);
+        let approval = FixedApprovalBroker(ApprovalDecision::Approved);
+        for (capability, operation) in [
+            ("fs.read", "read"),
+            ("system.status", "get"),
+            ("fs.write", "write"),
+            ("process.spawn", "spawn"),
+        ] {
+            let response = handle_envelope(
+                &policy,
+                &audit,
+                &approval,
+                &workspaces,
+                RemoteRequestEnvelope {
+                    request: request(capability, operation, "default"),
+                    remote: Some(remote()),
+                },
+            );
+            assert!(!response.ok);
+            assert_eq!(code(&response), FailureCode::RemoteSessionInactive);
+        }
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn remote_requests_can_never_manage_leases_trust_or_approvals() {
+        let (policy, audit, root) = fixture();
+        let workspaces =
+            remote_lease::WorkspaceSet::from_pairs(&[("default".into(), root.join("workspace"))]);
+        let approval = FixedApprovalBroker(ApprovalDecision::Approved);
+        for (capability, operation) in [
+            ("remote.lease.create", "create"),
+            ("remote.lease.revoke", "revoke"),
+            ("workspace.trust.grant", "grant"),
+            ("trust.revoke_emergency", "revoke"),
+            ("approval.history.query", "query"),
+        ] {
+            let response = handle_envelope(
+                &policy,
+                &audit,
+                &approval,
+                &workspaces,
+                RemoteRequestEnvelope {
+                    request: request(capability, operation, "default"),
+                    remote: Some(remote()),
+                },
+            );
+            assert_eq!(code(&response), FailureCode::CapabilityDenied);
+        }
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn local_lease_management_requires_a_configured_workspace() {
+        let (policy, audit, root) = fixture();
+        let workspaces =
+            remote_lease::WorkspaceSet::from_pairs(&[("default".into(), root.join("workspace"))]);
+        let approval = FixedApprovalBroker(ApprovalDecision::Approved);
+        let response = handle_envelope(
+            &policy,
+            &audit,
+            &approval,
+            &workspaces,
+            RemoteRequestEnvelope {
+                request: request("remote.lease.status", "get", "missing"),
+                remote: None,
+            },
+        );
+        assert_eq!(code(&response), FailureCode::WorkspaceDenied);
+        let unknown = handle_envelope(
+            &policy,
+            &audit,
+            &approval,
+            &workspaces,
+            RemoteRequestEnvelope {
+                request: request("remote.lease.extend", "extend", "default"),
+                remote: None,
+            },
+        );
+        assert_eq!(code(&unknown), FailureCode::CapabilityDenied);
+        let _ = std::fs::remove_dir_all(root);
     }
 }

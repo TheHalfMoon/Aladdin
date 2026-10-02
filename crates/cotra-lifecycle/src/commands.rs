@@ -574,6 +574,154 @@ pub fn mcp(args: &mut Args) -> Result<i32, LifecycleError> {
     cotra_lifecycle::mcp::run_action(&action, port)
 }
 
+/// `cotra remote allow|revoke|status`: local remote-session leases.
+pub fn remote(args: &mut Args) -> Result<Output, LifecycleError> {
+    use cotra_lifecycle::remote;
+    let action = args.positional("remote action (allow, revoke, status, connect)")?;
+    let layout = Layout::for_current_user()?;
+    match action.as_str() {
+        "allow" => {
+            let connection = args.value("--connection")?.ok_or_else(|| {
+                LifecycleError::usage("--connection <remote connection id> is required")
+            })?;
+            let workspaces = args.value("--workspaces")?;
+            let scopes = args.value("--scopes")?;
+            let minutes = match args.value("--minutes")? {
+                Some(value) => value
+                    .parse::<u64>()
+                    .map_err(|_| LifecycleError::usage("--minutes must be from 1 to 15"))?,
+                None => remote::MAX_LEASE_MINUTES,
+            };
+            let read_mode = args
+                .value("--read-mode")?
+                .unwrap_or_else(|| "session".into());
+            args.finish()?;
+            let config = Config::load(&layout)?;
+            config.check_workspaces_with_policy()?;
+            let workspaces: Vec<String> = match workspaces {
+                Some(list) => list.split(',').map(|s| s.trim().to_owned()).collect(),
+                None => vec![config.default_workspace().unwrap_or("default").to_owned()],
+            };
+            let options = remote::AllowOptions {
+                remote_connection_id: connection.clone(),
+                workspaces: workspaces.clone(),
+                scopes: scopes.map(|list| list.split(',').map(|s| s.trim().to_owned()).collect()),
+                minutes,
+                read_mode,
+            };
+            let (device_id, device_epoch) =
+                remote::device_identity(&remote::device_key_path(&layout))?;
+            let paired =
+                remote::paired_connection(&remote::uplink_config_path(&layout), &connection)?;
+            let arguments = remote::lease_arguments(&options, &paired, &device_id, device_epoch)?;
+            let version = active_version(&layout)?;
+            eprintln!("Confirm with Windows Hello when prompted. A remote session lease is a STRONG approval and cannot be granted remotely or by an agent.");
+            let request = ipc::request(&workspaces[0], "remote.lease.create", "create", arguments);
+            let response = ipc::call(
+                &layout.version_dir(&version).join("cotrad.exe"),
+                &config,
+                &request,
+                Duration::from_secs(180),
+            )?;
+            let lease = ipc::expect_ok(&response)?.clone();
+            Ok(Output {
+                exit_code: 0,
+                human: format!(
+                    "Remote session allowed for {connection} on {} for {minutes} minute(s). It never extends itself; run `cotra remote revoke` to end it early.\n",
+                    workspaces.join(", ")
+                ),
+                json: json!({"ok": true, "lease": lease}),
+            })
+        }
+        "revoke" => {
+            let connection = args.value("--connection")?;
+            args.finish()?;
+            let config = Config::load(&layout)?;
+            config.check_workspaces_with_policy()?;
+            let workspace = config.default_workspace().unwrap_or("default").to_string();
+            let version = active_version(&layout)?;
+            let request = ipc::request(
+                &workspace,
+                "remote.lease.revoke",
+                "revoke",
+                json!({ "remote_connection_id": connection }),
+            );
+            let response = ipc::call(
+                &layout.version_dir(&version).join("cotrad.exe"),
+                &config,
+                &request,
+                Duration::from_secs(30),
+            )?;
+            let result = ipc::expect_ok(&response)?.clone();
+            Ok(Output {
+                exit_code: 0,
+                human: format!(
+                    "Revoked {} remote session lease(s).\n",
+                    result
+                        .get("revoked")
+                        .map(Value::to_string)
+                        .unwrap_or_default()
+                ),
+                json: json!({"ok": true, "revoke": result}),
+            })
+        }
+        "status" => {
+            args.finish()?;
+            let config = Config::load(&layout)?;
+            config.check_workspaces_with_policy()?;
+            let workspace = config.default_workspace().unwrap_or("default").to_string();
+            let version = active_version(&layout)?;
+            let request = ipc::request(&workspace, "remote.lease.status", "get", json!({}));
+            let response = ipc::call(
+                &layout.version_dir(&version).join("cotrad.exe"),
+                &config,
+                &request,
+                Duration::from_secs(30),
+            )?;
+            let result = ipc::expect_ok(&response)?.clone();
+            let leases = result
+                .get("leases")
+                .and_then(Value::as_array)
+                .cloned()
+                .unwrap_or_default();
+            let mut human = String::new();
+            for lease in &leases {
+                human.push_str(&format!(
+                    "{} active={} workspaces={} scopes={} expires_at_ms={}\n",
+                    lease["remote_connection_id"].as_str().unwrap_or("?"),
+                    lease["active"],
+                    lease["workspaces"],
+                    lease["scope_ceiling"],
+                    lease["expires_at_ms"]
+                ));
+            }
+            if leases.is_empty() {
+                human.push_str(
+                    "No remote session leases. Remote requests fail with REMOTE_SESSION_INACTIVE.\n",
+                );
+            }
+            Ok(Output {
+                exit_code: 0,
+                human,
+                json: json!({"ok": true, "leases": leases}),
+            })
+        }
+        other => Err(LifecycleError::usage(format!(
+            "unknown remote action {other:?}; run `cotra help`"
+        ))),
+    }
+}
+
+/// `cotra remote connect`: run the outbound-only device uplink.
+pub fn remote_connect(args: &mut Args) -> Result<i32, LifecycleError> {
+    args.finish()?;
+    let layout = Layout::for_current_user()?;
+    let platform = host_platform();
+    let (launch, config) =
+        cotra_lifecycle::remote::resolve_uplink_launch(&layout, platform.as_ref())?;
+    Ok(cotra_lifecycle::remote::run_uplink(&launch, &config))
+}
+
 /// Internal: verifies the installation with this binary's own code. Used by
 /// `update` to confirm a newly activated version can verify itself.
 pub fn self_check(args: &mut Args) -> Result<Output, LifecycleError> {

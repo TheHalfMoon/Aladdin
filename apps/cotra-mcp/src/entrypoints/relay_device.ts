@@ -1,7 +1,13 @@
 import { startRelayTransport } from "../transports/relay_device.js";
 
 /**
- * Relay device entrypoint — reserved for COTRA-P15.
- * Fails closed until the remote uplink grains are canonical.
+ * Relay device entrypoint (SG-000055): outbound-only device uplink.
+ * Fails closed with PAIRING_REQUIRED when no protected pairing state exists.
  */
-startRelayTransport();
+try {
+  startRelayTransport();
+} catch (error) {
+  const code = error instanceof Error ? error.message.split(":")[0] : "TRANSPORT_UNAVAILABLE";
+  process.stderr.write(`[cotra-uplink] ${code}\n`);
+  process.exitCode = 1;
+}
