@@ -13,6 +13,7 @@ use std::path::Path;
 
 mod browser;
 mod clipboard;
+mod executable_admin;
 mod git_fetch;
 mod git_mutation;
 mod git_push;
@@ -136,6 +137,32 @@ fn handle_envelope(
             );
         }
         return match remote_lease::authorize_enrollment(approval, &request) {
+            Ok(value) => {
+                let _ = audit.record(&request, POLICY_REVISION, "SUCCESS");
+                ResponseEnvelope::success(&request, value, POLICY_REVISION)
+            }
+            Err(error) => {
+                let _ = audit.record(&request, POLICY_REVISION, "FAILED");
+                ResponseEnvelope::failure(request.request_id, error.code, error.message)
+            }
+        };
+    }
+    if executable_admin::is_registry_management(&request.capability) {
+        if policy.workspace(&request.workspace_id).is_none() {
+            let _ = audit.record(&request, POLICY_REVISION, "DENIED");
+            return ResponseEnvelope::failure(
+                request.request_id,
+                FailureCode::WorkspaceDenied,
+                "requested workspace is not configured",
+            );
+        }
+        return match executable_admin::dispatch_registry(
+            &cotra_policy::executable_registry::default_registry_path(),
+            &workspace_set.roots,
+            approval,
+            &request,
+            cotra_approval::now_ms(),
+        ) {
             Ok(value) => {
                 let _ = audit.record(&request, POLICY_REVISION, "SUCCESS");
                 ResponseEnvelope::success(&request, value, POLICY_REVISION)

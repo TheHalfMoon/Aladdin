@@ -15,13 +15,15 @@ use std::path::{Component, Path, PathBuf};
 /// `cotrad` `trust::default_trust_path`,
 /// `cotra_approval::default_approval_history_path`,
 /// `cotra_provider_browser::default_profile_root`, and
-/// `remote_session::default_lease_store_path`.
+/// `remote_session::default_lease_store_path`, and
+/// `executable_registry::default_registry_path`.
 pub const PROTECTED_STATE_OVERRIDES: &[&str] = &[
     "COTRA_AUDIT_PATH",
     "COTRA_TRUST_PATH",
     "COTRA_APPROVAL_HISTORY_PATH",
     "COTRA_BROWSER_STATE_DIR",
     "COTRA_REMOTE_LEASE_PATH",
+    "COTRA_EXECUTABLE_REGISTRY_PATH",
 ];
 
 /// Returns the unresolved protected state roots derived from the process

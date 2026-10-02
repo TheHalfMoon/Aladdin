@@ -159,7 +159,10 @@ fn dispatch(
             "os": std::env::consts::OS,
             "arch": std::env::consts::ARCH,
             "pid": std::process::id(),
-            "mode": "SG-000010_BOUNDED_PROCESS_SPAWN"
+            "mode": "SG-000010_BOUNDED_PROCESS_SPAWN",
+            "registered_executables": crate::executable_admin::registered_summaries(
+                &cotra_policy::executable_registry::default_registry_path()
+            )
         })),
         ("workspace.get", "get") => {
             let configured = policy.workspace(&workspace.id).ok_or_else(|| {
@@ -400,6 +403,7 @@ fn process_spawn(
         )
         .map_err(|error| ProviderError::new(error.code, error.message))?;
 
+    verify_registered_identity(&plan)?;
     let profile = process_profile_name(&request.request_id);
     let result = execute_contained(plan, &profile).map_err(map_process_failure)?;
     Ok(json!({
@@ -412,6 +416,33 @@ fn process_spawn(
         "stdin_policy": "null",
         "network_class": "NONE"
     }))
+}
+
+/// SG-000060: immediately before launch, a non-baseline executable must
+/// still be registered, match its argv grammar, and keep its registered path,
+/// size, and SHA-256. Any drift fails closed.
+#[cfg(windows)]
+fn verify_registered_identity(plan: &cotra_provider_process::ExecutionPlan) -> Result<(), ProviderError> {
+    if let Some(system_root) = std::env::var_os("SystemRoot") {
+        let baseline = std::fs::canonicalize(
+            PathBuf::from(system_root).join("System32").join("whoami.exe"),
+        );
+        if baseline.as_ref().is_ok_and(|path| *path == plan.executable) {
+            return Ok(());
+        }
+    }
+    let entries = cotra_policy::executable_registry::load_registry(
+        &cotra_policy::executable_registry::default_registry_path(),
+    );
+    let entry = cotra_policy::executable_registry::check_spawn(&entries, &plan.executable, &plan.argv)
+        .map_err(|error| ProviderError::new(error.code, error.message))?;
+    cotra_policy::executable_registry::verify_identity(entry, &plan.executable)
+        .map_err(|error| ProviderError::new(error.code, error.message))
+}
+
+#[cfg(not(windows))]
+fn verify_registered_identity(_plan: &cotra_provider_process::ExecutionPlan) -> Result<(), ProviderError> {
+    Ok(())
 }
 
 fn process_approval_digest(
@@ -799,6 +830,82 @@ mod tests {
         assert_eq!(result["assigned_to_job_before_resume"], true);
         assert_eq!(result["job_quiescent"], true);
         assert_eq!(result["network_class"], "NONE");
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn sg000060_registered_executables_run_contained_and_drift_fails_closed() {
+        use cotra_policy::executable_registry::{build_entry, save_registry, RegisteredExecutable};
+        let root = temp_root("process-registry");
+        let workspace = Workspace {
+            id: "default".into(),
+            root: fs::canonicalize(&root).expect("canonical workspace"),
+        };
+        let registry = root.with_extension("registry.json");
+        std::env::set_var("COTRA_EXECUTABLE_REGISTRY_PATH", &registry);
+        let policy = PolicyEngine::new(vec![workspace.clone()]).expect("policy");
+        let system_root = std::env::var_os("SystemRoot").expect("SystemRoot");
+        let hostname = PathBuf::from(&system_root).join("System32").join("hostname.exe");
+        let mut request = process_request(&workspace, hostname.clone());
+        // A distinct request id gives this test its own AppContainer profile,
+        // so it never collides with the SG-000010 test running in parallel.
+        request.request_id = "process-registry-test-request".into();
+
+        // Unregistered: denied by policy before any approval.
+        let error = policy.authorize(&request).expect_err("unregistered executable");
+        assert_eq!(error.code, FailureCode::CapabilityDenied);
+
+        // Registered with an empty grammar: argv must be empty.
+        let entry = build_entry("hostname", &hostname, vec![], vec![], 0, std::slice::from_ref(&workspace.root), 1)
+            .expect("registrable system executable");
+        save_registry(&registry, std::slice::from_ref(&entry)).expect("save registry");
+        policy.authorize(&request).expect("registered executable");
+        let mut with_args = request.clone();
+        with_args.arguments["argv"] = json!(["/?"]);
+        assert_eq!(
+            policy.authorize(&with_args).expect_err("grammar").code,
+            FailureCode::CapabilityDenied
+        );
+        let mut shell = request.clone();
+        shell.arguments["executable"] = json!(PathBuf::from(&system_root).join("System32").join("cmd.exe"));
+        assert_eq!(
+            policy.authorize(&shell).expect_err("shell").code,
+            FailureCode::CapabilityDenied
+        );
+
+        // Drifted identity: approved, but refused before launch.
+        let drifted = RegisteredExecutable {
+            sha256: "0".repeat(64),
+            ..entry.clone()
+        };
+        save_registry(&registry, &[drifted]).expect("save drifted registry");
+        policy.authorize(&request).expect("policy does not hash");
+        let stale = dispatch(
+            &policy,
+            &workspace,
+            &FixedApprovalBroker(ApprovalDecision::Approved),
+            &request,
+        )
+        .expect_err("hash drift fails closed before launch");
+        assert_eq!(stale.code, FailureCode::TargetStale);
+
+        // Intact identity: runs through the unchanged contained process path.
+        save_registry(&registry, std::slice::from_ref(&entry)).expect("save registry");
+        let result = dispatch(
+            &policy,
+            &workspace,
+            &FixedApprovalBroker(ApprovalDecision::Approved),
+            &request,
+        )
+        .expect("registered executable runs through the contained path");
+        assert_eq!(result["exit_code"], 0);
+        assert!(result["stdout"].as_str().is_some_and(|value| !value.trim().is_empty()));
+        assert_eq!(result["appcontainer_verified"], true);
+        assert_eq!(result["assigned_to_job_before_resume"], true);
+        assert_eq!(result["job_quiescent"], true);
+        assert_eq!(result["network_class"], "NONE");
+        let _ = fs::remove_file(&registry);
         let _ = fs::remove_dir_all(root);
     }
 }

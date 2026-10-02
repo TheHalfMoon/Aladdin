@@ -26,6 +26,7 @@ use crate::trust;
 #[derive(Debug, Clone)]
 pub struct WorkspaceSet {
     pub ids: Vec<String>,
+    pub roots: Vec<PathBuf>,
     pub digest: String,
 }
 
@@ -56,6 +57,7 @@ impl WorkspaceSet {
     pub fn from_pairs(pairs: &[(String, PathBuf)]) -> Self {
         Self {
             ids: pairs.iter().map(|(id, _)| id.clone()).collect(),
+            roots: pairs.iter().map(|(_, root)| root.clone()).collect(),
             digest: remote_session::workspace_set_digest(pairs),
         }
     }

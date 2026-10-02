@@ -11,7 +11,7 @@ owning grain exposes it under explicit profiles), `missing` (owning grain implem
 
 ## Workflows
 
-Totals: implemented_exposed: 10, implemented_hidden: 6, missing: 8, intentionally_denied: 11.
+Totals: implemented_exposed: 11, implemented_hidden: 6, missing: 7, intentionally_denied: 11.
 
 | Workflow | Status | Tools, owner, or reason |
 | --- | --- | --- |
@@ -27,8 +27,8 @@ Totals: implemented_exposed: 10, implemented_hidden: 6, missing: 8, intentionall
 | `create_directory` | missing | SG-000061 |
 | `move_or_rename` | missing | SG-000061 (final-path identity, workspace ceiling, approval) |
 | `delete_file` | missing | SG-000061 (destructive approval and postcondition verification) |
-| `run_bounded_program` | implemented_exposed | `process_spawn` (argv-only; the public ceiling is one protected executable until SG-000060) |
-| `run_build_and_test_tools` | missing | SG-000060 (STRONG-gated protected executable registry with interpreter controls) |
+| `run_bounded_program` | implemented_exposed | `process_spawn` (argv-only; the built-in baseline plus locally registered protected executables (SG-000060)) |
+| `run_build_and_test_tools` | implemented_exposed | `process_spawn` (native executables registered locally with STRONG presence (cotra exec add), hash-pinned, argv grammar, contained, no network; interpreters denied (SG-000060)) |
 | `git_read` | implemented_exposed | `git_status`, `git_diff`, `git_log` |
 | `git_local_mutation` | implemented_exposed | `git_branch_create`, `git_stage`, `git_unstage`, `git_commit` |
 | `git_remote` | implemented_exposed | `git_fetch_preview`, `git_fetch`, `git_push_preview`, `git_push` |
@@ -53,7 +53,7 @@ Totals: implemented_exposed: 10, implemented_hidden: 6, missing: 8, intentionall
 
 ## Capability shapes
 
-Totals: implemented_exposed: 20, implemented_hidden: 29, missing: 0, intentionally_denied: 10.
+Totals: implemented_exposed: 20, implemented_hidden: 29, missing: 0, intentionally_denied: 13.
 
 | Shape | Status | MCP tool, owner, or reason |
 | --- | --- | --- |
@@ -116,3 +116,6 @@ Totals: implemented_exposed: 20, implemented_hidden: 29, missing: 0, intentional
 | `remote.lease.revoke/revoke` | intentionally_denied | lease management is local-only |
 | `remote.lease.status/get` | intentionally_denied | lease management is local-only |
 | `remote.enrollment.authorize/authorize` | intentionally_denied | device enrollment and pairing are local STRONG operations |
+| `executable.registry.add/add` | intentionally_denied | executable registration is a local STRONG human decision; an agent must never widen what it can run |
+| `executable.registry.remove/remove` | intentionally_denied | registry management is local-only |
+| `executable.registry.list/get` | intentionally_denied | registry management is local-only; registered identifiers are shown read-only in system_status |

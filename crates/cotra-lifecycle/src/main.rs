@@ -62,6 +62,13 @@ Approvals:
   cotra emergency-revoke                  Invalidate all pending approvals and every
       remote session lease (Windows Hello).
 
+Protected executables (process_spawn never runs shells or interpreters):
+  cotra exec add <id> <path.exe> [--subcommands a,b] [--deny-args x,y] [--max-args N]
+      Register one native executable outside every workspace (Windows Hello). Its path,
+      size, and SHA-256 are pinned and re-verified before every launch.
+  cotra exec remove <id>                  Remove a registered executable.
+  cotra exec list                         Show registered executables.
+
 Remote sessions (outbound-only; no inbound port is opened):
   cotra remote enable --relay <origin> [--workspace <id>]
       Create this device's key and register it with a relay (Windows Hello).
@@ -251,6 +258,7 @@ fn run(args: &mut Args) -> Result<Output, LifecycleError> {
         "doctor" => commands::doctor(args),
         "approvals" => commands::approvals(args),
         "emergency-revoke" => commands::emergency_revoke(args),
+        "exec" => commands::exec(args),
         "remote" => commands::remote(args),
         "update" => commands::update(args),
         "rollback" => commands::rollback(args),

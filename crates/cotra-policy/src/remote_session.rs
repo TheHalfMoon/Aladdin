@@ -31,12 +31,13 @@ pub const REMOTE_SCOPES: [&str; 3] = ["cotra.read", "cotra.write", "cotra.execut
 
 /// Capability prefixes that manage local authority and are never reachable
 /// from a remote-context request, whatever lease exists.
-const LOCAL_ONLY_PREFIXES: [&str; 5] = [
+const LOCAL_ONLY_PREFIXES: [&str; 6] = [
     "remote.",
     "workspace.trust.",
     "trust.",
     "approval.",
     "lifecycle.",
+    "executable.",
 ];
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
