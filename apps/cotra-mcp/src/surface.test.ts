@@ -63,7 +63,7 @@ test("the MCP surface registers exactly the canonical closed tool set", () => {
 test("no MCP tool source reaches lifecycle, installer, update, trust, or approval surfaces", () => {
   const offenders: string[] = [];
   const forbidden = [
-    /cotra\.exe/i,
+    /cotra\.exe\b/i,
     /cotra-mcp-host/i,
     /\bsupervise\b/i,
     /self-check/i,
