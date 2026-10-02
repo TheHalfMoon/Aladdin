@@ -712,6 +712,112 @@ pub fn remote(args: &mut Args) -> Result<Output, LifecycleError> {
     }
 }
 
+/// `cotra exec add|remove|list`: the SG-000060 protected executable registry.
+pub fn exec(args: &mut Args) -> Result<Output, LifecycleError> {
+    let action = args.positional("exec action (add, remove, list)")?;
+    let layout = Layout::for_current_user()?;
+    let split = |value: Option<String>| -> Vec<String> {
+        value
+            .map(|list| {
+                list.split(',')
+                    .map(|s| s.trim().to_owned())
+                    .filter(|s| !s.is_empty())
+                    .collect()
+            })
+            .unwrap_or_default()
+    };
+    let (capability, operation, arguments, timeout) = match action.as_str() {
+        "add" => {
+            let id = args.positional("executable id")?;
+            let path = args.positional("executable path")?;
+            let subcommands = split(args.value("--subcommands")?);
+            let denied_args = split(args.value("--deny-args")?);
+            let max_args = match args.value("--max-args")? {
+                Some(value) => value
+                    .parse::<u64>()
+                    .map_err(|_| LifecycleError::usage("--max-args must be from 0 to 64"))?,
+                None => 16,
+            };
+            eprintln!("Confirm with Windows Hello when prompted. Registering an executable is a STRONG approval and cannot be granted by an agent.");
+            (
+                "executable.registry.add",
+                "add",
+                json!({ "id": id, "path": path, "subcommands": subcommands, "denied_args": denied_args, "max_args": max_args }),
+                Duration::from_secs(180),
+            )
+        }
+        "remove" => {
+            let id = args.positional("executable id")?;
+            (
+                "executable.registry.remove",
+                "remove",
+                json!({ "id": id }),
+                Duration::from_secs(30),
+            )
+        }
+        "list" => (
+            "executable.registry.list",
+            "get",
+            json!({}),
+            Duration::from_secs(30),
+        ),
+        other => {
+            return Err(LifecycleError::usage(format!(
+                "unknown exec action {other:?}; run `cotra help`"
+            )))
+        }
+    };
+    args.finish()?;
+    let config = Config::load(&layout)?;
+    config.check_workspaces_with_policy()?;
+    let workspace = config.default_workspace().unwrap_or("default").to_string();
+    let version = active_version(&layout)?;
+    let request = ipc::request(&workspace, capability, operation, arguments);
+    let response = ipc::call(
+        &layout.version_dir(&version).join("cotrad.exe"),
+        &config,
+        &request,
+        timeout,
+    )?;
+    let result = ipc::expect_ok(&response)?.clone();
+    let human = match action.as_str() {
+        "add" => format!(
+            "Registered {} ({}) sha256 {}.\n",
+            result["id"].as_str().unwrap_or("?"),
+            result["path"].as_str().unwrap_or("?"),
+            result["sha256"].as_str().unwrap_or("?")
+        ),
+        "remove" => format!("Removed {} executable(s).\n", result["removed"]),
+        _ => {
+            let mut text = String::new();
+            for entry in result["executables"]
+                .as_array()
+                .cloned()
+                .unwrap_or_default()
+            {
+                text.push_str(&format!(
+                    "{} {} subcommands={} max_args={}\n",
+                    entry["id"].as_str().unwrap_or("?"),
+                    entry["path"].as_str().unwrap_or("?"),
+                    entry["subcommands"],
+                    entry["max_args"]
+                ));
+            }
+            if text.is_empty() {
+                text.push_str(
+                    "No registered executables. process_spawn admits only the built-in baseline.\n",
+                );
+            }
+            text
+        }
+    };
+    Ok(Output {
+        exit_code: 0,
+        human,
+        json: json!({"ok": true, "result": result}),
+    })
+}
+
 /// `cotra remote enable|pair`: STRONG-gated device enrollment.
 pub fn remote_enroll(args: &mut Args, action: &str) -> Result<i32, LifecycleError> {
     let relay = args.value("--relay")?;

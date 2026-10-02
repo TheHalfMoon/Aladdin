@@ -1,105 +1,602 @@
 {
   "schema": "cotra-parity-inventory/1",
   "grain": "SG-000059",
-  "statuses": ["implemented_exposed", "implemented_hidden", "missing", "intentionally_denied"],
+  "statuses": [
+    "implemented_exposed",
+    "implemented_hidden",
+    "missing",
+    "intentionally_denied"
+  ],
   "capabilities": [
-    { "capability": "system.status", "operation": "get", "status": "implemented_exposed", "mcp_tool": "system_status" },
-    { "capability": "workspace.get", "operation": "get", "status": "implemented_exposed", "mcp_tool": "workspace_get" },
-    { "capability": "fs.stat", "operation": "stat", "status": "implemented_exposed", "mcp_tool": "fs_stat" },
-    { "capability": "fs.list", "operation": "list", "status": "implemented_exposed", "mcp_tool": "fs_list" },
-    { "capability": "fs.read", "operation": "read", "status": "implemented_exposed", "mcp_tool": "fs_read" },
-    { "capability": "fs.search", "operation": "search", "status": "implemented_exposed", "mcp_tool": "fs_search" },
-    { "capability": "fs.write", "operation": "preview", "status": "implemented_exposed", "mcp_tool": "fs_write_preview" },
-    { "capability": "fs.write", "operation": "write", "status": "implemented_exposed", "mcp_tool": "fs_write" },
-    { "capability": "process.spawn", "operation": "spawn", "status": "implemented_exposed", "mcp_tool": "process_spawn" },
-    { "capability": "git.status", "operation": "status", "status": "implemented_exposed", "mcp_tool": "git_status" },
-    { "capability": "git.diff", "operation": "diff", "status": "implemented_exposed", "mcp_tool": "git_diff" },
-    { "capability": "git.log", "operation": "log", "status": "implemented_exposed", "mcp_tool": "git_log" },
-    { "capability": "git.branch.create", "operation": "create", "status": "implemented_exposed", "mcp_tool": "git_branch_create" },
-    { "capability": "git.stage", "operation": "stage", "status": "implemented_exposed", "mcp_tool": "git_stage" },
-    { "capability": "git.unstage", "operation": "unstage", "status": "implemented_exposed", "mcp_tool": "git_unstage" },
-    { "capability": "git.commit", "operation": "commit", "status": "implemented_exposed", "mcp_tool": "git_commit" },
-    { "capability": "git.fetch.preview", "operation": "preview", "status": "implemented_exposed", "mcp_tool": "git_fetch_preview" },
-    { "capability": "git.fetch", "operation": "fetch", "status": "implemented_exposed", "mcp_tool": "git_fetch" },
-    { "capability": "git.push.preview", "operation": "preview", "status": "implemented_exposed", "mcp_tool": "git_push_preview" },
-    { "capability": "git.push", "operation": "push", "status": "implemented_exposed", "mcp_tool": "git_push" },
-
-    { "capability": "browser.profile", "operation": "status", "status": "implemented_hidden", "owner_grain": "SG-000062" },
-    { "capability": "browser.destination", "operation": "validate", "status": "implemented_hidden", "owner_grain": "SG-000062" },
-    { "capability": "browser.page", "operation": "open", "status": "implemented_hidden", "owner_grain": "SG-000062" },
-    { "capability": "browser.navigation", "operation": "preview", "status": "implemented_hidden", "owner_grain": "SG-000062" },
-    { "capability": "browser.navigation", "operation": "navigate", "status": "implemented_hidden", "owner_grain": "SG-000062" },
-    { "capability": "browser.snapshot", "operation": "observe", "status": "implemented_hidden", "owner_grain": "SG-000062" },
-    { "capability": "browser.dom", "operation": "click", "status": "implemented_hidden", "owner_grain": "SG-000062" },
-    { "capability": "browser.dom", "operation": "fill", "status": "implemented_hidden", "owner_grain": "SG-000062" },
-    { "capability": "browser.download", "operation": "preview", "status": "implemented_hidden", "owner_grain": "SG-000062" },
-    { "capability": "browser.download", "operation": "download", "status": "implemented_hidden", "owner_grain": "SG-000062" },
-    { "capability": "browser.upload", "operation": "preview", "status": "implemented_hidden", "owner_grain": "SG-000062" },
-    { "capability": "browser.upload", "operation": "submit", "status": "implemented_hidden", "owner_grain": "SG-000062" },
-    { "capability": "uia.process", "operation": "observe", "status": "implemented_hidden", "owner_grain": "SG-000063" },
-    { "capability": "uia.window", "operation": "list", "status": "implemented_hidden", "owner_grain": "SG-000063" },
-    { "capability": "uia.window", "operation": "observe", "status": "implemented_hidden", "owner_grain": "SG-000063" },
-    { "capability": "uia.tree", "operation": "observe", "status": "implemented_hidden", "owner_grain": "SG-000063" },
-    { "capability": "uia.element", "operation": "observe", "status": "implemented_hidden", "owner_grain": "SG-000063" },
-    { "capability": "uia.element", "operation": "invoke", "status": "implemented_hidden", "owner_grain": "SG-000063" },
-    { "capability": "uia.element", "operation": "set_value", "status": "implemented_hidden", "owner_grain": "SG-000063" },
-    { "capability": "uia.element", "operation": "select", "status": "implemented_hidden", "owner_grain": "SG-000063" },
-    { "capability": "uia.element", "operation": "toggle", "status": "implemented_hidden", "owner_grain": "SG-000063" },
-    { "capability": "uia.element", "operation": "scroll", "status": "implemented_hidden", "owner_grain": "SG-000063" },
-    { "capability": "uia.screenshot", "operation": "capture", "status": "implemented_hidden", "owner_grain": "SG-000063" },
-    { "capability": "uia.visual", "operation": "propose", "status": "implemented_hidden", "owner_grain": "SG-000063" },
-    { "capability": "uia.coordinates", "operation": "propose", "status": "implemented_hidden", "owner_grain": "SG-000063" },
-    { "capability": "uia.input", "operation": "execute", "status": "implemented_hidden", "owner_grain": "SG-000063" },
-    { "capability": "clipboard", "operation": "read", "status": "implemented_hidden", "owner_grain": "SG-000064" },
-    { "capability": "clipboard", "operation": "write", "status": "implemented_hidden", "owner_grain": "SG-000064" },
-    { "capability": "network", "operation": "fetch", "status": "implemented_hidden", "owner_grain": "SG-000064" },
-
-    { "capability": "workspace.trust.get", "operation": "get", "status": "intentionally_denied", "reason": "local authority management: trust is read and changed only through the local CLI; an agent must never inspect or move its own trust boundary" },
-    { "capability": "workspace.trust.grant", "operation": "grant", "status": "intentionally_denied", "reason": "agent self-grant of workspace trust; STRONG local presence only" },
-    { "capability": "workspace.trust.revoke", "operation": "revoke", "status": "intentionally_denied", "reason": "trust changes are local STRONG decisions, never MCP tools" },
-    { "capability": "trust.revoke_emergency", "operation": "revoke", "status": "intentionally_denied", "reason": "emergency revoke is a local STRONG human action" },
-    { "capability": "approval.history.query", "operation": "query", "status": "intentionally_denied", "reason": "approval history is local audit for the human, not agent context" },
-    { "capability": "trust.history.query", "operation": "query", "status": "intentionally_denied", "reason": "trust history is local audit for the human, not agent context" },
-    { "capability": "remote.lease.create", "operation": "create", "status": "intentionally_denied", "reason": "remote-session leases are created only with local STRONG presence" },
-    { "capability": "remote.lease.revoke", "operation": "revoke", "status": "intentionally_denied", "reason": "lease management is local-only" },
-    { "capability": "remote.lease.status", "operation": "get", "status": "intentionally_denied", "reason": "lease management is local-only" },
-    { "capability": "remote.enrollment.authorize", "operation": "authorize", "status": "intentionally_denied", "reason": "device enrollment and pairing are local STRONG operations" }
+    {
+      "capability": "system.status",
+      "operation": "get",
+      "status": "implemented_exposed",
+      "mcp_tool": "system_status"
+    },
+    {
+      "capability": "workspace.get",
+      "operation": "get",
+      "status": "implemented_exposed",
+      "mcp_tool": "workspace_get"
+    },
+    {
+      "capability": "fs.stat",
+      "operation": "stat",
+      "status": "implemented_exposed",
+      "mcp_tool": "fs_stat"
+    },
+    {
+      "capability": "fs.list",
+      "operation": "list",
+      "status": "implemented_exposed",
+      "mcp_tool": "fs_list"
+    },
+    {
+      "capability": "fs.read",
+      "operation": "read",
+      "status": "implemented_exposed",
+      "mcp_tool": "fs_read"
+    },
+    {
+      "capability": "fs.search",
+      "operation": "search",
+      "status": "implemented_exposed",
+      "mcp_tool": "fs_search"
+    },
+    {
+      "capability": "fs.write",
+      "operation": "preview",
+      "status": "implemented_exposed",
+      "mcp_tool": "fs_write_preview"
+    },
+    {
+      "capability": "fs.write",
+      "operation": "write",
+      "status": "implemented_exposed",
+      "mcp_tool": "fs_write"
+    },
+    {
+      "capability": "process.spawn",
+      "operation": "spawn",
+      "status": "implemented_exposed",
+      "mcp_tool": "process_spawn"
+    },
+    {
+      "capability": "git.status",
+      "operation": "status",
+      "status": "implemented_exposed",
+      "mcp_tool": "git_status"
+    },
+    {
+      "capability": "git.diff",
+      "operation": "diff",
+      "status": "implemented_exposed",
+      "mcp_tool": "git_diff"
+    },
+    {
+      "capability": "git.log",
+      "operation": "log",
+      "status": "implemented_exposed",
+      "mcp_tool": "git_log"
+    },
+    {
+      "capability": "git.branch.create",
+      "operation": "create",
+      "status": "implemented_exposed",
+      "mcp_tool": "git_branch_create"
+    },
+    {
+      "capability": "git.stage",
+      "operation": "stage",
+      "status": "implemented_exposed",
+      "mcp_tool": "git_stage"
+    },
+    {
+      "capability": "git.unstage",
+      "operation": "unstage",
+      "status": "implemented_exposed",
+      "mcp_tool": "git_unstage"
+    },
+    {
+      "capability": "git.commit",
+      "operation": "commit",
+      "status": "implemented_exposed",
+      "mcp_tool": "git_commit"
+    },
+    {
+      "capability": "git.fetch.preview",
+      "operation": "preview",
+      "status": "implemented_exposed",
+      "mcp_tool": "git_fetch_preview"
+    },
+    {
+      "capability": "git.fetch",
+      "operation": "fetch",
+      "status": "implemented_exposed",
+      "mcp_tool": "git_fetch"
+    },
+    {
+      "capability": "git.push.preview",
+      "operation": "preview",
+      "status": "implemented_exposed",
+      "mcp_tool": "git_push_preview"
+    },
+    {
+      "capability": "git.push",
+      "operation": "push",
+      "status": "implemented_exposed",
+      "mcp_tool": "git_push"
+    },
+    {
+      "capability": "browser.profile",
+      "operation": "status",
+      "status": "implemented_hidden",
+      "owner_grain": "SG-000062"
+    },
+    {
+      "capability": "browser.destination",
+      "operation": "validate",
+      "status": "implemented_hidden",
+      "owner_grain": "SG-000062"
+    },
+    {
+      "capability": "browser.page",
+      "operation": "open",
+      "status": "implemented_hidden",
+      "owner_grain": "SG-000062"
+    },
+    {
+      "capability": "browser.navigation",
+      "operation": "preview",
+      "status": "implemented_hidden",
+      "owner_grain": "SG-000062"
+    },
+    {
+      "capability": "browser.navigation",
+      "operation": "navigate",
+      "status": "implemented_hidden",
+      "owner_grain": "SG-000062"
+    },
+    {
+      "capability": "browser.snapshot",
+      "operation": "observe",
+      "status": "implemented_hidden",
+      "owner_grain": "SG-000062"
+    },
+    {
+      "capability": "browser.dom",
+      "operation": "click",
+      "status": "implemented_hidden",
+      "owner_grain": "SG-000062"
+    },
+    {
+      "capability": "browser.dom",
+      "operation": "fill",
+      "status": "implemented_hidden",
+      "owner_grain": "SG-000062"
+    },
+    {
+      "capability": "browser.download",
+      "operation": "preview",
+      "status": "implemented_hidden",
+      "owner_grain": "SG-000062"
+    },
+    {
+      "capability": "browser.download",
+      "operation": "download",
+      "status": "implemented_hidden",
+      "owner_grain": "SG-000062"
+    },
+    {
+      "capability": "browser.upload",
+      "operation": "preview",
+      "status": "implemented_hidden",
+      "owner_grain": "SG-000062"
+    },
+    {
+      "capability": "browser.upload",
+      "operation": "submit",
+      "status": "implemented_hidden",
+      "owner_grain": "SG-000062"
+    },
+    {
+      "capability": "uia.process",
+      "operation": "observe",
+      "status": "implemented_hidden",
+      "owner_grain": "SG-000063"
+    },
+    {
+      "capability": "uia.window",
+      "operation": "list",
+      "status": "implemented_hidden",
+      "owner_grain": "SG-000063"
+    },
+    {
+      "capability": "uia.window",
+      "operation": "observe",
+      "status": "implemented_hidden",
+      "owner_grain": "SG-000063"
+    },
+    {
+      "capability": "uia.tree",
+      "operation": "observe",
+      "status": "implemented_hidden",
+      "owner_grain": "SG-000063"
+    },
+    {
+      "capability": "uia.element",
+      "operation": "observe",
+      "status": "implemented_hidden",
+      "owner_grain": "SG-000063"
+    },
+    {
+      "capability": "uia.element",
+      "operation": "invoke",
+      "status": "implemented_hidden",
+      "owner_grain": "SG-000063"
+    },
+    {
+      "capability": "uia.element",
+      "operation": "set_value",
+      "status": "implemented_hidden",
+      "owner_grain": "SG-000063"
+    },
+    {
+      "capability": "uia.element",
+      "operation": "select",
+      "status": "implemented_hidden",
+      "owner_grain": "SG-000063"
+    },
+    {
+      "capability": "uia.element",
+      "operation": "toggle",
+      "status": "implemented_hidden",
+      "owner_grain": "SG-000063"
+    },
+    {
+      "capability": "uia.element",
+      "operation": "scroll",
+      "status": "implemented_hidden",
+      "owner_grain": "SG-000063"
+    },
+    {
+      "capability": "uia.screenshot",
+      "operation": "capture",
+      "status": "implemented_hidden",
+      "owner_grain": "SG-000063"
+    },
+    {
+      "capability": "uia.visual",
+      "operation": "propose",
+      "status": "implemented_hidden",
+      "owner_grain": "SG-000063"
+    },
+    {
+      "capability": "uia.coordinates",
+      "operation": "propose",
+      "status": "implemented_hidden",
+      "owner_grain": "SG-000063"
+    },
+    {
+      "capability": "uia.input",
+      "operation": "execute",
+      "status": "implemented_hidden",
+      "owner_grain": "SG-000063"
+    },
+    {
+      "capability": "clipboard",
+      "operation": "read",
+      "status": "implemented_hidden",
+      "owner_grain": "SG-000064"
+    },
+    {
+      "capability": "clipboard",
+      "operation": "write",
+      "status": "implemented_hidden",
+      "owner_grain": "SG-000064"
+    },
+    {
+      "capability": "network",
+      "operation": "fetch",
+      "status": "implemented_hidden",
+      "owner_grain": "SG-000064"
+    },
+    {
+      "capability": "workspace.trust.get",
+      "operation": "get",
+      "status": "intentionally_denied",
+      "reason": "local authority management: trust is read and changed only through the local CLI; an agent must never inspect or move its own trust boundary"
+    },
+    {
+      "capability": "workspace.trust.grant",
+      "operation": "grant",
+      "status": "intentionally_denied",
+      "reason": "agent self-grant of workspace trust; STRONG local presence only"
+    },
+    {
+      "capability": "workspace.trust.revoke",
+      "operation": "revoke",
+      "status": "intentionally_denied",
+      "reason": "trust changes are local STRONG decisions, never MCP tools"
+    },
+    {
+      "capability": "trust.revoke_emergency",
+      "operation": "revoke",
+      "status": "intentionally_denied",
+      "reason": "emergency revoke is a local STRONG human action"
+    },
+    {
+      "capability": "approval.history.query",
+      "operation": "query",
+      "status": "intentionally_denied",
+      "reason": "approval history is local audit for the human, not agent context"
+    },
+    {
+      "capability": "trust.history.query",
+      "operation": "query",
+      "status": "intentionally_denied",
+      "reason": "trust history is local audit for the human, not agent context"
+    },
+    {
+      "capability": "remote.lease.create",
+      "operation": "create",
+      "status": "intentionally_denied",
+      "reason": "remote-session leases are created only with local STRONG presence"
+    },
+    {
+      "capability": "remote.lease.revoke",
+      "operation": "revoke",
+      "status": "intentionally_denied",
+      "reason": "lease management is local-only"
+    },
+    {
+      "capability": "remote.lease.status",
+      "operation": "get",
+      "status": "intentionally_denied",
+      "reason": "lease management is local-only"
+    },
+    {
+      "capability": "remote.enrollment.authorize",
+      "operation": "authorize",
+      "status": "intentionally_denied",
+      "reason": "device enrollment and pairing are local STRONG operations"
+    },
+    {
+      "capability": "executable.registry.add",
+      "operation": "add",
+      "status": "intentionally_denied",
+      "reason": "executable registration is a local STRONG human decision; an agent must never widen what it can run"
+    },
+    {
+      "capability": "executable.registry.remove",
+      "operation": "remove",
+      "status": "intentionally_denied",
+      "reason": "registry management is local-only"
+    },
+    {
+      "capability": "executable.registry.list",
+      "operation": "get",
+      "status": "intentionally_denied",
+      "reason": "registry management is local-only; registered identifiers are shown read-only in system_status"
+    }
   ],
   "workflows": [
-    { "id": "read_file", "status": "implemented_exposed", "via": ["fs_read"] },
-    { "id": "read_multiple_files", "status": "implemented_exposed", "via": ["fs_read"], "note": "one bounded fs_read per file" },
-    { "id": "read_file_range", "status": "missing", "owner_grain": "SG-000061", "note": "offset and length window over a bounded text read" },
-    { "id": "write_file", "status": "implemented_exposed", "via": ["fs_write_preview", "fs_write"] },
-    { "id": "edit_block", "status": "missing", "owner_grain": "SG-000061", "note": "exact search-and-replace bound to the current file digest" },
-    { "id": "list_directory", "status": "implemented_exposed", "via": ["fs_list"] },
-    { "id": "file_info", "status": "implemented_exposed", "via": ["fs_stat"] },
-    { "id": "search_file_content", "status": "implemented_exposed", "via": ["fs_search"] },
-    { "id": "search_file_names", "status": "missing", "owner_grain": "SG-000061", "note": "bounded name glob inside the workspace" },
-    { "id": "create_directory", "status": "missing", "owner_grain": "SG-000061" },
-    { "id": "move_or_rename", "status": "missing", "owner_grain": "SG-000061", "note": "final-path identity, workspace ceiling, approval" },
-    { "id": "delete_file", "status": "missing", "owner_grain": "SG-000061", "note": "destructive approval and postcondition verification" },
-    { "id": "run_bounded_program", "status": "implemented_exposed", "via": ["process_spawn"], "note": "argv-only; the public ceiling is one protected executable until SG-000060" },
-    { "id": "run_build_and_test_tools", "status": "missing", "owner_grain": "SG-000060", "note": "STRONG-gated protected executable registry with interpreter controls" },
-    { "id": "git_read", "status": "implemented_exposed", "via": ["git_status", "git_diff", "git_log"] },
-    { "id": "git_local_mutation", "status": "implemented_exposed", "via": ["git_branch_create", "git_stage", "git_unstage", "git_commit"] },
-    { "id": "git_remote", "status": "implemented_exposed", "via": ["git_fetch_preview", "git_fetch", "git_push_preview", "git_push"] },
-    { "id": "browser_structured", "status": "implemented_hidden", "owner_grain": "SG-000062" },
-    { "id": "desktop_observe_and_act", "status": "implemented_hidden", "owner_grain": "SG-000063" },
-    { "id": "screenshots", "status": "implemented_hidden", "owner_grain": "SG-000063" },
-    { "id": "clipboard_read_write", "status": "implemented_hidden", "owner_grain": "SG-000064" },
-    { "id": "destination_scoped_web_fetch", "status": "implemented_hidden", "owner_grain": "SG-000064" },
-    { "id": "list_processes", "status": "implemented_hidden", "owner_grain": "SG-000063", "note": "uia.process observe" },
-    { "id": "shell_command_string", "status": "intentionally_denied", "reason": "unrestricted shell: arbitrary command strings bypass argv validation, provenance, and containment" },
-    { "id": "powershell_or_cmd", "status": "intentionally_denied", "reason": "unrestricted PowerShell or cmd is a general-purpose interpreter with full user authority" },
-    { "id": "interactive_repl_sessions", "status": "intentionally_denied", "reason": "interactive interpreter sessions are equivalent to an unrestricted shell" },
-    { "id": "background_long_running_processes", "status": "intentionally_denied", "reason": "every process is bounded by timeout, output, and descendant containment; no detached authority outlives the request" },
-    { "id": "kill_arbitrary_process", "status": "intentionally_denied", "reason": "terminating processes Cotra did not start would affect the user's own programs" },
-    { "id": "elevation_or_admin", "status": "intentionally_denied", "reason": "automatic elevation is never available" },
-    { "id": "read_outside_workspaces", "status": "intentionally_denied", "reason": "the workspace ceiling bounds every filesystem operation; home, credentials, and Cotra protected state stay unreachable" },
-    { "id": "arbitrary_network_sockets", "status": "intentionally_denied", "reason": "only destination-scoped fetch exists; no generic sockets or proxies" },
-    { "id": "browser_script_or_devtools", "status": "intentionally_denied", "reason": "arbitrary JavaScript, DevTools, and debugger access are unrestricted browser authority" },
-    { "id": "agent_changes_own_policy", "status": "intentionally_denied", "reason": "configuration, trust, approval, and lease changes are local human decisions" },
-    { "id": "install_software_or_services", "status": "intentionally_denied", "reason": "installers and services are outside the workstation tool surface" },
-    { "id": "read_office_or_pdf_documents", "status": "missing", "owner_grain": "outside_v0_2_target", "note": "binary document parsing is not part of the intended v0.2 replacement target" }
+    {
+      "id": "read_file",
+      "status": "implemented_exposed",
+      "via": [
+        "fs_read"
+      ]
+    },
+    {
+      "id": "read_multiple_files",
+      "status": "implemented_exposed",
+      "via": [
+        "fs_read"
+      ],
+      "note": "one bounded fs_read per file"
+    },
+    {
+      "id": "read_file_range",
+      "status": "missing",
+      "owner_grain": "SG-000061",
+      "note": "offset and length window over a bounded text read"
+    },
+    {
+      "id": "write_file",
+      "status": "implemented_exposed",
+      "via": [
+        "fs_write_preview",
+        "fs_write"
+      ]
+    },
+    {
+      "id": "edit_block",
+      "status": "missing",
+      "owner_grain": "SG-000061",
+      "note": "exact search-and-replace bound to the current file digest"
+    },
+    {
+      "id": "list_directory",
+      "status": "implemented_exposed",
+      "via": [
+        "fs_list"
+      ]
+    },
+    {
+      "id": "file_info",
+      "status": "implemented_exposed",
+      "via": [
+        "fs_stat"
+      ]
+    },
+    {
+      "id": "search_file_content",
+      "status": "implemented_exposed",
+      "via": [
+        "fs_search"
+      ]
+    },
+    {
+      "id": "search_file_names",
+      "status": "missing",
+      "owner_grain": "SG-000061",
+      "note": "bounded name glob inside the workspace"
+    },
+    {
+      "id": "create_directory",
+      "status": "missing",
+      "owner_grain": "SG-000061"
+    },
+    {
+      "id": "move_or_rename",
+      "status": "missing",
+      "owner_grain": "SG-000061",
+      "note": "final-path identity, workspace ceiling, approval"
+    },
+    {
+      "id": "delete_file",
+      "status": "missing",
+      "owner_grain": "SG-000061",
+      "note": "destructive approval and postcondition verification"
+    },
+    {
+      "id": "run_bounded_program",
+      "status": "implemented_exposed",
+      "via": [
+        "process_spawn"
+      ],
+      "note": "argv-only; the built-in baseline plus locally registered protected executables (SG-000060)"
+    },
+    {
+      "id": "run_build_and_test_tools",
+      "status": "implemented_exposed",
+      "via": [
+        "process_spawn"
+      ],
+      "note": "native executables registered locally with STRONG presence (cotra exec add), hash-pinned, argv grammar, contained, no network; interpreters denied (SG-000060)"
+    },
+    {
+      "id": "git_read",
+      "status": "implemented_exposed",
+      "via": [
+        "git_status",
+        "git_diff",
+        "git_log"
+      ]
+    },
+    {
+      "id": "git_local_mutation",
+      "status": "implemented_exposed",
+      "via": [
+        "git_branch_create",
+        "git_stage",
+        "git_unstage",
+        "git_commit"
+      ]
+    },
+    {
+      "id": "git_remote",
+      "status": "implemented_exposed",
+      "via": [
+        "git_fetch_preview",
+        "git_fetch",
+        "git_push_preview",
+        "git_push"
+      ]
+    },
+    {
+      "id": "browser_structured",
+      "status": "implemented_hidden",
+      "owner_grain": "SG-000062"
+    },
+    {
+      "id": "desktop_observe_and_act",
+      "status": "implemented_hidden",
+      "owner_grain": "SG-000063"
+    },
+    {
+      "id": "screenshots",
+      "status": "implemented_hidden",
+      "owner_grain": "SG-000063"
+    },
+    {
+      "id": "clipboard_read_write",
+      "status": "implemented_hidden",
+      "owner_grain": "SG-000064"
+    },
+    {
+      "id": "destination_scoped_web_fetch",
+      "status": "implemented_hidden",
+      "owner_grain": "SG-000064"
+    },
+    {
+      "id": "list_processes",
+      "status": "implemented_hidden",
+      "owner_grain": "SG-000063",
+      "note": "uia.process observe"
+    },
+    {
+      "id": "shell_command_string",
+      "status": "intentionally_denied",
+      "reason": "unrestricted shell: arbitrary command strings bypass argv validation, provenance, and containment"
+    },
+    {
+      "id": "powershell_or_cmd",
+      "status": "intentionally_denied",
+      "reason": "unrestricted PowerShell or cmd is a general-purpose interpreter with full user authority"
+    },
+    {
+      "id": "interactive_repl_sessions",
+      "status": "intentionally_denied",
+      "reason": "interactive interpreter sessions are equivalent to an unrestricted shell"
+    },
+    {
+      "id": "background_long_running_processes",
+      "status": "intentionally_denied",
+      "reason": "every process is bounded by timeout, output, and descendant containment; no detached authority outlives the request"
+    },
+    {
+      "id": "kill_arbitrary_process",
+      "status": "intentionally_denied",
+      "reason": "terminating processes Cotra did not start would affect the user's own programs"
+    },
+    {
+      "id": "elevation_or_admin",
+      "status": "intentionally_denied",
+      "reason": "automatic elevation is never available"
+    },
+    {
+      "id": "read_outside_workspaces",
+      "status": "intentionally_denied",
+      "reason": "the workspace ceiling bounds every filesystem operation; home, credentials, and Cotra protected state stay unreachable"
+    },
+    {
+      "id": "arbitrary_network_sockets",
+      "status": "intentionally_denied",
+      "reason": "only destination-scoped fetch exists; no generic sockets or proxies"
+    },
+    {
+      "id": "browser_script_or_devtools",
+      "status": "intentionally_denied",
+      "reason": "arbitrary JavaScript, DevTools, and debugger access are unrestricted browser authority"
+    },
+    {
+      "id": "agent_changes_own_policy",
+      "status": "intentionally_denied",
+      "reason": "configuration, trust, approval, and lease changes are local human decisions"
+    },
+    {
+      "id": "install_software_or_services",
+      "status": "intentionally_denied",
+      "reason": "installers and services are outside the workstation tool surface"
+    },
+    {
+      "id": "read_office_or_pdf_documents",
+      "status": "missing",
+      "owner_grain": "outside_v0_2_target",
+      "note": "binary document parsing is not part of the intended v0.2 replacement target"
+    }
   ]
 }

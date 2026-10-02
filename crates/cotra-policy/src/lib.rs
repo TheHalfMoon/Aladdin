@@ -222,7 +222,6 @@ fn validate_process_spawn(request: &RequestEnvelope) -> Result<(), PolicyError> 
     reject_unknown_process_arguments(arguments)?;
 
     let executable = required_string(arguments, "executable")?;
-    validate_process_executable(executable)?;
 
     let argv = arguments
         .get("argv")
@@ -269,6 +268,11 @@ fn validate_process_spawn(request: &RequestEnvelope) -> Result<(), PolicyError> 
             "process.spawn command line exceeds the bounded UTF-16 limit",
         ));
     }
+    let argv_strings: Vec<String> = argv
+        .iter()
+        .filter_map(|value| value.as_str().map(str::to_owned))
+        .collect();
+    validate_process_executable(executable, &argv_strings)?;
 
     let cwd = required_string(arguments, "cwd")?;
     if cwd.is_empty() {
@@ -355,7 +359,7 @@ fn bounded_u64(
     Ok(value)
 }
 
-fn validate_process_executable(executable: &str) -> Result<(), PolicyError> {
+fn validate_process_executable(executable: &str, argv: &[String]) -> Result<(), PolicyError> {
     if executable.is_empty() || executable.contains('\0') {
         return Err(PolicyError::new(
             FailureCode::InvalidRequest,
@@ -383,12 +387,17 @@ fn validate_process_executable(executable: &str) -> Result<(), PolicyError> {
         ));
     }
 
-    enforce_sg000010_executable_policy(executable)?;
+    enforce_sg000010_executable_policy(executable, argv)?;
     Ok(())
 }
 
+/// SG-000010 baseline (`whoami.exe`) or, from SG-000060, a locally
+/// registered, hash-pinned executable whose argv matches its grammar.
 #[cfg(windows)]
-fn enforce_sg000010_executable_policy(executable: &str) -> Result<(), PolicyError> {
+fn enforce_sg000010_executable_policy(
+    executable: &str,
+    argv: &[String],
+) -> Result<(), PolicyError> {
     let requested = std::fs::canonicalize(executable).map_err(|error| {
         PolicyError::new(
             FailureCode::InvalidRequest,
@@ -412,17 +421,22 @@ fn enforce_sg000010_executable_policy(executable: &str) -> Result<(), PolicyErro
             format!("SG-000010 whoami.exe fixture could not be resolved: {error}"),
         )
     })?;
-    if requested != allowed {
-        return Err(PolicyError::new(
-            FailureCode::CapabilityDenied,
-            "SG-000010 process.spawn permits only the qualified Windows whoami.exe executable; executable registry widening is a successor authority grain",
-        ));
+    if requested == allowed {
+        return Ok(());
     }
-    Ok(())
+    let entries = crate::executable_registry::load_registry(
+        &crate::executable_registry::default_registry_path(),
+    );
+    crate::executable_registry::check_spawn(&entries, Path::new(executable), argv)
+        .map(|_| ())
+        .map_err(|error| PolicyError::new(error.code, error.message))
 }
 
 #[cfg(not(windows))]
-fn enforce_sg000010_executable_policy(_executable: &str) -> Result<(), PolicyError> {
+fn enforce_sg000010_executable_policy(
+    _executable: &str,
+    _argv: &[String],
+) -> Result<(), PolicyError> {
     Ok(())
 }
 

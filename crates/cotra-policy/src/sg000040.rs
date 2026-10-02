@@ -1,3 +1,4 @@
+pub mod executable_registry;
 pub mod protected_state;
 pub mod remote_session;
 #[path = "sg000039.rs"]
