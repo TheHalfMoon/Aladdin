@@ -1,0 +1,70 @@
+{
+  "id": "SG-000066",
+  "title": "P16 security and parity exit",
+  "program": "COTRA-P16",
+  "state": "GRAIN",
+  "risk": "high",
+  "created": "2026-10-02",
+  "base": "837201a57238f1bb0afc6306c8d5a154ddb2ac72",
+  "dependencies": [
+    "SG-000065"
+  ],
+  "objective": "Qualify the COTRA-P16 exit using a pinned, provenance-recorded source audit of Desktop Commander (wonderwhy-er/DesktopCommanderMCP) and the founder-authorized Kernux source pool as evidence input: build a parity matrix classifying every major Desktop Commander-class workflow as COTRA_NATIVE, COTRA_SUPERIOR, DONOR_ADAPTED, SAFE_SUCCESSOR_REQUIRED, or INTENTIONALLY_DENIED, and a donor reuse matrix classifying each candidate subsystem as REUSE_VERBATIM, ADAPT, PORT, REFERENCE_ONLY, or REJECT_FOR_COTRA with exact revisions, paths, obligations, and authority deltas; prove that the intended everyday local development and workstation workflows run end to end through Cotra's own MCP surface and kernel; record every deliberately denied authority as a security decision; prove with regression tests that no unrestricted shell, PowerShell or cmd, generic socket, silent elevation, remote approval, or model self-approval path exists; confirm the profiles are exact; fix every defect at its root; and record the P16 exit. Donor capabilities that would add authority are recorded for lawful successor grains, never imported here.",
+  "scope": {
+    "include": [
+      "a pinned source audit of Desktop Commander and the Kernux source pool (Kernux donor maps and the sources they reference) producing a parity matrix and a donor reuse matrix with exact revisions, source paths, Cotra destinations, license and dependency obligations, authority deltas, and reasons",
+      "an end-to-end workflow suite over the authoritative MCP builder and the real cotrad dispatch for every workflow the parity inventory marks exposed, using the test approval broker for approval-bound steps and real Windows where behavior is Windows-specific",
+      "a Desktop Commander replacement record mapping each Desktop Commander-class capability to its Cotra tool, its documented security denial, or its explicit out-of-target status",
+      "source and behavior regression tests proving no unrestricted shell, PowerShell or cmd interpreter launch, generic socket or proxy, silent elevation, remote approval, or model self-approval path exists in shipped sources",
+      "confirmation that the core and desktop_structured profiles and the parity inventory agree exactly with the shipped catalog",
+      "root-cause fixes for any defect found and the COTRA-P16 exit record"
+    ],
+    "exclude": [
+      "importing donor code that adds authority; such candidates are recorded as SAFE_SUCCESSOR_REQUIRED for a lawful successor grain",
+      "any new tool, kernel shape, scope, profile, or authority",
+      "provider distribution and packaging (COTRA-P17)",
+      "claims about provider directory availability"
+    ]
+  },
+  "authority_delta": {
+    "filesystem": "None.",
+    "process": "None.",
+    "network": "None.",
+    "browser": "None.",
+    "ui_input": "None.",
+    "secrets": "None.",
+    "approval": "None.",
+    "privileged": "None."
+  },
+  "invariants": [
+    "no unrestricted shell, PowerShell, cmd, generic socket, silent elevation, or remote approval exists",
+    "deliberately denied authority is recorded as a security decision, never as a missing feature",
+    "public and local profiles are exact and regression-tested"
+  ],
+  "acceptance": [
+    {
+      "id": "A1",
+      "claim": "Every exposed everyday development and workstation workflow runs end to end through Cotra's MCP surface and kernel, and the pinned parity matrix classifies every major Desktop Commander-class workflow as COTRA_NATIVE, COTRA_SUPERIOR, DONOR_ADAPTED, SAFE_SUCCESSOR_REQUIRED, or INTENTIONALLY_DENIED with a stated reason, alongside a donor reuse matrix with exact revisions and obligations."
+    },
+    {
+      "id": "A2",
+      "claim": "Regression tests prove no unrestricted shell, PowerShell or cmd, generic socket or proxy, silent elevation, remote approval, or model self-approval path exists, and the public and local profiles equal the shipped catalog exactly."
+    },
+    {
+      "id": "A3",
+      "claim": "Exact-head CI, genuine TypeSafe Jev, Alibaba Open Code Review, manual review of excluded files, and zero unresolved review threads all pass."
+    }
+  ],
+  "successor_requirements": {
+    "sg_000067": "COTRA-P17 provider distribution may proceed only after SG-000066 closes and COTRA-P16 is exited canonically."
+  },
+  "review": {
+    "diffcipline": true,
+    "jev_semantic_review": true,
+    "alibaba_open_code_review": "required exact-range qualification where integrated",
+    "security_review": true,
+    "exact_head_ci": true,
+    "release_artifact_qualification": true
+  },
+  "done_when": "COTRA-P16 is exited canonically with workflow, denial, and profile evidence and every defect fixed at its root."
+}
