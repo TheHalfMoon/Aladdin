@@ -6,6 +6,8 @@ use std::fs::{self, File, OpenOptions};
 use std::io::{self, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 
+pub mod mutation;
+
 const DEFAULT_MAX_READ_BYTES: usize = 1024 * 1024;
 const DEFAULT_MAX_SEARCH_FILES: usize = 2_000;
 const DEFAULT_MAX_SEARCH_RESULTS: usize = 200;

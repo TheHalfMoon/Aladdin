@@ -19,8 +19,14 @@ const here = dirname(fileURLToPath(import.meta.url));
 const srcDir = join(here, "..", "src");
 
 const EXPECTED_TOOLS = [
+  "fs_edit",
+  "fs_find",
   "fs_list",
+  "fs_mkdir",
+  "fs_move",
   "fs_read",
+  "fs_read_range",
+  "fs_remove",
   "fs_search",
   "fs_stat",
   "fs_write",

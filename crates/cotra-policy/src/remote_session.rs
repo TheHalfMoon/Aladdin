@@ -199,7 +199,9 @@ pub fn required_scopes(capability: &str, operation: &str) -> Option<&'static [&'
         | ("fs.search", "search")
         | ("git.status", "status")
         | ("git.diff", "diff")
-        | ("git.log", "log") => READ,
+        | ("git.log", "log")
+        | ("fs.read_range", "read")
+        | ("fs.find", "find") => READ,
         ("fs.write", "preview")
         | ("fs.write", "write")
         | ("git.branch.create", "create")
@@ -209,7 +211,11 @@ pub fn required_scopes(capability: &str, operation: &str) -> Option<&'static [&'
         | ("git.fetch.preview", "preview")
         | ("git.fetch", "fetch")
         | ("git.push.preview", "preview")
-        | ("git.push", "push") => WRITE,
+        | ("git.push", "push")
+        | ("fs.mkdir", "mkdir")
+        | ("fs.move", "move")
+        | ("fs.remove", "remove")
+        | ("fs.edit", "edit") => WRITE,
         ("process.spawn", "spawn") => EXECUTE,
         _ => return None,
     })

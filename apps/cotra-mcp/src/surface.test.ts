@@ -9,8 +9,14 @@ const srcDir = join(here, "..", "src");
 
 /** The closed MCP tool set. Adding a tool requires a governed grain. */
 const CANONICAL_TOOLS = [
+  "fs_edit",
+  "fs_find",
   "fs_list",
+  "fs_mkdir",
+  "fs_move",
   "fs_read",
+  "fs_read_range",
+  "fs_remove",
   "fs_search",
   "fs_stat",
   "fs_write",
