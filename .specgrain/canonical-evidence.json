@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "snapshot_base": "dadbc5b273c282759501c60f587f80f461a381ea",
+  "snapshot_base": "837201a57238f1bb0afc6306c8d5a154ddb2ac72",
   "state_semantics": {
     "GRAIN": "Authorized or active work packet whose acceptance is not yet canonically proven.",
     "PROVEN": "Acceptance and required qualification are proven, but canonical closeout/governance is not yet complete.",
@@ -778,6 +778,18 @@
       "review_basis": "Exact-head genuine TypeSafe Jev 32/32 hunks with zero findings/blocking findings (pin 31f89602797fb7bea007f8a480bf368bf564954e), Alibaba Open Code Review v1.12.9 exact-range delegation over 17 files with 10 reviewable and 7 excluded files manually reviewed, exact-diff manual security review, real Windows clipboard and network evidence, Windows/Ubuntu Rust Node Governance, Supply chain audit, Release qualification, and Relay container, successful post-merge CI, and zero unresolved review threads. CodeRabbit skipped-review and cubic skipping notices evaluated as non-evidence noise with zero substantive findings.",
       "unresolved_review_threads": 0,
       "authority_boundary": "Three local-only MCP tools over the closed SG-000038, SG-000039, and SG-000040 shapes (one approved clipboard read, one approved clipboard write, one approved public HTTPS GET). No clipboard surveillance, paste, input, generic socket, proxy, or remote clipboard or network authority."
+    },
+    "SG-000065": {
+      "implementation_pr": 172,
+      "implementation_base": "dfac619b72f830bb69903700f70535ab9c187f3c",
+      "qualified_head": "967f9aedfb1b71f093584d6c333708630c6b3749",
+      "pre_merge_ci": "37052850382",
+      "pre_merge_review_gates": "37052850594",
+      "merge_sha": "837201a57238f1bb0afc6306c8d5a154ddb2ac72",
+      "post_merge_ci": "37053641221",
+      "review_basis": "Exact-head genuine TypeSafe Jev 23/23 hunks with zero findings/blocking findings (pin 31f89602797fb7bea007f8a480bf368bf564954e), Alibaba Open Code Review v1.12.9 exact-range delegation over 15 files with 5 reviewable and 10 excluded files manually reviewed, exact-diff manual security review, real stdio discovery evidence, Windows/Ubuntu Rust Node Governance, Supply chain audit, Release qualification, and Relay container, successful post-merge CI, and zero unresolved review threads. CodeRabbit skipped-review and cubic skipping notices evaluated as non-evidence noise with zero substantive findings.",
+      "unresolved_review_threads": 0,
+      "authority_boundary": "Tool metadata contract, profile-gated registration and discovery, MCP annotations, and a narrower fs_list output bound. No tool, kernel shape, scope, approval class, or authority is added; remote discovery and fs_list output only narrow."
     }
   }
 }

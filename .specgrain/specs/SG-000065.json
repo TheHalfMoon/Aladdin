@@ -2,7 +2,7 @@
   "id": "SG-000065",
   "title": "Tool profiles and metadata contract",
   "program": "COTRA-P16",
-  "state": "GRAIN",
+  "state": "CLOSED",
   "risk": "high",
   "created": "2026-10-02",
   "base": "dadbc5b273c282759501c60f587f80f461a381ea",
@@ -64,5 +64,25 @@
     "exact_head_ci": true,
     "release_artifact_qualification": true
   },
-  "done_when": "One tested tool contract drives registration, annotations, discovery, and remote ceilings for every profile, with default deny for anything unmapped."
+  "done_when": "One tested tool contract drives registration, annotations, discovery, and remote ceilings for every profile, with default deny for anything unmapped.",
+  "qualified_head": "967f9aedfb1b71f093584d6c333708630c6b3749",
+  "implementation_base": "dfac619b72f830bb69903700f70535ab9c187f3c",
+  "implementation_merge": "837201a57238f1bb0afc6306c8d5a154ddb2ac72",
+  "pre_merge_ci": "37052850382",
+  "pre_merge_review_gates": "37052850594",
+  "post_merge_ci": "37053641221",
+  "canonical_evidence": {
+    "implementation_pr": 172,
+    "implementation_base": "dfac619b72f830bb69903700f70535ab9c187f3c",
+    "qualified_head": "967f9aedfb1b71f093584d6c333708630c6b3749",
+    "pre_merge_ci": "37052850382",
+    "pre_merge_review_gates": "37052850594",
+    "merge_sha": "837201a57238f1bb0afc6306c8d5a154ddb2ac72",
+    "post_merge_ci": "37053641221",
+    "jev": "PASSED: genuine TypeSafe Jev exact-diff review covered 23/23 hunks with zero findings and zero blocking findings, pin 31f89602797fb7bea007f8a480bf368bf564954e",
+    "ocr": "PASSED: Alibaba Open Code Review v1.12.9 exact-range delegation over 15 changed files, 5 reviewable with delegated rules applied and 10 excluded (apps/cotra-mcp/src/clipboard.test.ts, device-uplink.test.ts, network.test.ts, tool-contract.test.ts, transport-contract.test.ts, and uia.test.ts and apps/cotra-relay/src/relay.test.ts and self-host.test.ts by default-path classification and docs/p16/TOOL_CONTRACT.md and docs/security/SG-000065_TOOL_CONTRACT_NOTE.md by unsupported-extension classification) manually reviewed",
+    "security_review": "PASS on exact qualified head: one authoritative tool contract with exactly one entry per canonical tool (kernel shape, effect class, approval class, remote scopes or local-only status, output bound, title, annotations) drives contract-gated registration on every transport (missing entry fails startup, out-of-profile tools are not registered, titles and annotations attached), the derived OAuth matrix and local-only list, and exact profiles: core (26 remote tools, relay) and desktop_structured (core plus 5 local-only tools, stdio and loopback); unmapped and unknown profiles and remote provider kinds fail closed. Closed a discovery leak where the relay advertised local-only tools to remote clients, and bounded the previously unbounded fs_list output at 5000 sorted entries with truncation reported. Tests pin the contract against tool sources, real MCP discovery per transport, the cotrad remote-session scope table, the OAuth matrix, the parity inventory, annotation and approval invariants, and the generated document. No tool, shape, scope, or authority added. All closed SG-000001 through SG-000064 regressions pass. CodeRabbit skipped-review and cubic skipping notices evaluated as non-evidence noise with zero substantive findings; zero unresolved threads.",
+    "unresolved_review_threads": 0,
+    "authority_boundary": "Tool metadata contract, profile-gated registration and discovery, MCP annotations, and a narrower fs_list output bound. No tool, kernel shape, scope, approval class, or authority is added; remote discovery and fs_list output only narrow."
+  }
 }
