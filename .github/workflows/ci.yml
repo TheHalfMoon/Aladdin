@@ -97,6 +97,39 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+  relay-container:
+    name: Relay container / ubuntu-latest
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Build the pinned self-host relay image
+        run: docker build -f apps/cotra-relay/Dockerfile -t cotra-relay:ci .
+      - name: Run the relay from a validated configuration and probe it
+        run: |
+          mkdir -p "$RUNNER_TEMP/relay-config" "$RUNNER_TEMP/relay-state"
+          chmod 0777 "$RUNNER_TEMP/relay-state"
+          cat > "$RUNNER_TEMP/relay-config/relay.json" <<'JSON'
+          {"publicOrigin":"http://127.0.0.1:8787","listenHost":"0.0.0.0","listenPort":8787,"stateDir":"/var/lib/cotra-relay","allowedOrigins":[]}
+          JSON
+          docker run -d --name relay -p 127.0.0.1:8787:8787 \
+            -v "$RUNNER_TEMP/relay-config:/etc/cotra-relay:ro" \
+            -v "$RUNNER_TEMP/relay-state:/var/lib/cotra-relay" cotra-relay:ci
+          for attempt in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8787/healthz; then break; fi
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:8787/healthz | grep -q '"ok":true'
+          curl -fsS http://127.0.0.1:8787/.well-known/oauth-protected-resource/mcp | grep -q '"resource":"http://127.0.0.1:8787/mcp"'
+          curl -fsS http://127.0.0.1:8787/.well-known/oauth-authorization-server | grep -q '"code_challenge_methods_supported":\["S256"\]'
+          status=$(curl -s -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:8787/mcp -H 'content-type: application/json' -d '{}')
+          test "$status" = "401"
+          test -f "$RUNNER_TEMP/relay-state/relay-state.json"
+          if docker logs relay 2>&1 | grep -E 'Bearer|access_token|refresh_token|privateKey'; then exit 1; fi
+          docker rm -f relay
+
   supply-chain:
     name: Supply chain audit
     runs-on: ubuntu-latest

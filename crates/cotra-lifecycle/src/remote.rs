@@ -252,6 +252,115 @@ pub fn run_uplink(launch: &UplinkLaunch, config: &Config) -> i32 {
     }
 }
 
+/// Relay origin recorded by `cotra remote enable`.
+pub fn recorded_relay_origin(path: &Path) -> Result<String, LifecycleError> {
+    let uplink = read_json(path, "the remote uplink configuration")?;
+    uplink
+        .get("relayOrigin")
+        .and_then(Value::as_str)
+        .map(str::to_owned)
+        .ok_or_else(|| LifecycleError::state("the remote uplink configuration lacks relayOrigin"))
+}
+
+/// Validates the `--relay` origin shape before anything is authorized.
+pub fn validate_relay_origin(origin: &str) -> Result<(), LifecycleError> {
+    let ok_https = origin.starts_with("https://")
+        && origin.len() > "https://".len()
+        && !origin["https://".len()..].contains(['/', '?', '#', '@', ' ']);
+    let ok_loopback = ["http://127.0.0.1:", "http://[::1]:"].iter().any(|prefix| {
+        origin
+            .strip_prefix(prefix)
+            .is_some_and(|port| !port.is_empty() && port.bytes().all(|b| b.is_ascii_digit()))
+    });
+    if ok_https || ok_loopback {
+        Ok(())
+    } else {
+        Err(LifecycleError::usage(
+            "--relay must be an https origin (or an exact loopback http origin) with no path",
+        ))
+    }
+}
+
+/// `cotra remote enable|pair`: STRONG presence through `cotrad`, then the
+/// interactive enrollment entrypoint with inherited console I/O.
+pub fn run_enrollment(
+    layout: &Layout,
+    platform: &dyn crate::platform::Platform,
+    action: &str,
+    relay: Option<String>,
+    workspace: Option<String>,
+) -> Result<i32, LifecycleError> {
+    let state = Installer::new(layout.clone(), platform).verify()?;
+    let version_dir = layout.version_dir(&state.active.version);
+    let node = PathBuf::from(&state.record.node_path);
+    let node_version = platform.node_version(&node)?;
+    if node_version.major < MIN_NODE_MAJOR {
+        return Err(LifecycleError::prerequisite(format!(
+            "Node.js {node_version} is older than the required {MIN_NODE_MAJOR}"
+        )));
+    }
+    let config = Config::load(layout)?;
+    config.check_workspaces_with_policy()?;
+    let relay_origin = match (action, relay) {
+        ("enable", Some(origin)) => origin,
+        ("enable", None) => return Err(LifecycleError::usage("--relay <origin> is required")),
+        ("pair", None) => recorded_relay_origin(&uplink_config_path(layout))?,
+        ("pair", Some(_)) => {
+            return Err(LifecycleError::usage(
+                "cotra remote pair uses the relay recorded by cotra remote enable",
+            ))
+        }
+        _ => return Err(LifecycleError::usage("unknown remote enrollment action")),
+    };
+    validate_relay_origin(&relay_origin)?;
+    let workspace = workspace
+        .or_else(|| config.default_workspace().map(str::to_owned))
+        .unwrap_or_else(|| "default".into());
+    let cotrad = version_dir.join("cotrad.exe");
+    eprintln!("Confirm with Windows Hello when prompted. Remote enrollment is a STRONG approval and cannot be granted remotely or by an agent.");
+    let request = crate::ipc::request(
+        &workspace,
+        "remote.enrollment.authorize",
+        "authorize",
+        json!({ "action": action, "relay_origin": relay_origin }),
+    );
+    let response = crate::ipc::call(
+        &cotrad,
+        &config,
+        &request,
+        std::time::Duration::from_secs(180),
+    )?;
+    crate::ipc::expect_ok(&response)?;
+    let mut env = crate::ipc::child_environment(&config);
+    env.insert(
+        "COTRA_DEVICE_KEY_PATH".into(),
+        device_key_path(layout).to_string_lossy().into_owned(),
+    );
+    env.insert(
+        "COTRA_UPLINK_CONFIG".into(),
+        uplink_config_path(layout).to_string_lossy().into_owned(),
+    );
+    let script = version_dir
+        .join("app")
+        .join("cotra-mcp")
+        .join("dist")
+        .join("entrypoints")
+        .join("remote_admin.js");
+    let mut command = Command::new(&node);
+    command.arg(&script).arg(action);
+    if action == "enable" {
+        command
+            .arg("--relay")
+            .arg(&relay_origin)
+            .arg("--workspace")
+            .arg(&workspace);
+    }
+    match command.env_clear().envs(env).status() {
+        Ok(status) => Ok(status.code().unwrap_or(1)),
+        Err(error) => Err(LifecycleError::state(format!("start Node.js: {error}"))),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -304,6 +413,24 @@ mod tests {
         let mut mode = options();
         mode.read_mode = "forever".into();
         assert!(lease_arguments(&mode, &paired(), &device, 1).is_err());
+    }
+
+    #[test]
+    fn relay_origins_are_https_or_exact_loopback_without_paths() {
+        assert!(validate_relay_origin("https://relay.example.com").is_ok());
+        assert!(validate_relay_origin("http://127.0.0.1:8787").is_ok());
+        assert!(validate_relay_origin("http://[::1]:8787").is_ok());
+        for bad in [
+            "http://relay.example.com",
+            "https://relay.example.com/path",
+            "https://user@relay.example.com",
+            "http://localhost:8787",
+            "http://127.0.0.1:",
+            "socks5://relay.example.com",
+            "",
+        ] {
+            assert!(validate_relay_origin(bad).is_err(), "{bad}");
+        }
     }
 
     #[test]

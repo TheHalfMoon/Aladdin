@@ -712,6 +712,16 @@ pub fn remote(args: &mut Args) -> Result<Output, LifecycleError> {
     }
 }
 
+/// `cotra remote enable|pair`: STRONG-gated device enrollment.
+pub fn remote_enroll(args: &mut Args, action: &str) -> Result<i32, LifecycleError> {
+    let relay = args.value("--relay")?;
+    let workspace = args.value("--workspace")?;
+    args.finish()?;
+    let layout = Layout::for_current_user()?;
+    let platform = host_platform();
+    cotra_lifecycle::remote::run_enrollment(&layout, platform.as_ref(), action, relay, workspace)
+}
+
 /// `cotra remote connect`: run the outbound-only device uplink.
 pub fn remote_connect(args: &mut Args) -> Result<i32, LifecycleError> {
     args.finish()?;

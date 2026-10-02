@@ -401,6 +401,83 @@ pub fn gate_remote(
     Ok(())
 }
 
+/// SG-000057: STRONG local presence before `cotra remote enable` or
+/// `cotra remote pair` runs. Only the local lifecycle CLI calls this; remote
+/// contexts never reach it.
+pub fn authorize_enrollment(
+    approval: &impl ApprovalBroker,
+    request: &RequestEnvelope,
+) -> Result<Value, ProviderError> {
+    let object = request.arguments.as_object().ok_or_else(|| {
+        ProviderError::new(
+            FailureCode::InvalidRequest,
+            "enrollment arguments must be an object",
+        )
+    })?;
+    if object.len() != 2 {
+        return Err(ProviderError::new(
+            FailureCode::InvalidRequest,
+            "enrollment accepts exactly action and relay_origin",
+        ));
+    }
+    let action = string_arg(&request.arguments, "action")?;
+    if action != "enable" && action != "pair" {
+        return Err(ProviderError::new(
+            FailureCode::InvalidRequest,
+            "enrollment action must be enable or pair",
+        ));
+    }
+    let relay_origin = string_arg(&request.arguments, "relay_origin")?;
+    if relay_origin.is_empty()
+        || relay_origin.len() > 256
+        || relay_origin.contains(char::is_whitespace)
+    {
+        return Err(ProviderError::new(
+            FailureCode::InvalidRequest,
+            "relay_origin is malformed",
+        ));
+    }
+    let mut hasher = Sha256::new();
+    for field in [
+        "COTRA_REMOTE_ENROLLMENT_V1",
+        POLICY_REVISION,
+        &request.workspace_id,
+        &action,
+        &relay_origin,
+    ] {
+        hasher.update((field.len() as u64).to_be_bytes());
+        hasher.update(field.as_bytes());
+    }
+    let digest: String = hasher
+        .finalize()
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect();
+    let prompt = ApprovalPrompt::new_strong(
+        request.workspace_id.clone(),
+        POLICY_REVISION,
+        if action == "enable" {
+            "enable remote access for this device"
+        } else {
+            "pair a remote AI client with this device"
+        },
+        relay_origin.clone(),
+        format!("action={action} relay={relay_origin}"),
+        digest.clone(),
+    );
+    let token = approval
+        .request_token(&prompt)
+        .map_err(|error| ProviderError::new(error.code, error.message))?;
+    approval
+        .consume(
+            &token,
+            &ConsumeExpectation::strong(digest, request.workspace_id.clone(), POLICY_REVISION),
+            cotra_approval::now_ms(),
+        )
+        .map_err(|error| ProviderError::new(error.code, error.message))?;
+    Ok(json!({ "authorized": true, "action": action }))
+}
+
 /// Emergency revoke invalidates every remote-session lease immediately.
 pub fn revoke_all(lease_path: &Path) -> Result<usize, ProviderError> {
     let leases = load_leases(lease_path);
@@ -818,6 +895,37 @@ mod tests {
             .unwrap_err();
             assert_eq!(error.code, FailureCode::CapabilityDenied);
         }
+        let _ = std::fs::remove_dir_all(&fixture.dir);
+    }
+
+    #[test]
+    fn enrollment_requires_strong_presence_and_exact_arguments() {
+        let fixture = Fixture::new("enroll");
+        let request = RequestEnvelope {
+            capability: "remote.enrollment.authorize".into(),
+            operation: "authorize".into(),
+            arguments: json!({ "action": "pair", "relay_origin": "https://relay.example" }),
+            ..create_request()
+        };
+        let verified = strong_broker(&fixture, TestPresenceVerifier::verified());
+        assert_eq!(
+            authorize_enrollment(&verified, &request).unwrap()["authorized"],
+            true
+        );
+        for verifier in [
+            TestPresenceVerifier::denied(),
+            TestPresenceVerifier::unavailable(),
+        ] {
+            let broker = strong_broker(&fixture, verifier);
+            assert!(authorize_enrollment(&broker, &request).is_err());
+        }
+        let mut wrong = request.clone();
+        wrong.arguments =
+            json!({ "action": "grant_everything", "relay_origin": "https://relay.example" });
+        assert!(authorize_enrollment(&verified, &wrong).is_err());
+        wrong.arguments =
+            json!({ "action": "pair", "relay_origin": "https://relay.example", "extra": 1 });
+        assert!(authorize_enrollment(&verified, &wrong).is_err());
         let _ = std::fs::remove_dir_all(&fixture.dir);
     }
 }

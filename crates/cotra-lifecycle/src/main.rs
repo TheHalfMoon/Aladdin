@@ -63,6 +63,10 @@ Approvals:
       remote session lease (Windows Hello).
 
 Remote sessions (outbound-only; no inbound port is opened):
+  cotra remote enable --relay <origin> [--workspace <id>]
+      Create this device's key and register it with a relay (Windows Hello).
+  cotra remote pair                       Pair an AI client that asks for a pairing code
+      (Windows Hello, then confirm the exact client and scopes on this console).
   cotra remote connect                    Run the device uplink to the paired relay.
   cotra remote allow --connection <rc-id> [--workspaces <id,...>] [--scopes <s,...>]
       [--minutes <1-15>] [--read-mode session|per_request|disabled]
@@ -135,6 +139,22 @@ fn main() {
             Err(error) => {
                 eprintln!("cotra supervise: {}", error.message);
                 2
+            }
+        };
+        std::process::exit(code);
+    }
+    if args.command == "remote"
+        && matches!(
+            args.rest.first().map(String::as_str),
+            Some("enable") | Some("pair")
+        )
+    {
+        let action = args.rest.remove(0);
+        let code = match commands::remote_enroll(&mut args, &action) {
+            Ok(code) => code,
+            Err(error) => {
+                eprintln!("cotra: {}", error.message);
+                error.kind.exit_code()
             }
         };
         std::process::exit(code);
