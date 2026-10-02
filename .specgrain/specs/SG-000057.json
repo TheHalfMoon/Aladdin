@@ -1,0 +1,79 @@
+{
+  "id": "SG-000057",
+  "title": "Open-source relay, self-host mode, and zero-cost reference deployment",
+  "program": "COTRA-P15",
+  "state": "GRAIN",
+  "risk": "high",
+  "created": "2026-10-02",
+  "base": "700d6bbbb1f3919f2f02b567117aab027cad202d",
+  "dependencies": [
+    "SG-000056"
+  ],
+  "objective": "Complete the open-source relay as a first-class self-hostable service with zero mandatory cost: the authorization server endpoints over the SG-000054 vocabulary with device-backed pairing enrollment, durable local relay state, explicit hard quotas with fail-closed no-billing overflow behavior, a self-host runtime with configuration validation and container packaging, local `cotra remote enable` and `cotra remote pair` enrollment, and a documented free-tier reference deployment that is never required.",
+  "scope": {
+    "include": [
+      "authorization-server metadata, authorization, token, revocation, and dynamic client registration endpoints implementing the SG-000054 checks, with pairing-code entry on the authorization page and no password, implicit, or client-credentials grant",
+      "device-backed pairing enrollment: STRONG-gated local `cotra remote enable` creating the device key and `cotra remote pair` creating a one-time pairing transaction whose hash is registered with the relay over the device channel, with local confirmation of the exact client, scopes, and connection before the device records the pairing",
+      "refresh token renewal at the token endpoint that requires a fresh family-bound device-key proof obtained over the live device channel",
+      "durable relay state in a local file store with atomic writes, integrity checks, bounded size, and deletion on revocation, holding no payloads, tokens, or device private keys",
+      "explicit configurable quotas with hard ceilings for requests, sessions, devices, registrations, pairing attempts, and token issuance, and a no-billing overflow mode that fails closed with typed errors instead of scaling or paying",
+      "self-host runtime: validated configuration file, relay entrypoint, container image definition with pinned base, health endpoint, and operator documentation including TLS termination",
+      "a free-tier reference deployment definition and documentation that is optional, with self-hosting as the canonical zero-cost path"
+    ],
+    "exclude": [
+      "any paid API, paid cloud, paid database, paid identity provider, or paid relay requirement",
+      "automatic paid overflow or autoscaling into billed capacity",
+      "provider-specific client identification or directory submission (SG-000067 onward)",
+      "SOCKS, CONNECT, arbitrary TCP, generic HTTP proxying, arbitrary WebSocket forwarding, raw shell tunnels, or any generic executor",
+      "any change to the local tool registry, schemas, capabilities, approvals, or the cotrad remote-session lease semantics",
+      "claims that a hosted reference deployment is live unless it is actually deployed and verified"
+    ]
+  },
+  "authority_delta": {
+    "filesystem": "The relay writes only its own state directory. On the device, enrollment writes only the device key, uplink configuration, and revocation list under the Cotra state directory.",
+    "process": "None.",
+    "network": "The relay listens for the public edge, authorization endpoints, and device channel; it makes no outbound requests.",
+    "browser": "None.",
+    "ui_input": "None.",
+    "secrets": "Device private keys never leave the device; relay token signing keys stay in relay state; no secret is logged.",
+    "approval": "Device enrollment and pairing require STRONG local presence; the relay cannot create, widen, renew, or extend a remote-session lease.",
+    "privileged": "Enrollment and pairing are local PRIVILEGED lifecycle operations never exposed as MCP tools."
+  },
+  "invariants": [
+    "self-hosting works independently of any Cotra-operated relay at zero mandatory cost",
+    "quota exhaustion fails closed with typed errors and never overflows into paid capacity",
+    "a stolen refresh token cannot renew while the bound device is offline",
+    "pairing proves device possession only and grants no workspace trust, approval, or lease",
+    "the SG-000052 through SG-000056 vocabulary stays frozen"
+  ],
+  "acceptance": [
+    {
+      "id": "A1",
+      "claim": "A standards-based OAuth 2.1 client can register, authorize with PKCE through device-backed pairing, exchange and refresh tokens with fresh device proof, revoke, and then reach the paired device through the public edge against a self-hosted relay."
+    },
+    {
+      "id": "A2",
+      "claim": "Relay state is durable, integrity-checked, bounded, and payload-free; quotas are explicit with hard ceilings and fail closed with typed errors in no-billing mode."
+    },
+    {
+      "id": "A3",
+      "claim": "Self-host mode runs from a validated configuration and container definition with operator documentation, and the optional free-tier reference deployment is documented without being required or claimed live unless verified."
+    },
+    {
+      "id": "A4",
+      "claim": "Exact-head CI including release qualification and supply-chain audit, genuine TypeSafe Jev, Alibaba Open Code Review, manual review of excluded files, and zero unresolved review threads all pass."
+    }
+  ],
+  "successor_requirements": {
+    "sg_000058": "The P15 adversarial and chaos exit may proceed only after SG-000057 closes with the self-hostable relay qualified."
+  },
+  "review": {
+    "diffcipline": true,
+    "jev_semantic_review": true,
+    "alibaba_open_code_review": "required exact-range qualification where integrated",
+    "security_review": true,
+    "exact_head_ci": true,
+    "release_artifact_qualification": true
+  },
+  "done_when": "The open-source relay is canonical as a self-hostable zero-cost service with device-backed OAuth enrollment, durable state, hard fail-closed quotas, and documented optional free-tier deployment."
+}

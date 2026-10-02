@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "snapshot_base": "6114ecae6baa649f74081a48962aaf30644c6897",
+  "snapshot_base": "700d6bbbb1f3919f2f02b567117aab027cad202d",
   "state_semantics": {
     "GRAIN": "Authorized or active work packet whose acceptance is not yet canonically proven.",
     "PROVEN": "Acceptance and required qualification are proven, but canonical closeout/governance is not yet complete.",
@@ -670,6 +670,18 @@
       "review_basis": "Exact-head genuine TypeSafe Jev 40/40 hunks with zero findings/blocking findings (pin 31f89602797fb7bea007f8a480bf368bf564954e), Alibaba Open Code Review v1.12.9 exact-range delegation over 22 files with 19 reviewable and 3 excluded files (Cargo.lock, device-uplink.test.ts, and SG-000055_DEVICE_UPLINK_LEASE_NOTE.md) manually reviewed, exact-diff manual security review, Windows/Ubuntu Rust Node Governance, Supply chain audit, and Release qualification, successful post-merge CI, and zero unresolved review threads. Qodo billing-blocked and CodeRabbit skipped-review notices evaluated as non-evidence noise with zero substantive findings.",
       "unresolved_review_threads": 0,
       "authority_boundary": "Outbound-only device channel to one configured relay origin carrying frozen MCP frames into the authoritative tool catalog, and the cotrad-enforced finite STRONG-created local remote-session lease. No listener, public edge, relay server, proxy, new MCP tool, schema change, or approval change for existing capabilities; the relay and provider cannot create, widen, renew, or extend a lease."
+    },
+    "SG-000056": {
+      "implementation_pr": 154,
+      "implementation_base": "d44666bd10d7c53a88af78d4f3f34acdf98155ea",
+      "qualified_head": "54d725ed532fa0a02648c7422cb6510aadeb5356",
+      "pre_merge_ci": "36999656542",
+      "pre_merge_review_gates": "36999654192",
+      "merge_sha": "700d6bbbb1f3919f2f02b567117aab027cad202d",
+      "post_merge_ci": "37000182855",
+      "review_basis": "Exact-head genuine TypeSafe Jev 16/16 hunks with zero findings/blocking findings (pin 31f89602797fb7bea007f8a480bf368bf564954e), Alibaba Open Code Review v1.12.9 exact-range delegation over 13 files with 8 reviewable and 5 excluded files (oauth-authorization.test.ts, device-channel.test.ts, relay.test.ts, package-lock.json, and SG-000056_PUBLIC_MCP_EDGE_NOTE.md) manually reviewed, exact-diff manual security review, Windows/Ubuntu Rust Node Governance, Supply chain audit, and Release qualification, successful post-merge CI, and zero unresolved review threads. Qodo billing-blocked and CodeRabbit skipped-review notices evaluated as non-evidence noise with zero substantive findings.",
+      "unresolved_review_threads": 0,
+      "authority_boundary": "Separate open-source relay package with the public Streamable HTTP /mcp edge, protected-resource metadata, and the relay side of the device channel, forwarding frozen MCP frames only to one paired device route after per-request token and scope verification. No outbound requests from the relay, no proxy, executor, MCP tool, schema, capability, approval, or lease authority; no change to the device tool registry."
     }
   }
 }
