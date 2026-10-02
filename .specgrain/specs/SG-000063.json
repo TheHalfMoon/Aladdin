@@ -1,0 +1,68 @@
+{
+  "id": "SG-000063",
+  "title": "Structured desktop MCP exposure",
+  "program": "COTRA-P16",
+  "state": "GRAIN",
+  "risk": "high",
+  "created": "2026-10-02",
+  "base": "bce0d3e0a89275d8d9f040fe9f3ea1fc9facf918",
+  "dependencies": [
+    "SG-000062"
+  ],
+  "objective": "Make structured desktop observation live on real Windows and expose it as bounded read-only MCP tools: visible top-level windows and their processes in the caller's interactive session, and a bounded UI Automation element tree for one bound window, through the closed SG-000027 registry with its identity, protected-surface exclusion, redaction, and bounds; qualify UIA actuation, screenshots, visual proposals, and coordinate fallback against the live native adapter and expose none that is not live, keeping human interruption and input leases authoritative.",
+  "scope": {
+    "include": [
+      "native window enumeration of visible top-level windows and owning processes in the same session through Win32, with process identity from the image path and start time",
+      "native bounded UI Automation tree reads for one window through the control view with password values redacted",
+      "read-only MCP tools for window listing and window tree observation through the existing registry and its protected-surface exclusion",
+      "a per-shape qualification of actuation, screenshot, visual proposal, coordinate, and input shapes against the live native adapter with test-pinned decisions",
+      "real Windows evidence on a window the test creates, and fail-closed behavior where no interactive desktop exists"
+    ],
+    "exclude": [
+      "any actuation, screenshot, coordinate, or synthetic input shape that the live native adapter does not implement",
+      "raw SendInput, keyboard or mouse injection, window focus stealing, or process termination",
+      "browser, clipboard, or network exposure"
+    ]
+  },
+  "authority_delta": {
+    "filesystem": "None.",
+    "process": "Read-only process facts for processes that own visible windows in the caller's session.",
+    "network": "None.",
+    "browser": "None.",
+    "ui_input": "None; observation only.",
+    "secrets": "Password fields are redacted; protected surfaces are excluded.",
+    "approval": "None for observation.",
+    "privileged": "None."
+  },
+  "invariants": [
+    "observation never actuates, focuses, or injects input",
+    "protected surfaces and other sessions are never observed",
+    "no MCP tool claims desktop capability the native adapter does not implement"
+  ],
+  "acceptance": [
+    {
+      "id": "A1",
+      "claim": "Window listing and bounded tree observation are live on real Windows, bounded, redacted, and exclude protected surfaces and other sessions."
+    },
+    {
+      "id": "A2",
+      "claim": "Every non-live desktop shape is recorded and pinned off the MCP surface, and observation fails closed without an interactive desktop."
+    },
+    {
+      "id": "A3",
+      "claim": "Exact-head CI, genuine TypeSafe Jev, Alibaba Open Code Review, manual review of excluded files, and zero unresolved review threads all pass."
+    }
+  ],
+  "successor_requirements": {
+    "sg_000064": "Clipboard and bounded network exposure may proceed only after SG-000063 closes."
+  },
+  "review": {
+    "diffcipline": true,
+    "jev_semantic_review": true,
+    "alibaba_open_code_review": "required exact-range qualification where integrated",
+    "security_review": true,
+    "exact_head_ci": true,
+    "release_artifact_qualification": true
+  },
+  "done_when": "Live read-only desktop observation is canonical and exposed, and every non-live desktop shape is recorded and hidden."
+}
