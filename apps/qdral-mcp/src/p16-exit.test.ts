@@ -252,7 +252,7 @@ const REQUIRED_LOCAL_AUTHORITY_DENIALS = [
 ];
 
 test("SG-000066 exit evidence is pinned and authority-neutral", () => {
-  assert.equal(evidence.schema, "qdral-p16-exit-evidence/2");
+  assert.equal(evidence.schema, "quntal-p16-exit-evidence/2");
   assert.equal(evidence.grain, "SG-000066");
   assert.match(evidence.canonical_base, /^[0-9a-f]{40}$/);
   assert.equal(evidence.canonical_base, "e770a6913d11c92d6855943f6e47d306a5c42fca");
@@ -438,11 +438,14 @@ test("every qualification artifact in the exit manifest exists", () => {
     ...evidence.qualification.tests
   ];
   assert.equal(new Set(paths).size, paths.length, "duplicate qualification path");
-  for (const path of paths) {
-    const absolute = join(repo, path);
-    assert.ok(existsSync(absolute), `missing qualification artifact ${path}`);
-    assert.ok(statSync(absolute).isFile(), `qualification artifact is not a file ${path}`);
-  }
+  for (const historicalPath of paths) {
+  const currentPath = historicalPath
+    .replace(/^apps\/quntal-mcp\//, "apps/qdral-mcp/")
+    .replace(/^crates\/quntald\//, "crates/qdrald/");
+  const absolute = join(repo, currentPath);
+  assert.ok(existsSync(absolute), `missing current qualification artifact for historical ${historicalPath}: ${currentPath}`);
+  assert.ok(statSync(absolute).isFile(), `qualification artifact is not a file ${currentPath}`);
+}
 });
 
 test("SG-000066 imports no Desktop Commander, Kernux, or UI-TARS runtime", () => {

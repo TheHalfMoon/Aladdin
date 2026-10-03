@@ -10,6 +10,7 @@ const historicalContentAllowed = (path) =>
   path === "docs/identity/QUNTAL_RENAME.md" ||
   path === "docs/identity/QDRAL_RENAME.md" ||
   path === "docs/canonical/CURRENT.md" ||
+  path === "docs/p16/sg000066_exit_evidence.json" ||
   path === ".specgrain/canonical-evidence.json" ||
   path === ".specgrain/ledger.json" ||
   path === "scripts/check-current-identity.mjs" ||

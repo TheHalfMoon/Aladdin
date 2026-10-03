@@ -1,5 +1,5 @@
 {
-  "schema": "qdral-p16-exit-evidence/2",
+  "schema": "quntal-p16-exit-evidence/2",
   "grain": "SG-000066",
   "canonical_base": "e770a6913d11c92d6855943f6e47d306a5c42fca",
   "authority_delta": "none",
@@ -107,7 +107,7 @@
     {
       "workflow": "read_file",
       "classification": "COTRA_NATIVE",
-      "reason": "Qdral exposes bounded workspace-scoped file reads through its own fs_read contract."
+      "reason": "Quntal exposes bounded workspace-scoped file reads through its own fs_read contract."
     },
     {
       "workflow": "read_multiple_files",
@@ -117,12 +117,12 @@
     {
       "workflow": "read_file_range",
       "classification": "COTRA_NATIVE",
-      "reason": "Qdral provides its own bounded UTF-8 line-window read contract."
+      "reason": "Quntal provides its own bounded UTF-8 line-window read contract."
     },
     {
       "workflow": "write_file",
       "classification": "COTRA_SUPERIOR",
-      "reason": "Qdral separates preview from approved write and keeps mutation inside the workspace policy kernel."
+      "reason": "Quntal separates preview from approved write and keeps mutation inside the workspace policy kernel."
     },
     {
       "workflow": "edit_block",
@@ -137,12 +137,12 @@
     {
       "workflow": "file_info",
       "classification": "COTRA_NATIVE",
-      "reason": "File metadata is exposed through Qdral's canonical fs_stat contract."
+      "reason": "File metadata is exposed through Quntal's canonical fs_stat contract."
     },
     {
       "workflow": "search_file_content",
       "classification": "COTRA_NATIVE",
-      "reason": "Content search is implemented by Qdral's bounded fs_search contract."
+      "reason": "Content search is implemented by Quntal's bounded fs_search contract."
     },
     {
       "workflow": "search_file_names",
@@ -152,7 +152,7 @@
     {
       "workflow": "create_directory",
       "classification": "COTRA_SUPERIOR",
-      "reason": "Directory creation is approval-bound and postcondition-verified by Qdral."
+      "reason": "Directory creation is approval-bound and postcondition-verified by Quntal."
     },
     {
       "workflow": "move_or_rename",
@@ -167,7 +167,7 @@
     {
       "workflow": "run_bounded_program",
       "classification": "COTRA_SUPERIOR",
-      "reason": "Qdral permits argv-only execution of admitted executables with timeout, output bounds, and descendant containment instead of shell strings."
+      "reason": "Quntal permits argv-only execution of admitted executables with timeout, output bounds, and descendant containment instead of shell strings."
     },
     {
       "workflow": "run_build_and_test_tools",
@@ -177,7 +177,7 @@
     {
       "workflow": "git_read",
       "classification": "COTRA_NATIVE",
-      "reason": "Git status, diff, and log are first-party Qdral tools."
+      "reason": "Git status, diff, and log are first-party Quntal tools."
     },
     {
       "workflow": "git_local_mutation",
@@ -197,7 +197,7 @@
     {
       "workflow": "desktop_observe",
       "classification": "COTRA_SUPERIOR",
-      "reason": "Qdral exposes only read-only visible-window identity and bounded UI Automation trees, not raw desktop control."
+      "reason": "Quntal exposes only read-only visible-window identity and bounded UI Automation trees, not raw desktop control."
     },
     {
       "workflow": "desktop_act",
@@ -217,12 +217,12 @@
     {
       "workflow": "destination_scoped_web_fetch",
       "classification": "COTRA_SUPERIOR",
-      "reason": "Qdral exposes only approved public HTTPS GET with address-set binding and same-origin redirects, never generic sockets or proxying."
+      "reason": "Quntal exposes only approved public HTTPS GET with address-set binding and same-origin redirects, never generic sockets or proxying."
     },
     {
       "workflow": "list_processes",
       "classification": "COTRA_SUPERIOR",
-      "reason": "Qdral reports only processes owning visible windows with typed creation-time identity and exposes no arbitrary process termination."
+      "reason": "Quntal reports only processes owning visible windows with typed creation-time identity and exposes no arbitrary process termination."
     },
     {
       "workflow": "shell_command_string",
@@ -247,7 +247,7 @@
     {
       "workflow": "kill_arbitrary_process",
       "classification": "INTENTIONALLY_DENIED",
-      "reason": "Terminating processes that Qdral did not start would affect user-owned programs."
+      "reason": "Terminating processes that Quntal did not start would affect user-owned programs."
     },
     {
       "workflow": "elevation_or_admin",
@@ -257,7 +257,7 @@
     {
       "workflow": "read_outside_workspaces",
       "classification": "INTENTIONALLY_DENIED",
-      "reason": "The workspace ceiling is a security boundary; home, credentials, and protected Qdral state remain unreachable."
+      "reason": "The workspace ceiling is a security boundary; home, credentials, and protected Quntal state remain unreachable."
     },
     {
       "workflow": "arbitrary_network_sockets",
@@ -296,14 +296,14 @@
         "src/tools/schemas.ts"
       ],
       "cotra_destinations": [
-        "apps/qdral-mcp/src/server.ts",
-        "apps/qdral-mcp/src/tool_contract.ts"
+        "apps/quntal-mcp/src/server.ts",
+        "apps/quntal-mcp/src/tool_contract.ts"
       ],
       "classification": "REFERENCE_ONLY",
       "license_obligation": "MIT notice obligations apply to any future copied source; no source is copied by SG-000066.",
       "dependency_obligation": "No Desktop Commander dependency is admitted; any future import requires independent dependency review.",
       "authority_delta": "none",
-      "reason": "The v0.2 filesystem surface is already implemented natively behind Qdral policy and does not need donor runtime code."
+      "reason": "The v0.2 filesystem surface is already implemented natively behind Quntal policy and does not need donor runtime code."
     },
     {
       "id": "desktop_commander_terminal_and_process_sessions",
@@ -319,7 +319,7 @@
       "license_obligation": "No donor source is copied.",
       "dependency_obligation": "No donor runtime or terminal dependency is admitted.",
       "authority_delta": "would widen process authority",
-      "reason": "Qdral intentionally replaces unrestricted terminal/session authority with bounded argv-only admitted executables."
+      "reason": "Quntal intentionally replaces unrestricted terminal/session authority with bounded argv-only admitted executables."
     },
     {
       "id": "desktop_commander_document_support",
@@ -351,9 +351,9 @@
       ],
       "classification": "REFERENCE_ONLY",
       "license_obligation": "Kernux is Apache-2.0; referenced donor licenses remain independently binding if source is ever copied.",
-      "dependency_obligation": "Kernux is not a Qdral dependency and no referenced donor dependency is imported here.",
+      "dependency_obligation": "Kernux is not a Quntal dependency and no referenced donor dependency is imported here.",
       "authority_delta": "none",
-      "reason": "Qdral uses the governance lessons as evidence structure only; Kernux governance/runtime remains independent."
+      "reason": "Quntal uses the governance lessons as evidence structure only; Kernux governance/runtime remains independent."
     },
     {
       "id": "kernux_computer_use_boundary_patterns",
@@ -369,7 +369,7 @@
       "license_obligation": "No Kernux or referenced donor source is copied by SG-000066.",
       "dependency_obligation": "No Kernux runtime, browser, accessibility, or remote dependency is admitted.",
       "authority_delta": "none",
-      "reason": "These patterns inform successor architecture only; Qdral remains the sole policy/trust/approval/identity/lease/audit/revocation authority."
+      "reason": "These patterns inform successor architecture only; Quntal remains the sole policy/trust/approval/identity/lease/audit/revocation authority."
     },
     {
       "id": "ui_tars_browser_mcp_and_puppeteer",
@@ -400,7 +400,7 @@
       "license_obligation": "Apache-2.0 applies to future copied source.",
       "dependency_obligation": "No parser package is imported.",
       "authority_delta": "would translate untrusted model text into action proposals",
-      "reason": "Only a future closed Qdral-owned action schema may consume model proposals; free-form donor action types are never executable authority."
+      "reason": "Only a future closed Quntal-owned action schema may consume model proposals; free-form donor action types are never executable authority."
     },
     {
       "id": "ui_tars_operator_abstraction",
@@ -416,7 +416,7 @@
       "license_obligation": "Apache-2.0 applies to future copied source.",
       "dependency_obligation": "No UI-TARS SDK/operator dependency is admitted.",
       "authority_delta": "could add observation and actuation authority depending on adapter",
-      "reason": "Lifecycle/cancellation ideas may inform successor design, but Qdral must keep its own policy and action contracts."
+      "reason": "Lifecycle/cancellation ideas may inform successor design, but Quntal must keep its own policy and action contracts."
     },
     {
       "id": "ui_tars_nutjs_operator",
@@ -463,7 +463,7 @@
       "license_obligation": "No donor source is copied.",
       "dependency_obligation": "No remote operator, remote service, websocket endpoint, or hosted dependency is admitted.",
       "authority_delta": "would add remote computer/browser control and transport authority",
-      "reason": "Remote control cannot bypass Qdral typed identity, local lease creation, revocation, destination, audit, and approval authority."
+      "reason": "Remote control cannot bypass Quntal typed identity, local lease creation, revocation, destination, audit, and approval authority."
     },
     {
       "id": "ui_tars_event_stream",
@@ -479,7 +479,7 @@
       "license_obligation": "Apache-2.0 applies to future copied source.",
       "dependency_obligation": "No Tarko event-stream package is imported.",
       "authority_delta": "none by itself, but event payloads can expose authority-bearing state if adopted carelessly",
-      "reason": "Event-stream organization is a design reference only; Qdral audit/event semantics remain canonical."
+      "reason": "Event-stream organization is a design reference only; Quntal audit/event semantics remain canonical."
     },
     {
       "id": "ui_tars_electron_ipc",
@@ -495,7 +495,7 @@
       "license_obligation": "Apache-2.0 applies to future copied source.",
       "dependency_obligation": "No Electron IPC package is imported.",
       "authority_delta": "could bridge renderer requests to privileged host behavior",
-      "reason": "Any future desktop IPC must terminate at Qdral-owned typed contracts and kernel policy rather than inherit donor handler authority."
+      "reason": "Any future desktop IPC must terminate at Quntal-owned typed contracts and kernel policy rather than inherit donor handler authority."
     },
     {
       "id": "ui_tars_agent_loop",
@@ -541,7 +541,7 @@
       "license_obligation": "No donor source is copied.",
       "dependency_obligation": "No command-server or interpreter dependency is admitted.",
       "authority_delta": "would add unrestricted shell/script execution",
-      "reason": "Qdral intentionally exposes admitted argv-only executables and rejects shell/interpreter authority."
+      "reason": "Quntal intentionally exposes admitted argv-only executables and rejects shell/interpreter authority."
     },
     {
       "id": "ui_tars_raw_model_to_input",
@@ -558,7 +558,7 @@
       "license_obligation": "No donor source is copied.",
       "dependency_obligation": "No parser/operator execution chain is admitted.",
       "authority_delta": "would let untrusted model output drive native input",
-      "reason": "Model output may only become a proposal normalized to a closed Qdral action schema, policy-evaluated, approved where required, and executed by a qualified adapter."
+      "reason": "Model output may only become a proposal normalized to a closed Quntal action schema, policy-evaluated, approved where required, and executed by a qualified adapter."
     },
     {
       "id": "ui_tars_personal_browser_profile",
@@ -623,28 +623,28 @@
     { "capability": "executable.registry.add", "operation": "add" }
   ],
   "qualification": {
-    "authoritative_mcp_builder": "apps/qdral-mcp/src/server.ts",
-    "tool_contract": "apps/qdral-mcp/src/tool_contract.ts",
-    "daemon_entrypoint": "crates/qdrald/src/main.rs",
+    "authoritative_mcp_builder": "apps/quntal-mcp/src/server.ts",
+    "tool_contract": "apps/quntal-mcp/src/tool_contract.ts",
+    "daemon_entrypoint": "crates/quntald/src/main.rs",
     "parity_inventory": "docs/p16/capability_parity_inventory.json",
     "tests": [
-      "apps/qdral-mcp/src/parity-inventory.test.ts",
-      "apps/qdral-mcp/src/surface.test.ts",
-      "apps/qdral-mcp/src/kernel.test.ts",
-      "apps/qdral-mcp/src/process.test.ts",
-      "apps/qdral-mcp/src/clipboard.test.ts",
-      "apps/qdral-mcp/src/network.test.ts",
-      "apps/qdral-mcp/src/uia.test.ts",
-      "apps/qdral-mcp/src/browser-qualification.test.ts",
-      "apps/qdral-mcp/src/tool-contract.test.ts",
-      "apps/qdral-mcp/src/transport-contract.test.ts",
-      "apps/qdral-mcp/src/p16-exit.test.ts"
+      "apps/quntal-mcp/src/parity-inventory.test.ts",
+      "apps/quntal-mcp/src/surface.test.ts",
+      "apps/quntal-mcp/src/kernel.test.ts",
+      "apps/quntal-mcp/src/process.test.ts",
+      "apps/quntal-mcp/src/clipboard.test.ts",
+      "apps/quntal-mcp/src/network.test.ts",
+      "apps/quntal-mcp/src/uia.test.ts",
+      "apps/quntal-mcp/src/browser-qualification.test.ts",
+      "apps/quntal-mcp/src/tool-contract.test.ts",
+      "apps/quntal-mcp/src/transport-contract.test.ts",
+      "apps/quntal-mcp/src/p16-exit.test.ts"
     ]
   },
   "exit_invariants": [
     "The canonical parity inventory remains the classification source of truth.",
     "The parity matrix covers every workflow in that inventory exactly once using the SG-000066 classification vocabulary.",
-    "Every implemented replacement workflow resolves only through canonical Qdral MCP tools and qdrald-governed capability shapes.",
+    "Every implemented replacement workflow resolves only through canonical Quntal MCP tools and quntald-governed capability shapes.",
     "Every denied donor authority remains unexposed to MCP.",
     "Desktop Commander, the Kernux source pool, and UI-TARS remain provenance-pinned reference-only evidence inputs in SG-000066.",
     "No donor package, runtime, operator, browser engine, screenshot path, input path, shell, proxy, approval path, trust mutation, remote lease mutation, or self-policy authority is imported by this grain.",
