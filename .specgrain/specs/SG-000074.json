@@ -1,0 +1,60 @@
+{
+  "id": "SG-000074",
+  "title": "Live isolated browser-host foundation",
+  "program": "QUNTAL-P18",
+  "state": "PLANNED",
+  "risk": "high",
+  "created": "2026-10-03",
+  "dependencies": ["SG-000073"],
+  "objective": "Introduce a low-authority live browser-host process behind quntald using selected pinned UI-TARS/Puppeteer implementation material without creating a second MCP or authorization boundary. The host may launch only a dedicated Quntal automation profile on an explicitly supported Chromium-family executable and may expose only a private typed local protocol to quntald; no page network loading, DOM observation, browser actuation, transfer, screenshot exposure, personal-profile attachment, raw CDP exposure, or remote reach is authorized in this grain.",
+  "scope": {
+    "include": [
+      "a packaged quntal-browser-host process launched and supervised only by Quntal",
+      "private bounded framed IPC with protocol/version negotiation, request correlation, cancellation, size limits, and typed failures",
+      "dedicated ephemeral Quntal automation profile creation under protected Quntal state with deterministic cleanup and no personal browser data reuse",
+      "supported-browser executable discovery and verification with exact path/version/publisher or equivalent integrity evidence where available",
+      "browser sandbox enabled and explicit denial of --no-sandbox, remote-debugging TCP listeners, arbitrary user-data-dir, extension inheritance, external protocol handlers, and caller-supplied browser flags",
+      "browser and host process supervision with bounded process count, memory/time ceilings where enforceable, parent/session invalidation, crash detection, and kill-on-Quntal-shutdown behavior",
+      "server-allocated BrowserEngineId and BrowserProfileId bound to installation/session/policy revision with no caller-selected identity",
+      "tests proving the host has no MCP/HTTP/LAN listener and cannot be directly addressed by an AI client"
+    ],
+    "exclude": [
+      "page navigation or internet/network egress",
+      "live DOM/accessibility observation",
+      "click/fill or any browser actuation",
+      "downloads/uploads",
+      "browser screenshots exposed to callers",
+      "personal profile or stored credential access",
+      "generic CDP/DevTools or JavaScript evaluation",
+      "remote computer-use exposure",
+      "new public MCP browser tools"
+    ]
+  },
+  "authority_delta": {
+    "filesystem": "A protected Quntal-owned automation profile and bounded browser-host state may be created under Quntal protected local state. No personal browser profile, workspace file, or arbitrary caller path becomes readable/writable.",
+    "process": "Quntal may launch and supervise one bounded browser-host and its supported browser child process under exact executable/profile policy. No caller-selected executable or flag authority is added.",
+    "network": "None. Page/network loading remains blocked until SG-000075.",
+    "browser": "A live isolated browser process may exist, but no navigation, observation, actuation, transfers, personal-profile access, raw CDP, or caller-facing browser tool is authorized.",
+    "ui_input": "None.",
+    "secrets": "No personal browser stores, cookies, credentials, tokens, or unrelated inherited secrets are made available to the host/browser.",
+    "approval": "No new approval class or reusable approval is introduced.",
+    "privileged": "None; browser launch must run without elevation."
+  },
+  "invariants": [
+    "quntald remains the authority boundary and the browser host is a replaceable low-authority implementation component",
+    "the browser host has no independent MCP/public network control plane",
+    "personal browser profiles and caller-selected browser flags are unreachable",
+    "browser sandboxing is not disabled",
+    "no page/network authority exists yet"
+  ],
+  "acceptance": [
+    {"id": "A1", "claim": "A real supported browser launches only with a Quntal-owned isolated profile and no personal-profile data or caller-selected launch flags."},
+    {"id": "A2", "claim": "The browser host is reachable only through the private bounded Quntal protocol and exposes no MCP, HTTP, LAN, remote-debugging TCP, or other caller-addressable control listener."},
+    {"id": "A3", "claim": "Crash, parent exit, lock/logoff/session invalidation, and Quntal shutdown deterministically invalidate browser engine/profile identities and terminate supervised child processes."},
+    {"id": "A4", "claim": "Tests prove page loading/network, DOM/AX observation, browser actuation, transfer, screenshot exposure, arbitrary JS/CDP, personal profile, and remote reach remain denied/unreachable."},
+    {"id": "A5", "claim": "Exact-head Windows qualification, CI, TypeSafe Jev, Alibaba Open Code Review, security review, manual excluded-file review, and zero unresolved blockers pass."}
+  ],
+  "successor_requirements": {"sg_000075": "Browser network mediation and real navigation may activate only after the isolated host is canonically qualified."},
+  "review": {"diffcipline": true, "jev_semantic_review": true, "alibaba_open_code_review": "required exact-range qualification where integrated", "security_review": true, "exact_head_ci": true},
+  "done_when": "A live but network-inert, caller-inert, isolated browser host is canonically qualified behind quntald with no personal-profile or raw control reach."
+}
