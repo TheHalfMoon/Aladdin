@@ -27,6 +27,12 @@ interface Inventory {
   capabilities: Capability[];
 }
 
+interface ReferencedSource {
+  repository: string;
+  revision: string;
+  license: string;
+}
+
 interface Donor {
   id: string;
   repository: string;
@@ -36,6 +42,28 @@ interface Donor {
   source_paths: string[];
   reuse: string;
   runtime_imported: boolean;
+  referenced_sources?: ReferencedSource[];
+  non_admissible_unpinned_sources?: string[];
+}
+
+interface ParityEntry {
+  workflow: string;
+  classification: string;
+  reason: string;
+}
+
+interface DonorReuseEntry {
+  id: string;
+  donor_id: string;
+  subsystem: string;
+  source_revision: string;
+  source_paths: string[];
+  cotra_destinations: string[];
+  classification: string;
+  license_obligation: string;
+  dependency_obligation: string;
+  authority_delta: string;
+  reason: string;
 }
 
 interface Replacement {
@@ -61,7 +89,11 @@ interface ExitEvidence {
   grain: string;
   canonical_base: string;
   authority_delta: string;
+  parity_categories: string[];
+  donor_reuse_categories: string[];
   donors: Donor[];
+  parity_matrix: ParityEntry[];
+  donor_reuse_matrix: DonorReuseEntry[];
   desktop_commander_replacement: Replacement[];
   desktop_commander_denials: string[];
   ui_tars_classification: UiTarsClassification[];
@@ -107,6 +139,22 @@ const capabilities = new Map(
   inventory.capabilities.map((entry) => [`${entry.capability}/${entry.operation}`, entry])
 );
 
+const REQUIRED_PARITY_CATEGORIES = [
+  "COTRA_NATIVE",
+  "COTRA_SUPERIOR",
+  "DONOR_ADAPTED",
+  "SAFE_SUCCESSOR_REQUIRED",
+  "INTENTIONALLY_DENIED"
+];
+
+const REQUIRED_DONOR_REUSE_CATEGORIES = [
+  "REUSE_VERBATIM",
+  "ADAPT",
+  "PORT",
+  "REFERENCE_ONLY",
+  "REJECT_FOR_COTRA"
+];
+
 const REQUIRED_REPLACEMENT_WORKFLOWS = [
   "create_directory",
   "delete_file",
@@ -148,6 +196,53 @@ const REQUIRED_UI_TARS_CLASSIFICATIONS: Record<string, { status: string; disposi
   agent_changes_own_policy: { status: "intentionally_denied", disposition: "deny" }
 };
 
+const REQUIRED_UI_TARS_REUSE_IDS = [
+  "ui_tars_action_parser",
+  "ui_tars_agent_loop",
+  "ui_tars_browser_evaluate",
+  "ui_tars_browser_mcp_and_puppeteer",
+  "ui_tars_command_and_script_execution",
+  "ui_tars_electron_ipc",
+  "ui_tars_event_stream",
+  "ui_tars_nutjs_operator",
+  "ui_tars_operator_abstraction",
+  "ui_tars_personal_browser_profile",
+  "ui_tars_raw_model_to_input",
+  "ui_tars_remote_computer_and_browser",
+  "ui_tars_screenshot_and_dpi"
+];
+
+const REQUIRED_UI_TARS_REJECTED_IDS = [
+  "ui_tars_browser_evaluate",
+  "ui_tars_command_and_script_execution",
+  "ui_tars_personal_browser_profile",
+  "ui_tars_raw_model_to_input",
+  "ui_tars_remote_computer_and_browser"
+];
+
+const REQUIRED_KERNUX_REFERENCED_SOURCES: Record<string, { revision: string; license: string }> = {
+  "stablyai/orca": {
+    revision: "0d23ea6e688410c878096dab8b1779857354b7d4",
+    license: "MIT"
+  },
+  "tinyfish-io/agentql": {
+    revision: "418ba8ad1c69dfac134a6833369a01dfba5a24a7",
+    license: "MIT"
+  },
+  "wonderwhy-er/DesktopCommanderMCP": {
+    revision: "08ff76192919a6e8fe2557b39c3f99e7b54c3b92",
+    license: "MIT"
+  },
+  "opensymph/open-computer-use": {
+    revision: "5b433b98019c18201a15d11e8c3cb0010879a3d8",
+    license: "MIT"
+  },
+  "bytedance/UI-TARS-desktop": {
+    revision: "2ff41a9e515828c5bd5b276e493d73aa0bdf4a3a",
+    license: "Apache-2.0"
+  }
+};
+
 const REQUIRED_LOCAL_AUTHORITY_DENIALS = [
   "executable.registry.add/add",
   "remote.enrollment.authorize/authorize",
@@ -157,22 +252,46 @@ const REQUIRED_LOCAL_AUTHORITY_DENIALS = [
 ];
 
 test("SG-000066 exit evidence is pinned and authority-neutral", () => {
-  assert.equal(evidence.schema, "quntal-p16-exit-evidence/1");
+  assert.equal(evidence.schema, "quntal-p16-exit-evidence/2");
   assert.equal(evidence.grain, "SG-000066");
   assert.match(evidence.canonical_base, /^[0-9a-f]{40}$/);
   assert.equal(evidence.canonical_base, "e770a6913d11c92d6855943f6e47d306a5c42fca");
   assert.equal(evidence.authority_delta, "none");
-  assert.ok(evidence.exit_invariants.length >= 6);
+  assert.deepEqual(sorted(evidence.parity_categories), sorted(REQUIRED_PARITY_CATEGORIES));
+  assert.deepEqual(sorted(evidence.donor_reuse_categories), sorted(REQUIRED_DONOR_REUSE_CATEGORIES));
+  assert.ok(evidence.exit_invariants.length >= 7);
 });
 
-test("Desktop Commander and UI-TARS donors are exact reference-only pins", () => {
-  assert.deepEqual(sorted(evidence.donors.map((entry) => entry.id)), ["desktop_commander", "ui_tars"]);
+test("Desktop Commander, Kernux source pool, and UI-TARS donors are exact reference-only pins", () => {
+  assert.deepEqual(sorted(evidence.donors.map((entry) => entry.id)), [
+    "desktop_commander",
+    "kernux_source_pool",
+    "ui_tars"
+  ]);
 
   const desktopCommander = evidence.donors.find((entry) => entry.id === "desktop_commander");
   assert.ok(desktopCommander);
   assert.equal(desktopCommander.repository, "wonderwhy-er/DesktopCommanderMCP");
   assert.equal(desktopCommander.revision, "c774c3b505de990219637ecdc9a830c8772fae9d");
   assert.equal(desktopCommander.license, "MIT");
+
+  const kernux = evidence.donors.find((entry) => entry.id === "kernux_source_pool");
+  assert.ok(kernux);
+  assert.equal(kernux.repository, "TheHalfMoon/kernux");
+  assert.equal(kernux.revision, "828e71a6464e055712e77c85d2fc94bfd8f96e3b");
+  assert.equal(kernux.license, "Apache-2.0");
+  assert.ok(kernux.non_admissible_unpinned_sources?.some((entry) => entry.includes("TinyFish")));
+
+  const referencedSources = new Map(
+    (kernux.referenced_sources ?? []).map((entry) => [entry.repository, entry])
+  );
+  assert.deepEqual(sorted(referencedSources.keys()), sorted(Object.keys(REQUIRED_KERNUX_REFERENCED_SOURCES)));
+  for (const [repository, required] of Object.entries(REQUIRED_KERNUX_REFERENCED_SOURCES)) {
+    const source = referencedSources.get(repository);
+    assert.ok(source, repository);
+    assert.equal(source.revision, required.revision, repository);
+    assert.equal(source.license, required.license, repository);
+  }
 
   const uiTars = evidence.donors.find((entry) => entry.id === "ui_tars");
   assert.ok(uiTars);
@@ -182,11 +301,76 @@ test("Desktop Commander and UI-TARS donors are exact reference-only pins", () =>
 
   for (const donor of evidence.donors) {
     assert.match(donor.revision, /^[0-9a-f]{40}$/);
-    assert.equal(donor.reuse, "reference_only");
+    assert.equal(donor.reuse, "REFERENCE_ONLY");
     assert.equal(donor.runtime_imported, false);
     assert.ok(donor.license_path.length > 0);
     assert.ok(donor.source_paths.length > 0);
   }
+});
+
+test("the parity matrix covers all 36 workflows exactly once using the SG-000066 vocabulary", () => {
+  assert.equal(inventory.workflows.length, 36);
+  const actualIds = evidence.parity_matrix.map((entry) => entry.workflow);
+  assert.equal(new Set(actualIds).size, actualIds.length, "duplicate parity workflow");
+  assert.deepEqual(sorted(actualIds), sorted(workflows.keys()));
+
+  const categories = new Set(evidence.parity_categories);
+  for (const entry of evidence.parity_matrix) {
+    const workflow = workflows.get(entry.workflow);
+    assert.ok(workflow, `unknown parity workflow ${entry.workflow}`);
+    assert.ok(categories.has(entry.classification), `unknown parity classification ${entry.classification}`);
+    assert.ok(entry.reason.trim().length > 0, `${entry.workflow} needs a stated reason`);
+
+    if (workflow.status === "implemented_exposed") {
+      assert.ok(
+        ["COTRA_NATIVE", "COTRA_SUPERIOR", "DONOR_ADAPTED"].includes(entry.classification),
+        `${entry.workflow} is exposed but classified ${entry.classification}`
+      );
+    } else if (workflow.status === "missing") {
+      assert.equal(entry.classification, "SAFE_SUCCESSOR_REQUIRED", entry.workflow);
+    } else if (workflow.status === "intentionally_denied") {
+      assert.equal(entry.classification, "INTENTIONALLY_DENIED", entry.workflow);
+    } else {
+      assert.fail(`workflow ${entry.workflow} has unsupported matrix status ${workflow.status}`);
+    }
+  }
+});
+
+test("the donor reuse matrix is complete, pinned, obligation-bearing, and import-neutral", () => {
+  const donorIds = new Set(evidence.donors.map((entry) => entry.id));
+  const reuseCategories = new Set(evidence.donor_reuse_categories);
+  const ids = evidence.donor_reuse_matrix.map((entry) => entry.id);
+  assert.equal(new Set(ids).size, ids.length, "duplicate donor reuse row");
+
+  for (const entry of evidence.donor_reuse_matrix) {
+    assert.ok(donorIds.has(entry.donor_id), `${entry.id} names unknown donor ${entry.donor_id}`);
+    assert.ok(reuseCategories.has(entry.classification), `${entry.id} has unknown reuse classification`);
+    assert.ok(["REFERENCE_ONLY", "REJECT_FOR_COTRA"].includes(entry.classification), `${entry.id} would import donor source in SG-000066`);
+    assert.match(entry.source_revision, /^[0-9a-f]{40}$/);
+    assert.ok(entry.source_paths.length > 0, `${entry.id} needs exact source paths`);
+    assert.ok(entry.subsystem.trim().length > 0);
+    assert.ok(entry.license_obligation.trim().length > 0);
+    assert.ok(entry.dependency_obligation.trim().length > 0);
+    assert.ok(entry.authority_delta.trim().length > 0);
+    assert.ok(entry.reason.trim().length > 0);
+  }
+
+  const uiTarsRows = evidence.donor_reuse_matrix.filter((entry) => entry.donor_id === "ui_tars");
+  assert.deepEqual(sorted(uiTarsRows.map((entry) => entry.id)), REQUIRED_UI_TARS_REUSE_IDS);
+  for (const entry of uiTarsRows) {
+    assert.equal(entry.source_revision, "2ff41a9e515828c5bd5b276e493d73aa0bdf4a3a", entry.id);
+  }
+  for (const id of REQUIRED_UI_TARS_REJECTED_IDS) {
+    const entry = uiTarsRows.find((candidate) => candidate.id === id);
+    assert.ok(entry, id);
+    assert.equal(entry.classification, "REJECT_FOR_COTRA", id);
+    assert.equal(entry.cotra_destinations.length, 0, `${id} must have no Quntal destination`);
+  }
+
+  assert.deepEqual(
+    sorted(evidence.donor_reuse_matrix.filter((entry) => entry.donor_id === "kernux_source_pool").map((entry) => entry.id)),
+    ["kernux_computer_use_boundary_patterns", "kernux_provenance_and_import_controls"]
+  );
 });
 
 test("the Desktop Commander replacement matrix cannot silently shrink or widen", () => {
@@ -261,7 +445,7 @@ test("every qualification artifact in the exit manifest exists", () => {
   }
 });
 
-test("SG-000066 imports no Desktop Commander or UI-TARS runtime", () => {
+test("SG-000066 imports no Desktop Commander, Kernux, or UI-TARS runtime", () => {
   const runtimeFiles = [
     join(repo, "package.json"),
     join(repo, "package-lock.json"),
@@ -271,7 +455,13 @@ test("SG-000066 imports no Desktop Commander or UI-TARS runtime", () => {
     ...collectFiles(join(repo, "apps", "quntal-mcp", "src"), (path) => path.endsWith(".ts") && !path.endsWith(".test.ts")),
     ...collectFiles(join(repo, "crates"), (path) => path.endsWith(".rs"))
   ];
-  const forbiddenRuntimeMarkers = ["desktopcommandermcp", "@ui-tars", "ui-tars", "operator-browser"];
+  const forbiddenRuntimeMarkers = [
+    "desktopcommandermcp",
+    "@ui-tars",
+    "ui-tars",
+    "operator-browser",
+    "thehalfmoon/kernux"
+  ];
 
   for (const path of runtimeFiles) {
     const content = readFileSync(path, "utf8").toLowerCase();
