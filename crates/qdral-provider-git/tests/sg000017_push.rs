@@ -772,11 +772,9 @@ fn sg000015_mutation_and_sg000016_fetch_regressions_remain_green() {
     assert!(status["porcelain_v2"].is_string());
     let log = provider.log(".", 5).expect("read-only log");
     assert_eq!(log["commits"].as_array().unwrap().len(), 1);
-    let fetch_destination = qdral_provider_git::fetch::parse_destination(
-        "test-origin",
-        "https://example.com/repo.git",
-    )
-    .expect("fetch destination");
+    let fetch_destination =
+        qdral_provider_git::fetch::parse_destination("test-origin", "https://example.com/repo.git")
+            .expect("fetch destination");
     let fetch_preview = provider
         .fetch_preview(".", "test-origin", "main", &fetch_destination)
         .expect("fetch preview");

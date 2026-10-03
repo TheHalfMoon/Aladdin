@@ -59,10 +59,8 @@ impl PolicyEngine {
     }
 
     pub fn authorize(&self, request: &RequestEnvelope) -> Result<PolicyDecision, PolicyError> {
-        if qdral_provider_browser::is_allowed_browser_shape(
-            &request.capability,
-            &request.operation,
-        ) {
+        if qdral_provider_browser::is_allowed_browser_shape(&request.capability, &request.operation)
+        {
             self.validate_allowed_browser_shape(request)?;
             let workspace = self
                 .legacy

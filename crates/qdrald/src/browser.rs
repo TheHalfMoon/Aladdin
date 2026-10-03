@@ -1153,12 +1153,8 @@ fn preview_download(
         (source.pinned_address, 0)
     } else {
         let (final_destination, count, _final_origin) =
-            qdral_provider_browser::validate_redirect_chain(
-                &page.current_origin,
-                &chain,
-                resolver,
-            )
-            .map_err(|error| ProviderError::new(error.code, error.message))?;
+            qdral_provider_browser::validate_redirect_chain(&page.current_origin, &chain, resolver)
+                .map_err(|error| ProviderError::new(error.code, error.message))?;
         if final_destination.origin != page.current_origin {
             return Err(ProviderError::new(
                 FailureCode::CapabilityDenied,
@@ -1182,8 +1178,7 @@ fn preview_download(
     let destination_root_identity = qdral_provider_browser::download_root_identity(&root);
 
     let issued_at_ms = now_ms();
-    let expires_at_ms =
-        issued_at_ms.saturating_add(qdral_provider_browser::DOWNLOAD_SOURCE_TTL_MS);
+    let expires_at_ms = issued_at_ms.saturating_add(qdral_provider_browser::DOWNLOAD_SOURCE_TTL_MS);
     let source_url_digest = qdral_provider_browser::sha256_hex(source_url.as_bytes());
     let source_id = qdral_provider_browser::download_source_id_for(
         &workspace.id,
@@ -3278,10 +3273,7 @@ mod tests {
         let digest = qdral_provider_browser::sha256_hex(bytes);
         // A well formed QDRAL_BROWSER_DOWNLOAD_SOURCE_V1 identity, so the strict
         // shape validator accepts it exactly as it accepts a real one.
-        let source_id = format!(
-            "dl-{}",
-            qdral_provider_browser::sha256_hex(name.as_bytes())
-        );
+        let source_id = format!("dl-{}", qdral_provider_browser::sha256_hex(name.as_bytes()));
         let mut store = qdral_provider_browser::DownloadStore::load_or_create(
             qdral_provider_browser::default_download_registry_path(profile_root),
         );

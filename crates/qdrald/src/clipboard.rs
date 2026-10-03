@@ -42,12 +42,10 @@ pub fn dispatch_clipboard(
     approval: &impl ApprovalBroker,
     request: &RequestEnvelope,
 ) -> Result<Option<Value>, ProviderError> {
-    if qdral_provider_clipboard::is_clipboard_write_shape(&request.capability, &request.operation)
-    {
+    if qdral_provider_clipboard::is_clipboard_write_shape(&request.capability, &request.operation) {
         return write_with_approval(workspace, approval, request, &NativeAdapter::new()).map(Some);
     }
-    if !qdral_provider_clipboard::is_clipboard_read_shape(&request.capability, &request.operation)
-    {
+    if !qdral_provider_clipboard::is_clipboard_read_shape(&request.capability, &request.operation) {
         return Ok(None);
     }
     read_with_approval(workspace, approval, request, &NativeAdapter::new()).map(Some)

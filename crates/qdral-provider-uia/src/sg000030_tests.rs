@@ -538,12 +538,7 @@ fn protected_window_select_is_denied() {
     let adapter = FakeSelectAdapter::with_process(4242, "notepad", 9001);
     adapter.set_windows(
         4242,
-        vec![fake_window(
-            100,
-            "Qdral Approval",
-            "QdralApproveDialog",
-            1,
-        )],
+        vec![fake_window(100, "Qdral Approval", "QdralApproveDialog", 1)],
     );
     adapter.set_tree(100, vec![select_item("item-1")]);
     let mut registry = UiaRegistry::new();

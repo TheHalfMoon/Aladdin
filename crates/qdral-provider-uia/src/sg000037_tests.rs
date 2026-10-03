@@ -540,12 +540,7 @@ fn protected_surface_remains_denied_with_epoch_binding() {
     let adapter = FakeInterruptAdapter::with_process(4242, "notepad", 9001);
     adapter.set_windows(
         4242,
-        vec![fake_window(
-            200,
-            "Qdral Approval",
-            "qdralapprove-dialog",
-            1,
-        )],
+        vec![fake_window(200, "Qdral Approval", "qdralapprove-dialog", 1)],
     );
     let mut registry = UiaRegistry::new();
     let list = registry.list_windows(&adapter, WORKSPACE, POLICY).unwrap();

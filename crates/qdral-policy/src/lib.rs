@@ -597,10 +597,7 @@ mod tests {
     #[test]
     fn sg000041_refuses_ancestor_of_missing_protected_root() {
         let base = temp_root();
-        assert!(sg41_refused(
-            &base,
-            &base.join("Qdral").join("audit.jsonl")
-        ));
+        assert!(sg41_refused(&base, &base.join("Qdral").join("audit.jsonl")));
         let _ = std::fs::remove_dir_all(base);
     }
 

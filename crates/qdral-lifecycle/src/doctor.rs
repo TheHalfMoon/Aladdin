@@ -226,9 +226,7 @@ pub fn run(layout: &Layout, platform: &dyn Platform) -> DoctorReport {
                 crate::ipc::request(&workspace, "system.status", "get", serde_json::json!({}));
             match crate::ipc::call(&qdrald, config, &request, Duration::from_secs(20)) {
                 Ok(response) => match crate::ipc::expect_ok(&response) {
-                    Ok(result)
-                        if result.get("name").and_then(|v| v.as_str()) == Some("qdrald") =>
-                    {
+                    Ok(result) if result.get("name").and_then(|v| v.as_str()) == Some("qdrald") => {
                         check(
                             "ipc",
                             CheckStatus::Pass,

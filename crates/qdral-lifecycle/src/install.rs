@@ -571,11 +571,7 @@ mod tests {
         installer
             .install(&release_dir("0.2.0"), &options())
             .unwrap();
-        fs::write(
-            root.join("versions").join("0.2.0").join("qdrald.exe"),
-            b"x",
-        )
-        .unwrap();
+        fs::write(root.join("versions").join("0.2.0").join("qdrald.exe"), b"x").unwrap();
         assert!(installer.verify().is_err());
         let report = installer
             .install(&release_dir("0.2.0"), &options())

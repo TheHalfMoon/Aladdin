@@ -75,10 +75,8 @@ impl PolicyEngine {
                 policy_revision: POLICY_REVISION,
             });
         }
-        if qdral_provider_browser::is_allowed_browser_shape(
-            &request.capability,
-            &request.operation,
-        ) {
+        if qdral_provider_browser::is_allowed_browser_shape(&request.capability, &request.operation)
+        {
             // SG-000021 and SG-000022 shapes retain their validation in the
             // legacy engine, but the reported revision advances to the
             // observation revision.

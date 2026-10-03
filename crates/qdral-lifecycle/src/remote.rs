@@ -393,10 +393,7 @@ mod tests {
         let device = format!("dev-{}", "c".repeat(32));
         let args = lease_arguments(&options(), &paired(), &device, 1).unwrap();
         assert_eq!(args["duration_seconds"], 900);
-        assert_eq!(
-            args["scope_ceiling"],
-            json!(["qdral.read", "qdral.write"])
-        );
+        assert_eq!(args["scope_ceiling"], json!(["qdral.read", "qdral.write"]));
         assert_eq!(args["device_id"], device);
         let mut narrowed = options();
         narrowed.scopes = Some(vec!["qdral.read".into()]);

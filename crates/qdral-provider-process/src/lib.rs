@@ -223,10 +223,7 @@ mod tests {
         let env = BTreeMap::from([
             ("PATH".to_owned(), "bin".to_owned()),
             ("OPENAI_API_KEY".to_owned(), "secret".to_owned()),
-            (
-                "QDRAL_TUNNEL_KEY_FILE".to_owned(),
-                "secret-path".to_owned(),
-            ),
+            ("QDRAL_TUNNEL_KEY_FILE".to_owned(), "secret-path".to_owned()),
         ]);
 
         let plan = build_execution_plan(

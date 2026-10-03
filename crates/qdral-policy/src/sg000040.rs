@@ -83,8 +83,7 @@ impl PolicyEngine {
                 policy_revision: POLICY_REVISION,
             });
         }
-        if qdral_provider_network::is_network_fetch_shape(&request.capability, &request.operation)
-        {
+        if qdral_provider_network::is_network_fetch_shape(&request.capability, &request.operation) {
             self.validate_network_fetch(request)?;
             let workspace = self
                 .legacy

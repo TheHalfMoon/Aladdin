@@ -1048,11 +1048,7 @@ mod tests {
         save_leases(&path, &[lease()]).unwrap();
         assert_eq!(load_leases(&path), vec![lease()]);
         let text = std::fs::read_to_string(&path).unwrap();
-        std::fs::write(
-            &path,
-            text.replace("\"qdral.write\"", "\"qdral.execute\""),
-        )
-        .unwrap();
+        std::fs::write(&path, text.replace("\"qdral.write\"", "\"qdral.execute\"")).unwrap();
         assert!(
             load_leases(&path).is_empty(),
             "tampered store must yield no lease"

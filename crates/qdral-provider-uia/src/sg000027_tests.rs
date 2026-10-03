@@ -296,12 +296,7 @@ fn protected_window_direct_observation_is_denied() {
     let (_, _, window_id, _) = listed_window_id(&list, 0);
     adapter.set_windows(
         4242,
-        vec![fake_window(
-            100,
-            "Qdral Approval",
-            "QdralApproveDialog",
-            1,
-        )],
+        vec![fake_window(100, "Qdral Approval", "QdralApproveDialog", 1)],
     );
     let relist = registry.list_windows(&adapter, WORKSPACE, POLICY).unwrap();
     assert_eq!(relist["window_count"], 0);

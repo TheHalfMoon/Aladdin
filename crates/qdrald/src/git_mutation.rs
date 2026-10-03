@@ -360,8 +360,7 @@ mod tests {
             fn request_token(
                 &self,
                 _prompt: &ApprovalPrompt,
-            ) -> Result<qdral_approval::ApprovedToken, qdral_approval::ApprovalError>
-            {
+            ) -> Result<qdral_approval::ApprovedToken, qdral_approval::ApprovalError> {
                 Err(qdral_approval::ApprovalError {
                     code: FailureCode::ApprovalDenied,
                     message: "local user denied Git mutation".into(),

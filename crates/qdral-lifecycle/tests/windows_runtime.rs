@@ -107,10 +107,7 @@ impl Drop for Cleanup {
 fn release() -> PathBuf {
     let dir = temp_dir("release");
     let payload: Vec<(&str, Vec<u8>)> = vec![
-        (
-            "qdral.exe",
-            fs::read(env!("CARGO_BIN_EXE_qdral")).unwrap(),
-        ),
+        ("qdral.exe", fs::read(env!("CARGO_BIN_EXE_qdral")).unwrap()),
         (
             "qdral-mcp-host.exe",
             fs::read(env!("CARGO_BIN_EXE_qdral-mcp-host")).unwrap(),

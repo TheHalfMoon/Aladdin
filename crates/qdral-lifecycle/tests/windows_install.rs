@@ -13,8 +13,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
 fn temp_dir(label: &str) -> PathBuf {
-    let dir =
-        std::env::temp_dir().join(format!("qdral-win-{label}-{}", qdral_lifecycle::nonce()));
+    let dir = std::env::temp_dir().join(format!("qdral-win-{label}-{}", qdral_lifecycle::nonce()));
     fs::create_dir_all(&dir).unwrap();
     dir
 }

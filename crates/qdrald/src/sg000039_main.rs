@@ -2079,8 +2079,7 @@ mod sg000058_lease_boundary_tests {
             .duration_since(UNIX_EPOCH)
             .expect("clock")
             .as_nanos();
-        let root =
-            std::env::temp_dir().join(format!("qdral-sg58-{}-{suffix}", std::process::id()));
+        let root = std::env::temp_dir().join(format!("qdral-sg58-{}-{suffix}", std::process::id()));
         std::fs::create_dir_all(root.join("workspace")).expect("workspace");
         std::fs::write(
             root.join("workspace").join("README.md"),
@@ -2094,12 +2093,7 @@ mod sg000058_lease_boundary_tests {
         std::env::set_var("QDRAL_REMOTE_LEASE_PATH", &lease_path);
         let mut trust_store = trust::TrustStore::load_or_create(trust_path.clone());
         trust_store
-            .grant(
-                "default",
-                POLICY_REVISION,
-                "test",
-                qdral_approval::now_ms(),
-            )
+            .grant("default", POLICY_REVISION, "test", qdral_approval::now_ms())
             .expect("grant");
         let policy = PolicyEngine::new(vec![Workspace {
             id: "default".into(),
@@ -2195,12 +2189,7 @@ mod sg000058_lease_boundary_tests {
         save_leases(&lease_path, std::slice::from_ref(&lease)).expect("save");
         assert!(handle_envelope(&policy, &audit, &approval, &workspaces, read("default")).ok);
         trust::TrustStore::load_or_create(trust_path.clone())
-            .revoke_workspace(
-                "default",
-                POLICY_REVISION,
-                "test",
-                qdral_approval::now_ms(),
-            )
+            .revoke_workspace("default", POLICY_REVISION, "test", qdral_approval::now_ms())
             .expect("revoke trust");
         let untrusted = handle_envelope(&policy, &audit, &approval, &workspaces, read("default"));
         assert_eq!(code(&untrusted), Some(FailureCode::RemoteSessionInactive));

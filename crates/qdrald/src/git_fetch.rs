@@ -102,9 +102,7 @@ fn network_digest(
     );
     digest_field(
         &mut hasher,
-        qdral_provider_network::MAX_REDIRECTS
-            .to_string()
-            .as_bytes(),
+        qdral_provider_network::MAX_REDIRECTS.to_string().as_bytes(),
     );
     hex_lower(&hasher.finalize())
 }

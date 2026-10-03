@@ -1689,10 +1689,7 @@ mod tests {
 
     #[test]
     fn push_child_env_inherits_no_secrets_or_proxies() {
-        std::env::set_var(
-            "QDRAL_PUSH_TEST_DECOY_SECRET_XYZ",
-            "decoy-secret-value-xyz",
-        );
+        std::env::set_var("QDRAL_PUSH_TEST_DECOY_SECRET_XYZ", "decoy-secret-value-xyz");
         std::env::set_var("QDRAL_GIT_CREDENTIAL_DECOY_XYZ", "decoy-credential-xyz");
         std::env::set_var("PUSH_TEST_FAKE_TOKEN", "fake-token-abc");
         let env = build_child_env(None);

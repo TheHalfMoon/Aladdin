@@ -338,14 +338,13 @@ fn uninstall(args: &mut Args) -> Result<Output, LifecycleError> {
     let layout = Layout::for_current_user()?;
     let mut human = String::new();
     if layout.supervisor_record().exists() {
-        let stopped =
-            qdral_lifecycle::lifecycle::stop(&layout, std::time::Duration::from_secs(20))
-                .map_err(|error| {
-                    LifecycleError::conflict(format!(
-                        "Qdral could not be stopped, so nothing was uninstalled: {}",
-                        error.message
-                    ))
-                })?;
+        let stopped = qdral_lifecycle::lifecycle::stop(&layout, std::time::Duration::from_secs(20))
+            .map_err(|error| {
+                LifecycleError::conflict(format!(
+                    "Qdral could not be stopped, so nothing was uninstalled: {}",
+                    error.message
+                ))
+            })?;
         human.push_str(&format!("Stopped Qdral first: {}.\n", stopped.detail));
     }
     let platform = host_platform();
