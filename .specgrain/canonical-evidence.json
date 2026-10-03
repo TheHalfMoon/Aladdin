@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "snapshot_base": "837201a57238f1bb0afc6306c8d5a154ddb2ac72",
+  "snapshot_base": "dea92a454a91e999105d5f3a463b3a63368b4109",
   "state_semantics": {
     "GRAIN": "Authorized or active work packet whose acceptance is not yet canonically proven.",
     "PROVEN": "Acceptance and required qualification are proven, but canonical closeout/governance is not yet complete.",
@@ -790,6 +790,18 @@
       "review_basis": "Exact-head genuine TypeSafe Jev 23/23 hunks with zero findings/blocking findings (pin 31f89602797fb7bea007f8a480bf368bf564954e), Alibaba Open Code Review v1.12.9 exact-range delegation over 15 files with 5 reviewable and 10 excluded files manually reviewed, exact-diff manual security review, real stdio discovery evidence, Windows/Ubuntu Rust Node Governance, Supply chain audit, Release qualification, and Relay container, successful post-merge CI, and zero unresolved review threads. CodeRabbit skipped-review and cubic skipping notices evaluated as non-evidence noise with zero substantive findings.",
       "unresolved_review_threads": 0,
       "authority_boundary": "Tool metadata contract, profile-gated registration and discovery, MCP annotations, and a narrower fs_list output bound. No tool, kernel shape, scope, approval class, or authority is added; remote discovery and fs_list output only narrow."
+    },
+    "SG-000066": {
+      "implementation_pr": 178,
+      "implementation_base": "e770a6913d11c92d6855943f6e47d306a5c42fca",
+      "qualified_head": "a5601b57937b45983be18b13d3e0fffd3e267875",
+      "pre_merge_ci": "37143757854",
+      "pre_merge_review_gates": "37143755920",
+      "merge_sha": "dea92a454a91e999105d5f3a463b3a63368b4109",
+      "post_merge_ci": "37144211455",
+      "review_basis": "Exact-head genuine TypeSafe Jev 2/2 changed-file hunks and 7/7 slices with zero findings/blocking findings (pin 31f89602797fb7bea007f8a480bf368bf564954e), Alibaba Open Code Review v1.12.9 exact-range delegation over 2 files with 1 reviewable JSON and 1 excluded TypeScript test manually reviewed in full, exact-diff manual security review, Windows/Ubuntu Rust and Node, Governance, Supply chain audit, Relay container, Release qualification, successful 8/8 post-merge CI on the implementation merge, and zero unresolved review threads. CodeRabbit/Qodo/Cubic outputs are not governance evidence.",
+      "unresolved_review_threads": 0,
+      "authority_boundary": "Evidence and regression tests only. No production/runtime code, donor runtime or dependency, process/browser/screenshot/native-input/generic-network/shell authority, trust/approval/lease mutation, provider implementation, or P18 activation was added."
     }
   }
 }

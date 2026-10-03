@@ -2,7 +2,7 @@
   "id": "SG-000066",
   "title": "P16 security and parity exit",
   "program": "COTRA-P16",
-  "state": "GRAIN",
+  "state": "CLOSED",
   "risk": "high",
   "created": "2026-10-02",
   "base": "837201a57238f1bb0afc6306c8d5a154ddb2ac72",
@@ -76,5 +76,25 @@
     "exact_head_ci": true,
     "release_artifact_qualification": true
   },
-  "done_when": "COTRA-P16 is exited canonically with workflow, denial, profile, Desktop Commander/Kernux/UI-TARS donor-audit evidence and every defect fixed at its root, while UI-TARS remains evidence-only and all authority-adding computer-use integration is explicitly deferred to separately authorized successor grains."
+  "done_when": "COTRA-P16 is exited canonically with workflow, denial, profile, Desktop Commander/Kernux/UI-TARS donor-audit evidence and every defect fixed at its root, while UI-TARS remains evidence-only and all authority-adding computer-use integration is explicitly deferred to separately authorized successor grains.",
+  "qualified_head": "a5601b57937b45983be18b13d3e0fffd3e267875",
+  "implementation_base": "e770a6913d11c92d6855943f6e47d306a5c42fca",
+  "implementation_merge": "dea92a454a91e999105d5f3a463b3a63368b4109",
+  "pre_merge_ci": "37143757854",
+  "pre_merge_review_gates": "37143755920",
+  "post_merge_ci": "37144211455",
+  "canonical_evidence": {
+    "implementation_pr": 178,
+    "implementation_base": "e770a6913d11c92d6855943f6e47d306a5c42fca",
+    "qualified_head": "a5601b57937b45983be18b13d3e0fffd3e267875",
+    "pre_merge_ci": "37143757854",
+    "pre_merge_review_gates": "37143755920",
+    "merge_sha": "dea92a454a91e999105d5f3a463b3a63368b4109",
+    "post_merge_ci": "37144211455",
+    "jev": "PASSED: genuine TypeSafe Jev exact-diff review covered 2/2 changed-file hunks and 7/7 slices with zero findings and zero blocking findings, pin 31f89602797fb7bea007f8a480bf368bf564954e.",
+    "ocr": "PASSED: Alibaba Open Code Review v1.12.9 exact-range delegation covered the exact PR range over 2 changed files; docs/p16/sg000066_exit_evidence.json was reviewable and apps/quntal-mcp/src/p16-exit.test.ts was excluded by default-path classification and manually reviewed in full.",
+    "security_review": "PASS on the exact qualified head: the machine-readable P16 exit evidence covers every one of the 36 canonical workflows exactly once with the required COTRA parity vocabulary; records exact revision/path/license/dependency/authority-delta reuse decisions for Desktop Commander, the founder-authorized Kernux source pool, and UI-TARS; proves the 15 intended Desktop Commander replacement workflows resolve only through canonical Quntal MCP tools and quntald-governed shapes; keeps unrestricted shell/interpreter, generic socket/proxy, arbitrary browser script, elevation, model self-policy, remote/local authority mutation, unsafe UI-TARS direct-action paths, and other high-authority shapes denied or successor-only; imports no donor runtime or dependency; keeps SG-000073 through SG-000086 inactive; and passes every closed SG-000001 through SG-000065 regression. CodeRabbit/Qodo/Cubic outputs are not governance evidence. Zero unresolved review threads.",
+    "unresolved_review_threads": 0,
+    "authority_boundary": "Evidence and regression tests only. No production/runtime code, dependency, process authority, browser authority, screenshot path, native-input path, generic network/proxy authority, shell/interpreter authority, trust/approval mutation, remote lease mutation, tool surface, provider implementation, or P18 activation was added; all donor source remained reference-only or explicitly rejected."
+  }
 }
