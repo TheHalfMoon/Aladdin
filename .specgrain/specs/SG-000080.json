@@ -1,0 +1,56 @@
+{
+  "id": "SG-000080",
+  "title": "Exact-window capture with bounded capture leases",
+  "program": "QUNTAL-P18",
+  "state": "PLANNED",
+  "risk": "high",
+  "created": "2026-10-03",
+  "dependencies": ["SG-000079"],
+  "objective": "Implement Windows-first exact-window pixel capture behind Quntal's existing desktop identity model. Capture must bind the exact process instance, HWND/window generation, session, dimensions/DPI, policy revision, and protected-surface rules. Repeated observation uses a local-only, revocable, time-bounded CaptureLease that cannot be minted by a model or remote caller.",
+  "scope": {
+    "include": [
+      "native exact-window capture using a Windows API suitable for per-window capture rather than whole-screen grab",
+      "capture identity bound to process PID+creation time, HWND, class, window generation, session, geometry/DPI, policy revision, and capture generation",
+      "server-issued CaptureLease with exact window scope, maximum duration/rate/frame byte dimensions, local issuance, explicit revoke, and deterministic expiry",
+      "lease invalidation on process/window replacement, geometry/session changes where required by contract, lock/logoff, policy/workspace/trust revision change, emergency revoke, secure-desktop transition, or Quntal restart",
+      "exclusion of Quntal-owned windows, Quntal approval/trust/revoke UI, CredentialUIBroker, consent/UAC, LogonUI, secure desktop, foreign sessions, stale/reused handles, protected markers, and explicitly denied windows",
+      "bounded image dimensions/bytes/rate and secret-safe metadata logging with no screenshot bytes in logs/metrics",
+      "tests on real Windows for DPI scaling, resize/move, minimized/occluded behavior, multi-monitor placement, stale HWND/PID reuse, RDP/session transition, lock/logoff, and protected surfaces"
+    ],
+    "exclude": [
+      "whole-screen capture",
+      "continuous background screen streaming",
+      "model/MCP minting of capture leases",
+      "remote capture reach",
+      "desktop actuation",
+      "coordinate execution",
+      "security/credential dialog capture"
+    ]
+  },
+  "authority_delta": {
+    "filesystem": "No general filesystem authority; transient image buffers/files if required remain under protected Quntal state and bounded cleanup policy.",
+    "process": "No new process launch authority.",
+    "network": "None.",
+    "browser": "None.",
+    "ui_input": "None.",
+    "secrets": "Window pixels become observable only for exact locally authorized non-protected windows under bounded capture authority; protected/security surfaces are excluded by construction.",
+    "approval": "CaptureLease issuance is a local authority decision at the required presence/approval class and cannot be delegated to the model/remote caller.",
+    "privileged": "None; no secure-desktop capture or elevation."
+  },
+  "invariants": [
+    "capture is exact-window scoped and never silently widens to the screen/session",
+    "protected/security/Quntal surfaces are never captured",
+    "capture leases are local-only, bounded, revocable, and stale on identity/session/policy drift",
+    "screenshot bytes never enter logs/telemetry"
+  ],
+  "acceptance": [
+    {"id": "A1", "claim": "A real Windows window can be captured with exact process/window/generation/DPI binding and deterministic bounded output."},
+    {"id": "A2", "claim": "Quntal, credential, UAC/consent, LogonUI, secure-desktop, foreign-session, stale/reused-handle, and protected-marker targets fail closed before pixels are returned."},
+    {"id": "A3", "claim": "CaptureLease issuance/reuse/revoke/expiry and lock/logoff/session/window/process/policy invalidation are deterministic, and no model/MCP/remote path can mint or widen a lease."},
+    {"id": "A4", "claim": "Real-machine tests cover DPI, resize/move, multi-monitor, RDP/session, lock/logoff, minimized/occluded behavior, and stale identity without whole-screen fallback."},
+    {"id": "A5", "claim": "Exact-head Windows CI, TypeSafe Jev, Alibaba Open Code Review, security review, privacy/log review, and zero unresolved blockers pass."}
+  ],
+  "successor_requirements": {"sg_000081": "Structured UIA actuation may activate only after desktop observation/capture identities and protected-surface rules are canonically qualified."},
+  "review": {"diffcipline": true, "jev_semantic_review": true, "alibaba_open_code_review": "required exact-range qualification where integrated", "security_review": true, "exact_head_ci": true, "native_windows_qualification": true},
+  "done_when": "Exact-window capture and local bounded capture leases are canonically qualified with protected-surface exclusion, stale invalidation, privacy bounds, and no screen-wide or remote widening."
+}
