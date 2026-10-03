@@ -27,16 +27,17 @@ jobs:
 
           test = Path('apps/qdral-mcp/src/p16-exit.test.ts')
           text = test.read_text(encoding='utf-8')
-          text = text.replace(
-              'assert.equal(evidence.schema, "qdral-p16-exit-evidence/2");',
-              'assert.equal(evidence.schema, "quntal-p16-exit-evidence/2");'
-          )
-          old = '''  for (const path of paths) {
-            const absolute = join(repo, path);
-            assert.ok(existsSync(absolute), `missing qualification artifact ${path}`);
-            assert.ok(statSync(absolute).isFile(), `qualification artifact is not a file ${path}`);
-          }'''
-          new = '''  for (const historicalPath of paths) {
+          current_schema = 'assert.equal(evidence.schema, "qdral-p16-exit-evidence/2");'
+          historical_schema = 'assert.equal(evidence.schema, "quntal-p16-exit-evidence/2");'
+          if current_schema not in text and historical_schema not in text:
+              raise SystemExit('evidence schema assertion not found')
+          text = text.replace(current_schema, historical_schema)
+
+          test_marker = 'test("every qualification artifact in the exit manifest exists", () => {'
+          test_start = text.index(test_marker)
+          loop_start = text.index('  for (const path of paths) {', test_start)
+          loop_end = text.index('\n  }\n});', loop_start) + len('\n  }')
+          replacement = '''  for (const historicalPath of paths) {
             const currentPath = historicalPath
               .replace(/^apps\\/quntal-mcp\\//, "apps/qdral-mcp/")
               .replace(/^crates\\/quntald\\//, "crates/qdrald/");
@@ -44,17 +45,18 @@ jobs:
             assert.ok(existsSync(absolute), `missing current qualification artifact for historical ${historicalPath}: ${currentPath}`);
             assert.ok(statSync(absolute).isFile(), `qualification artifact is not a file ${currentPath}`);
           }'''
-          if old not in text:
-              raise SystemExit('qualification artifact block not found')
-          test.write_text(text.replace(old, new), encoding='utf-8')
+          text = text[:loop_start] + replacement + text[loop_end:]
+          test.write_text(text, encoding='utf-8')
 
           gate = Path('scripts/check-current-identity.mjs')
           text = gate.read_text(encoding='utf-8')
-          needle = '  path === "docs/canonical/CURRENT.md" ||\n'
-          replacement = needle + '  path === "docs/p16/sg000066_exit_evidence.json" ||\n'
-          if needle not in text:
-              raise SystemExit('identity allowlist insertion point not found')
-          gate.write_text(text.replace(needle, replacement, 1), encoding='utf-8')
+          evidence_line = '  path === "docs/p16/sg000066_exit_evidence.json" ||\n'
+          if evidence_line not in text:
+              needle = '  path === "docs/canonical/CURRENT.md" ||\n'
+              if needle not in text:
+                  raise SystemExit('identity allowlist insertion point not found')
+              text = text.replace(needle, needle + evidence_line, 1)
+          gate.write_text(text, encoding='utf-8')
           PY
           git diff --check
       - name: Commit evidence-preservation repair
