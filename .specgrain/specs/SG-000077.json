@@ -1,0 +1,55 @@
+{
+  "id": "SG-000077",
+  "title": "Live structured browser actuation",
+  "program": "QUNTAL-P18",
+  "state": "PLANNED",
+  "risk": "high",
+  "created": "2026-10-03",
+  "dependencies": ["SG-000076"],
+  "objective": "Bind Quntal's existing structured browser click/fill authority to the live governed browser engine. Every live action must revalidate exact page, origin, page/document generation, node identity, role/state, workspace/policy revision, and approval immediately before execution, then observe a bounded postcondition and deterministically advance or invalidate state. Structured denial never silently falls back to coordinates.",
+  "scope": {
+    "include": [
+      "live click/invoke on one server-issued live node whose role/state permit invoke",
+      "live bounded non-password fill on one server-issued text-compatible node",
+      "fresh SOFT approval and one-shot digest binding preserved from the existing browser actuation contract",
+      "immediate pre-execution revalidation of page, origin, page/document generation, node role/state, workspace/trust/policy revision, and host identity",
+      "bounded postcondition observation and deterministic page/document generation updates after mutation",
+      "tests for stale/replaced nodes, disabled/role mismatch, navigation races, document mutation races, approval replay/expiry/digest mismatch, host crash, cancellation, and double execution"
+    ],
+    "exclude": [
+      "password-field fill",
+      "arbitrary keyboard streams/hotkeys",
+      "coordinate fallback",
+      "arbitrary JavaScript/CDP/DevTools",
+      "downloads/uploads except through SG-000078",
+      "personal profile",
+      "remote exposure"
+    ]
+  },
+  "authority_delta": {
+    "filesystem": "None.",
+    "process": "None beyond the existing governed browser host.",
+    "network": "Page effects remain within SG-000075 browser egress policy.",
+    "browser": "Existing structured click/fill authority becomes live against exact typed nodes.",
+    "ui_input": "No OS-level mouse/keyboard authority is added; actuation occurs through the browser engine on structured node identity.",
+    "secrets": "Password targets and browser credential stores remain denied; fill values are bounded caller-supplied non-secret text under the existing evidence rules.",
+    "approval": "Fresh one-shot SOFT approval remains mandatory for each click/fill mutation.",
+    "privileged": "None."
+  },
+  "invariants": [
+    "structured browser mutation is exact-node and fresh-state bound",
+    "approval is consumed once before mutation and cannot be replayed",
+    "structured failure never silently widens to coordinate input",
+    "password targets, raw JS/CDP, personal profiles, and OS-level input remain unreachable"
+  ],
+  "acceptance": [
+    {"id": "A1", "claim": "Live click and fill execute only on exact current nodes whose bound role/state/page/origin/document/workspace/policy facts still match immediately before execution."},
+    {"id": "A2", "claim": "Stale/replaced/disabled/wrong-role nodes, navigation/document races, approval replay/expiry/digest mismatch, cancellation, and host failure all fail closed without duplicate mutation."},
+    {"id": "A3", "claim": "Postcondition observation and generation advancement make prior node identities stale deterministically where the document/page changed."},
+    {"id": "A4", "claim": "No password fill, coordinate fallback, OS input, raw JS/CDP, personal-profile, transfer bypass, or remote reach is introduced."},
+    {"id": "A5", "claim": "Exact-head live-browser tests, CI, TypeSafe Jev, Alibaba Open Code Review, security review, and zero unresolved blockers pass."}
+  ],
+  "successor_requirements": {"sg_000078": "Live browser transfers may activate only after structured mutation semantics are canonically qualified."},
+  "review": {"diffcipline": true, "jev_semantic_review": true, "alibaba_open_code_review": "required exact-range qualification where integrated", "security_review": true, "exact_head_ci": true},
+  "done_when": "Structured browser click/fill are live and canonically qualified with exact-node revalidation, one-shot approval, postconditions, race handling, and no silent coordinate widening."
+}
