@@ -1,14 +1,14 @@
 #!/usr/bin/env node
-// Writes a deterministic CycloneDX 1.5 SBOM for a packaged Cotra release.
+// Writes a deterministic CycloneDX 1.5 SBOM for a packaged Quntal release.
 //
 // Usage:
 //   node scripts/generate-sbom.mjs --release <release-dir> --out <sbom.cdx.json>
 //
 // The Rust components are the crates actually linked into the shipped
-// binaries (cotrad, cotra, cotra-mcp-host) for x86_64-pc-windows-msvc, taken
+// binaries (quntald, quntal, quntal-mcp-host) for x86_64-pc-windows-msvc, taken
 // from `cargo metadata` and following only normal (non-dev, non-build)
 // dependency edges. The npm components are the packages present in the
-// release's app/cotra-mcp/node_modules. Every payload file listed in the
+// release's app/quntal-mcp/node_modules. Every payload file listed in the
 // release manifest is recorded with its SHA-256.
 
 import { createHash } from "node:crypto";
@@ -19,7 +19,7 @@ import { fileURLToPath } from "node:url";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const TARGET = "x86_64-pc-windows-msvc";
-const ROOT_PACKAGES = ["cotrad", "cotra-lifecycle"];
+const ROOT_PACKAGES = ["quntald", "quntal-lifecycle"];
 
 function fail(message) {
   console.error(`generate-sbom: ${message}`);
@@ -83,7 +83,7 @@ function cargoComponents() {
     stack.push(...next);
   }
 
-  const ref = (p) => (p.source ? `pkg:cargo/${p.name}@${p.version}` : `cotra:${p.name}@${p.version}`);
+  const ref = (p) => (p.source ? `pkg:cargo/${p.name}@${p.version}` : `quntal:${p.name}@${p.version}`);
   const components = [];
   for (const id of reached) {
     const p = packages.get(id);
@@ -93,7 +93,7 @@ function cargoComponents() {
       name: p.name,
       version: p.version,
       licenses: p.license ? [{ expression: p.license }] : [],
-      ...(p.source ? { purl: ref(p) } : { description: "Cotra workspace crate" })
+      ...(p.source ? { purl: ref(p) } : { description: "Quntal workspace crate" })
     };
     const checksum = checksums.get(`${p.name}@${p.version}`);
     if (checksum) component.hashes = [{ alg: "SHA-256", content: checksum }];
@@ -140,7 +140,7 @@ function verifyPayload(release, manifest) {
 }
 
 function npmComponents(release) {
-  const base = join(release, "app", "cotra-mcp", "node_modules");
+  const base = join(release, "app", "quntal-mcp", "node_modules");
   const found = [];
   const visit = (dir) => {
     if (!existsSync(dir)) return;
@@ -160,7 +160,7 @@ function npmComponents(release) {
     }
   };
   visit(base);
-  const appPkg = JSON.parse(readFileSync(join(release, "app", "cotra-mcp", "package.json"), "utf8"));
+  const appPkg = JSON.parse(readFileSync(join(release, "app", "quntal-mcp", "package.json"), "utf8"));
   // Node resolves a dependency from the nearest enclosing node_modules
   // directory, so resolve edges the same way rather than by name only.
   const byPath = new Map(found.map((entry) => [entry.path, entry]));
@@ -193,7 +193,7 @@ function npmComponents(release) {
       .map((entry) => npmPurl(entry.pkg.name, entry.pkg.version));
     dependencies.set(ref, [...new Set(deps)].sort());
   }
-  const appRef = `cotra:${appPkg.name}@${appPkg.version}`;
+  const appRef = `quntal:${appPkg.name}@${appPkg.version}`;
   const appDeps = Object.keys(appPkg.dependencies ?? {})
     .map((dep) => byPath.get(join(base, ...dep.split("/"))))
     .filter(Boolean)
@@ -201,7 +201,7 @@ function npmComponents(release) {
     .sort();
   return {
     components: [
-      { type: "application", "bom-ref": appRef, name: appPkg.name, version: appPkg.version, description: "Cotra MCP server app" },
+      { type: "application", "bom-ref": appRef, name: appPkg.name, version: appPkg.version, description: "Quntal MCP server app" },
       ...components.values()
     ],
     dependencies: [{ ref: appRef, dependsOn: appDeps }, ...[...dependencies].map(([ref, dependsOn]) => ({ ref, dependsOn }))],
@@ -223,7 +223,7 @@ const files = manifest.files.map((file) => ({
   name: file.path,
   hashes: [{ alg: "SHA-256", content: file.sha256 }]
 }));
-const productRef = `cotra@${manifest.version}`;
+const productRef = `quntal@${manifest.version}`;
 const sortByRef = (a, b) => (a["bom-ref"] < b["bom-ref"] ? -1 : a["bom-ref"] > b["bom-ref"] ? 1 : 0);
 const sbom = {
   bomFormat: "CycloneDX",
@@ -234,15 +234,15 @@ const sbom = {
     component: {
       type: "application",
       "bom-ref": productRef,
-      name: "cotra",
+      name: "quntal",
       version: manifest.version,
-      description: "Cotra Windows x64 release payload",
+      description: "Quntal Windows x64 release payload",
       licenses: [{ expression: "Apache-2.0" }],
       hashes: [{ alg: "SHA-256", content: manifestHash }]
     },
     properties: [
-      { name: "cotra:manifest-sha256", value: manifestHash },
-      { name: "cotra:rust-target", value: TARGET }
+      { name: "quntal:manifest-sha256", value: manifestHash },
+      { name: "quntal:rust-target", value: TARGET }
     ]
   },
   components: [...cargo.components, ...npm.components, ...files].sort(sortByRef),

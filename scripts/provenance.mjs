@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Writes a provenance record for a packaged Cotra release: source revision,
+// Writes a provenance record for a packaged Quntal release: source revision,
 // build workflow and run, toolchain versions, dependency lock digests,
 // artifact digests, and the SBOM digest. It records only what it observes;
 // fields that are unavailable (for example outside GitHub Actions) are null.
@@ -76,8 +76,8 @@ if (artifacts.length === 0) fail("at least one --artifact is required");
 const manifest = JSON.parse(readFileSync(join(release, "manifest.json"), "utf8"));
 const env = process.env;
 const record = {
-  schema: "cotra-provenance-v1",
-  product: { name: "cotra", version: manifest.version },
+  schema: "quntal-provenance-v1",
+  product: { name: "quntal", version: manifest.version },
   source: {
     repository: env.GITHUB_REPOSITORY ? `${env.GITHUB_SERVER_URL}/${env.GITHUB_REPOSITORY}` : null,
     revision: run("git", ["rev-parse", "HEAD"]),

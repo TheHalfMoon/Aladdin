@@ -1,14 +1,14 @@
 # SG-000060 Protected Executable Registry Note
 
-Status: IMPLEMENTATION FOR COTRA-P16
+Status: IMPLEMENTATION FOR QUNTAL-P16
 SpecGrain: SG-000060
 Base: `79ba16a3fbe167edb7ddb846f7c7556144bc6abf`
 Date: 2026-10-02
-Code: `crates/cotra-policy/src/executable_registry.rs`,
-`crates/cotra-policy/src/lib.rs` (`enforce_sg000010_executable_policy`),
-`crates/cotrad/src/executable_admin.rs`, `crates/cotrad/src/main.rs`
-(`verify_registered_identity`), `crates/cotra-lifecycle/src/commands.rs`
-(`cotra exec`).
+Code: `crates/quntal-policy/src/executable_registry.rs`,
+`crates/quntal-policy/src/lib.rs` (`enforce_sg000010_executable_policy`),
+`crates/quntald/src/executable_admin.rs`, `crates/quntald/src/main.rs`
+(`verify_registered_identity`), `crates/quntal-lifecycle/src/commands.rs`
+(`quntal exec`).
 
 ## 1. What changes
 
@@ -23,8 +23,8 @@ The MCP tool and its schema are unchanged.
 
 ## 2. Registration
 
-- Only `cotra exec add <id> <path.exe>` on the local machine registers an
-  executable. cotrad requires STRONG platform presence bound to a digest of
+- Only `quntal exec add <id> <path.exe>` on the local machine registers an
+  executable. quntald requires STRONG platform presence bound to a digest of
   the exact entry (id, canonical path, SHA-256, size, subcommands, denied
   arguments, argument bound) and re-hashes the file after approval; any change
   during approval fails closed.
@@ -44,8 +44,8 @@ The MCP tool and its schema are unchanged.
   `.js`, `.lnk`, `.com`, `.msi`, and extension-less files). Package-runner
   scripts such as `npm.cmd` are therefore denied.
 - The registry is an integrity-checked JSON document in protected state
-  (`%LOCALAPPDATA%\Cotra\executable_registry.json`, override
-  `COTRA_EXECUTABLE_REGISTRY_PATH`, now a protected-state override). A
+  (`%LOCALAPPDATA%\Quntal\executable_registry.json`, override
+  `QUNTAL_EXECUTABLE_REGISTRY_PATH`, now a protected-state override). A
   missing, corrupt, tampered, or oversized registry yields no entries.
 
 ## 3. Launch

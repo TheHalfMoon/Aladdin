@@ -1,6 +1,6 @@
 # Structured Desktop Exposure Qualification (SG-000063)
 
-Status: CANONICAL DECISION FOR COTRA-P16
+Status: CANONICAL DECISION FOR QUNTAL-P16
 
 ## Question
 
@@ -15,7 +15,7 @@ An MCP tool must not claim desktop capability the adapter does not have.
 
 ## What became live
 
-`crates/cotra-provider-uia/src/native_desktop.rs` observes the caller's
+`crates/quntal-provider-uia/src/native_desktop.rs` observes the caller's
 interactive desktop read-only through Win32 and UI Automation:
 
 - Window listing enumerates top-level windows with `EnumWindows` and keeps
@@ -36,15 +36,15 @@ focuses or activates a window, and never captures pixels.
 
 ## Exclusions
 
-- Cotra's own windows: windows of the observing process (which hosts the
-  SOFT approval prompts) and of `cotra.exe`, `cotrad.exe`, and
-  `cotra-mcp-host.exe` are never reported, and a tree read of the observing
+- Quntal's own windows: windows of the observing process (which hosts the
+  SOFT approval prompts) and of `quntal.exe`, `quntald.exe`, and
+  `quntal-mcp-host.exe` are never reported, and a tree read of the observing
   process's window is denied.
 - Windows security prompts: windows of `CredentialUIBroker.exe` (the
-  Windows Hello dialog that shows Cotra's STRONG approval request),
+  Windows Hello dialog that shows Quntal's STRONG approval request),
   `consent.exe`, and `LogonUI.exe` are never reported, and a tree read is
   denied if a handle is owned by one of them at read time.
-- Protected surfaces: windows whose title or class carries a protected Cotra
+- Protected surfaces: windows whose title or class carries a protected Quntal
   approval, trust, or emergency-revoke marker are omitted from listings and
   counted in `protected_omitted`; tree reads of them are denied.
 - Other sessions: windows owned by processes in another Windows session are
@@ -77,9 +77,9 @@ focuses or activates a window, and never captures pixels.
 | `uia.input/execute` | not implemented | not exposed |
 
 The decision is pinned by `DESKTOP_SHAPE_QUALIFICATIONS` in
-`crates/cotra-provider-uia/src/lib.rs`, by `sg000063_tests.rs` (every
+`crates/quntal-provider-uia/src/lib.rs`, by `sg000063_tests.rs` (every
 not-live shape fails closed as unavailable on the native adapter), and by
-`apps/cotra-mcp/src/uia.test.ts` (only `desktop.ts` forwards UIA shapes, and
+`apps/quntal-mcp/src/uia.test.ts` (only `desktop.ts` forwards UIA shapes, and
 only the two live ones).
 
 ## Remote reach
@@ -87,15 +87,15 @@ only the two live ones).
 Both desktop tools are local-only (`LOCAL_ONLY_TOOL_NAMES`). Window titles
 and control trees of every application in the user's session are not
 mapped to any remote OAuth scope: the relay edge and the device uplink deny
-them as unmapped, and cotrad's remote-session scope table has no `uia.*`
+them as unmapped, and quntald's remote-session scope table has no `uia.*`
 entry, so a remote request fails closed even if it reached the kernel. A
 later governed grain may map a locally enabled `desktop_structured` profile.
 
 ## Evidence
 
-- `cargo test -p cotra-provider-uia sg000063` on real Windows 11 in an
+- `cargo test -p quntal-provider-uia sg000063` on real Windows 11 in an
   interactive session spawns a probe process with a plain text box, a
-  system password box, and a second form titled as a Cotra approval
+  system password box, and a second form titled as a Quntal approval
   surface. The live listing returns the probe with `powershell.exe` image
   identity and win32 creation-time generation, omits the protected form
   (`protected_omitted >= 1`), and the live tree returns the plain value,
@@ -103,8 +103,8 @@ later governed grain may map a locally enabled `desktop_structured` profile.
   value, and never contains the password text. A depth-0, one-node read is
   reported as truncated. A window this process creates is never listed and
   its tree read is denied.
-- An end-to-end run through `node apps/cotra-mcp/dist/index.js` and a real
-  `cotrad.exe` lists 28 tools, finds the probe through
+- An end-to-end run through `node apps/quntal-mcp/dist/index.js` and a real
+  `quntald.exe` lists 28 tools, finds the probe through
   `desktop_window_list`, reads its tree through `desktop_window_tree` with
   the password value absent, rejects a drifted `window_generation` as
   `TARGET_STALE`, and rejects a malformed `window_id`.

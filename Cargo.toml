@@ -1,27 +1,27 @@
 [workspace]
 resolver = "2"
 members = [
-  "crates/cotra-contracts",
-  "crates/cotra-policy",
-  "crates/cotra-audit",
-  "crates/cotra-approval",
-  "crates/cotra-provider-fs",
-  "crates/cotra-provider-git",
-  "crates/cotra-provider-process",
-  "crates/cotra-provider-browser",
-  "crates/cotra-provider-uia",
-  "crates/cotra-provider-clipboard",
-  "crates/cotra-provider-network",
-  "crates/cotra-tunnel",
-  "crates/cotra-lifecycle",
-  "crates/cotrad",
+  "crates/quntal-contracts",
+  "crates/quntal-policy",
+  "crates/quntal-audit",
+  "crates/quntal-approval",
+  "crates/quntal-provider-fs",
+  "crates/quntal-provider-git",
+  "crates/quntal-provider-process",
+  "crates/quntal-provider-browser",
+  "crates/quntal-provider-uia",
+  "crates/quntal-provider-clipboard",
+  "crates/quntal-provider-network",
+  "crates/quntal-tunnel",
+  "crates/quntal-lifecycle",
+  "crates/quntald",
 ]
 
 [workspace.package]
 version = "0.1.0"
 edition = "2021"
 license = "Apache-2.0"
-repository = "https://github.com/TheHalfMoon/Cotra"
+repository = "https://github.com/TheHalfMoon/Quntal"
 rust-version = "1.82"
 
 [workspace.dependencies]

@@ -1,6 +1,6 @@
 # SG-000057 Open-Source Relay, Self-Host Mode, and Zero-Cost Deployment Note
 
-Status: IMPLEMENTATION FOR COTRA-P15
+Status: IMPLEMENTATION FOR QUNTAL-P15
 SpecGrain: SG-000057
 Base: `ca494131070a5cdb9c133bef0db69e6292c2d085`
 Date: 2026-10-02
@@ -9,12 +9,12 @@ Companions:
 - `docs/security/SG-000055_DEVICE_UPLINK_LEASE_NOTE.md`
 - `docs/security/SG-000056_PUBLIC_MCP_EDGE_NOTE.md`
 - `docs/relay/SELF_HOSTING.md`, `docs/relay/REFERENCE_DEPLOYMENT.md`
-- `apps/cotra-relay/src/authorization.ts`, `file_store.ts`, `quotas.ts`,
+- `apps/quntal-relay/src/authorization.ts`, `file_store.ts`, `quotas.ts`,
   `config.ts`, `main.ts`, `Dockerfile`
-- `apps/cotra-mcp/src/remote_enrollment.ts`,
-  `apps/cotra-mcp/src/entrypoints/remote_admin.ts`
-- `crates/cotrad/src/remote_lease.rs` (`authorize_enrollment`),
-  `crates/cotra-lifecycle/src/remote.rs` (`run_enrollment`)
+- `apps/quntal-mcp/src/remote_enrollment.ts`,
+  `apps/quntal-mcp/src/entrypoints/remote_admin.ts`
+- `crates/quntald/src/remote_lease.rs` (`authorize_enrollment`),
+  `crates/quntal-lifecycle/src/remote.rs` (`run_enrollment`)
 
 ## 1. Purpose
 
@@ -50,8 +50,8 @@ optional reference deployment definition that is never required.
 
 ## 3. Device-backed pairing
 
-- `cotra remote enable --relay <origin>` and `cotra remote pair` first ask
-  `cotrad` for STRONG presence (`remote.enrollment.authorize`, digest bound to
+- `quntal remote enable --relay <origin>` and `quntal remote pair` first ask
+  `quntald` for STRONG presence (`remote.enrollment.authorize`, digest bound to
   the action, relay origin, workspace, and policy revision). Remote contexts
   can never reach this capability (SG-000055 local-only `remote.` prefix).
 - `enable` creates the Ed25519 device key locally (owner-only file), writes
@@ -119,7 +119,7 @@ live hosted relay; self-hosting remains the canonical zero-cost path.
 
 ## 9. Tests
 
-`apps/cotra-relay/src/self-host.test.ts` drives the complete standards flow
+`apps/quntal-relay/src/self-host.test.ts` drives the complete standards flow
 against a real loopback relay with durable state: dynamic registration,
 authorization page, device pairing with local confirmation, PKCE code
 exchange, the device uplink, MCP over the public edge with the 20-tool
@@ -128,5 +128,5 @@ family, and access-token revocation at the edge; plus code replay revoking
 issued tokens, offline refresh refusal, device decline, strict registration
 and authorization validation with attempt limits, restart persistence with
 the same signing key, corrupt-state refusal, quota exhaustion, and strict
-configuration. Device-side tests cover proof-signing rules; cotrad and
+configuration. Device-side tests cover proof-signing rules; quntald and
 lifecycle tests cover the STRONG enrollment gate and relay origin shapes.

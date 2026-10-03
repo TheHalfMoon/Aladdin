@@ -1,0 +1,21 @@
+[package]
+name = "quntal-policy"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[lib]
+path = "src/sg000040.rs"
+
+[dependencies]
+quntal-approval = { path = "../quntal-approval" }
+quntal-contracts = { path = "../quntal-contracts" }
+quntal-provider-browser = { path = "../quntal-provider-browser" }
+quntal-provider-clipboard = { path = "../quntal-provider-clipboard" }
+quntal-provider-network = { path = "../quntal-provider-network" }
+quntal-provider-uia = { path = "../quntal-provider-uia" }
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true

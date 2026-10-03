@@ -1,18 +1,18 @@
 # SG-000027 - Read-only Windows UI Automation observation security note
 
 Status: IMPLEMENTATION CANDIDATE
-Program: COTRA-P09
+Program: QUNTAL-P09
 Grain: SG-000027
 
 ## Purpose
 
-SG-000027 establishes the first COTRA-P09 Windows UI Automation foundation
+SG-000027 establishes the first QUNTAL-P09 Windows UI Automation foundation
 on top of the SG-000018 replay-resistant foundation, SG-000019 STRONG
-enforcement, SG-000020 trust and revoke records, and the closed COTRA-P08
+enforcement, SG-000020 trust and revoke records, and the closed QUNTAL-P08
 structured-browser registry: a read-only UI Automation observation
 capability with server-derived process identity, typed window identity,
 typed element identity, bounded tree observation, stale-identity
-fail-closed behavior, protected Cotra approval-surface exclusion, and
+fail-closed behavior, protected Quntal approval-surface exclusion, and
 password and secret redaction.
 
 No actuation authority exists in this grain. Invoke, click, value setting,
@@ -63,9 +63,9 @@ accessible name, and their values are redacted: evidence carries
 `redacted` as `true` and no value bytes. Raw values never enter records,
 history, logs, MCP responses, snapshots, or evidence packets.
 
-## Protected Cotra surfaces
+## Protected Quntal surfaces
 
-Windows carrying Cotra approval markers are omitted from window listings
+Windows carrying Quntal approval markers are omitted from window listings
 and counted as `protected_omitted`, never returned. Direct observation of
 a protected surface fails closed as `CapabilityDenied`, so the agent
 cannot inspect trusted approval material in a way that undermines STRONG

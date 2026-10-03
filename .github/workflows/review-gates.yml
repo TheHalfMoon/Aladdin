@@ -16,8 +16,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
-      OCR_BIN: /tmp/cotra-ocr
-      OCR_OUT: /tmp/cotra-ocr-output
+      OCR_BIN: /tmp/quntal-ocr
+      OCR_OUT: /tmp/quntal-ocr-output
       OCR_URL: https://github.com/alibaba/open-code-review/releases/download/v1.12.9/opencodereview-linux-amd64
       OCR_SHA256: 9105c7081b8362a1cb0167f1ddfd1437e147a0e3c9a5af89c03c8859a5b0f0e8
     steps:
@@ -102,9 +102,9 @@ jobs:
         with:
           name: ocr-delegation-${{ github.event.pull_request.head.sha }}
           path: |
-            /tmp/cotra-ocr-output/ocr-preview.json
-            /tmp/cotra-ocr-output/ocr-rules.json
-            /tmp/cotra-ocr-output/ocr-evidence.json
+            /tmp/quntal-ocr-output/ocr-preview.json
+            /tmp/quntal-ocr-output/ocr-rules.json
+            /tmp/quntal-ocr-output/ocr-evidence.json
           if-no-files-found: error
           retention-days: 14
 
@@ -133,7 +133,7 @@ jobs:
         run: |
           set -euo pipefail
           if [ -z "${TYPESAFE_API_KEY:-}" ]; then
-            echo "::error::TYPESAFE_API_KEY is not configured for Cotra GitHub Actions; Jev review is UNPROVEN."
+            echo "::error::TYPESAFE_API_KEY is not configured for Quntal GitHub Actions; Jev review is UNPROVEN."
             exit 1
           fi
       - name: Fetch exact PR head as data
@@ -167,7 +167,7 @@ jobs:
         run: |
           set -euo pipefail
           JEV_DIR="$RUNNER_TEMP/jev-review"
-          BASE_ADAPTER="$RUNNER_TEMP/cotra-jev-exact-diff.mjs"
+          BASE_ADAPTER="$RUNNER_TEMP/quntal-jev-exact-diff.mjs"
           git show "$BASE_SHA:.github/scripts/jev-exact-diff.mjs" > "$BASE_ADAPTER"
           node "$BASE_ADAPTER" "$BASE_SHA" "$HEAD_SHA" "$GITHUB_WORKSPACE" "$JEV_DIR" | tee jev-review.json
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4

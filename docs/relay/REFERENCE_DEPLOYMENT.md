@@ -1,11 +1,11 @@
-# Cotra Relay Reference Deployment (Optional, Zero-Cost)
+# Quntal Relay Reference Deployment (Optional, Zero-Cost)
 
 Status: REFERENCE DEFINITION (SG-000057). Not deployed or operated by the
 project. Self-hosting (`SELF_HOSTING.md`) is the canonical zero-cost path.
 
 ## Policy
 
-- A hosted relay is never required to use Cotra. Local clients use stdio or
+- A hosted relay is never required to use Quntal. Local clients use stdio or
   loopback HTTP, and remote clients can always use a self-hosted relay.
 - A reference deployment may use only free tiers and must run in the relay's
   no-billing mode: quotas fail closed with `REMOTE_RATE_LIMITED`, and no
@@ -13,9 +13,9 @@ project. Self-hosting (`SELF_HOSTING.md`) is the canonical zero-cost path.
 - Free-tier terms change. Before deploying, the operator must verify on the
   provider's current pages that the chosen tier is free and that billing
   cannot be triggered automatically. Some providers ask for a payment card
-  for identity verification even on free tiers; Cotra never requires one, and
+  for identity verification even on free tiers; Quntal never requires one, and
   such a provider should be skipped if that is unacceptable.
-- No document in this repository may claim a hosted Cotra relay is live
+- No document in this repository may claim a hosted Quntal relay is live
   unless it has actually been deployed and verified.
 
 ## Shape
@@ -23,7 +23,7 @@ project. Self-hosting (`SELF_HOSTING.md`) is the canonical zero-cost path.
 Any free host that can run one long-lived container (or Node.js process)
 with a public HTTPS name works:
 
-- the image from `apps/cotra-relay/Dockerfile`;
+- the image from `apps/quntal-relay/Dockerfile`;
 - one persistent volume for `stateDir` (the relay refuses to start on corrupt
   state, so ephemeral disks lose pairings on restart but never fail open);
 - conservative quotas, for example the values in `relay.example.json`;
@@ -41,7 +41,7 @@ bounded backoff, and requests to an offline device fail closed with
    `https://<host>/mcp` and the issuer `https://<host>`.
 3. `POST https://<host>/mcp` without a token returns 401 with a
    `WWW-Authenticate: Bearer resource_metadata=...` header.
-4. Link a test computer with `cotra remote enable` and `cotra remote pair`,
+4. Link a test computer with `quntal remote enable` and `quntal remote pair`,
    allow a lease, and call `tools/list` from an MCP client.
 5. Revoke the lease and confirm the next call returns
    `REMOTE_SESSION_INACTIVE`.

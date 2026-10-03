@@ -1,4 +1,4 @@
-# Mistral Vibe Code MCP configuration for Cotra.
+# Mistral Vibe Code MCP configuration for Quntal.
 # File: config.toml under mcp_servers. Field names verified against the
 # official Vibe Code MCP servers documentation.
 # Vibe Code does not support OAuth; both entries below use transports that
@@ -6,22 +6,22 @@
 
 # Local process transport. Preferred: no secrets, no ports.
 [[mcp_servers]]
-name = "cotra"
+name = "quntal"
 transport = "stdio"
-command = "cotra"
+command = "quntal"
 args = ["mcp", "stdio"]
 startup_timeout_sec = 20
 tool_timeout_sec = 60
 
-# Loopback Streamable HTTP transport. Set COTRA_LOOPBACK_TOKEN in the
-# environment (at least 32 characters) and start `cotra mcp serve`.
+# Loopback Streamable HTTP transport. Set QUNTAL_LOOPBACK_TOKEN in the
+# environment (at least 32 characters) and start `quntal mcp serve`.
 # Replace PORT with the printed listener port. The token travels as a
 # bearer header through the documented api_key fields, never in the file.
 # [[mcp_servers]]
-# name = "cotra_http"
+# name = "quntal_http"
 # transport = "streamable-http"
 # url = "http://127.0.0.1:PORT/mcp"
-# api_key_env = "COTRA_LOOPBACK_TOKEN"
+# api_key_env = "QUNTAL_LOOPBACK_TOKEN"
 # api_key_header = "Authorization"
 # api_key_format = "Bearer {token}"
 # startup_timeout_sec = 20

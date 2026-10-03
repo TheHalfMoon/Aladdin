@@ -1,17 +1,17 @@
 # SG-000032 - Structured UIA ScrollPattern actuation security note
 
 Status: IMPLEMENTATION CANDIDATE
-Program: COTRA-P09
+Program: QUNTAL-P09
 Grain: SG-000032
 
 ## Purpose
 
-SG-000032 establishes the fifth and final narrow COTRA-P09 structured
+SG-000032 establishes the fifth and final narrow QUNTAL-P09 structured
 actuation grain on top of the SG-000027 observation registry, the
 SG-000028 invoke registry, the SG-000029 value registry, the SG-000030
 select registry, the SG-000031 toggle registry, the SG-000018
 replay-resistant foundation, SG-000019 class enforcement, SG-000020 trust
-and revoke records, and the closed COTRA-P08 registry: a single approved
+and revoke records, and the closed QUNTAL-P08 registry: a single approved
 ScrollPattern shape bound to server-derived process identity, typed
 window identity, typed element identity, expected tree generation,
 expected control type, expected Scroll pattern support, expected enabled
@@ -19,7 +19,7 @@ state, expected current scroll position, bounded requested direction,
 bounded requested amount, workspace scope, and policy revision, with
 fresh SOFT approval digest binding including scroll position, direction,
 and amount, immediate pre-actuation stale-target revalidation, and
-protected Cotra approval-surface exclusion.
+protected Quntal approval-surface exclusion.
 
 No other new actuation authority exists in this grain. Invoke remains
 closed under SG-000028, value remains closed under SG-000029, select
@@ -60,7 +60,7 @@ Out-of-range directions, amounts, and positions fail closed as
 Only `ScrollBar`, `Pane`, `List`, and `Tree` control types with `Scroll`
 pattern support and enabled state actuate. All other control types,
 unsupported patterns, disabled elements, password and secret bearing
-elements, and protected Cotra surfaces are denied as `CapabilityDenied`.
+elements, and protected Quntal surfaces are denied as `CapabilityDenied`.
 Expected current scroll position is enforced and any position drift
 fails closed without silent retargeting. Evidence carries only
 identities, generations, control type, expected scroll position,
@@ -90,10 +90,10 @@ drift all fail closed without silent retargeting. A successful scroll
 advances the owning window tree generation and removes its elements so
 stale identities cannot be replayed.
 
-## Protected Cotra surfaces and secrets
+## Protected Quntal surfaces and secrets
 
 Scroll can never target approval dialogs, STRONG presence surfaces,
-workspace trust controls, emergency revoke, or security-sensitive Cotra
+workspace trust controls, emergency revoke, or security-sensitive Quntal
 UI. Password and secret bearing elements are denied as targets, and
 current secret values never enter records, history, logs, MCP responses,
 snapshots, or evidence packets. Fail closed on uncertainty.

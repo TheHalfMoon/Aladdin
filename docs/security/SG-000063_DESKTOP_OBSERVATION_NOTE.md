@@ -1,13 +1,13 @@
 # SG-000063 Structured Desktop Observation Note
 
-Status: IMPLEMENTATION FOR COTRA-P16
+Status: IMPLEMENTATION FOR QUNTAL-P16
 SpecGrain: SG-000063
 Base: `0f41c0c8f7b5461ee32ecb595d44e6adb43844cf`
 Date: 2026-10-02
-Code: `crates/cotra-provider-uia/src/native_desktop.rs`,
-`crates/cotra-provider-uia/src/lib.rs` (`NativeAdapter`,
+Code: `crates/quntal-provider-uia/src/native_desktop.rs`,
+`crates/quntal-provider-uia/src/lib.rs` (`NativeAdapter`,
 `DESKTOP_SHAPE_QUALIFICATIONS`, `UiaRegistry::observe_tree`),
-`apps/cotra-mcp/src/desktop.ts`, `apps/cotra-mcp/src/oauth_authorization.ts`
+`apps/quntal-mcp/src/desktop.ts`, `apps/quntal-mcp/src/oauth_authorization.ts`
 (`LOCAL_ONLY_TOOL_NAMES`). Decision record:
 `docs/p16/DESKTOP_QUALIFICATION.md`.
 
@@ -43,13 +43,13 @@ registry. No kernel shape, policy rule, or approval class is added.
   desktop rather than an empty one.
 - Same session only: windows of processes in another session are never
   listed; their trees are denied.
-- Self and Cotra exclusion: windows of the observing process and of
-  `cotra.exe`, `cotrad.exe`, and `cotra-mcp-host.exe` are never listed.
+- Self and Quntal exclusion: windows of the observing process and of
+  `quntal.exe`, `quntald.exe`, and `quntal-mcp-host.exe` are never listed.
 - Windows security prompt exclusion: windows of `CredentialUIBroker.exe`
   (which hosts the Windows Hello STRONG approval dialog), `consent.exe`, and
   `LogonUI.exe` are never listed, and a tree read is denied if the handle's
   owner is one of them at read time.
-- Protected markers: titles or classes carrying a Cotra approval, trust, or
+- Protected markers: titles or classes carrying a Quntal approval, trust, or
   emergency-revoke marker are omitted and counted.
 - Unidentifiable owners: a process whose image path or creation time cannot
   be read is omitted rather than given a fabricated identity.
@@ -75,13 +75,13 @@ elements under a new tree generation every call.
 
 UIA connection and transaction timeouts are 2 s and 5 s, and the walk
 stops one node past the registry bound, so one hung application cannot
-stall cotrad indefinitely or produce an unbounded response.
+stall quntald indefinitely or produce an unbounded response.
 
 ## 7. Remote reach
 
 Both tools are local-only. They are absent from `OAUTH_SCOPE_TOOL_MATRIX`
 and listed in `LOCAL_ONLY_TOOL_NAMES`, so the relay edge and the device
-uplink deny them as `tool_unmapped` for every scope. cotrad's
+uplink deny them as `tool_unmapped` for every scope. quntald's
 remote-session scope table has no `uia.*` entry, so a remote request fails
 closed in the kernel as well. OAuth scopes never enable desktop
 observation; a later governed grain may map a locally enabled
@@ -99,15 +99,15 @@ focus stealing, and process termination remain absent.
 ## 9. Evidence
 
 - Real Windows 11 (interactive session): `cargo test -p
-  cotra-provider-uia sg000063` creates a probe window process with a plain
+  quntal-provider-uia sg000063` creates a probe window process with a plain
   text box, a system password box, and a protected-titled form, and proves
   listing, process identity, bounded trees, truncation, password
   non-reading, protected omission, and own-window denial.
-- Real end to end: `node apps/cotra-mcp/dist/index.js` with a real
-  `cotrad.exe` lists 28 tools, observes the probe through both desktop
+- Real end to end: `node apps/quntal-mcp/dist/index.js` with a real
+  `quntald.exe` lists 28 tools, observes the probe through both desktop
   tools with the password value absent, and rejects drifted generations and
   malformed identities.
-- Contract tests: `apps/cotra-mcp/src/uia.test.ts`,
+- Contract tests: `apps/quntal-mcp/src/uia.test.ts`,
   `oauth-authorization.test.ts`, `parity-inventory.test.ts`,
   `surface.test.ts`, `transport-contract.test.ts`, and the release
   qualification catalog pin the 28-tool surface and the local-only

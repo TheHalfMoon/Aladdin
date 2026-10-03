@@ -1,22 +1,22 @@
 # SG-000029 - Structured UIA ValuePattern actuation security note
 
 Status: IMPLEMENTATION CANDIDATE
-Program: COTRA-P09
+Program: QUNTAL-P09
 Grain: SG-000029
 
 ## Purpose
 
-SG-000029 establishes the second narrow COTRA-P09 structured actuation
+SG-000029 establishes the second narrow QUNTAL-P09 structured actuation
 grain on top of the SG-000027 observation registry, the SG-000028 invoke
 registry, the SG-000018 replay-resistant foundation, SG-000019 class
-enforcement, SG-000020 trust and revoke records, and the closed COTRA-P08
+enforcement, SG-000020 trust and revoke records, and the closed QUNTAL-P08
 registry: a single approved ValuePattern shape bound to server-derived
 process identity, typed window identity, typed element identity, expected
 tree generation, expected control type, expected Value pattern support,
 expected enabled state, bounded value material, workspace scope, and policy
 revision, with fresh SOFT approval digest binding including the value
 digest, immediate pre-actuation stale-target revalidation, and protected
-Cotra approval-surface exclusion.
+Quntal approval-surface exclusion.
 
 No other new actuation authority exists in this grain. Invoke remains
 closed under SG-000028. Select, toggle, scroll, focus, keyboard input,
@@ -47,7 +47,7 @@ Only `Edit`, `Document`, and `ComboBox` control types with `Value`
 pattern support and enabled state actuate, with values of at most 1024
 characters and no NUL bytes. All other control types, unsupported
 patterns, disabled elements, password and secret bearing elements,
-protected Cotra surfaces, and oversized values are denied as
+protected Quntal surfaces, and oversized values are denied as
 `CapabilityDenied` or `InvalidRequest`. Values are never silently
 truncated. Evidence carries only the value digest, never raw value bytes.
 
@@ -74,10 +74,10 @@ fail closed without silent retargeting. A successful set_value advances
 the owning window tree generation and removes its elements so stale
 identities cannot be replayed.
 
-## Protected Cotra surfaces and secrets
+## Protected Quntal surfaces and secrets
 
 Set_value can never target approval dialogs, STRONG presence surfaces,
-workspace trust controls, emergency revoke, or security-sensitive Cotra UI.
+workspace trust controls, emergency revoke, or security-sensitive Quntal UI.
 Password and secret bearing elements are denied as targets, and current
 secret values never enter records, history, logs, MCP responses,
 snapshots, or evidence packets. Fail closed on uncertainty.

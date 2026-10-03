@@ -41,16 +41,16 @@ jobs:
           "VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
       - uses: ./.github/actions/build-package-qualify
         with:
-          release-dir: ${{ runner.temp }}/cotra-${{ env.VERSION }}-windows-x64
+          release-dir: ${{ runner.temp }}/quntal-${{ env.VERSION }}-windows-x64
       - uses: ./.github/actions/reproducibility-check
         with:
           ref: ${{ github.ref }}
-          release-dir: ${{ runner.temp }}/cotra-${{ env.VERSION }}-windows-x64
+          release-dir: ${{ runner.temp }}/quntal-${{ env.VERSION }}-windows-x64
           out-dir: ${{ runner.temp }}/dist
       - name: Collect release assets
         shell: pwsh
         run: |
-          $name = "cotra-$env:VERSION-windows-x64"
+          $name = "quntal-$env:VERSION-windows-x64"
           $release = Join-Path $env:RUNNER_TEMP $name
           $out = Join-Path $env:RUNNER_TEMP "dist"
           Copy-Item "$release.zip" (Join-Path $out "$name.zip")
@@ -67,7 +67,7 @@ jobs:
       - name: Attest build provenance for the archive
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
-          subject-path: ${{ runner.temp }}/dist/cotra-${{ env.VERSION }}-windows-x64.zip
+          subject-path: ${{ runner.temp }}/dist/quntal-${{ env.VERSION }}-windows-x64.zip
       - name: Create or refresh the draft release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -85,6 +85,6 @@ jobs:
             # A re-run after a partial upload refreshes the draft's assets.
             gh release upload "${{ github.ref_name }}" $files --clobber --repo "${{ github.repository }}"
           } else {
-            gh release create "${{ github.ref_name }}" $files --draft --verify-tag --repo "${{ github.repository }}" --title "Cotra $env:VERSION" --notes "Unsigned Windows x64 build of Cotra $env:VERSION from ${{ github.sha }}. Verify the archive against SHA256SUMS.txt and with 'gh attestation verify <archive> --repo ${{ github.repository }}'; the installer verifies every payload file against manifest.json. SBOM (CycloneDX 1.5), provenance record, and third-party notices are attached."
+            gh release create "${{ github.ref_name }}" $files --draft --verify-tag --repo "${{ github.repository }}" --title "Quntal $env:VERSION" --notes "Unsigned Windows x64 build of Quntal $env:VERSION from ${{ github.sha }}. Verify the archive against SHA256SUMS.txt and with 'gh attestation verify <archive> --repo ${{ github.repository }}'; the installer verifies every payload file against manifest.json. SBOM (CycloneDX 1.5), provenance record, and third-party notices are attached."
           }
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

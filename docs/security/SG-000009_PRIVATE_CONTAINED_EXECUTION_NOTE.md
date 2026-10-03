@@ -2,14 +2,14 @@
 
 Date: 2026-09-24
 
-SG-000009 qualifies a provider-internal Windows executor. It does not register a process capability and is not reachable from policy, cotrad, or MCP.
+SG-000009 qualifies a provider-internal Windows executor. It does not register a process capability and is not reachable from policy, quntald, or MCP.
 
 The qualification fixture is deliberately fixed:
 
 - executable: the operating-system `whoami.exe` resolved relative to `GetSystemDirectoryW`;
 - argv: no arguments; `/all` is excluded because its claims query is unavailable in the zero-capability AppContainer and returns exit code 1;
 - cwd: an explicit temporary qualification root;
-- environment: the existing fixed-name, case-insensitive allowlist with Cotra/tunnel/secret values excluded;
+- environment: the existing fixed-name, case-insensitive allowlist with Quntal/tunnel/secret values excluded;
 - stdin: `NUL` with no caller input;
 - stdout/stderr: separate bounded pipes;
 - process: zero-capability AppContainer, created suspended;

@@ -1,7 +1,7 @@
 {
   "mcpServers": {
-    "cotra": {
-      "command": "cotra",
+    "quntal": {
+      "command": "quntal",
       "args": ["mcp", "stdio"]
     }
   }

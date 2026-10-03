@@ -1,12 +1,12 @@
 # SG-000015 — Approved local Git mutation security note
 
 Status: IMPLEMENTATION CANDIDATE
-Program: COTRA-P06
+Program: QUNTAL-P06
 Grain: SG-000015
 
 ## Purpose
 
-SG-000015 introduces the first bounded local Git mutation surface for repositories already inside a trusted Cotra workspace. It is deliberately narrower than generic Git command execution.
+SG-000015 introduces the first bounded local Git mutation surface for repositories already inside a trusted Quntal workspace. It is deliberately narrower than generic Git command execution.
 
 The only newly reachable mutation capabilities are:
 
@@ -17,7 +17,7 @@ The only newly reachable mutation capabilities are:
 
 ## Approval and stale-state binding
 
-Every mutation requires fresh local Cotra approval.
+Every mutation requires fresh local Quntal approval.
 
 The approval digest binds:
 
@@ -31,7 +31,7 @@ The approval digest binds:
 - branch name for branch creation;
 - SHA-256 digest of the commit message for commit.
 
-After approval, Cotra reconstructs the relevant repository state and fails with `TARGET_STALE` if it differs from the approved state. The Git provider performs a final state check immediately before applying the mutation.
+After approval, Quntal reconstructs the relevant repository state and fails with `TARGET_STALE` if it differs from the approved state. The Git provider performs a final state check immediately before applying the mutation.
 
 ## Repository and path boundary
 

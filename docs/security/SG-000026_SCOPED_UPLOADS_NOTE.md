@@ -1,7 +1,7 @@
 # SG-000026 - Scoped bounded browser uploads security note
 
 Status: IMPLEMENTATION CANDIDATE
-Program: COTRA-P08
+Program: QUNTAL-P08
 Grain: SG-000026
 
 ## Purpose
@@ -10,7 +10,7 @@ SG-000026 establishes scoped bounded browser uploads on top of the SG-000021
 isolated automation profile, the SG-000022 typed page lifecycle with origin
 binding, the SG-000023 typed node observation, the SG-000024 structured
 actuation, and the SG-000025 approved download root: an upload capability that
-may read exactly one file, and only a file Cotra itself downloaded and recorded
+may read exactly one file, and only a file Quntal itself downloaded and recorded
 under the approved workspace download root, and may stage it only to one known
 enabled typed file-input node, bound to exact page identity, page generation,
 document generation, origin, node identity, expected role, expected input type,
@@ -44,7 +44,7 @@ Credential files, browser profile files, OS secret stores, user home files,
 workspace-authored files, unrelated project files, and directories are
 unreachable **by construction**, not merely by policy: there is no code path
 from any request field to any path, and the only path that can be read is the
-one a Cotra download record already names inside the approved root.
+one a Quntal download record already names inside the approved root.
 
 ## Destination and target binding
 
@@ -81,7 +81,7 @@ closed, so an upload can never complete against a revoked workspace.
 ## Approval, one-shot consumption, and bounds
 
 Every upload requires a fresh SOFT approval whose digest under
-`COTRA_BROWSER_UPLOAD_V1` binds workspace, policy revision, profile identity,
+`QUNTAL_BROWSER_UPLOAD_V1` binds workspace, policy revision, profile identity,
 page identity, origin, page and document generation, node identity, expected
 role, input type and state, trust revision, upload source identity, artifact
 relative destination, artifact media type, artifact content digest, and artifact

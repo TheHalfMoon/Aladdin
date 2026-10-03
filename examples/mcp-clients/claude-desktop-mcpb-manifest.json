@@ -1,22 +1,22 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-08-26/mcpb.manifest.schema.json",
   "manifest_version": "0.3",
-  "name": "cotra",
-  "display_name": "Cotra",
+  "name": "quntal",
+  "display_name": "Quntal",
   "version": "0.1.0",
   "description": "Local-first MCP gateway with 31 bounded tools and local approval for computer changes.",
-  "long_description": "Cotra exposes 31 bounded tools (workspace files and bounded file changes, local Git, registered argv-only processes, read-only desktop window observation, approved single clipboard reads and writes, approved public HTTPS fetches) through a local policy kernel with per-action approval. This extension launches the installed Cotra entrypoint over stdio. It requires Cotra 0.1.0 installed and at least one configured workspace. No tunnel is required.",
+  "long_description": "Quntal exposes 31 bounded tools (workspace files and bounded file changes, local Git, registered argv-only processes, read-only desktop window observation, approved single clipboard reads and writes, approved public HTTPS fetches) through a local policy kernel with per-action approval. This extension launches the installed Quntal entrypoint over stdio. It requires Quntal 0.1.0 installed and at least one configured workspace. No tunnel is required.",
   "author": {
     "name": "TheHalfMoon",
-    "url": "https://github.com/TheHalfMoon/Cotra"
+    "url": "https://github.com/TheHalfMoon/Quntal"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/TheHalfMoon/Cotra.git"
+    "url": "https://github.com/TheHalfMoon/Quntal.git"
   },
-  "homepage": "https://github.com/TheHalfMoon/Cotra",
-  "documentation": "https://github.com/TheHalfMoon/Cotra#readme",
-  "support": "https://github.com/TheHalfMoon/Cotra/issues",
+  "homepage": "https://github.com/TheHalfMoon/Quntal",
+  "documentation": "https://github.com/TheHalfMoon/Quntal#readme",
+  "support": "https://github.com/TheHalfMoon/Quntal/issues",
   "license": "Apache-2.0",
   "keywords": [
     "files",
@@ -26,9 +26,9 @@
   ],
   "server": {
     "type": "binary",
-    "entry_point": "cotra.exe",
+    "entry_point": "quntal.exe",
     "mcp_config": {
-      "command": "cotra",
+      "command": "quntal",
       "args": [
         "mcp",
         "stdio"
@@ -38,7 +38,7 @@
   "tools": [
     {
       "name": "system_status",
-      "description": "Read Cotra daemon status."
+      "description": "Read Quntal daemon status."
     },
     {
       "name": "workspace_get",
