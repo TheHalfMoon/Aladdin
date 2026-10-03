@@ -1,0 +1,209 @@
+{
+  "schema": "quntal-p16-exit-evidence/1",
+  "grain": "SG-000066",
+  "canonical_base": "e770a6913d11c92d6855943f6e47d306a5c42fca",
+  "authority_delta": "none",
+  "purpose": "Evidence-backed COTRA-P16 exit qualification for the intended v0.2 Desktop Commander replacement target and the UI-TARS donor audit added to SG-000066.",
+  "donors": [
+    {
+      "id": "desktop_commander",
+      "repository": "wonderwhy-er/DesktopCommanderMCP",
+      "revision": "c774c3b505de990219637ecdc9a830c8772fae9d",
+      "license": "MIT",
+      "license_path": "LICENSE",
+      "source_paths": [
+        "src/server.ts",
+        "src/tools/schemas.ts"
+      ],
+      "reuse": "reference_only",
+      "runtime_imported": false
+    },
+    {
+      "id": "ui_tars",
+      "repository": "bytedance/UI-TARS-desktop",
+      "revision": "2ff41a9e515828c5bd5b276e493d73aa0bdf4a3a",
+      "license": "Apache-2.0",
+      "license_path": "LICENSE",
+      "source_paths": [
+        "apps/ui-tars/src/main/remote/operators.ts",
+        "multimodal/gui-agent/operator-aio/README.md"
+      ],
+      "reuse": "reference_only",
+      "runtime_imported": false
+    }
+  ],
+  "desktop_commander_replacement": [
+    {
+      "donor_shape": "read_file",
+      "workflow": "read_file",
+      "expected_status": "implemented_exposed"
+    },
+    {
+      "donor_shape": "read_multiple_files",
+      "workflow": "read_multiple_files",
+      "expected_status": "implemented_exposed"
+    },
+    {
+      "donor_shape": "read_file_range",
+      "workflow": "read_file_range",
+      "expected_status": "implemented_exposed"
+    },
+    {
+      "donor_shape": "write_file",
+      "workflow": "write_file",
+      "expected_status": "implemented_exposed"
+    },
+    {
+      "donor_shape": "edit_block",
+      "workflow": "edit_block",
+      "expected_status": "implemented_exposed"
+    },
+    {
+      "donor_shape": "list_directory",
+      "workflow": "list_directory",
+      "expected_status": "implemented_exposed"
+    },
+    {
+      "donor_shape": "get_file_info",
+      "workflow": "file_info",
+      "expected_status": "implemented_exposed"
+    },
+    {
+      "donor_shape": "start_search_content",
+      "workflow": "search_file_content",
+      "expected_status": "implemented_exposed"
+    },
+    {
+      "donor_shape": "start_search_name",
+      "workflow": "search_file_names",
+      "expected_status": "implemented_exposed"
+    },
+    {
+      "donor_shape": "create_directory",
+      "workflow": "create_directory",
+      "expected_status": "implemented_exposed"
+    },
+    {
+      "donor_shape": "move_file",
+      "workflow": "move_or_rename",
+      "expected_status": "implemented_exposed"
+    },
+    {
+      "donor_shape": "delete_file",
+      "workflow": "delete_file",
+      "expected_status": "implemented_exposed"
+    },
+    {
+      "donor_shape": "start_process",
+      "workflow": "run_bounded_program",
+      "expected_status": "implemented_exposed"
+    },
+    {
+      "donor_shape": "start_process_build_or_test",
+      "workflow": "run_build_and_test_tools",
+      "expected_status": "implemented_exposed"
+    },
+    {
+      "donor_shape": "list_processes",
+      "workflow": "list_processes",
+      "expected_status": "implemented_exposed"
+    }
+  ],
+  "desktop_commander_denials": [
+    "shell_command_string",
+    "powershell_or_cmd",
+    "interactive_repl_sessions",
+    "background_long_running_processes",
+    "kill_arbitrary_process",
+    "elevation_or_admin",
+    "read_outside_workspaces",
+    "arbitrary_network_sockets",
+    "browser_script_or_devtools",
+    "agent_changes_own_policy",
+    "install_software_or_services"
+  ],
+  "ui_tars_classification": [
+    {
+      "subsystem": "live_browser_operator",
+      "workflow": "browser_structured",
+      "expected_status": "missing",
+      "disposition": "defer_to_governed_successor"
+    },
+    {
+      "subsystem": "native_input_operator",
+      "workflow": "desktop_act",
+      "expected_status": "missing",
+      "disposition": "defer_to_governed_successor"
+    },
+    {
+      "subsystem": "screenshot_capture",
+      "workflow": "screenshots",
+      "expected_status": "missing",
+      "disposition": "defer_to_governed_successor"
+    },
+    {
+      "subsystem": "arbitrary_browser_script_or_devtools",
+      "workflow": "browser_script_or_devtools",
+      "expected_status": "intentionally_denied",
+      "disposition": "deny"
+    },
+    {
+      "subsystem": "generic_network_or_proxy_authority",
+      "workflow": "arbitrary_network_sockets",
+      "expected_status": "intentionally_denied",
+      "disposition": "deny"
+    },
+    {
+      "subsystem": "self_policy_or_approval_changes",
+      "workflow": "agent_changes_own_policy",
+      "expected_status": "intentionally_denied",
+      "disposition": "deny"
+    }
+  ],
+  "local_authority_denials": [
+    {
+      "capability": "workspace.trust.grant",
+      "operation": "grant"
+    },
+    {
+      "capability": "trust.revoke_emergency",
+      "operation": "revoke"
+    },
+    {
+      "capability": "remote.lease.create",
+      "operation": "create"
+    },
+    {
+      "capability": "remote.enrollment.authorize",
+      "operation": "authorize"
+    },
+    {
+      "capability": "executable.registry.add",
+      "operation": "add"
+    }
+  ],
+  "qualification": {
+    "authoritative_mcp_builder": "apps/quntal-mcp/src/server.ts",
+    "tool_contract": "apps/quntal-mcp/src/tool_contract.ts",
+    "daemon_entrypoint": "crates/quntald/src/main.rs",
+    "parity_inventory": "docs/p16/capability_parity_inventory.json",
+    "tests": [
+      "apps/quntal-mcp/src/parity-inventory.test.ts",
+      "apps/quntal-mcp/src/surface.test.ts",
+      "apps/quntal-mcp/src/kernel.test.ts",
+      "apps/quntal-mcp/src/fs-mutation.test.ts",
+      "apps/quntal-mcp/src/process.test.ts",
+      "apps/quntal-mcp/src/desktop.test.ts",
+      "apps/quntal-mcp/src/clipboard-network.test.ts",
+      "apps/quntal-mcp/src/p16-exit.test.ts"
+    ]
+  },
+  "exit_invariants": [
+    "The canonical parity inventory remains the classification source of truth.",
+    "Every implemented replacement workflow resolves only through canonical Quntal MCP tools and quntald-governed capability shapes.",
+    "Every denied donor authority remains unexposed to MCP.",
+    "Desktop Commander and UI-TARS remain provenance-pinned reference-only donors in SG-000066.",
+    "No donor package, runtime, operator, browser engine, screenshot path, input path, shell, proxy, approval path, trust mutation, remote lease mutation, or self-policy authority is imported by this grain.",
+    "Future computer-use authority remains gated by the canonical post-P17 successor program and is not activated by this evidence package."
+  ]
+}
