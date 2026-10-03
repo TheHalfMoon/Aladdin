@@ -1,0 +1,39 @@
+name: Qdral identity rename transformer
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  transform:
+    if: github.head_ref == 'identity/quntal-to-qdral' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout rename branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+      - name: Apply governed Qdral identity transform
+        run: node .github/scripts/qdral-rename.mjs
+      - name: Verify staged tree hygiene
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add -A
+          git diff --cached --check
+          git status --short
+          test -n "$(git diff --cached --name-only)"
+      - name: Commit and push transformed tree
+        shell: bash
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "refactor: rename Quntal to Qdral"
+          git push origin "HEAD:${HEAD_REF}"
