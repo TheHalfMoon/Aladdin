@@ -1,0 +1,56 @@
+{
+  "id": "SG-000085",
+  "title": "Computer-use security, privacy, failure, and performance qualification",
+  "program": "QUNTAL-P18",
+  "state": "PLANNED",
+  "risk": "critical",
+  "created": "2026-10-03",
+  "dependencies": ["SG-000084"],
+  "objective": "Perform adversarial program-wide qualification across the live browser, transfer, exact-window capture, structured UIA, coordinate fallback, model-adapter, and remote-lease paths. Fix every finding at its root and prove bounded resources, secret minimization, deterministic failure invalidation, non-retry mutation semantics, protected-surface denial, and exact tool/profile authority before P18 exit.",
+  "scope": {
+    "include": [
+      "browser network attacks: DNS rebinding, redirect widening/downgrade/loops, popup/new-window, iframe, worker/service-worker, WebSocket, QUIC/DoH/WebRTC bypass, unsafe schemes, external protocols, browser permissions, and download auto-trigger",
+      "browser identity/failure attacks: host/browser crash, navigation/document/node drift, stale/forged node IDs, process restart, cancellation, timeout, duplicate dispatch, and partial transfer",
+      "desktop attacks/failures: stale HWND/PID reuse, element replacement, resize/move/DPI drift, multi-monitor, RDP/session transition, lock/logoff, protected/Quntal/security windows, UAC/Windows Hello/LogonUI/secure desktop, and focus/input races",
+      "coordinate/input attacks: stale capture, out-of-bounds coordinates, lease replay/expiry, human physical interruption, repeated/double dispatch, unsupported gesture/hotkey attempts, and clipboard/state tampering",
+      "remote isolation attacks: provider/principal/device/session/route confusion, compromised-relay redirection, lease widening/replay, revoke/disconnect/reconnect races, remote self-approval/self-grant, and offline queue attempts",
+      "transfer/filesystem attacks: path traversal, reserved/device/UNC/ADS paths, reparse/symlink/junction escape, malicious filenames, type confusion, oversized/truncated payloads, changed upload sources, and duplicate writes/submissions",
+      "privacy/secret tests proving password/credential/cookie/token/browser-profile/security-surface data does not enter tool results, audit payloads beyond policy-approved metadata, logs, metrics, crash reports, or donor event streams",
+      "resource bounds for browser tabs/processes, host/browser memory/CPU/time, pending requests/transfers, DOM nodes/depth/bytes, screenshots dimensions/bytes/rate, event/result sizes, input/capture/remote leases, and cleanup",
+      "source scanning/regression tests for arbitrary JS/CDP, unrestricted shell/script, generic socket/proxy, personal profile, raw model-to-input, remote approval, model self-approval, silent elevation, and silent coordinate fallback",
+      "real Windows qualification for Windows-specific behavior and deterministic fixtures/integration coverage elsewhere"
+    ],
+    "exclude": [
+      "new feature or authority widening except root-cause fixes that narrow/correct existing P18 implementation",
+      "new provider distribution packaging unrelated to computer-use qualification",
+      "waiving or reclassifying failed security tests without a new governed authorization"
+    ]
+  },
+  "authority_delta": {
+    "filesystem": "None; only corrective narrowing/repair is permitted.",
+    "process": "None; only corrective narrowing/repair is permitted.",
+    "network": "None; only corrective narrowing/repair is permitted.",
+    "browser": "None; only corrective narrowing/repair is permitted.",
+    "ui_input": "None; only corrective narrowing/repair is permitted.",
+    "secrets": "None; privacy failures must be fixed, never accepted as authority.",
+    "approval": "None; approval/lease weaknesses must be fixed, never waived.",
+    "privileged": "None."
+  },
+  "invariants": [
+    "all mutation retries after dispatch remain disabled",
+    "all volatile authority invalidates on the documented identity/session/policy/restart transitions",
+    "protected/security surfaces remain unreachable",
+    "resource and output bounds are deterministic and test-pinned",
+    "security/privacy findings are fixed at root before exit"
+  ],
+  "acceptance": [
+    {"id": "A1", "claim": "The complete adversarial matrix passes across browser network/identity, desktop identity/protected surfaces, coordinate leases/human interruption, transfers, model adapters, and remote isolation."},
+    {"id": "A2", "claim": "Resource-bound tests prove deterministic ceilings and cleanup for processes/tabs/requests/transfers/trees/images/events/results/leases without unbounded growth or orphan authority."},
+    {"id": "A3", "claim": "Privacy tests prove secret-bearing browser/desktop/security data does not leak into logs, metrics, crash reports, audit payloads beyond approved metadata, or donor presentation streams."},
+    {"id": "A4", "claim": "Source/behavior regressions prove arbitrary JS/CDP, unrestricted shell/script, generic socket/proxy, personal profile, raw model-to-input, remote approval, model self-approval, silent elevation, and silent coordinate fallback remain unreachable."},
+    {"id": "A5", "claim": "All findings are root-cause fixed and exact-head Windows/integration CI, TypeSafe Jev, Alibaba Open Code Review, manual excluded-file review, security/privacy review, and zero unresolved blockers pass."}
+  ],
+  "successor_requirements": {"sg_000086": "P18 exit may activate only after the full adversarial qualification closes with no waived blocking finding."},
+  "review": {"diffcipline": true, "jev_semantic_review": true, "alibaba_open_code_review": "required exact-range qualification where integrated", "security_review": true, "privacy_review": true, "exact_head_ci": true, "native_windows_qualification": true, "release_artifact_qualification": true},
+  "done_when": "The entire P18 computer-use stack is adversarially qualified, bounded, privacy-safe, failure-deterministic, and free of unresolved blocking findings."
+}
