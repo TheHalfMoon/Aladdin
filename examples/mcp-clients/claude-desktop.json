@@ -1,7 +1,7 @@
 {
   "mcpServers": {
-    "quntal": {
-      "command": "quntal",
+    "qdral": {
+      "command": "qdral",
       "args": ["mcp", "stdio"]
     }
   }

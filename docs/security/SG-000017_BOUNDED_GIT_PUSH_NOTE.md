@@ -1,7 +1,7 @@
 # SG-000017 — Bounded Git HTTPS push security note
 
 Status: IMPLEMENTATION CANDIDATE
-Program: QUNTAL-P06
+Program: QDRAL-P06
 Grain: SG-000017
 
 ## Purpose
@@ -61,7 +61,7 @@ port, pinned address, source ref, destination ref, expected HEAD, expected
 prior tracking state, and credential-reference identifier without raw secret
 material. The approval digest is versioned separately from fetch.
 
-After approval and before network use, Quntal revalidates the preview state,
+After approval and before network use, Qdral revalidates the preview state,
 re-resolves and re-pins the destination, rechecks repository-local transport
 configuration, and revalidates the credential binding. Any material drift
 fails closed. The actual remote ref is then read with the hardened transport
@@ -88,7 +88,7 @@ Authentication uses opaque credential reference ids, never raw secret values
 in requests. The `anonymous` reference selects the credentialless path. Any
 other reference must equal the destination-bound reference and is resolved
 post-approval through a narrow resolver that reads only the single
-`QUNTAL_GIT_CREDENTIAL_<REFERENCE>` environment variable for the approved
+`QDRAL_GIT_CREDENTIAL_<REFERENCE>` environment variable for the approved
 reference. No other environment, helper, manager, or URL-embedded credential
 is consulted.
 
@@ -103,15 +103,15 @@ both success and failure paths.
 
 ## Postconditions and evidence
 
-After a push, Quntal re-reads the remote destination ref with the same
+After a push, Qdral re-reads the remote destination ref with the same
 hardened transport and requires it to equal the pushed source object id. It
-then records the Quntal-owned tracking ref and proves that checked-out HEAD,
+then records the Qdral-owned tracking ref and proves that checked-out HEAD,
 current branch, index, and worktree material state are unchanged. Evidence
 carries the credential reference id with an explicit redaction marker and no
 secret value.
 
 A no-cost real HTTPS qualification exercises the hardened transport against
-the explicitly pinned canonical Quntal source. Anonymous ls-remote proves the
+the explicitly pinned canonical Qdral source. Anonymous ls-remote proves the
 DNS, pinning, TLS, and HTTP wiring; the anonymous push attempt fails closed
 as a typed transport denial without mutating local or remote state. A
 successful authenticated HTTPS push has no no-cost destination in this

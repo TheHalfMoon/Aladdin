@@ -2,7 +2,7 @@
 
 Base: `9c1e932d93abd46943e91af1118df0dce5fe35de`
 Grain: `SG-000010`
-Program: `QUNTAL-P05`
+Program: `QDRAL-P05`
 
 This implementation opens only the approved argv-first `process.spawn` contract described by SG-000010.
 
@@ -35,4 +35,4 @@ Explicitly absent:
 
 The existing SG-000009/SG-000009A contained executor remains the security boundary. This grain does not introduce an alternate process-launch path.
 
-A broader executable registry is explicitly deferred. Before that authority can be added, Quntal must qualify descendant-aware post-primary-exit drain/termination semantics so a child process retaining stdio handles cannot keep a request open indefinitely.
+A broader executable registry is explicitly deferred. Before that authority can be added, Qdral must qualify descendant-aware post-primary-exit drain/termination semantics so a child process retaining stdio handles cannot keep a request open indefinitely.

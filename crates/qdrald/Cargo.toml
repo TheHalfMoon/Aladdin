@@ -1,0 +1,38 @@
+[package]
+name = "qdrald"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+autobins = false
+
+[[bin]]
+name = "qdrald"
+path = "src/sg000039_main.rs"
+
+[dependencies]
+qdral-approval = { path = "../qdral-approval" }
+qdral-audit = { path = "../qdral-audit" }
+qdral-contracts = { path = "../qdral-contracts" }
+qdral-policy = { path = "../qdral-policy" }
+qdral-provider-browser = { path = "../qdral-provider-browser" }
+qdral-provider-clipboard = { path = "../qdral-provider-clipboard" }
+qdral-provider-fs = { path = "../qdral-provider-fs" }
+qdral-provider-git = { path = "../qdral-provider-git" }
+qdral-provider-network = { path = "../qdral-provider-network" }
+qdral-provider-process = { path = "../qdral-provider-process" }
+qdral-provider-uia = { path = "../qdral-provider-uia" }
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.52", features = [
+  "Win32_Foundation",
+  "Win32_System_RemoteDesktop",
+  "Win32_System_Threading",
+] }
+
+[dev-dependencies]
+qdral-approval = { path = "../qdral-approval", features = ["test-support"] }

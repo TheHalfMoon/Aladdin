@@ -1,7 +1,7 @@
-# Quntal Relay Protocol and Remote Threat Contract
+# Qdral Relay Protocol and Remote Threat Contract
 
-Status: FROZEN CONTRACT FOR QUNTAL-P15
-SpecGrain: SG-000052 (QUNTAL-P15, design-first)
+Status: FROZEN CONTRACT FOR QDRAL-P15
+SpecGrain: SG-000052 (QDRAL-P15, design-first)
 Base: `a7002bfd56657fe2aa4f3710d10942031d66a258`
 Date: 2026-10-01
 Companions:
@@ -19,7 +19,7 @@ until this contract is canonical. Successor grains (SG-000053 through
 SG-000057) implement against this text; any deviation requires a new
 explicitly authorized SpecGrain.
 
-The relay carries only Quntal-defined authenticated MCP traffic. It is never
+The relay carries only Qdral-defined authenticated MCP traffic. It is never
 a generic proxy. Anything not defined here is denied.
 
 ## 2. Roles
@@ -33,7 +33,7 @@ a generic proxy. Anything not defined here is denied.
   relay (SG-000055). No inbound home or router port exists.
 - `local edge`: the on-device receiver that verifies the device-verifiable
   authorization envelope, checks the active local remote-session lease, and
-  dispatches to the authoritative Quntal tool registry through `quntald`.
+  dispatches to the authoritative Qdral tool registry through `qdrald`.
 
 Compromise of any relay-side role must not mint local authority.
 
@@ -63,7 +63,7 @@ Rules:
 ### 4.1 Protocol version
 
 Every frame carries `protocolVersion` with the single frozen value
-`quntal-relay/1`. Unknown versions fail closed with
+`qdral-relay/1`. Unknown versions fail closed with
 `MCP_PROTOCOL_UNSUPPORTED`. Version negotiation, when added by a successor
 grain, must refuse to downgrade silently.
 
@@ -71,7 +71,7 @@ grain, must refuse to downgrade silently.
 
 A request frame carries exactly these envelope fields plus the MCP payload:
 
-- `protocolVersion`: frozen `quntal-relay/1`;
+- `protocolVersion`: frozen `qdral-relay/1`;
 - `routeDeviceId`: opaque tenant-scoped device route identifier;
 - `remoteConnectionId`: stable provider MCP connection bound to one
   authenticated principal and one exact device;
@@ -165,7 +165,7 @@ approval checks; any denial wins and failures are typed (section 8).
   replay with typed `RELAY_REPLAY_DETECTED`;
 - duplicate delivery (same `correlationId` with an already answered request)
   returns the recorded result once where the operation is idempotent and
-  deduplicated by `quntald`, and otherwise fails closed without re-execution;
+  deduplicated by `qdrald`, and otherwise fails closed without re-execution;
 - reordered frames that create an impossible order fail with the typed
   transport error; ordering semantics are defined per frame kind and
   concurrency uses independent correlation IDs;
@@ -189,7 +189,7 @@ approval checks; any denial wins and failures are typed (section 8).
   unless the existing provider establishes termination; transport close does
   not fabricate process state;
 - mutating operations are never automatically retried after dispatch unless
-  a stable operation ID is deduplicated by `quntald` with result replay;
+  a stable operation ID is deduplicated by `qdrald` with result replay;
   retries are otherwise limited to idempotent reads.
 
 ## 8. Frozen typed-failure vocabulary

@@ -9,7 +9,7 @@ permissions:
 
 jobs:
   transform:
-    if: github.head_ref == 'identity/quntal-to-qdral' && github.event.pull_request.head.repo.full_name == github.repository
+    if: github.head_ref == 'identity/qdral-to-qdral' && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     steps:
       - name: Checkout rename branch
@@ -35,5 +35,5 @@ jobs:
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -m "refactor: rename Quntal to Qdral"
+          git commit -m "refactor: rename Qdral to Qdral"
           git push origin "HEAD:${HEAD_REF}"

@@ -1,21 +1,21 @@
 # SG-000033 - Bounded window-scoped screenshot capture security note
 
 Status: IMPLEMENTATION CANDIDATE
-Program: QUNTAL-P10
+Program: QDRAL-P10
 Grain: SG-000033
 
 ## Purpose
 
-SG-000033 establishes the first narrow QUNTAL-P10 vision grain on top of
-the closed QUNTAL-P09 structured-UIA registry, the SG-000018
+SG-000033 establishes the first narrow QDRAL-P10 vision grain on top of
+the closed QDRAL-P09 structured-UIA registry, the SG-000018
 replay-resistant foundation, SG-000019 class enforcement, SG-000020 trust
-and revoke records, and the closed QUNTAL-P08 registry: a single approved
+and revoke records, and the closed QDRAL-P08 registry: a single approved
 window-scoped capture shape bound to server-derived process identity,
 typed window identity, expected window generation, fixed target-window
 scope, workspace scope, and policy revision, with fresh SOFT approval
 digest binding, server-allocated typed frame identity with capture
 generation and geometry, immediate pre-capture stale-target
-revalidation, and protected Quntal approval-surface exclusion.
+revalidation, and protected Qdral approval-surface exclusion.
 
 No other new vision or input authority exists in this grain. Visual
 target proposals, coordinate proposals, bounded input execution, input
@@ -81,10 +81,10 @@ occurred. A successful capture never advances the window tree
 generation because capture is read-only; element identities are
 unaffected.
 
-## Protected Quntal surfaces and secrets
+## Protected Qdral surfaces and secrets
 
 Capture can never target approval dialogs, STRONG presence surfaces,
-workspace trust controls, emergency revoke, or security-sensitive Quntal
+workspace trust controls, emergency revoke, or security-sensitive Qdral
 UI. Protected surfaces are omitted from window listings, denied on
 direct observation, and denied on capture. Fail closed on uncertainty.
 No password, credential, Windows Hello, cookie, token, or session

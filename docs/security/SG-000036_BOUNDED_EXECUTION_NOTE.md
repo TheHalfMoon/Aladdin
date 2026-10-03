@@ -1,23 +1,23 @@
 # SG-000036 - Bounded coordinate execution security note
 
 Status: IMPLEMENTATION CANDIDATE
-Program: QUNTAL-P10
+Program: QDRAL-P10
 Grain: SG-000036
 
 ## Purpose
 
-SG-000036 establishes the fourth narrow QUNTAL-P10 vision grain on top
+SG-000036 establishes the fourth narrow QDRAL-P10 vision grain on top
 of the closed SG-000035 coordinate registry, the closed SG-000034
 visual proposal registry, the closed SG-000033 window-scoped capture
-registry, the closed QUNTAL-P09 structured-UIA registry, the SG-000018
+registry, the closed QDRAL-P09 structured-UIA registry, the SG-000018
 replay-resistant foundation, SG-000019 class enforcement, SG-000020
-trust and revoke records, and the closed QUNTAL-P08 registry: a single
+trust and revoke records, and the closed QDRAL-P08 registry: a single
 approved bounded execution shape bound to server-derived coordinate
 identity and expected derivation generation with click-only
 operation, an explicit server-derived single-use input lease, fresh
 SOFT approval digest binding including the lease, immediate
 pre-execution stale-coordinate revalidation, window-confined
-actuation, and protected Quntal approval-surface exclusion.
+actuation, and protected Qdral approval-surface exclusion.
 
 This is the strongest P10 authority and is treated accordingly: one
 fixed operation, one exact window, one exact coordinate, one lease,
@@ -94,11 +94,11 @@ changes, and policy revision drift all fail closed without silent
 retargeting and without keyboard, drag, clipboard, network, or
 elevation fallback.
 
-## Protected Quntal surfaces and secrets
+## Protected Qdral surfaces and secrets
 
 Execution can never target approval dialogs, STRONG presence
 surfaces, workspace trust controls, emergency revoke, or
-security-sensitive Quntal UI, because coordinate identities of
+security-sensitive Qdral UI, because coordinate identities of
 protected surfaces can never exist, execution re-checks protected
 status on the owning window, and execution is confined to the exact
 owning window. Fail closed on uncertainty. P10 input authority must

@@ -1,7 +1,7 @@
 # SG-000025 - Scoped bounded browser downloads security note
 
 Status: IMPLEMENTATION CANDIDATE
-Program: QUNTAL-P08
+Program: QDRAL-P08
 Grain: SG-000025
 
 ## Purpose
@@ -21,7 +21,7 @@ personal-profile mode, debugging, scripting, credential access, MCP browser
 tools, and network egress beyond destination validation and DNS resolution
 absent.
 
-No browser is launched or attached in this grain, and Quntal performs no network
+No browser is launched or attached in this grain, and Qdral performs no network
 transfer: the source URL is validated and pinned exactly like an SG-000022
 navigation destination. Actual page rendering and page loading by a browser
 engine remain absent and are successor work.
@@ -36,7 +36,7 @@ generation-drifted, document-replaced, and policy-drifted pages fail closed.
 
 `browser.download/preview` requires no approval, mutates nothing, and writes
 nothing. It returns a server-allocated one-shot download source identity bound
-under `QUNTAL_BROWSER_DOWNLOAD_SOURCE_V1` to workspace, policy revision, profile
+under `QDRAL_BROWSER_DOWNLOAD_SOURCE_V1` to workspace, policy revision, profile
 identity, page identity, origin, page generation, document generation, source
 origin, source URL digest, canonical relative destination, declared media type,
 declared size, download policy revision, and issue time, plus a deterministic
@@ -78,7 +78,7 @@ repository is inside the Windows test that builds a directory junction with
 only under `#[cfg(test)]`; its arguments are two test-generated temporary
 paths and no capability, request field, or caller input reaches it. It grants no
 production authority, and no shell, PowerShell, or process-spawning capability is
-reachable from any Quntal capability, MCP tool, or browser shape.
+reachable from any Qdral capability, MCP tool, or browser shape.
 
 Downloads are create-only. The file is opened with create-new semantics, an
 existing destination fails closed with `PostconditionFailed`, parent directories
@@ -141,7 +141,7 @@ denial is retained unchanged: downloads are reachable only through the explicit
 ## Approval and evidence
 
 Every download requires a fresh SOFT approval whose digest under
-`QUNTAL_BROWSER_DOWNLOAD_V1` binds workspace, policy revision, profile identity,
+`QDRAL_BROWSER_DOWNLOAD_V1` binds workspace, policy revision, profile identity,
 page identity, origin, page generation, document generation, source identity,
 source origin, canonical relative destination, declared media type, declared
 size, the actual content digest, and the download policy revision. Preview

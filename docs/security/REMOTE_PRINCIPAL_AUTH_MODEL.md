@@ -1,4 +1,4 @@
-# Quntal Remote Principal and Authorization Model
+# Qdral Remote Principal and Authorization Model
 
 Status: IMPLEMENTATION-READY PROPOSAL
 Date: 2026-10-01
@@ -11,21 +11,21 @@ Companions:
 
 ## 1. Problem
 
-Hosted AI clients need a stable authenticated principal before Quntal can route a remote MCP request to one user's computer.
+Hosted AI clients need a stable authenticated principal before Qdral can route a remote MCP request to one user's computer.
 
-Quntal must provide that identity without making a paid identity provider, email/password database, social login, or founder-funded SaaS subscription mandatory.
+Qdral must provide that identity without making a paid identity provider, email/password database, social login, or founder-funded SaaS subscription mandatory.
 
 At the same time, OpenAI public plugins and standards-compliant remote MCP clients need OAuth 2.1 semantics for private data and write actions.
 
-This document defines the default Quntal solution.
+This document defines the default Qdral solution.
 
 ## 2. Decision: device-backed remote principal
 
 The v0.2 default is a **device-backed remote principal**.
 
-The local Quntal installation is the root of user possession for initial remote linking. A hosted provider connection is paired to exactly one Quntal device by an explicit local flow.
+The local Qdral installation is the root of user possession for initial remote linking. A hosted provider connection is paired to exactly one Qdral device by an explicit local flow.
 
-No mandatory Quntal email account, password, phone number, social login, or third-party identity subscription is required.
+No mandatory Qdral email account, password, phone number, social login, or third-party identity subscription is required.
 
 The relay/auth service stores only opaque principal/device/connection identifiers, device public keys, OAuth client/token state, route/revocation epochs, and the minimum abuse/rate-limit metadata required to operate the service.
 
@@ -35,11 +35,11 @@ The device private key remains local.
 
 ### 3.1 `device_id`
 
-A random stable identifier for one Quntal installation. It is not derived from hardware serials, Windows username, MAC address, machine SID, hostname, or other fingerprinting data.
+A random stable identifier for one Qdral installation. It is not derived from hardware serials, Windows username, MAC address, machine SID, hostname, or other fingerprinting data.
 
 ### 3.2 device key pair
 
-Generated locally during remote setup and stored in Quntal protected state.
+Generated locally during remote setup and stored in Qdral protected state.
 
 Used to authenticate the device channel and prove possession during pairing/refresh-sensitive transitions.
 
@@ -67,21 +67,21 @@ A user who wants to connect a second PC creates a second provider connection und
 
 ### 3.5 `client_session_id`
 
-Generated locally by Quntal for each live MCP session. It remains the session identifier used by local audit/policy and is not replaced by provider or relay session IDs.
+Generated locally by Qdral for each live MCP session. It remains the session identifier used by local audit/policy and is not replaced by provider or relay session IDs.
 
 ## 4. First-time remote setup
 
 The user explicitly runs a local command such as:
 
 ```text
-quntal remote enable
+qdral remote enable
 ```
 
 This operation:
 
 1. creates the device key pair if absent;
 2. creates the opaque `device_id`;
-3. stores private material under existing Quntal protected-state rules;
+3. stores private material under existing Qdral protected-state rules;
 4. registers only the device public key and minimal route metadata with the selected relay;
 5. requires STRONG local user presence before the device is eligible for remote pairing;
 6. does not grant any workspace, capability, tool profile, or action approval.
@@ -90,33 +90,33 @@ This operation:
 
 ## 5. Provider linking / OAuth user authentication
 
-The public Quntal authorization server uses OAuth 2.1 authorization-code + PKCE for supported hosted MCP clients.
+The public Qdral authorization server uses OAuth 2.1 authorization-code + PKCE for supported hosted MCP clients.
 
 The user authenticates the OAuth authorization transaction through **local device pairing**, not a cloud password.
 
 ### 5.1 Linking flow
 
-1. The hosted AI client discovers Quntal's protected-resource and authorization-server metadata.
-2. The hosted client begins authorization-code + PKCE with the exact Quntal MCP resource.
-3. The Quntal authorization page asks the user to pair a Quntal device. It does not ask for a Quntal password.
+1. The hosted AI client discovers Qdral's protected-resource and authorization-server metadata.
+2. The hosted client begins authorization-code + PKCE with the exact Qdral MCP resource.
+3. The Qdral authorization page asks the user to pair a Qdral device. It does not ask for a Qdral password.
 4. On the PC, the user runs:
 
    ```text
-   quntal remote pair
+   qdral remote pair
    ```
 
-5. Quntal requires STRONG local user presence and creates a short-lived one-time pairing transaction.
+5. Qdral requires STRONG local user presence and creates a short-lived one-time pairing transaction.
 6. The user either:
    - opens a device-generated HTTPS pairing URL/QR token; or
    - enters a high-entropy one-time code into the authorization page.
 7. The relay/auth service sends a fresh challenge to the candidate device.
 8. The device signs the challenge and confirms the exact remote OAuth client/provider, requested scopes, and target device alias locally.
 9. The server creates/binds `remote_principal_id` and `remote_connection_id` only after successful device proof and local confirmation.
-10. The authorization page shows the requested Quntal scopes and the selected device.
+10. The authorization page shows the requested Qdral scopes and the selected device.
 11. The authorization server issues a short-lived authorization code bound to client, redirect URI, PKCE challenge, resource, principal, device, scopes, and transaction.
 12. The provider exchanges it for scoped tokens.
 
-Pairing proves possession/control of the local Quntal installation. It still does not grant workspace trust or approve tool effects.
+Pairing proves possession/control of the local Qdral installation. It still does not grant workspace trust or approve tool effects.
 
 ## 6. Pairing token requirements
 
@@ -136,7 +136,7 @@ The authorization page must not reveal whether an arbitrary guessed device/princ
 
 ## 7. OAuth server requirements
 
-The Quntal authorization server is security-critical.
+The Qdral authorization server is security-critical.
 
 It must use maintained standards libraries for OAuth/JWT/JOSE processing where practical and must not implement cryptographic primitives from scratch.
 
@@ -165,7 +165,7 @@ Required behavior includes:
 
 ## 8. Device-gated token lifetime
 
-Quntal minimizes the consequences of losing a device without requiring a mandatory cloud account recovery system.
+Qdral minimizes the consequences of losing a device without requiring a mandatory cloud account recovery system.
 
 Default policy:
 
@@ -193,7 +193,7 @@ Required commands/UX:
 - revoke every paired device route for the account;
 - rotate the device key;
 - disable remote mode entirely, which revokes every connection and every paired device route;
-- emergency revoke through the existing Quntal authority boundary, including a remotely reachable emergency revocation path that does not require physical access to a stolen or still-running device.
+- emergency revoke through the existing Qdral authority boundary, including a remotely reachable emergency revocation path that does not require physical access to a stolen or still-running device.
 
 A remotely reachable emergency revocation path uses an authenticated principal session, such as a still-valid OAuth session or provider-side connector removal propagated to the relay, to revoke device routes and token families without requiring commands on the lost device. Short access-token lifetime, device-gated refresh with fresh device-key proof, and the finite local remote-session lease bound the residual window until revocation propagates.
 
@@ -204,13 +204,13 @@ Revocation increments the relevant epoch and invalidates:
 - access/refresh token families as applicable;
 - device reconnect authorization for the revoked identity.
 
-Provider-side disconnect is useful but is not the sole Quntal revocation mechanism.
+Provider-side disconnect is useful but is not the sole Qdral revocation mechanism.
 
 ## 10. Lost-device case
 
 The default v0.2 system intentionally avoids pretending that an email/password cloud account exists when it does not.
 
-If the only Quntal device is permanently lost:
+If the only Qdral device is permanently lost:
 
 - the short access-token lifetime limits residual access;
 - device-gated renewal fails when the device cannot prove possession/current epoch with a fresh device-key proof;
@@ -222,7 +222,7 @@ If the only Quntal device is permanently lost:
 
 This document does not claim that a lost device is immediately contained without revocation. Containment requires revocation plus token and lease expiry.
 
-An optional recovery credential or passkey-backed multi-device Quntal account may be designed later, but it is not required for the initial universal release and must not be silently introduced as a new cloud dependency.
+An optional recovery credential or passkey-backed multi-device Qdral account may be designed later, but it is not required for the initial universal release and must not be silently introduced as a new cloud dependency.
 
 ## 11. Multiple devices
 
@@ -230,7 +230,7 @@ v0.2 does not route one provider connection dynamically among multiple computers
 
 Each connection is one device.
 
-If a provider supports multiple connected accounts/connections, Quntal may expose a minimal authenticated profile identity so the user can distinguish connections, for example a user-chosen device alias. This profile must reveal no hostname, username, IP address, machine SID, or hardware fingerprint by default.
+If a provider supports multiple connected accounts/connections, Qdral may expose a minimal authenticated profile identity so the user can distinguish connections, for example a user-chosen device alias. This profile must reveal no hostname, username, IP address, machine SID, or hardware fingerprint by default.
 
 For OpenAI, any future profile tool must follow the platform's authenticated profile-tool convention and be independently reviewed as a tool-surface change.
 
@@ -238,31 +238,31 @@ For OpenAI, any future profile tool must follow the platform's authenticated pro
 
 Initial remote OAuth scopes:
 
-- `quntal.read`
-- `quntal.write`
-- `quntal.execute`
+- `qdral.read`
+- `qdral.write`
+- `qdral.execute`
 
 Normative scope-to-tool/profile matrix (default deny):
 
-- `quntal.read` authorizes only tools and profiles explicitly marked read-only in the reviewed matrix;
-- `quntal.write` additionally authorizes only explicitly marked write tools and profiles;
-- `quntal.execute` additionally authorizes only explicitly marked execute tools and profiles;
+- `qdral.read` authorizes only tools and profiles explicitly marked read-only in the reviewed matrix;
+- `qdral.write` additionally authorizes only explicitly marked write tools and profiles;
+- `qdral.execute` additionally authorizes only explicitly marked execute tools and profiles;
 - a tool that requires more than one scope needs every listed scope present in both the current token and the leased OAuth scope ceiling;
 - missing or unknown scope/tool/profile mappings deny;
-- the relay enforces this matrix before dispatch, and `quntald` re-enforces it with the leased ceiling.
+- the relay enforces this matrix before dispatch, and `qdrald` re-enforces it with the leased ceiling.
 
 OAuth scopes are an outer remote ceiling only.
 
 They do not:
 
 - select or trust a workspace;
-- enable a Quntal local tool-surface profile;
+- enable a Qdral local tool-surface profile;
 - grant SOFT or STRONG approval;
 - widen an executable registry;
 - bypass provider ceilings;
 - allow a relay to create a capability token.
 
-The local Quntal device must separately enable the relevant surface profile/workspace policy.
+The local Qdral device must separately enable the relevant surface profile/workspace policy.
 
 Effective permission is the intersection of:
 
@@ -271,7 +271,7 @@ remote OAuth scope
 AND active local remote-session lease, including its OAuth scope ceiling, workspace set, tool-surface profile, policy revision, device/connection binding, and expiry
 AND locally enabled tool-surface profile
 AND workspace policy
-AND quntald capability/provider ceiling
+AND qdrald capability/provider ceiling
 AND required local approval
 ```
 
@@ -281,25 +281,25 @@ Any denial wins. A valid remote OAuth token without an active local lease denies
 
 ### OpenAI
 
-Production public plugin path uses OAuth 2.1. OpenAI's MCP client identity mechanisms (CIMD/private-key JWT and/or mTLS where supported) authenticate the OpenAI client as defense in depth; device-backed pairing authenticates/binds the Quntal user/device authorization transaction.
+Production public plugin path uses OAuth 2.1. OpenAI's MCP client identity mechanisms (CIMD/private-key JWT and/or mTLS where supported) authenticate the OpenAI client as defense in depth; device-backed pairing authenticates/binds the Qdral user/device authorization transaction.
 
 ### Claude
 
-Remote connector path should use the same OAuth 2.1 authorization server when the configured Claude connector supports it. Local Claude paths bypass remote OAuth and authenticate only to local Quntal transport.
+Remote connector path should use the same OAuth 2.1 authorization server when the configured Claude connector supports it. Local Claude paths bypass remote OAuth and authenticate only to local Qdral transport.
 
 ### Mistral Vibe Work
 
-Current Mistral Vibe Work custom connectors auto-detect OAuth 2.1 with dynamic client registration, bearer, basic, or no-auth. The shared Quntal public relay should prefer OAuth 2.1/DCR rather than weakening to a static bearer token merely for convenience.
+Current Mistral Vibe Work custom connectors auto-detect OAuth 2.1 with dynamic client registration, bearer, basic, or no-auth. The shared Qdral public relay should prefer OAuth 2.1/DCR rather than weakening to a static bearer token merely for convenience.
 
 ### Local Mistral Vibe Code
 
-Current Vibe Code does not support OAuth-required MCP servers, so it uses Quntal local stdio/loopback mode rather than the public OAuth relay.
+Current Vibe Code does not support OAuth-required MCP servers, so it uses Qdral local stdio/loopback mode rather than the public OAuth relay.
 
 ## 14. Self-hosted mode
 
 Self-hosted remote deployments run the same authorization contract.
 
-A self-host operator may integrate an external identity provider, but the reference Quntal deployment must retain the device-backed principal path so self-hosting does not require a paid IdP.
+A self-host operator may integrate an external identity provider, but the reference Qdral deployment must retain the device-backed principal path so self-hosting does not require a paid IdP.
 
 Alternative authentication methods must not be accepted by the public OpenAI plugin endpoint unless they satisfy that provider's requirements.
 
@@ -364,12 +364,12 @@ Before remote release, prove at minimum:
 
 ## 18. Non-goals for v0.2
 
-- mandatory Quntal cloud identity account;
+- mandatory Qdral cloud identity account;
 - mandatory email/password login;
 - social-login dependency;
 - cross-device roaming under one live MCP connection;
 - unattended remote approval;
 - remote Windows Hello;
-- cloud recovery of local Quntal secrets;
+- cloud recovery of local Qdral secrets;
 - enterprise SSO/SCIM;
 - claims that provider login alone grants local authority.

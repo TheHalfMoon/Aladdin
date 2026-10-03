@@ -1,11 +1,11 @@
-# Quntal Threat Model
+# Qdral Threat Model
 
 Status: INITIAL CANONICAL SECURITY MODEL
 Date: 2026-09-23
 
 ## 1. Security objective
 
-Quntal must let an authorized AI client perform useful local work without turning MCP connectivity into ambient Windows authority.
+Qdral must let an authorized AI client perform useful local work without turning MCP connectivity into ambient Windows authority.
 
 The security target is capability-bounded local automation with explicit trust scopes, protected approvals, destination-scoped egress, secret isolation, and auditable evidence.
 
@@ -19,11 +19,11 @@ ZONE B — Secure MCP Tunnel transport
 Trusted only as configured transport.
 Not the local authorization authority.
 
-ZONE C — quntal-mcp
+ZONE C — qdral-mcp
 Treat as network/protocol-facing and potentially compromiseable.
 Must not hold broad privileged authority.
 
-ZONE D — quntald policy kernel
+ZONE D — qdrald policy kernel
 Primary local authorization authority.
 Protected state and IPC.
 
@@ -48,7 +48,7 @@ Untrusted unless specifically allowed.
 - browser sessions;
 - clipboard contents;
 - local application data;
-- Quntal configuration;
+- Qdral configuration;
 - workspace policy;
 - approval authority;
 - tunnel runtime credentials;
@@ -71,7 +71,7 @@ Controls:
 - installer does not create inbound firewall rule.
 
 Tests:
-- fresh install has no inbound Quntal firewall requirement;
+- fresh install has no inbound Qdral firewall requirement;
 - network listener inventory verifies expected local-only state.
 
 ### T02 — MCP caller escalates through tool metadata
@@ -116,15 +116,15 @@ Controls:
 ### T05 — Shell becomes universal bypass
 
 Threat:
-Agent uses PowerShell/cmd/native tools to read protected Quntal state, alter policy, approve requests, or exfiltrate secrets.
+Agent uses PowerShell/cmd/native tools to read protected Qdral state, alter policy, approve requests, or exfiltrate secrets.
 
 Controls:
 - separate execution capability;
 - reduced token strategy;
-- protected quntald state/IPC;
+- protected qdrald state/IPC;
 - curated environment;
 - no secret inheritance;
-- deny protected Quntal paths/processes where enforceable;
+- deny protected Qdral paths/processes where enforceable;
 - strong approval for policy/trust changes.
 
 Residual risk:
@@ -149,9 +149,9 @@ Threat:
 Agent clicks its own approval dialog.
 
 Controls:
-- protected Quntal process/window identities;
-- UIA provider denies Quntal approval surfaces;
-- coordinate provider denies Quntal surfaces;
+- protected Qdral process/window identities;
+- UIA provider denies Qdral approval surfaces;
+- coordinate provider denies Qdral surfaces;
 - suspend input lease while approval pending;
 - no MCP approve tool.
 
@@ -313,7 +313,7 @@ Controls:
 - export verification.
 
 Residual risk:
-Local administrator/malware can alter local evidence unless stronger external attestation is introduced. Quntal v1 does not claim resistance to a compromised administrator.
+Local administrator/malware can alter local evidence unless stronger external attestation is introduced. Qdral v1 does not claim resistance to a compromised administrator.
 
 ### T23 — Malicious update or dependency
 
@@ -328,7 +328,7 @@ Controls:
 ### T24 — Donor-code trust transfer
 
 Threat:
-Quntal copies code with weaker assumptions or hidden network behavior.
+Qdral copies code with weaker assumptions or hidden network behavior.
 
 Controls:
 - source ledger;
@@ -337,7 +337,7 @@ Controls:
 - semantic security review;
 - no bulk donor import.
 
-### T25 — Quntal configuration tampering
+### T25 — Qdral configuration tampering
 
 Controls:
 - ACL-protected config;
@@ -358,10 +358,10 @@ Controls:
 ### T27 — Local same-user compromise
 
 Threat:
-Malware already running with the user's full rights attacks Quntal.
+Malware already running with the user's full rights attacks Qdral.
 
 Boundary:
-Quntal reduces exposure and protects privileged components where possible, but v1 does not claim to defend against a fully compromised Windows administrator or equivalent local attacker.
+Qdral reduces exposure and protects privileged components where possible, but v1 does not claim to defend against a fully compromised Windows administrator or equivalent local attacker.
 
 ### T28 — Elevation bypass
 
@@ -386,7 +386,7 @@ Controls:
 - hardware-backed remote attestation;
 - enterprise DLP replacement;
 - unattended privilege elevation;
-- public multi-tenant Quntal cloud.
+- public multi-tenant Qdral cloud.
 
 ## 7. Security release gate
 

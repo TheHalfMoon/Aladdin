@@ -1,7 +1,7 @@
 # SG-000020 — Workspace trust with history UX and emergency revoke security note
 
 Status: IMPLEMENTATION CANDIDATE
-Program: QUNTAL-P07
+Program: QDRAL-P07
 Grain: SG-000020
 
 ## Purpose
@@ -19,7 +19,7 @@ through dedicated PRIVILEGED APIs with STRONG presence.
 
 ## Trust model
 
-Trust state is per-workspace records in Quntal protected local state with
+Trust state is per-workspace records in Qdral protected local state with
 a checksum chain over workspace identity, trust flag, revision,
 provenance method, timestamp, and policy revision. Unknown workspaces
 report untrusted fail-closed. Corrupt or missing state reports untrusted
@@ -84,7 +84,7 @@ trust changes or revoke.
 
 All SG-000018 nonce, expiry, one-shot, digest, workspace, policy, and
 history behaviors are retained with ledger schema
-`quntal-approval-ledger-v3` covering epoch and revoke flags. All SG-000019
+`qdral-approval-ledger-v3` covering epoch and revoke flags. All SG-000019
 STRONG enforcement, fail-closed presence, and class-labeled history are
 retained. P06 file, process, and Git flows keep exact digests and
 revalidation outside trust labeling. Denied and unavailable trust and

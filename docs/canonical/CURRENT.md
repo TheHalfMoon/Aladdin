@@ -1,3 +1,12 @@
+# Qdral Current Identity Notice
+
+Status: ACTIVE PRODUCT IDENTITY
+Effective date: 2026-10-03
+
+Qdral is the current product and project name. Quntal and Cotra references in the historical ledger below identify earlier names of this same project and are intentionally preserved rather than rewritten. Current project-owned packages, crates, executables, CLI names, environment variables, paths, documentation, and repository references are governed by `docs/identity/QDRAL_RENAME.md`. This identity change grants no new authority.
+
+---
+
 # Cotra Current Canonical Frontier
 
 Status: COMPLETE_CANONICAL

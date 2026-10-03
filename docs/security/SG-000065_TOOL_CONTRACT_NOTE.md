@@ -1,13 +1,13 @@
 # SG-000065 Tool Profiles and Metadata Contract Note
 
-Status: IMPLEMENTATION FOR QUNTAL-P16
+Status: IMPLEMENTATION FOR QDRAL-P16
 SpecGrain: SG-000065
 Base: `dfac619b72f830bb69903700f70535ab9c187f3c`
 Date: 2026-10-02
-Code: `apps/quntal-mcp/src/tool_contract.ts`, `apps/quntal-mcp/src/server.ts`
+Code: `apps/qdral-mcp/src/tool_contract.ts`, `apps/qdral-mcp/src/server.ts`
 (`allowedToolsFor`, contract-gated registration),
-`apps/quntal-mcp/src/oauth_authorization.ts` (derived scope matrix),
-`crates/quntal-provider-fs/src/lib.rs` (`MAX_LIST_ENTRIES`). Generated record:
+`apps/qdral-mcp/src/oauth_authorization.ts` (derived scope matrix),
+`crates/qdral-provider-fs/src/lib.rs` (`MAX_LIST_ENTRIES`). Generated record:
 `docs/p16/TOOL_CONTRACT.md`.
 
 ## 1. One contract
@@ -34,7 +34,7 @@ bound, title, and MCP annotations. Everything else is derived from it:
 Before this grain the relay path advertised all 31 tools to remote clients
 (the 5 local-only tools were denied on call, but discovery leaked them).
 The relay now lists exactly `core`. Discovery hiding is not authorization:
-the relay edge and device uplink scope checks, the quntald remote-session
+the relay edge and device uplink scope checks, the qdrald remote-session
 scope table, the lease, workspace policy, and local approval still decide
 every call. `developer`, `coordinate_fallback`, and unknown profiles are not
 mapped and throw at server construction.
@@ -67,7 +67,7 @@ changes are not, read-only is never destructive, destructive and execute
 effects declare destructive, network and execute effects declare open
 world and nothing else does, approval is required exactly for effects
 beyond observation, and only `fs_remove` requires STRONG presence (as
-quntald requests it).
+qdrald requests it).
 
 ## 5. Output bounds
 
@@ -78,13 +78,13 @@ deterministic, and reports `truncated`. This only narrows output.
 
 ## 6. Cross-checks
 
-`apps/quntal-mcp/src/tool-contract.test.ts` pins:
+`apps/qdral-mcp/src/tool-contract.test.ts` pins:
 
 - contract keys equal the canonical catalog; titles unique; bounds stated;
 - each entry's kernel shape equals the parity inventory's record for that
   tool;
-- each remote entry's scope equals quntald's `required_scopes` mapping in
-  `crates/quntal-policy/src/remote_session.rs`, each local-only shape has no
+- each remote entry's scope equals qdrald's `required_scopes` mapping in
+  `crates/qdral-policy/src/remote_session.rs`, each local-only shape has no
   remote mapping there, and the OAuth matrix and `core` ceiling equal the
   26 remote tools;
 - exact profile membership and fail-closed unknown profiles and providers;

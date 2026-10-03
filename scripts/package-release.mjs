@@ -1,10 +1,10 @@
 #!/usr/bin/env node
-// Assembles a Quntal Windows release directory and its manifest.json.
+// Assembles a Qdral Windows release directory and its manifest.json.
 //
 // Usage:
 //   node scripts/package-release.mjs --out <empty-or-new-dir> [--target-dir target/release]
 //
-// Prerequisites: `cargo build --release -p quntald -p quntal-lifecycle` on
+// Prerequisites: `cargo build --release -p qdrald -p qdral-lifecycle` on
 // Windows and `npm run build` for the MCP app. The script copies only runtime
 // payload (no tests, type declarations, or source maps), installs the MCP
 // app's production dependencies, and writes a manifest whose paths satisfy
@@ -25,9 +25,9 @@ import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const MANIFEST_SCHEMA = "quntal-release-manifest-v1";
+const MANIFEST_SCHEMA = "qdral-release-manifest-v1";
 const CONFIG_SCHEMA = { min: 1, max: 1 };
-const BINARIES = ["quntal.exe", "quntal-mcp-host.exe", "quntald.exe"];
+const BINARIES = ["qdral.exe", "qdral-mcp-host.exe", "qdrald.exe"];
 
 function fail(message) {
   console.error(`package-release: ${message}`);
@@ -46,14 +46,14 @@ function workspaceVersion() {
   const cargo = readFileSync(join(repo, "Cargo.toml"), "utf8");
   const match = cargo.match(/\[workspace\.package\][^[]*?\nversion\s*=\s*"([^"]+)"/);
   if (!match) fail("workspace version not found in Cargo.toml");
-  const app = JSON.parse(readFileSync(join(repo, "apps/quntal-mcp/package.json"), "utf8"));
+  const app = JSON.parse(readFileSync(join(repo, "apps/qdral-mcp/package.json"), "utf8"));
   if (app.version !== match[1]) {
-    fail(`Cargo workspace version ${match[1]} does not match @quntal/mcp ${app.version}`);
+    fail(`Cargo workspace version ${match[1]} does not match @qdral/mcp ${app.version}`);
   }
   return match[1];
 }
 
-// Mirrors quntal_lifecycle::manifest::validate_relative_path.
+// Mirrors qdral_lifecycle::manifest::validate_relative_path.
 function validateRelativePath(path) {
   if (path.length === 0 || path.length > 200) return "length out of range";
   if (path.startsWith("/")) return "absolute path";
@@ -99,8 +99,8 @@ for (const binary of BINARIES) {
 }
 copyFileSync(join(repo, "LICENSE"), join(out, "LICENSE"));
 
-const appSource = join(repo, "apps/quntal-mcp");
-const appOut = join(out, "app/quntal-mcp");
+const appSource = join(repo, "apps/qdral-mcp");
+const appOut = join(out, "app/qdral-mcp");
 mkdirSync(join(appOut, "dist"), { recursive: true });
 const pkg = JSON.parse(readFileSync(join(appSource, "package.json"), "utf8"));
 const runtimePackage = {
@@ -113,7 +113,7 @@ const runtimePackage = {
 };
 writeFileSync(join(appOut, "package.json"), `${JSON.stringify(runtimePackage, null, 2)}\n`);
 const distSource = join(appSource, "dist");
-if (!existsSync(join(distSource, "index.js"))) fail("apps/quntal-mcp/dist/index.js missing; run npm run build first");
+if (!existsSync(join(distSource, "index.js"))) fail("apps/qdral-mcp/dist/index.js missing; run npm run build first");
 function copyDistJs(fromDir, toDir) {
   for (const name of readdirSync(fromDir).sort()) {
     const source = join(fromDir, name);
@@ -186,4 +186,4 @@ const entries = files
 
 const manifest = { schema: MANIFEST_SCHEMA, version, config_schema: CONFIG_SCHEMA, files: entries };
 writeFileSync(join(out, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`);
-console.log(`package-release: Quntal ${version} with ${entries.length} files in ${out}`);
+console.log(`package-release: Qdral ${version} with ${entries.length} files in ${out}`);

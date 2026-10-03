@@ -8,7 +8,7 @@ This grain qualifies only a provider-private, test-owned Windows workspace ACL b
 
 The native Windows integration test derives the deterministic AppContainer SID from the exact temporary profile name before launch. It then adds one explicit ACE only to a temporary test-owned workspace directory, preserving the original DACL for restoration.
 
-The ACE grants the AppContainer identity only the filesystem read/write/execute rights required to traverse the workspace, read the deterministic input fixture, and create the deterministic output fixture. The ACE is inherited only by children of that workspace. No user-profile root, Quntal protected-state directory, sibling resource, or caller-selected path is modified.
+The ACE grants the AppContainer identity only the filesystem read/write/execute rights required to traverse the workspace, read the deterministic input fixture, and create the deterministic output fixture. The ACE is inherited only by children of that workspace. No user-profile root, Qdral protected-state directory, sibling resource, or caller-selected path is modified.
 
 The existing contained executor then creates the same AppContainer profile and launches the integration-test fixture through the already-qualified suspended-process, zero-capability, explicit-handle, Job Object boundary.
 
@@ -19,10 +19,10 @@ Native Windows exact-head qualification must prove that the contained child:
 - reads `input.txt` inside the explicitly granted workspace;
 - creates `output.txt` inside that workspace;
 - runs with AppContainer identity verified;
-- is assigned to the Quntal Job Object before resume;
+- is assigned to the Qdral Job Object before resume;
 - reaches verified Job quiescence;
 - observes NUL/EOF stdin;
-- receives none of the tested Quntal/tunnel/API secret-like environment values.
+- receives none of the tested Qdral/tunnel/API secret-like environment values.
 
 ## Negative evidence required
 
@@ -42,7 +42,7 @@ Still absent or unchanged:
 - additional public `process.spawn` executable targets;
 - generic executable-registry widening;
 - broad filesystem or user-profile grants;
-- Quntal protected-state grants;
+- Qdral protected-state grants;
 - caller-selected ACL targets or security descriptors;
 - caller environment overrides or stdin payloads;
 - process network authority or PowerShell remoting;

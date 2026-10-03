@@ -1,7 +1,7 @@
 # SG-000023 - Read-only DOM and accessibility observation security note
 
 Status: IMPLEMENTATION CANDIDATE
-Program: QUNTAL-P08
+Program: QDRAL-P08
 Grain: SG-000023
 
 ## Purpose
@@ -16,7 +16,7 @@ debugging, scripting, credential access, MCP browser tools, and network
 egress absent.
 
 No browser is launched or attached in this grain. Snapshots are computed
-read-only from the Quntal page registry only. Actual page rendering or page
+read-only from the Qdral page registry only. Actual page rendering or page
 loading by a browser engine remains absent and is successor work.
 
 ## Snapshot binding
@@ -40,9 +40,9 @@ remote delegation is introduced.
 Every node identity is server-allocated with an `nd-` prefix. The digest
 binds profile identity, page identity, page generation, current origin,
 document generation, node index, and policy revision under the
-`QUNTAL_BROWSER_NODE_V1` domain. The snapshot identity uses an `ss-` prefix
+`QDRAL_BROWSER_NODE_V1` domain. The snapshot identity uses an `ss-` prefix
 and binds page identity, page generation, document generation, origin,
-profile identity, and policy revision under `QUNTAL_BROWSER_SNAPSHOT_V1`.
+profile identity, and policy revision under `QDRAL_BROWSER_SNAPSHOT_V1`.
 
 Validation recomputes the node identity against the current page, profile,
 origin, generation, and policy revision. Stale page generations, replaced

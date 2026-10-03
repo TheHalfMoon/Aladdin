@@ -1,13 +1,13 @@
 # SG-000061 Filesystem Mutation Completion Note
 
-Status: IMPLEMENTATION FOR QUNTAL-P16
+Status: IMPLEMENTATION FOR QDRAL-P16
 SpecGrain: SG-000061
 Base: `fb4203f9ef1638e32cdf7c9afdb3f9e49b082222`
 Date: 2026-10-02
-Code: `crates/quntal-provider-fs/src/mutation.rs`,
-`crates/quntal-policy/src/sg000040.rs` (`is_fs_mutation_shape`,
-`validate_fs_mutation`), `crates/quntald/src/fs_mutation.rs`,
-`apps/quntal-mcp/src/fs_mutation.ts`.
+Code: `crates/qdral-provider-fs/src/mutation.rs`,
+`crates/qdral-policy/src/sg000040.rs` (`is_fs_mutation_shape`,
+`validate_fs_mutation`), `crates/qdrald/src/fs_mutation.rs`,
+`apps/qdral-mcp/src/fs_mutation.ts`.
 
 ## 1. New MCP tools
 
@@ -31,7 +31,7 @@ The legacy generic `fs.delete/delete` shape is unchanged and stays denied;
 - Every operation resolves the final Windows path (handle-based
   `GetFinalPathNameByHandleW`) and requires it to stay inside the trusted
   workspace root, so junctions or links pointing outside, including into
-  protected Quntal state, fail with `PATH_ESCAPE`.
+  protected Qdral state, fail with `PATH_ESCAPE`.
 - Links, junctions, and any reparse point are never moved or removed
   (`CAPABILITY_DENIED`) and never traversed by `fs_find`.
 - `fs_mkdir` creates one component at a time from the nearest existing
@@ -56,8 +56,8 @@ The legacy generic `fs.delete/delete` shape is unchanged and stays denied;
 
 ## 4. Remote and scope behavior
 
-`fs_read_range` and `fs_find` require `quntal.read`; the four mutations
-require `quntal.write` in the OAuth matrix and in the quntald lease scope
+`fs_read_range` and `fs_find` require `qdral.read`; the four mutations
+require `qdral.write` in the OAuth matrix and in the qdrald lease scope
 table. Remote calls additionally need an active lease and the same
 approvals; `fs_remove` therefore always needs a human at the computer.
 
@@ -68,7 +68,7 @@ approvals; `fs_remove` therefore always needs a human at the computer.
   into itself, no escape), identity-bound non-recursive removal, digest and
   count bound edits, and a real Windows junction to an outside directory
   that is never followed, moved, removed, or used for mkdir.
-- quntald tests (3): denied approvals change nothing, removal requires STRONG
+- qdrald tests (3): denied approvals change nothing, removal requires STRONG
   presence (denied, unavailable, and SOFT-only brokers remove nothing), and
   approved mkdir, move, edit, ranged read, and find work end to end while
   the generic `fs.delete` shape is not handled.

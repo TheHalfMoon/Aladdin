@@ -1,6 +1,6 @@
 # SG-000056 Public Streamable HTTP MCP Edge Note
 
-Status: IMPLEMENTATION FOR QUNTAL-P15
+Status: IMPLEMENTATION FOR QDRAL-P15
 SpecGrain: SG-000056
 Base: `d44666bd10d7c53a88af78d4f3f34acdf98155ea`
 Date: 2026-10-02
@@ -8,12 +8,12 @@ Companions:
 - `docs/security/RELAY_PROTOCOL_CONTRACT.md` (SG-000052, frozen)
 - `docs/security/SG-000054_OAUTH_AUTHORIZATION_NOTE.md`
 - `docs/security/SG-000055_DEVICE_UPLINK_LEASE_NOTE.md`
-- `apps/quntal-relay/src/edge.ts`, `device_channel.ts`, `server.ts`, `store.ts`
+- `apps/qdral-relay/src/edge.ts`, `device_channel.ts`, `server.ts`, `store.ts`
 
 ## 1. Purpose
 
 SG-000056 adds the relay side of remote access as a separate open-source
-workspace package, `@quntal/relay`: the public Streamable HTTP `/mcp` edge,
+workspace package, `@qdral/relay`: the public Streamable HTTP `/mcp` edge,
 RFC 9728 protected-resource metadata, and the relay side of the SG-000055
 device channel. The relay reuses the frozen SG-000052 vocabulary, the
 SG-000053 device identity checks, the SG-000054 token verification and scope
@@ -66,7 +66,7 @@ are SG-000057.
   epoch, scopes) is derived only from the verified token and the stored
   route. Payloads and tool arguments never select it.
 - The relay cannot create, widen, renew, or extend the local remote-session
-  lease, and cannot satisfy any approval; the device and `quntald` re-check
+  lease, and cannot satisfy any approval; the device and `qdrald` re-check
   everything (SG-000055), so the edge's typed lease denial is returned to the
   client unchanged.
 
@@ -146,7 +146,7 @@ connections anywhere, devices connect to it.
 
 ## 9. Tests
 
-`apps/quntal-relay/src/relay.test.ts` runs a real loopback relay, a real
+`apps/qdral-relay/src/relay.test.ts` runs a real loopback relay, a real
 SG-000055 device uplink client, and the authoritative MCP builder with a
 stub kernel: an authenticated client initializes, lists exactly the 20-tool
 catalog, calls `fs_read`, and receives the typed `REMOTE_SESSION_INACTIVE`
@@ -160,7 +160,7 @@ size, Host, and unknown paths; and unknown devices, wrong epochs, forged and
 replayed challenge responses, bad channel tokens, and revoked devices on the
 channel endpoints. None of the rejected requests reaches the device kernel.
 
-`apps/quntal-relay/src/device-channel.test.ts` proves refusals precede
+`apps/qdral-relay/src/device-channel.test.ts` proves refusals precede
 sequence allocation, a request timing out before delivery becomes a
 `cancel` that the real SG-000055 device core accepts without executing it
 while executing the next request, timeouts after delivery and channel

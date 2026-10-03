@@ -24,7 +24,7 @@ Each fetch requires fresh one-shot SOFT approval. The approval digest binds work
 
 ## MCP ceiling
 
-SG-000040 is an internal quntald capability only. No MCP network tool is registered. Node guard tests fail if a network tool source or registration is introduced.
+SG-000040 is an internal qdrald capability only. No MCP network tool is registered. Node guard tests fail if a network tool source or registration is introduced.
 
 ## Qualification limits
 

@@ -1,7 +1,7 @@
 # SG-000022 — Origin-bound bounded navigation security note
 
 Status: IMPLEMENTATION CANDIDATE
-Program: QUNTAL-P08
+Program: QDRAL-P08
 Grain: SG-000022
 
 ## Purpose
@@ -15,7 +15,7 @@ mode, debugging, scripting, credential access, MCP browser tools, and network
 egress absent.
 
 No browser is launched or attached in this grain. Navigation transitions page
-identity and origin in the Quntal registry only. Actual page rendering or page
+identity and origin in the Qdral registry only. Actual page rendering or page
 loading by a browser engine remains absent and is successor work.
 
 ## Page lifecycle
@@ -24,7 +24,7 @@ Every page is bound to the isolated automation profile, one workspace, its
 current origin, and a server-side lifecycle generation. Pages are allocated
 by `browser.page.open` with no network activity and a per-workspace bound of
 16 open pages. The page identity is always server-allocated with a `pg-`
-prefix; only identities present in the registry file under Quntal protected
+prefix; only identities present in the registry file under Qdral protected
 local state are valid. Caller-supplied strings that are absent fail closed
 as stale handles with `TargetStale`.
 
@@ -56,7 +56,7 @@ with exact expected state.
 digest binding over workspace, policy revision, profile identity, page
 identity, expected origin and generation, target origin, pinned address,
 redirect chain, and final origin. The digest uses length-prefixed SHA-256
-fields under the `QUNTAL_BROWSER_NAVIGATION_V1` domain. Any material drift
+fields under the `QDRAL_BROWSER_NAVIGATION_V1` domain. Any material drift
 invalidates the approval.
 
 The dispatch flow fails closed in order: unknown or closed pages, foreign

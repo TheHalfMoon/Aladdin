@@ -1,8 +1,8 @@
 #!/usr/bin/env node
-// Writes THIRD_PARTY_NOTICES.txt for a Quntal release: for every third-party
+// Writes THIRD_PARTY_NOTICES.txt for a Qdral release: for every third-party
 // crate linked into the shipped binaries (x86_64-pc-windows-msvc, normal
 // dependency edges only) and every npm package in the release's
-// app/quntal-mcp/node_modules, the declared license expression and the full
+// app/qdral-mcp/node_modules, the declared license expression and the full
 // text of each license or notice file the package ships.
 //
 // Usage:
@@ -15,7 +15,7 @@ import { fileURLToPath } from "node:url";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const TARGET = "x86_64-pc-windows-msvc";
-const ROOT_PACKAGES = ["quntald", "quntal-lifecycle"];
+const ROOT_PACKAGES = ["qdrald", "qdral-lifecycle"];
 const NOTICE_FILE = /^(licen[cs]e|copying|notice|unlicense)([-_.].*)?$/i;
 
 function fail(message) {
@@ -117,7 +117,7 @@ function npmPackages(release) {
       }
     }
   };
-  visit(join(release, "app", "quntal-mcp", "node_modules"));
+  visit(join(release, "app", "qdral-mcp", "node_modules"));
   return found;
 }
 
@@ -135,8 +135,8 @@ const entries = [...byKey.entries()]
   .map(([, entry]) => entry);
 const missing = [];
 let text =
-  "Quntal third-party notices\n\n" +
-  "Quntal is licensed under the Apache License 2.0 (see LICENSE). This release\n" +
+  "Qdral third-party notices\n\n" +
+  "Qdral is licensed under the Apache License 2.0 (see LICENSE). This release\n" +
   "includes the following third-party components, each under its own license.\n";
 for (const entry of entries) {
   const files = noticeFiles(entry.dir, entry.licenseFile);

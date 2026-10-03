@@ -1,22 +1,22 @@
 # SG-000035 - Proposal-only coordinate derivation security note
 
 Status: IMPLEMENTATION CANDIDATE
-Program: QUNTAL-P10
+Program: QDRAL-P10
 Grain: SG-000035
 
 ## Purpose
 
-SG-000035 establishes the third narrow QUNTAL-P10 vision grain on top
+SG-000035 establishes the third narrow QDRAL-P10 vision grain on top
 of the closed SG-000034 visual proposal registry, the closed SG-000033
-window-scoped capture registry, the closed QUNTAL-P09 structured-UIA
+window-scoped capture registry, the closed QDRAL-P09 structured-UIA
 registry, the SG-000018 replay-resistant foundation, SG-000019 class
 enforcement, SG-000020 trust and revoke records, and the closed
-QUNTAL-P08 registry: a single approved proposal-only derivation shape
+QDRAL-P08 registry: a single approved proposal-only derivation shape
 bound to server-derived proposal identity and expected proposal
 generation, with deterministic frame-relative coordinates computed
 from the exact bounded proposal region, server-allocated typed
 coordinate identity, fresh SOFT approval digest binding, immediate
-pre-derivation stale-proposal revalidation, and protected Quntal
+pre-derivation stale-proposal revalidation, and protected Qdral
 approval-surface exclusion.
 
 No input authority exists in this grain. Bounded input execution,
@@ -84,11 +84,11 @@ derivation never mutates proposal, frame, window, tree, or process
 state because derivation is non-actuating; proposal and frame
 identities are unaffected.
 
-## Protected Quntal surfaces and secrets
+## Protected Qdral surfaces and secrets
 
 Coordinates can never be derived for approval dialogs, STRONG
 presence surfaces, workspace trust controls, emergency revoke, or
-security-sensitive Quntal UI, because frames and proposals of
+security-sensitive Qdral UI, because frames and proposals of
 protected surfaces can never exist and direct derivation paths
 re-check protected status. Fail closed on uncertainty. No password,
 credential, Windows Hello, cookie, token, or session material enters

@@ -1,4 +1,4 @@
-# Quntal Universal Connectivity Threat Model
+# Qdral Universal Connectivity Threat Model
 
 Status: IMPLEMENTATION-READY PROPOSAL
 Base: `5feff3f15cc7e20464cafffd7b87d713b65a012f`
@@ -7,7 +7,7 @@ Companion: `docs/canonical/UNIVERSAL_AI_ACCESS_PLAN.md`
 
 ## 1. Scope
 
-This document extends Quntal's existing local threat model to cover provider-neutral local MCP transports, a public remote MCP edge, OAuth, a shared/self-hosted relay, device identity, pairing, revocation, and multi-provider use.
+This document extends Qdral's existing local threat model to cover provider-neutral local MCP transports, a public remote MCP edge, OAuth, a shared/self-hosted relay, device identity, pairing, revocation, and multi-provider use.
 
 It does not replace the existing closed threat model for filesystem, process, Git, browser, UIA, screenshot, coordinate input, clipboard, bounded network, approvals, trust, installer, update, or release supply chain.
 
@@ -15,7 +15,7 @@ The universal layer must preserve those controls.
 
 ## 2. Security objective
 
-A remote or local AI client may request only individually exposed Quntal tools. Every requested local effect must still be authorized by `quntald`, workspace policy, provider ceiling, and local approval rules.
+A remote or local AI client may request only individually exposed Qdral tools. Every requested local effect must still be authorized by `qdrald`, workspace policy, provider ceiling, and local approval rules.
 
 Compromise or misuse of an AI provider, MCP client, relay, OAuth token, or transport must not by itself create unrestricted OS authority or local approval authority.
 
@@ -28,7 +28,7 @@ Protect:
 - executable/process authority;
 - browser/UIA/screenshot/clipboard data;
 - approval and trust state;
-- Quntal policy and audit state;
+- Qdral policy and audit state;
 - device private key;
 - remote OAuth access/refresh tokens;
 - pairing state;
@@ -47,7 +47,7 @@ Consider:
 - malicious webpage on the local machine;
 - other unprivileged local process;
 - malicious remote internet client;
-- another legitimate Quntal user/tenant;
+- another legitimate Qdral user/tenant;
 - compromised shared relay application;
 - compromised relay operator account;
 - network attacker outside TLS;
@@ -55,7 +55,7 @@ Consider:
 - user error during pairing/profile selection;
 - denial-of-service attacker.
 
-The model does not claim to protect against arbitrary code already executing with unrestricted access to the same protected user secrets/memory as Quntal. Strong local presence remains required for the highest-risk trust changes.
+The model does not claim to protect against arbitrary code already executing with unrestricted access to the same protected user secrets/memory as Qdral. Strong local presence remains required for the highest-risk trust changes.
 
 ## 5. Trust boundaries
 
@@ -65,9 +65,9 @@ The model does not claim to protect against arbitrary code already executing wit
 - `OAuth -> relay account/principal`: remote identity boundary.
 - `relay account -> paired device route`: tenant/device isolation boundary.
 - `relay -> outbound device link`: authenticated transport boundary.
-- `local MCP edge -> quntald`: authenticated local IPC boundary.
-- `quntald -> provider`: capability token/provider ceiling boundary.
-- `quntald -> approval authority`: independent human authority boundary.
+- `local MCP edge -> qdrald`: authenticated local IPC boundary.
+- `qdrald -> provider`: capability token/provider ceiling boundary.
+- `qdrald -> approval authority`: independent human authority boundary.
 
 ## 6. Threat catalogue
 
@@ -201,7 +201,7 @@ Controls:
 - expiry;
 - correlation binding;
 - duplicate rejection;
-- existing Quntal approval one-shot/digest controls remain independent defense in depth.
+- existing Qdral approval one-shot/digest controls remain independent defense in depth.
 
 ### UC-T12 Relay-frame reordering
 
@@ -233,7 +233,7 @@ Controls:
 - no durable offline queue for mutating calls;
 - no durable offline queue for read calls;
 - short transport reconnect grace only;
-- original Quntal request/approval expiry remains effective;
+- original Qdral request/approval expiry remains effective;
 - queued items expire before dispatch;
 - device offline returns `DEVICE_OFFLINE` rather than silently persisting work.
 
@@ -253,7 +253,7 @@ Threat: request authorized under an earlier revision executes after policy chang
 
 Controls:
 
-- `quntald` re-evaluates current revision;
+- `qdrald` re-evaluates current revision;
 - approval digest includes workspace/policy revision;
 - relay does not cache local allow decisions.
 
@@ -299,7 +299,7 @@ Controls:
 
 - protected local access secret stored with user ACL;
 - short/rotatable listener credential;
-- local process is still subject to `quntald` workspace/approval policy;
+- local process is still subject to `qdrald` workspace/approval policy;
 - documentation does not claim loopback auth protects against arbitrary same-user compromise.
 
 ### UC-T21 Relay plaintext/log leakage
@@ -348,9 +348,9 @@ Controls:
 - no CONNECT/SOCKS/raw TCP/general HTTP forwarding;
 - existing destination-scoped network provider remains separately gated.
 
-### UC-T25 Protected Quntal surface targeted through new desktop exposure
+### UC-T25 Protected Qdral surface targeted through new desktop exposure
 
-Threat: newly exposed UIA/screenshot/coordinate tools approve their own operations or manipulate Quntal security UI.
+Threat: newly exposed UIA/screenshot/coordinate tools approve their own operations or manipulate Qdral security UI.
 
 Controls:
 
@@ -384,7 +384,7 @@ Controls:
 
 ### UC-T28 Provider credential cross-use
 
-Threat: Claude connection credentials are accepted as OpenAI/Quntal connection or vice versa.
+Threat: Claude connection credentials are accepted as OpenAI/Qdral connection or vice versa.
 
 Controls:
 
@@ -394,7 +394,7 @@ Controls:
 
 ### UC-T29 Cancellation ambiguity
 
-Threat: remote host cancels and Quntal reports local process terminated when it is not verified.
+Threat: remote host cancels and Qdral reports local process terminated when it is not verified.
 
 Controls:
 
@@ -443,8 +443,8 @@ Threat: model reads protected key through filesystem/process surfaces.
 
 Controls:
 
-- Quntal protected state remains outside admitted workspaces;
-- child processes remain isolated from Quntal secrets;
+- Qdral protected state remains outside admitted workspaces;
+- child processes remain isolated from Qdral secrets;
 - secret paths excluded by policy;
 - no tool returns raw device key.
 
@@ -545,7 +545,7 @@ Controls:
 - payload/log redaction tests;
 - quota/rate/backpressure tests;
 - public/local tool-schema equivalence tests;
-- protected Quntal surface regressions;
+- protected Qdral surface regressions;
 - executable-registry remote-widening denial;
 - all pre-existing local security regression suites unchanged unless an explicit successor grain lawfully changes a boundary.
 
@@ -554,7 +554,7 @@ Controls:
 Even after qualification:
 
 - a shared relay processes remote MCP plaintext transiently after TLS termination;
-- compromise of the user's already-unrestricted same-user environment can undermine local secret boundaries outside Quntal's model;
+- compromise of the user's already-unrestricted same-user environment can undermine local secret boundaries outside Qdral's model;
 - provider behavior, account policy, directory availability, and review decisions are external;
 - public relay availability can be limited by free-tier quotas;
 - prompt injection cannot be solved only by transport/authentication and remains constrained by least privilege, local approval, and output/egress controls.

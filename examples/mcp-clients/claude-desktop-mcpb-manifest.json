@@ -1,22 +1,22 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-08-26/mcpb.manifest.schema.json",
   "manifest_version": "0.3",
-  "name": "quntal",
-  "display_name": "Quntal",
+  "name": "qdral",
+  "display_name": "Qdral",
   "version": "0.1.0",
   "description": "Local-first MCP gateway with 31 bounded tools and local approval for computer changes.",
-  "long_description": "Quntal exposes 31 bounded tools (workspace files and bounded file changes, local Git, registered argv-only processes, read-only desktop window observation, approved single clipboard reads and writes, approved public HTTPS fetches) through a local policy kernel with per-action approval. This extension launches the installed Quntal entrypoint over stdio. It requires Quntal 0.1.0 installed and at least one configured workspace. No tunnel is required.",
+  "long_description": "Qdral exposes 31 bounded tools (workspace files and bounded file changes, local Git, registered argv-only processes, read-only desktop window observation, approved single clipboard reads and writes, approved public HTTPS fetches) through a local policy kernel with per-action approval. This extension launches the installed Qdral entrypoint over stdio. It requires Qdral 0.1.0 installed and at least one configured workspace. No tunnel is required.",
   "author": {
     "name": "TheHalfMoon",
-    "url": "https://github.com/TheHalfMoon/Quntal"
+    "url": "https://github.com/TheHalfMoon/Qdral"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/TheHalfMoon/Quntal.git"
+    "url": "https://github.com/TheHalfMoon/Qdral.git"
   },
-  "homepage": "https://github.com/TheHalfMoon/Quntal",
-  "documentation": "https://github.com/TheHalfMoon/Quntal#readme",
-  "support": "https://github.com/TheHalfMoon/Quntal/issues",
+  "homepage": "https://github.com/TheHalfMoon/Qdral",
+  "documentation": "https://github.com/TheHalfMoon/Qdral#readme",
+  "support": "https://github.com/TheHalfMoon/Qdral/issues",
   "license": "Apache-2.0",
   "keywords": [
     "files",
@@ -26,9 +26,9 @@
   ],
   "server": {
     "type": "binary",
-    "entry_point": "quntal.exe",
+    "entry_point": "qdral.exe",
     "mcp_config": {
-      "command": "quntal",
+      "command": "qdral",
       "args": [
         "mcp",
         "stdio"
@@ -38,7 +38,7 @@
   "tools": [
     {
       "name": "system_status",
-      "description": "Read Quntal daemon status."
+      "description": "Read Qdral daemon status."
     },
     {
       "name": "workspace_get",
