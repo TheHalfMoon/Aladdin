@@ -1,0 +1,57 @@
+{
+  "id": "SG-000078",
+  "title": "Live bounded browser transfers",
+  "program": "QUNTAL-P18",
+  "state": "PLANNED",
+  "risk": "high",
+  "created": "2026-10-03",
+  "dependencies": ["SG-000077"],
+  "objective": "Connect Quntal's existing bounded download/upload contracts to the live governed browser engine without creating generic browser filesystem access. Browser downloads stage into protected Quntal state before the existing destination/type/size/digest/approval checks; uploads remain restricted to server-recorded admissible artifacts and exact typed file-input nodes.",
+  "scope": {
+    "include": [
+      "intercepted live browser downloads into protected Quntal staging with hard byte/time/count bounds",
+      "revalidation of source page/origin/generation, redirect chain, declared/actual type and size, content digest, approved workspace destination, create-only semantics, and fresh SOFT approval before workspace placement",
+      "no browser direct-write to arbitrary workspace/user paths and no auto-open/execute/extract after download",
+      "live upload staging only from server-recorded admissible artifacts under the existing upload-source confinement rules",
+      "exact live file-input node identity/role/state/page/document binding plus source digest/size/media/trust/policy revision and fresh SOFT approval",
+      "one-shot transfer source consumption, deterministic expiry, cancellation, crash cleanup, and orphan staging cleanup",
+      "tests for download auto-trigger, dangerous/unknown payloads, filename/path/reparse attacks, redirect widening, oversized/truncated content, changed artifacts, arbitrary caller paths, replaced file inputs, trust revoke, and duplicate submission"
+    ],
+    "exclude": [
+      "generic browser download manager exposure",
+      "arbitrary caller-selected download roots or upload paths",
+      "overwrite/delete/rename/extract/open/execute of downloaded content",
+      "workspace-authored or user-home upload sources unless separately authorized later",
+      "multiple/directory upload",
+      "personal profile or browser credential stores",
+      "raw JS/CDP",
+      "remote transfer widening"
+    ]
+  },
+  "authority_delta": {
+    "filesystem": "Live browser bytes may enter protected Quntal staging; final download placement/upload reads remain constrained by the already closed bounded transfer contracts. No generic path authority is added.",
+    "process": "No execution/opening/extraction authority is added.",
+    "network": "Transfer network activity is constrained to SG-000075 governed browser egress and exact page/source origin policy.",
+    "browser": "Approved live download interception and upload-to-file-input become real under existing typed transfer identities.",
+    "ui_input": "None.",
+    "secrets": "No credential/cookie/token/browser-profile material may become a transfer source or evidence payload.",
+    "approval": "Fresh one-shot SOFT approval remains mandatory at the existing mutation points.",
+    "privileged": "None."
+  },
+  "invariants": [
+    "the browser never gains generic workspace/user filesystem authority",
+    "download staging cannot auto-execute/open/extract",
+    "uploads accept only server-authorized source classes and exact file-input nodes",
+    "transfer cancellation/crash/retry never duplicates mutation"
+  ],
+  "acceptance": [
+    {"id": "A1", "claim": "A real browser download is intercepted, bounded, staged, verified, approved, and placed create-only at exactly the authorized workspace destination with no direct arbitrary browser write."},
+    {"id": "A2", "claim": "A real upload submits only an admissible server-recorded artifact to one exact current file-input node after complete source/node/trust/approval revalidation."},
+    {"id": "A3", "claim": "Path/reparse, redirect, type/content, size/truncation, changed-artifact, arbitrary-source, replaced-node, trust-revoke, crash, cancellation, and duplicate/replay tests fail closed."},
+    {"id": "A4", "claim": "No generic filesystem, execution/open/extract, personal-profile, raw JS/CDP, or remote authority is introduced."},
+    {"id": "A5", "claim": "Exact-head live transfer tests, CI, TypeSafe Jev, Alibaba Open Code Review, security review, and zero unresolved blockers pass."}
+  ],
+  "successor_requirements": {"sg_000079": "Browser MCP/profile exposure may activate only after every intended browser shape is backed by a live qualified implementation."},
+  "review": {"diffcipline": true, "jev_semantic_review": true, "alibaba_open_code_review": "required exact-range qualification where integrated", "security_review": true, "exact_head_ci": true},
+  "done_when": "Live downloads/uploads are canonically connected to Quntal's existing bounded transfer policy with no generic browser filesystem authority or execution path."
+}
