@@ -9,10 +9,12 @@
   "dependencies": [
     "SG-000065"
   ],
-  "objective": "Qualify the COTRA-P16 exit using a pinned, provenance-recorded source audit of Desktop Commander (wonderwhy-er/DesktopCommanderMCP) and the founder-authorized Kernux source pool as evidence input: build a parity matrix classifying every major Desktop Commander-class workflow as COTRA_NATIVE, COTRA_SUPERIOR, DONOR_ADAPTED, SAFE_SUCCESSOR_REQUIRED, or INTENTIONALLY_DENIED, and a donor reuse matrix classifying each candidate subsystem as REUSE_VERBATIM, ADAPT, PORT, REFERENCE_ONLY, or REJECT_FOR_COTRA with exact revisions, paths, obligations, and authority deltas; prove that the intended everyday local development and workstation workflows run end to end through Cotra's own MCP surface and kernel; record every deliberately denied authority as a security decision; prove with regression tests that no unrestricted shell, PowerShell or cmd, generic socket, silent elevation, remote approval, or model self-approval path exists; confirm the profiles are exact; fix every defect at its root; and record the P16 exit. Donor capabilities that would add authority are recorded for lawful successor grains, never imported here.",
+  "objective": "Qualify the COTRA-P16 exit using pinned, provenance-recorded source audits of Desktop Commander (wonderwhy-er/DesktopCommanderMCP), the founder-authorized Kernux source pool, and bytedance/UI-TARS-desktop@2ff41a9e515828c5bd5b276e493d73aa0bdf4a3a as evidence input: build a parity matrix classifying every major Desktop Commander-class workflow as COTRA_NATIVE, COTRA_SUPERIOR, DONOR_ADAPTED, SAFE_SUCCESSOR_REQUIRED, or INTENTIONALLY_DENIED, and a donor reuse matrix classifying each candidate subsystem as REUSE_VERBATIM, ADAPT, PORT, REFERENCE_ONLY, or REJECT_FOR_COTRA with exact revisions, paths, obligations, and authority deltas; prove that the intended everyday local development and workstation workflows run end to end through Cotra's own MCP surface and kernel; record every deliberately denied authority as a security decision; prove with regression tests that no unrestricted shell, PowerShell or cmd, generic socket, silent elevation, remote approval, or model self-approval path exists; confirm the profiles are exact; fix every defect at its root; and record the P16 exit. UI-TARS is donor evidence only in this grain: its browser engine, operator, action parser, capture, event-stream, remote-computer, and UI patterns may be classified for successor work, but no UI-TARS code, dependency, runtime, tool, browser process, capture path, input path, or new authority may be imported or exposed here.",
   "scope": {
     "include": [
-      "a pinned source audit of Desktop Commander and the Kernux source pool (Kernux donor maps and the sources they reference) producing a parity matrix and a donor reuse matrix with exact revisions, source paths, Cotra destinations, license and dependency obligations, authority deltas, and reasons",
+      "a pinned source audit of Desktop Commander, the Kernux source pool (Kernux donor maps and the sources they reference), and bytedance/UI-TARS-desktop at exact revision 2ff41a9e515828c5bd5b276e493d73aa0bdf4a3a, producing a parity matrix and a donor reuse matrix with exact revisions, source paths, Cotra destinations, license and dependency obligations, authority deltas, and reasons",
+      "for UI-TARS specifically, classify the Browser MCP/Puppeteer implementation, action parser, operator abstraction, NutJS operator, screenshot and DPI logic, remote-computer operator, event-stream architecture, Electron IPC patterns, agent loop, arbitrary JavaScript/browser_evaluate, command/script execution, raw model-to-input execution, and personal-profile behavior without importing them",
+      "record UI-TARS browser-engine, window-capture, structured desktop actuation, coordinate fallback, provider action-adapter, and remote computer-use candidates as SAFE_SUCCESSOR_REQUIRED where they would add authority, with an explicit successor architecture that keeps Cotra/Quntal policy, approval, trust, identity, lease, audit, destination, and revocation authority local and authoritative",
       "an end-to-end workflow suite over the authoritative MCP builder and the real cotrad dispatch for every workflow the parity inventory marks exposed, using the test approval broker for approval-bound steps and real Windows where behavior is Windows-specific",
       "a Desktop Commander replacement record mapping each Desktop Commander-class capability to its Cotra tool, its documented security denial, or its explicit out-of-target status",
       "source and behavior regression tests proving no unrestricted shell, PowerShell or cmd interpreter launch, generic socket or proxy, silent elevation, remote approval, or model self-approval path exists in shipped sources",
@@ -21,6 +23,7 @@
     ],
     "exclude": [
       "importing donor code that adds authority; such candidates are recorded as SAFE_SUCCESSOR_REQUIRED for a lawful successor grain",
+      "adding UI-TARS packages, dependencies, browser engines, MCP servers, operators, action parsers, screenshots, input execution, remote-computer paths, or runtime processes to the shipped product in this grain",
       "any new tool, kernel shape, scope, profile, or authority",
       "provider distribution and packaging (COTRA-P17)",
       "claims about provider directory availability"
@@ -28,10 +31,10 @@
   },
   "authority_delta": {
     "filesystem": "None.",
-    "process": "None.",
+    "process": "None. UI-TARS is audited only; no browser, operator, helper, or donor process is launched by shipped Quntal code in this grain.",
     "network": "None.",
-    "browser": "None.",
-    "ui_input": "None.",
+    "browser": "None. Live browser integration remains successor work.",
+    "ui_input": "None. UI-TARS NutJS/raw input paths are evidence only and remain unreachable.",
     "secrets": "None.",
     "approval": "None.",
     "privileged": "None."
@@ -39,7 +42,9 @@
   "invariants": [
     "no unrestricted shell, PowerShell, cmd, generic socket, silent elevation, or remote approval exists",
     "deliberately denied authority is recorded as a security decision, never as a missing feature",
-    "public and local profiles are exact and regression-tested"
+    "public and local profiles are exact and regression-tested",
+    "UI-TARS remains a pinned donor-audit input only in SG-000066; no donor runtime or authority is made reachable",
+    "any computer-use capability that would launch or attach to a browser, capture pixels, actuate desktop input, parse model actions into executable authority, or widen remote computer control is successor-only and requires a separately authorized SpecGrain"
   ],
   "acceptance": [
     {
@@ -52,11 +57,16 @@
     },
     {
       "id": "A3",
+      "claim": "The UI-TARS audit is pinned to revision 2ff41a9e515828c5bd5b276e493d73aa0bdf4a3a and records exact source paths, per-subsystem reuse classification, license/dependency obligations, authority deltas, explicit rejected capabilities, and lawful successor requirements without importing donor runtime code or changing shipped authority."
+    },
+    {
+      "id": "A4",
       "claim": "Exact-head CI, genuine TypeSafe Jev, Alibaba Open Code Review, manual review of excluded files, and zero unresolved review threads all pass."
     }
   ],
   "successor_requirements": {
-    "sg_000067": "COTRA-P17 provider distribution may proceed only after SG-000066 closes and COTRA-P16 is exited canonically."
+    "sg_000067": "COTRA-P17 provider distribution may proceed only after SG-000066 closes and COTRA-P16 is exited canonically.",
+    "post_p17_computer_use": "After the COTRA-P17 distribution/release sequence closes, a separately authorized QUNTAL-P18 governed computer-use program may implement the pinned UI-TARS-derived successor candidates. That program must preserve Quntal as the sole authority for policy, trust, approvals, typed identities, leases, destination policy, audit, revocation, and tool exposure; must not expose arbitrary JavaScript/CDP, unrestricted shell/script execution, personal browser profiles, raw model-to-input authority, remote approval, or model self-approval; and must qualify live browser networking, DOM/AX identity, downloads/uploads, window-scoped capture, structured desktop actuation, coordinate fallback, model-action adapters, remote leases, failure invalidation, and real-machine security before exposure."
   },
   "review": {
     "diffcipline": true,
@@ -66,5 +76,5 @@
     "exact_head_ci": true,
     "release_artifact_qualification": true
   },
-  "done_when": "COTRA-P16 is exited canonically with workflow, denial, and profile evidence and every defect fixed at its root."
+  "done_when": "COTRA-P16 is exited canonically with workflow, denial, profile, Desktop Commander/Kernux/UI-TARS donor-audit evidence and every defect fixed at its root, while UI-TARS remains evidence-only and all authority-adding computer-use integration is explicitly deferred to separately authorized successor grains."
 }
