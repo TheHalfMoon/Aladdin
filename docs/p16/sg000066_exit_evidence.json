@@ -1,0 +1,653 @@
+{
+  "schema": "quntal-p16-exit-evidence/2",
+  "grain": "SG-000066",
+  "canonical_base": "e770a6913d11c92d6855943f6e47d306a5c42fca",
+  "authority_delta": "none",
+  "purpose": "Evidence-backed COTRA-P16 exit qualification for the intended v0.2 Desktop Commander replacement target, the founder-authorized Kernux source pool, and the UI-TARS donor audit added to SG-000066.",
+  "parity_categories": [
+    "COTRA_NATIVE",
+    "COTRA_SUPERIOR",
+    "DONOR_ADAPTED",
+    "SAFE_SUCCESSOR_REQUIRED",
+    "INTENTIONALLY_DENIED"
+  ],
+  "donor_reuse_categories": [
+    "REUSE_VERBATIM",
+    "ADAPT",
+    "PORT",
+    "REFERENCE_ONLY",
+    "REJECT_FOR_COTRA"
+  ],
+  "donors": [
+    {
+      "id": "desktop_commander",
+      "repository": "wonderwhy-er/DesktopCommanderMCP",
+      "revision": "c774c3b505de990219637ecdc9a830c8772fae9d",
+      "license": "MIT",
+      "license_path": "LICENSE",
+      "source_paths": [
+        "src/server.ts",
+        "src/tools/schemas.ts"
+      ],
+      "reuse": "REFERENCE_ONLY",
+      "runtime_imported": false
+    },
+    {
+      "id": "kernux_source_pool",
+      "repository": "TheHalfMoon/kernux",
+      "revision": "828e71a6464e055712e77c85d2fc94bfd8f96e3b",
+      "license": "Apache-2.0",
+      "license_path": "LICENSE",
+      "source_paths": [
+        "docs/canonical/DONOR_PROVENANCE.md",
+        "docs/canonical/DONOR_IMPORT_CHECKLIST.md",
+        "docs/canonical/COMPUTER_USE_DONOR_INTEGRATION_PLAN.md"
+      ],
+      "reuse": "REFERENCE_ONLY",
+      "runtime_imported": false,
+      "referenced_sources": [
+        {
+          "repository": "stablyai/orca",
+          "revision": "0d23ea6e688410c878096dab8b1779857354b7d4",
+          "license": "MIT"
+        },
+        {
+          "repository": "tinyfish-io/agentql",
+          "revision": "418ba8ad1c69dfac134a6833369a01dfba5a24a7",
+          "license": "MIT"
+        },
+        {
+          "repository": "wonderwhy-er/DesktopCommanderMCP",
+          "revision": "08ff76192919a6e8fe2557b39c3f99e7b54c3b92",
+          "license": "MIT"
+        },
+        {
+          "repository": "opensymph/open-computer-use",
+          "revision": "5b433b98019c18201a15d11e8c3cb0010879a3d8",
+          "license": "MIT"
+        },
+        {
+          "repository": "bytedance/UI-TARS-desktop",
+          "revision": "2ff41a9e515828c5bd5b276e493d73aa0bdf4a3a",
+          "license": "Apache-2.0"
+        }
+      ],
+      "non_admissible_unpinned_sources": [
+        "Founder-authorized non-public TinyFish source is not import-admissible here because no exact artifact identity or immutable revision is independently recorded in the Kernux donor map."
+      ]
+    },
+    {
+      "id": "ui_tars",
+      "repository": "bytedance/UI-TARS-desktop",
+      "revision": "2ff41a9e515828c5bd5b276e493d73aa0bdf4a3a",
+      "license": "Apache-2.0",
+      "license_path": "LICENSE",
+      "source_paths": [
+        "packages/agent-infra/mcp-servers/browser/src/index.ts",
+        "packages/agent-infra/browser/src/local-browser.ts",
+        "packages/ui-tars/action-parser/src/actionParser.ts",
+        "packages/ui-tars/sdk/src/GUIAgent.ts",
+        "multimodal/gui-agent/operator-nutjs/src/NutJSOperator.ts",
+        "apps/ui-tars/src/main/agent/operator.ts",
+        "apps/ui-tars/src/main/remote/operators.ts",
+        "multimodal/gui-agent/operator-browser/src/RemoteBrowserOperator.ts",
+        "multimodal/tarko/agent/src/agent/event-stream.ts",
+        "multimodal/tarko/agent-interface/src/agent-event-stream.ts",
+        "packages/ui-tars/electron-ipc/src/main/registerIpcMain.ts",
+        "apps/ui-tars/src/main/main.ts",
+        "multimodal/agent-tars/core/src/agent-tars.ts",
+        "packages/agent-infra/mcp-servers/browser/src/tools/evaluate.ts",
+        "packages/agent-infra/mcp-servers/commands/src/server.ts"
+      ],
+      "reuse": "REFERENCE_ONLY",
+      "runtime_imported": false
+    }
+  ],
+  "parity_matrix": [
+    {
+      "workflow": "read_file",
+      "classification": "COTRA_NATIVE",
+      "reason": "Quntal exposes bounded workspace-scoped file reads through its own fs_read contract."
+    },
+    {
+      "workflow": "read_multiple_files",
+      "classification": "COTRA_NATIVE",
+      "reason": "Multiple reads are composed from bounded canonical fs_read calls without importing donor batching authority."
+    },
+    {
+      "workflow": "read_file_range",
+      "classification": "COTRA_NATIVE",
+      "reason": "Quntal provides its own bounded UTF-8 line-window read contract."
+    },
+    {
+      "workflow": "write_file",
+      "classification": "COTRA_SUPERIOR",
+      "reason": "Quntal separates preview from approved write and keeps mutation inside the workspace policy kernel."
+    },
+    {
+      "workflow": "edit_block",
+      "classification": "COTRA_SUPERIOR",
+      "reason": "The native edit binds exact search-and-replace to current content identity and occurrence count."
+    },
+    {
+      "workflow": "list_directory",
+      "classification": "COTRA_NATIVE",
+      "reason": "Directory listing is provided by the canonical workspace-bounded fs_list tool."
+    },
+    {
+      "workflow": "file_info",
+      "classification": "COTRA_NATIVE",
+      "reason": "File metadata is exposed through Quntal's canonical fs_stat contract."
+    },
+    {
+      "workflow": "search_file_content",
+      "classification": "COTRA_NATIVE",
+      "reason": "Content search is implemented by Quntal's bounded fs_search contract."
+    },
+    {
+      "workflow": "search_file_names",
+      "classification": "COTRA_NATIVE",
+      "reason": "Name search is implemented by bounded fs_find without following links."
+    },
+    {
+      "workflow": "create_directory",
+      "classification": "COTRA_SUPERIOR",
+      "reason": "Directory creation is approval-bound and postcondition-verified by Quntal."
+    },
+    {
+      "workflow": "move_or_rename",
+      "classification": "COTRA_SUPERIOR",
+      "reason": "Move/rename is same-workspace, identity-bound, approval-gated, and never overwrites."
+    },
+    {
+      "workflow": "delete_file",
+      "classification": "COTRA_SUPERIOR",
+      "reason": "Deletion is non-recursive, identity-bound, and requires STRONG approval."
+    },
+    {
+      "workflow": "run_bounded_program",
+      "classification": "COTRA_SUPERIOR",
+      "reason": "Quntal permits argv-only execution of admitted executables with timeout, output bounds, and descendant containment instead of shell strings."
+    },
+    {
+      "workflow": "run_build_and_test_tools",
+      "classification": "COTRA_SUPERIOR",
+      "reason": "Build/test executables are locally registered with STRONG presence, hash-pinned, grammar-bounded, contained, and network-restricted."
+    },
+    {
+      "workflow": "git_read",
+      "classification": "COTRA_NATIVE",
+      "reason": "Git status, diff, and log are first-party Quntal tools."
+    },
+    {
+      "workflow": "git_local_mutation",
+      "classification": "COTRA_SUPERIOR",
+      "reason": "Local Git mutations are closed typed tools rather than arbitrary Git command strings."
+    },
+    {
+      "workflow": "git_remote",
+      "classification": "COTRA_SUPERIOR",
+      "reason": "Remote Git operations are split into preview and execution tools under destination and approval policy."
+    },
+    {
+      "workflow": "browser_structured",
+      "classification": "SAFE_SUCCESSOR_REQUIRED",
+      "reason": "A live browser engine adds network, page-identity, download/upload, and execution authority and therefore requires the separately governed post-P17 successor."
+    },
+    {
+      "workflow": "desktop_observe",
+      "classification": "COTRA_SUPERIOR",
+      "reason": "Quntal exposes only read-only visible-window identity and bounded UI Automation trees, not raw desktop control."
+    },
+    {
+      "workflow": "desktop_act",
+      "classification": "SAFE_SUCCESSOR_REQUIRED",
+      "reason": "Native actuation adds input authority and must be qualified shape-by-shape in the separately governed successor."
+    },
+    {
+      "workflow": "screenshots",
+      "classification": "SAFE_SUCCESSOR_REQUIRED",
+      "reason": "Pixel capture adds a new observation/privacy surface and remains successor-only."
+    },
+    {
+      "workflow": "clipboard_read_write",
+      "classification": "COTRA_SUPERIOR",
+      "reason": "Clipboard operations are single approved text samples/placements with secret refusal and no monitoring or paste authority."
+    },
+    {
+      "workflow": "destination_scoped_web_fetch",
+      "classification": "COTRA_SUPERIOR",
+      "reason": "Quntal exposes only approved public HTTPS GET with address-set binding and same-origin redirects, never generic sockets or proxying."
+    },
+    {
+      "workflow": "list_processes",
+      "classification": "COTRA_SUPERIOR",
+      "reason": "Quntal reports only processes owning visible windows with typed creation-time identity and exposes no arbitrary process termination."
+    },
+    {
+      "workflow": "shell_command_string",
+      "classification": "INTENTIONALLY_DENIED",
+      "reason": "Arbitrary command strings bypass executable admission, argv validation, provenance, and containment."
+    },
+    {
+      "workflow": "powershell_or_cmd",
+      "classification": "INTENTIONALLY_DENIED",
+      "reason": "PowerShell and cmd are unrestricted interpreters with full user authority."
+    },
+    {
+      "workflow": "interactive_repl_sessions",
+      "classification": "INTENTIONALLY_DENIED",
+      "reason": "Interactive interpreter sessions are equivalent to unrestricted shell authority."
+    },
+    {
+      "workflow": "background_long_running_processes",
+      "classification": "INTENTIONALLY_DENIED",
+      "reason": "Detached authority must not outlive a bounded request."
+    },
+    {
+      "workflow": "kill_arbitrary_process",
+      "classification": "INTENTIONALLY_DENIED",
+      "reason": "Terminating processes that Quntal did not start would affect user-owned programs."
+    },
+    {
+      "workflow": "elevation_or_admin",
+      "classification": "INTENTIONALLY_DENIED",
+      "reason": "Silent or agent-driven elevation is outside the security model."
+    },
+    {
+      "workflow": "read_outside_workspaces",
+      "classification": "INTENTIONALLY_DENIED",
+      "reason": "The workspace ceiling is a security boundary; home, credentials, and protected Quntal state remain unreachable."
+    },
+    {
+      "workflow": "arbitrary_network_sockets",
+      "classification": "INTENTIONALLY_DENIED",
+      "reason": "Only destination-scoped fetch is exposed; generic sockets and proxies are not agent authority."
+    },
+    {
+      "workflow": "browser_script_or_devtools",
+      "classification": "INTENTIONALLY_DENIED",
+      "reason": "Arbitrary JavaScript, CDP, DevTools, and debugger execution are unrestricted browser authority."
+    },
+    {
+      "workflow": "agent_changes_own_policy",
+      "classification": "INTENTIONALLY_DENIED",
+      "reason": "Policy, trust, approval, executable admission, and lease changes remain local human authority."
+    },
+    {
+      "workflow": "install_software_or_services",
+      "classification": "INTENTIONALLY_DENIED",
+      "reason": "Installers and service management are outside the workstation agent surface."
+    },
+    {
+      "workflow": "read_office_or_pdf_documents",
+      "classification": "SAFE_SUCCESSOR_REQUIRED",
+      "reason": "Binary document parsing is outside the v0.2 replacement target and requires a separately admitted parser/dependency surface."
+    }
+  ],
+  "donor_reuse_matrix": [
+    {
+      "id": "desktop_commander_filesystem_surface",
+      "donor_id": "desktop_commander",
+      "subsystem": "filesystem read/write/search and MCP exposure patterns",
+      "source_revision": "c774c3b505de990219637ecdc9a830c8772fae9d",
+      "source_paths": [
+        "src/server.ts",
+        "src/tools/schemas.ts"
+      ],
+      "cotra_destinations": [
+        "apps/quntal-mcp/src/server.ts",
+        "apps/quntal-mcp/src/tool_contract.ts"
+      ],
+      "classification": "REFERENCE_ONLY",
+      "license_obligation": "MIT notice obligations apply to any future copied source; no source is copied by SG-000066.",
+      "dependency_obligation": "No Desktop Commander dependency is admitted; any future import requires independent dependency review.",
+      "authority_delta": "none",
+      "reason": "The v0.2 filesystem surface is already implemented natively behind Quntal policy and does not need donor runtime code."
+    },
+    {
+      "id": "desktop_commander_terminal_and_process_sessions",
+      "donor_id": "desktop_commander",
+      "subsystem": "terminal command strings, interactive sessions, long-running processes, and process termination",
+      "source_revision": "c774c3b505de990219637ecdc9a830c8772fae9d",
+      "source_paths": [
+        "src/server.ts",
+        "src/tools/schemas.ts"
+      ],
+      "cotra_destinations": [],
+      "classification": "REJECT_FOR_COTRA",
+      "license_obligation": "No donor source is copied.",
+      "dependency_obligation": "No donor runtime or terminal dependency is admitted.",
+      "authority_delta": "would widen process authority",
+      "reason": "Quntal intentionally replaces unrestricted terminal/session authority with bounded argv-only admitted executables."
+    },
+    {
+      "id": "desktop_commander_document_support",
+      "donor_id": "desktop_commander",
+      "subsystem": "Office/PDF/document-data helper patterns",
+      "source_revision": "c774c3b505de990219637ecdc9a830c8772fae9d",
+      "source_paths": [
+        "src/server.ts",
+        "src/tools/schemas.ts"
+      ],
+      "cotra_destinations": [],
+      "classification": "REFERENCE_ONLY",
+      "license_obligation": "No donor source is copied.",
+      "dependency_obligation": "Any future parser must be separately admitted with its own dependency and content-safety review.",
+      "authority_delta": "none in SG-000066; future parser surface would require separate qualification",
+      "reason": "Document parsing is outside the v0.2 target and remains a successor candidate rather than an imported donor feature."
+    },
+    {
+      "id": "kernux_provenance_and_import_controls",
+      "donor_id": "kernux_source_pool",
+      "subsystem": "donor provenance, notice, characterization, and source-to-destination control patterns",
+      "source_revision": "828e71a6464e055712e77c85d2fc94bfd8f96e3b",
+      "source_paths": [
+        "docs/canonical/DONOR_PROVENANCE.md",
+        "docs/canonical/DONOR_IMPORT_CHECKLIST.md"
+      ],
+      "cotra_destinations": [
+        "docs/p16/sg000066_exit_evidence.json"
+      ],
+      "classification": "REFERENCE_ONLY",
+      "license_obligation": "Kernux is Apache-2.0; referenced donor licenses remain independently binding if source is ever copied.",
+      "dependency_obligation": "Kernux is not a Quntal dependency and no referenced donor dependency is imported here.",
+      "authority_delta": "none",
+      "reason": "Quntal uses the governance lessons as evidence structure only; Kernux governance/runtime remains independent."
+    },
+    {
+      "id": "kernux_computer_use_boundary_patterns",
+      "donor_id": "kernux_source_pool",
+      "subsystem": "computer-use boundary, policy ordering, ambiguous-outcome handling, and donor isolation patterns",
+      "source_revision": "828e71a6464e055712e77c85d2fc94bfd8f96e3b",
+      "source_paths": [
+        "docs/canonical/COMPUTER_USE_DONOR_INTEGRATION_PLAN.md",
+        "docs/canonical/DONOR_PROVENANCE.md"
+      ],
+      "cotra_destinations": [],
+      "classification": "REFERENCE_ONLY",
+      "license_obligation": "No Kernux or referenced donor source is copied by SG-000066.",
+      "dependency_obligation": "No Kernux runtime, browser, accessibility, or remote dependency is admitted.",
+      "authority_delta": "none",
+      "reason": "These patterns inform successor architecture only; Quntal remains the sole policy/trust/approval/identity/lease/audit/revocation authority."
+    },
+    {
+      "id": "ui_tars_browser_mcp_and_puppeteer",
+      "donor_id": "ui_tars",
+      "subsystem": "Browser MCP and local browser/Puppeteer integration",
+      "source_revision": "2ff41a9e515828c5bd5b276e493d73aa0bdf4a3a",
+      "source_paths": [
+        "packages/agent-infra/mcp-servers/browser/src/index.ts",
+        "packages/agent-infra/browser/src/local-browser.ts"
+      ],
+      "cotra_destinations": [],
+      "classification": "REFERENCE_ONLY",
+      "license_obligation": "Apache-2.0 source terms apply to future copied source; nested packages/assets require separate notice review.",
+      "dependency_obligation": "No browser engine, Puppeteer dependency, or hosted service is admitted by SG-000066.",
+      "authority_delta": "would add live browser, network, profile, page, and download/upload authority",
+      "reason": "Live browser integration is SAFE_SUCCESSOR_REQUIRED and cannot enter P16."
+    },
+    {
+      "id": "ui_tars_action_parser",
+      "donor_id": "ui_tars",
+      "subsystem": "model action parser",
+      "source_revision": "2ff41a9e515828c5bd5b276e493d73aa0bdf4a3a",
+      "source_paths": [
+        "packages/ui-tars/action-parser/src/actionParser.ts"
+      ],
+      "cotra_destinations": [],
+      "classification": "REFERENCE_ONLY",
+      "license_obligation": "Apache-2.0 applies to future copied source.",
+      "dependency_obligation": "No parser package is imported.",
+      "authority_delta": "would translate untrusted model text into action proposals",
+      "reason": "Only a future closed Quntal-owned action schema may consume model proposals; free-form donor action types are never executable authority."
+    },
+    {
+      "id": "ui_tars_operator_abstraction",
+      "donor_id": "ui_tars",
+      "subsystem": "operator abstraction and GUI-agent lifecycle",
+      "source_revision": "2ff41a9e515828c5bd5b276e493d73aa0bdf4a3a",
+      "source_paths": [
+        "packages/ui-tars/sdk/src/GUIAgent.ts",
+        "apps/ui-tars/src/main/agent/operator.ts"
+      ],
+      "cotra_destinations": [],
+      "classification": "REFERENCE_ONLY",
+      "license_obligation": "Apache-2.0 applies to future copied source.",
+      "dependency_obligation": "No UI-TARS SDK/operator dependency is admitted.",
+      "authority_delta": "could add observation and actuation authority depending on adapter",
+      "reason": "Lifecycle/cancellation ideas may inform successor design, but Quntal must keep its own policy and action contracts."
+    },
+    {
+      "id": "ui_tars_nutjs_operator",
+      "donor_id": "ui_tars",
+      "subsystem": "NutJS local computer operator",
+      "source_revision": "2ff41a9e515828c5bd5b276e493d73aa0bdf4a3a",
+      "source_paths": [
+        "multimodal/gui-agent/operator-nutjs/src/NutJSOperator.ts"
+      ],
+      "cotra_destinations": [],
+      "classification": "REFERENCE_ONLY",
+      "license_obligation": "Apache-2.0 applies to donor source; NutJS and transitive dependencies require independent review before any future admission.",
+      "dependency_obligation": "No NutJS/native-input dependency is admitted.",
+      "authority_delta": "would add screenshot and native input authority",
+      "reason": "Native input is SAFE_SUCCESSOR_REQUIRED and raw donor execution is not an admissible P16 boundary."
+    },
+    {
+      "id": "ui_tars_screenshot_and_dpi",
+      "donor_id": "ui_tars",
+      "subsystem": "screenshot capture, physical/logical sizing, and DPI/scale-factor handling",
+      "source_revision": "2ff41a9e515828c5bd5b276e493d73aa0bdf4a3a",
+      "source_paths": [
+        "multimodal/gui-agent/operator-nutjs/src/NutJSOperator.ts",
+        "apps/ui-tars/src/main/agent/operator.ts"
+      ],
+      "cotra_destinations": [],
+      "classification": "REFERENCE_ONLY",
+      "license_obligation": "Apache-2.0 applies to future copied source and screenshot/native dependencies need separate review.",
+      "dependency_obligation": "No capture dependency or pixel path is admitted.",
+      "authority_delta": "would add pixel-capture observation authority",
+      "reason": "Window-scoped capture and DPI handling remain successor-only until privacy, identity, and failure invalidation are qualified."
+    },
+    {
+      "id": "ui_tars_remote_computer_and_browser",
+      "donor_id": "ui_tars",
+      "subsystem": "remote computer and remote browser operators",
+      "source_revision": "2ff41a9e515828c5bd5b276e493d73aa0bdf4a3a",
+      "source_paths": [
+        "apps/ui-tars/src/main/remote/operators.ts",
+        "multimodal/gui-agent/operator-browser/src/RemoteBrowserOperator.ts"
+      ],
+      "cotra_destinations": [],
+      "classification": "REJECT_FOR_COTRA",
+      "license_obligation": "No donor source is copied.",
+      "dependency_obligation": "No remote operator, remote service, websocket endpoint, or hosted dependency is admitted.",
+      "authority_delta": "would add remote computer/browser control and transport authority",
+      "reason": "Remote control cannot bypass Quntal typed identity, local lease creation, revocation, destination, audit, and approval authority."
+    },
+    {
+      "id": "ui_tars_event_stream",
+      "donor_id": "ui_tars",
+      "subsystem": "agent event-stream architecture",
+      "source_revision": "2ff41a9e515828c5bd5b276e493d73aa0bdf4a3a",
+      "source_paths": [
+        "multimodal/tarko/agent/src/agent/event-stream.ts",
+        "multimodal/tarko/agent-interface/src/agent-event-stream.ts"
+      ],
+      "cotra_destinations": [],
+      "classification": "REFERENCE_ONLY",
+      "license_obligation": "Apache-2.0 applies to future copied source.",
+      "dependency_obligation": "No Tarko event-stream package is imported.",
+      "authority_delta": "none by itself, but event payloads can expose authority-bearing state if adopted carelessly",
+      "reason": "Event-stream organization is a design reference only; Quntal audit/event semantics remain canonical."
+    },
+    {
+      "id": "ui_tars_electron_ipc",
+      "donor_id": "ui_tars",
+      "subsystem": "Electron IPC router/handler patterns",
+      "source_revision": "2ff41a9e515828c5bd5b276e493d73aa0bdf4a3a",
+      "source_paths": [
+        "packages/ui-tars/electron-ipc/src/main/registerIpcMain.ts",
+        "apps/ui-tars/src/main/main.ts"
+      ],
+      "cotra_destinations": [],
+      "classification": "REFERENCE_ONLY",
+      "license_obligation": "Apache-2.0 applies to future copied source.",
+      "dependency_obligation": "No Electron IPC package is imported.",
+      "authority_delta": "could bridge renderer requests to privileged host behavior",
+      "reason": "Any future desktop IPC must terminate at Quntal-owned typed contracts and kernel policy rather than inherit donor handler authority."
+    },
+    {
+      "id": "ui_tars_agent_loop",
+      "donor_id": "ui_tars",
+      "subsystem": "multimodal agent loop, lifecycle, tool registration, and cancellation",
+      "source_revision": "2ff41a9e515828c5bd5b276e493d73aa0bdf4a3a",
+      "source_paths": [
+        "packages/ui-tars/sdk/src/GUIAgent.ts",
+        "multimodal/agent-tars/core/src/agent-tars.ts"
+      ],
+      "cotra_destinations": [],
+      "classification": "REFERENCE_ONLY",
+      "license_obligation": "Apache-2.0 applies to future copied source.",
+      "dependency_obligation": "No UI-TARS agent runtime is imported.",
+      "authority_delta": "could couple model/tool lifecycle to executable host authority",
+      "reason": "Loop and cancellation patterns may inform successor orchestration, but policy decisions remain outside the model loop."
+    },
+    {
+      "id": "ui_tars_browser_evaluate",
+      "donor_id": "ui_tars",
+      "subsystem": "arbitrary browser JavaScript evaluation",
+      "source_revision": "2ff41a9e515828c5bd5b276e493d73aa0bdf4a3a",
+      "source_paths": [
+        "packages/agent-infra/mcp-servers/browser/src/tools/evaluate.ts"
+      ],
+      "cotra_destinations": [],
+      "classification": "REJECT_FOR_COTRA",
+      "license_obligation": "No donor source is copied.",
+      "dependency_obligation": "No browser evaluate/CDP dependency is admitted.",
+      "authority_delta": "would add unrestricted page-context script authority",
+      "reason": "Arbitrary JavaScript/CDP/DevTools authority is explicitly denied by SG-000066 and by the successor requirements."
+    },
+    {
+      "id": "ui_tars_command_and_script_execution",
+      "donor_id": "ui_tars",
+      "subsystem": "run_command and run_script MCP tools",
+      "source_revision": "2ff41a9e515828c5bd5b276e493d73aa0bdf4a3a",
+      "source_paths": [
+        "packages/agent-infra/mcp-servers/commands/src/server.ts"
+      ],
+      "cotra_destinations": [],
+      "classification": "REJECT_FOR_COTRA",
+      "license_obligation": "No donor source is copied.",
+      "dependency_obligation": "No command-server or interpreter dependency is admitted.",
+      "authority_delta": "would add unrestricted shell/script execution",
+      "reason": "Quntal intentionally exposes admitted argv-only executables and rejects shell/interpreter authority."
+    },
+    {
+      "id": "ui_tars_raw_model_to_input",
+      "donor_id": "ui_tars",
+      "subsystem": "raw model prediction parsing followed by direct input execution",
+      "source_revision": "2ff41a9e515828c5bd5b276e493d73aa0bdf4a3a",
+      "source_paths": [
+        "packages/ui-tars/action-parser/src/actionParser.ts",
+        "packages/ui-tars/sdk/src/GUIAgent.ts",
+        "multimodal/gui-agent/operator-nutjs/src/NutJSOperator.ts"
+      ],
+      "cotra_destinations": [],
+      "classification": "REJECT_FOR_COTRA",
+      "license_obligation": "No donor source is copied.",
+      "dependency_obligation": "No parser/operator execution chain is admitted.",
+      "authority_delta": "would let untrusted model output drive native input",
+      "reason": "Model output may only become a proposal normalized to a closed Quntal action schema, policy-evaluated, approved where required, and executed by a qualified adapter."
+    },
+    {
+      "id": "ui_tars_personal_browser_profile",
+      "donor_id": "ui_tars",
+      "subsystem": "persistent/personal browser userDataDir and profile behavior",
+      "source_revision": "2ff41a9e515828c5bd5b276e493d73aa0bdf4a3a",
+      "source_paths": [
+        "packages/agent-infra/browser/src/local-browser.ts",
+        "packages/agent-infra/mcp-servers/browser/src/index.ts"
+      ],
+      "cotra_destinations": [],
+      "classification": "REJECT_FOR_COTRA",
+      "license_obligation": "No donor source is copied.",
+      "dependency_obligation": "No persistent browser profile integration is admitted.",
+      "authority_delta": "would expose ambient authenticated browser state and personal data",
+      "reason": "Successor browser work must use isolated governed identities; personal profiles are explicitly outside the allowed authority model."
+    }
+  ],
+  "desktop_commander_replacement": [
+    { "donor_shape": "read_file", "workflow": "read_file", "expected_status": "implemented_exposed" },
+    { "donor_shape": "read_multiple_files", "workflow": "read_multiple_files", "expected_status": "implemented_exposed" },
+    { "donor_shape": "read_file_range", "workflow": "read_file_range", "expected_status": "implemented_exposed" },
+    { "donor_shape": "write_file", "workflow": "write_file", "expected_status": "implemented_exposed" },
+    { "donor_shape": "edit_block", "workflow": "edit_block", "expected_status": "implemented_exposed" },
+    { "donor_shape": "list_directory", "workflow": "list_directory", "expected_status": "implemented_exposed" },
+    { "donor_shape": "get_file_info", "workflow": "file_info", "expected_status": "implemented_exposed" },
+    { "donor_shape": "start_search_content", "workflow": "search_file_content", "expected_status": "implemented_exposed" },
+    { "donor_shape": "start_search_name", "workflow": "search_file_names", "expected_status": "implemented_exposed" },
+    { "donor_shape": "create_directory", "workflow": "create_directory", "expected_status": "implemented_exposed" },
+    { "donor_shape": "move_file", "workflow": "move_or_rename", "expected_status": "implemented_exposed" },
+    { "donor_shape": "delete_file", "workflow": "delete_file", "expected_status": "implemented_exposed" },
+    { "donor_shape": "start_process", "workflow": "run_bounded_program", "expected_status": "implemented_exposed" },
+    { "donor_shape": "start_process_build_or_test", "workflow": "run_build_and_test_tools", "expected_status": "implemented_exposed" },
+    { "donor_shape": "list_processes", "workflow": "list_processes", "expected_status": "implemented_exposed" }
+  ],
+  "desktop_commander_denials": [
+    "shell_command_string",
+    "powershell_or_cmd",
+    "interactive_repl_sessions",
+    "background_long_running_processes",
+    "kill_arbitrary_process",
+    "elevation_or_admin",
+    "read_outside_workspaces",
+    "arbitrary_network_sockets",
+    "browser_script_or_devtools",
+    "agent_changes_own_policy",
+    "install_software_or_services"
+  ],
+  "ui_tars_classification": [
+    { "subsystem": "live_browser_operator", "workflow": "browser_structured", "expected_status": "missing", "disposition": "defer_to_governed_successor" },
+    { "subsystem": "native_input_operator", "workflow": "desktop_act", "expected_status": "missing", "disposition": "defer_to_governed_successor" },
+    { "subsystem": "screenshot_capture", "workflow": "screenshots", "expected_status": "missing", "disposition": "defer_to_governed_successor" },
+    { "subsystem": "arbitrary_browser_script_or_devtools", "workflow": "browser_script_or_devtools", "expected_status": "intentionally_denied", "disposition": "deny" },
+    { "subsystem": "generic_network_or_proxy_authority", "workflow": "arbitrary_network_sockets", "expected_status": "intentionally_denied", "disposition": "deny" },
+    { "subsystem": "self_policy_or_approval_changes", "workflow": "agent_changes_own_policy", "expected_status": "intentionally_denied", "disposition": "deny" }
+  ],
+  "local_authority_denials": [
+    { "capability": "workspace.trust.grant", "operation": "grant" },
+    { "capability": "trust.revoke_emergency", "operation": "revoke" },
+    { "capability": "remote.lease.create", "operation": "create" },
+    { "capability": "remote.enrollment.authorize", "operation": "authorize" },
+    { "capability": "executable.registry.add", "operation": "add" }
+  ],
+  "qualification": {
+    "authoritative_mcp_builder": "apps/quntal-mcp/src/server.ts",
+    "tool_contract": "apps/quntal-mcp/src/tool_contract.ts",
+    "daemon_entrypoint": "crates/quntald/src/main.rs",
+    "parity_inventory": "docs/p16/capability_parity_inventory.json",
+    "tests": [
+      "apps/quntal-mcp/src/parity-inventory.test.ts",
+      "apps/quntal-mcp/src/surface.test.ts",
+      "apps/quntal-mcp/src/kernel.test.ts",
+      "apps/quntal-mcp/src/process.test.ts",
+      "apps/quntal-mcp/src/clipboard.test.ts",
+      "apps/quntal-mcp/src/network.test.ts",
+      "apps/quntal-mcp/src/uia.test.ts",
+      "apps/quntal-mcp/src/browser-qualification.test.ts",
+      "apps/quntal-mcp/src/tool-contract.test.ts",
+      "apps/quntal-mcp/src/transport-contract.test.ts",
+      "apps/quntal-mcp/src/p16-exit.test.ts"
+    ]
+  },
+  "exit_invariants": [
+    "The canonical parity inventory remains the classification source of truth.",
+    "The parity matrix covers every workflow in that inventory exactly once using the SG-000066 classification vocabulary.",
+    "Every implemented replacement workflow resolves only through canonical Quntal MCP tools and quntald-governed capability shapes.",
+    "Every denied donor authority remains unexposed to MCP.",
+    "Desktop Commander, the Kernux source pool, and UI-TARS remain provenance-pinned reference-only evidence inputs in SG-000066.",
+    "No donor package, runtime, operator, browser engine, screenshot path, input path, shell, proxy, approval path, trust mutation, remote lease mutation, or self-policy authority is imported by this grain.",
+    "Future computer-use authority remains gated by the canonical post-P17 successor program and is not activated by this evidence package."
+  ]
+}
