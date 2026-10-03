@@ -1,0 +1,68 @@
+{
+  "id": "SG-000073",
+  "title": "Computer-use architecture and provenance freeze",
+  "program": "QUNTAL-P18",
+  "state": "PLANNED",
+  "risk": "high",
+  "created": "2026-10-03",
+  "dependencies": ["SG-000072"],
+  "objective": "Freeze the post-v0.2 governed computer-use architecture and donor provenance before any new browser, capture, desktop-input, model-adapter, or remote-computer authority is implemented. Pin bytedance/UI-TARS-desktop@2ff41a9e515828c5bd5b276e493d73aa0bdf4a3a and any additional authorized donor revisions and source paths; classify every reused subsystem; define the canonical ComputerAction proposal vocabulary, browser/page/document/node/window/element/capture/input/remote-lease identities, process boundaries, protocol envelopes, failure invalidation rules, and license/dependency obligations; and prove that no donor runtime or authority is reachable yet.",
+  "scope": {
+    "include": [
+      "pinned donor source ledger with exact repository revisions and source paths",
+      "per-subsystem REUSE_VERBATIM, ADAPT, PORT, REFERENCE_ONLY, or REJECT classification with destination and authority delta",
+      "license, NOTICE, attribution, modified-file, dependency, SBOM, and provenance obligations for each selected donor component",
+      "canonical typed identity vocabulary for browser profiles, engines, pages, page/document generations, browser nodes, process instances, windows/window generations, UIA elements, capture generations, approvals, input leases, capture leases, remote computer-use leases, policy revisions, and workspace trust revisions",
+      "canonical provider-neutral ComputerActionProposal schema carrying untrusted proposal data only",
+      "process-boundary design for a low-authority browser host and native desktop providers behind quntald",
+      "explicit denial list for arbitrary JavaScript/CDP, unrestricted shell/script execution, personal browser profiles, raw model-to-input execution, remote approval, model self-approval, silent coordinate fallback, and protected-surface automation",
+      "deterministic protocol-versioning, bounds, cancellation, crash/restart invalidation, and audit/event contracts",
+      "tests proving no P18 donor package, host process, browser launch/attachment, capture path, input path, new MCP tool, new profile, or remote mapping is reachable in this grain"
+    ],
+    "exclude": [
+      "launching or attaching to a browser",
+      "network page loading",
+      "live DOM or accessibility reads",
+      "browser actuation or transfers",
+      "desktop screenshot/capture",
+      "UIA actuation",
+      "coordinate input",
+      "remote computer-use reach",
+      "new MCP tools or profiles",
+      "any new runtime authority"
+    ]
+  },
+  "authority_delta": {
+    "filesystem": "None beyond governance/provenance records in the repository.",
+    "process": "None.",
+    "network": "None.",
+    "browser": "None.",
+    "ui_input": "None.",
+    "secrets": "None.",
+    "approval": "None.",
+    "privileged": "None."
+  },
+  "invariants": [
+    "Quntal remains the sole authority for policy, trust, approvals, typed target identity, leases, destination policy, audit, revocation, and tool exposure",
+    "model/provider adapters remain untrusted syntax normalizers and cannot mint or widen authority",
+    "all authority-adding computer-use implementation remains blocked until a successor grain explicitly authorizes the exact delta",
+    "donor provenance and license obligations are recorded before code reuse"
+  ],
+  "acceptance": [
+    {"id": "A1", "claim": "A pinned donor/provenance matrix records exact source revisions, paths, reuse classification, Quntal destination, license/dependency obligations, and authority delta for every selected UI-TARS subsystem."},
+    {"id": "A2", "claim": "The canonical computer-use action and target identity contracts, process boundaries, protocol envelopes, bounds, cancellation semantics, crash/restart invalidation, and denial list are deterministic and test-pinned."},
+    {"id": "A3", "claim": "Regression tests prove that no new browser, capture, desktop-input, model-adapter execution, remote-computer, MCP tool/profile, process, network, or privileged authority is reachable before successor authorization."},
+    {"id": "A4", "claim": "Exact-head CI, genuine TypeSafe Jev, Alibaba Open Code Review, security review, manual review of excluded files, and zero unresolved blocking threads all pass."}
+  ],
+  "successor_requirements": {
+    "sg_000074": "Live isolated browser-host foundation may activate only after this architecture/provenance freeze closes canonically."
+  },
+  "review": {
+    "diffcipline": true,
+    "jev_semantic_review": true,
+    "alibaba_open_code_review": "required exact-range qualification where integrated",
+    "security_review": true,
+    "exact_head_ci": true
+  },
+  "done_when": "The governed computer-use architecture and donor provenance are frozen canonically with zero runtime authority delta and SG-000074 has an exact implementation contract to build against."
+}
