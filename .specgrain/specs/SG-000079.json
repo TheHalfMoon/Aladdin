@@ -1,0 +1,56 @@
+{
+  "id": "SG-000079",
+  "title": "Live browser tool exposure and profile qualification",
+  "program": "QUNTAL-P18",
+  "state": "PLANNED",
+  "risk": "high",
+  "created": "2026-10-03",
+  "dependencies": ["SG-000078"],
+  "objective": "Expose only live-qualified browser capabilities through Quntal's authoritative MCP tool contract and an explicit local `browser_structured` profile. No donor MCP server, raw browser API, arbitrary JavaScript/CDP, personal profile, or remote browser mapping may be exposed.",
+  "scope": {
+    "include": [
+      "authoritative TOOL_CONTRACT entries for only those browser shapes proven live in SG-000075 through SG-000078",
+      "explicit `browser_structured` local tool-surface profile with default-deny membership and exact discovery tests",
+      "MCP schema, annotations, effect/approval classes, output bounds, and kernel-shape mappings derived from one source of truth",
+      "transport/profile tests proving stdio/loopback local exposure only unless a later grain authorizes remote mapping",
+      "end-to-end MCP -> quntald -> browser host tests for every exposed browser tool",
+      "parity inventory and generated documentation updates tied to live qualification state",
+      "negative discovery and invocation tests for every intentionally denied donor/browser capability"
+    ],
+    "exclude": [
+      "`browser_evaluate` or arbitrary JavaScript",
+      "generic CDP/DevTools/debugger tools",
+      "personal profile/cookie/credential-store tools",
+      "raw browser-host process or IPC controls",
+      "automatic inclusion in existing profiles by implication",
+      "relay/remote mapping",
+      "any browser shape not live-qualified"
+    ]
+  },
+  "authority_delta": {
+    "filesystem": "No authority beyond the live-qualified browser transfer tools already authorized in predecessor grains.",
+    "process": "No new process authority; exposure does not widen browser-host control.",
+    "network": "No authority beyond live-qualified governed browser navigation/transfer shapes.",
+    "browser": "Selected live browser shapes become caller-accessible through Quntal's MCP contract under an explicit local profile.",
+    "ui_input": "None beyond structured browser actuation already authorized; no OS input.",
+    "secrets": "No new secret access.",
+    "approval": "Per-tool approval classes remain those of the underlying kernel shapes; exposure cannot weaken them.",
+    "privileged": "None."
+  },
+  "invariants": [
+    "tool exposure never outruns live provider qualification",
+    "Quntal TOOL_CONTRACT remains the only public tool-surface source of truth",
+    "browser_structured is explicit and local-only by default",
+    "denied donor capabilities remain absent from discovery and invocation"
+  ],
+  "acceptance": [
+    {"id": "A1", "claim": "Every exposed browser tool has one exact TOOL_CONTRACT entry and one live provider path through quntald, and no non-live browser shape is discoverable."},
+    {"id": "A2", "claim": "The `browser_structured` local profile is exact, generated documentation/parity agree with discovery, and unknown/widened profiles fail closed."},
+    {"id": "A3", "claim": "Arbitrary JS/CDP, personal-profile, raw host control, non-qualified browser shapes, and remote browser mapping are absent from discovery and fail closed if invoked internally."},
+    {"id": "A4", "claim": "End-to-end local MCP tests prove policy, approvals, bounds, stale identity, cancellation, and evidence semantics are unchanged by exposure."},
+    {"id": "A5", "claim": "Exact-head CI, TypeSafe Jev, Alibaba Open Code Review, security review, manual excluded-file review, and zero unresolved blockers pass."}
+  ],
+  "successor_requirements": {"sg_000080": "Desktop visual capture work may proceed independently after browser exposure is exact and canonically qualified."},
+  "review": {"diffcipline": true, "jev_semantic_review": true, "alibaba_open_code_review": "required exact-range qualification where integrated", "security_review": true, "exact_head_ci": true},
+  "done_when": "Only live-qualified browser shapes are exposed through one exact local browser_structured profile, with denied donor/raw browser authority absent."
+}
