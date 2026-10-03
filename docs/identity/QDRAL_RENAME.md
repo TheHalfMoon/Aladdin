@@ -24,6 +24,12 @@ Closed SpecGrain records, canonical evidence, the canonical history ledger, merg
 
 Current project-owned code, packages, crates, executables, CLI surfaces, environment variables, OAuth/tool metadata, install paths, live documentation, and future planning use Qdral. A retained old-name string is permitted only when it is explicitly historical evidence or a deliberately documented compatibility boundary.
 
+## State migration boundary
+
+The identity rename does not silently transfer security authority from Quntal namespaces into Qdral namespaces. Existing Quntal installation roots, persisted credentials, OAuth tokens and scopes, device enrollments, remote-session leases, trust records, approvals, protocol identities, and other protected state are not automatically imported, rewritten, deleted, or treated as Qdral authority.
+
+A Qdral installation or remote connection must establish its own Qdral-namespaced state through the existing governed install, enrollment, trust, lease, and approval flows. If migration of protected Quntal state is required later, it must be authorized and qualified as an explicit successor grain with typed source/target identity, user-visible consent where authority is transferred, rollback semantics, and fail-closed tests. This rename itself performs no such migration.
+
 ## Authority
 
 This rename changes identity only. It does not grant new filesystem, process, network, browser, UI, secret, approval, trust, executable-admission, remote-session, or privileged authority. Existing fail-closed security boundaries remain authoritative.
