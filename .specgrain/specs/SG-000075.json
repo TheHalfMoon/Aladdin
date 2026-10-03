@@ -1,0 +1,56 @@
+{
+  "id": "SG-000075",
+  "title": "Browser network mediation and real navigation",
+  "program": "QUNTAL-P18",
+  "state": "PLANNED",
+  "risk": "high",
+  "created": "2026-10-03",
+  "dependencies": ["SG-000074"],
+  "objective": "Bind Quntal's closed browser destination/page/navigation policy to the live isolated engine while preventing Chromium from becoming an unbounded network client. All top-level and subresource traffic must remain inside Quntal destination/egress policy with typed page generations, fresh top-level navigation approval, redirect and DNS-rebinding defenses, and deterministic failure semantics.",
+  "scope": {
+    "include": [
+      "real page loading for the existing isolated browser profile and typed page identity",
+      "top-level navigation preserving destination validation, public-address policy, exact origin binding, DNS re-resolution, hop-by-hop redirect checks, fresh SOFT approval, and page-generation transition semantics",
+      "browser-request mediation for document, iframe, script, style, image, font, fetch/XHR, worker/service-worker, WebSocket, and other network-capable resource classes",
+      "explicit denial or mediation of QUIC, DoH, WebRTC direct-network bypass, proxy bypass, private/loopback/link-local/metadata destinations, unsafe schemes, external protocol handlers, browser-internal URLs, and userinfo destinations",
+      "bounded redirects, requests, response headers/body metadata used for policy, tab/page counts, navigation timeouts, and cancellation",
+      "automatic download initiation intercepted so SG-000078 remains the only transfer authority",
+      "tests for DNS rebinding, redirect widening/downgrade/loops, popup/new-window navigation, iframe escape, service-worker persistence, WebSocket reach, and browser permission prompts"
+    ],
+    "exclude": [
+      "live DOM/AX exposure to callers",
+      "browser click/fill or other actuation",
+      "downloads/uploads as data transfer authority",
+      "browser screenshots exposed to callers",
+      "arbitrary JS/CDP/DevTools",
+      "personal profile",
+      "remote browser exposure"
+    ]
+  },
+  "authority_delta": {
+    "filesystem": "No new workspace/personal filesystem authority.",
+    "process": "No process authority beyond SG-000074 supervised browser processes.",
+    "network": "The isolated browser may load policy-authorized public web resources only through Quntal-mediated browser egress. Generic socket/proxy/tunnel authority remains absent.",
+    "browser": "Real page loading/navigation is newly live under existing typed page/origin/approval policy.",
+    "ui_input": "None.",
+    "secrets": "No personal cookies/credentials/session stores are introduced.",
+    "approval": "Top-level navigation retains fresh SOFT approval with exact destination/page binding; subresources cannot widen authority beyond the approved navigation policy.",
+    "privileged": "None."
+  },
+  "invariants": [
+    "Chromium cannot bypass Quntal destination policy through an alternate network path",
+    "top-level navigation remains origin/address/redirect bound and approval gated",
+    "automatic download does not become a filesystem write",
+    "unsafe/private destinations fail closed before useful content is delivered"
+  ],
+  "acceptance": [
+    {"id": "A1", "claim": "Real navigation loads an approved public HTTPS destination and binds the resulting live page to the existing page/origin/generation contract."},
+    {"id": "A2", "claim": "Tests prove DNS rebinding, redirect widening/downgrade/loops, private/loopback/link-local/metadata targets, unsafe schemes, external protocol handlers, and direct-network bypass classes fail closed."},
+    {"id": "A3", "claim": "Iframe, worker/service-worker, fetch/XHR, WebSocket, popup/new-window, and other subresource paths cannot exceed the top-level Quntal destination/egress ceiling."},
+    {"id": "A4", "claim": "No DOM/AX caller exposure, actuation, transfer, screenshot exposure, arbitrary JS/CDP, personal profile, or remote reach is introduced."},
+    {"id": "A5", "claim": "Exact-head live-browser tests, CI, TypeSafe Jev, Alibaba Open Code Review, security review, and zero unresolved blockers pass."}
+  ],
+  "successor_requirements": {"sg_000076": "Live DOM/accessibility observation may activate only after real navigation and browser egress are qualified."},
+  "review": {"diffcipline": true, "jev_semantic_review": true, "alibaba_open_code_review": "required exact-range qualification where integrated", "security_review": true, "exact_head_ci": true, "native_network_qualification": true},
+  "done_when": "Real browser navigation is canonically live through Quntal-mediated egress with bypass, redirect, DNS, download-trigger, and permission escape tests passing."
+}
