@@ -1,0 +1,56 @@
+{
+  "id": "SG-000076",
+  "title": "Live DOM and accessibility observation",
+  "program": "QUNTAL-P18",
+  "state": "PLANNED",
+  "risk": "high",
+  "created": "2026-10-03",
+  "dependencies": ["SG-000075"],
+  "objective": "Bind the existing browser snapshot/observation contract to live DOM and accessibility evidence from the governed browser host while preserving exact page/origin/generation identity, bounds, stale failure, password/secret redaction, and the denial of arbitrary JavaScript, raw CDP, personal-profile data, and browser credential stores.",
+  "scope": {
+    "include": [
+      "live DOM and accessibility-tree reads for one known active Quntal page",
+      "server-issued browser node identities bound to profile, page, page generation, origin, document generation, role/state/index, workspace, and policy revision",
+      "max_nodes, max_depth, max_bytes, response-size, timeout, and image-free structured observation bounds",
+      "password/secret field value redaction and exclusion of cookies, storage, credentials, tokens, autofill stores, and personal profile state",
+      "document-generation advancement and deterministic invalidation after navigation/document replacement",
+      "tests for forged/stale/cross-page/cross-origin/cross-workspace/cross-policy node identities, oversized trees, hidden secret fields, shadow DOM/iframe boundaries, and dynamic document mutation"
+    ],
+    "exclude": [
+      "browser actuation",
+      "screenshots or visual coordinate control",
+      "downloads/uploads",
+      "arbitrary JavaScript evaluation",
+      "generic CDP/DevTools exposure",
+      "cookie/session/local-storage credential access",
+      "personal browser profile",
+      "remote exposure"
+    ]
+  },
+  "authority_delta": {
+    "filesystem": "None.",
+    "process": "None beyond prior browser host authority.",
+    "network": "None beyond SG-000075 mediated browser loading.",
+    "browser": "Read-only live DOM/accessibility observation is added for already-authorized live pages.",
+    "ui_input": "None.",
+    "secrets": "No password, cookie, token, credential, storage secret, or personal-profile data may enter observation results/evidence/logs.",
+    "approval": "No new mutation approval; observation remains bounded read authority under the existing page/workspace/profile contract.",
+    "privileged": "None."
+  },
+  "invariants": [
+    "browser node identities are server allocated and stale on page/document drift",
+    "observation is bounded and secret-minimized",
+    "raw JavaScript/CDP and browser stores remain unreachable",
+    "no silent actuation or coordinate fallback occurs"
+  ],
+  "acceptance": [
+    {"id": "A1", "claim": "A real loaded page produces a bounded live DOM/accessibility snapshot whose node IDs are exactly bound to the Quntal page/origin/document generations."},
+    {"id": "A2", "claim": "Stale, forged, cross-page, cross-origin, cross-workspace, replaced-document, and policy-drift identities fail closed."},
+    {"id": "A3", "claim": "Password/secret values, cookies, credentials, tokens, storage, autofill, and personal-profile data are absent from results, audit payloads, and logs."},
+    {"id": "A4", "claim": "Arbitrary JS/CDP, actuation, transfer, screenshot, coordinate, personal-profile, and remote authority remain unreachable."},
+    {"id": "A5", "claim": "Exact-head live-browser tests, CI, TypeSafe Jev, Alibaba Open Code Review, security review, and zero unresolved blockers pass."}
+  ],
+  "successor_requirements": {"sg_000077": "Live browser actuation may activate only after live node identity and stale semantics are canonically qualified."},
+  "review": {"diffcipline": true, "jev_semantic_review": true, "alibaba_open_code_review": "required exact-range qualification where integrated", "security_review": true, "exact_head_ci": true},
+  "done_when": "Live structured browser observation is canonically qualified with exact node identity, deterministic bounds, secret minimization, and no raw browser debugging/scripting reach."
+}
