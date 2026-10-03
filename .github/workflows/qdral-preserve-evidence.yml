@@ -1,0 +1,70 @@
+name: Qdral preserve historical P16 evidence
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  preserve-evidence:
+    if: github.head_ref == 'identity/quntal-to-qdral' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout rename branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+      - name: Restore immutable SG-000066 evidence and adapt current verifier
+        shell: bash
+        run: |
+          set -euo pipefail
+          git checkout 6013ada69ea9c5c0ab9174391f1cc4c36408504e -- docs/p16/sg000066_exit_evidence.json
+          python - <<'PY'
+          from pathlib import Path
+
+          test = Path('apps/qdral-mcp/src/p16-exit.test.ts')
+          text = test.read_text(encoding='utf-8')
+          text = text.replace(
+              'assert.equal(evidence.schema, "qdral-p16-exit-evidence/2");',
+              'assert.equal(evidence.schema, "quntal-p16-exit-evidence/2");'
+          )
+          old = '''  for (const path of paths) {
+            const absolute = join(repo, path);
+            assert.ok(existsSync(absolute), `missing qualification artifact ${path}`);
+            assert.ok(statSync(absolute).isFile(), `qualification artifact is not a file ${path}`);
+          }'''
+          new = '''  for (const historicalPath of paths) {
+            const currentPath = historicalPath
+              .replace(/^apps\\/quntal-mcp\\//, "apps/qdral-mcp/")
+              .replace(/^crates\\/quntald\\//, "crates/qdrald/");
+            const absolute = join(repo, currentPath);
+            assert.ok(existsSync(absolute), `missing current qualification artifact for historical ${historicalPath}: ${currentPath}`);
+            assert.ok(statSync(absolute).isFile(), `qualification artifact is not a file ${currentPath}`);
+          }'''
+          if old not in text:
+              raise SystemExit('qualification artifact block not found')
+          test.write_text(text.replace(old, new), encoding='utf-8')
+
+          gate = Path('scripts/check-current-identity.mjs')
+          text = gate.read_text(encoding='utf-8')
+          needle = '  path === "docs/canonical/CURRENT.md" ||\n'
+          replacement = needle + '  path === "docs/p16/sg000066_exit_evidence.json" ||\n'
+          if needle not in text:
+              raise SystemExit('identity allowlist insertion point not found')
+          gate.write_text(text.replace(needle, replacement, 1), encoding='utf-8')
+          PY
+          git diff --check
+      - name: Commit evidence-preservation repair
+        shell: bash
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          set -euo pipefail
+          git add docs/p16/sg000066_exit_evidence.json apps/qdral-mcp/src/p16-exit.test.ts scripts/check-current-identity.mjs
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'test: preserve historical P16 evidence across Qdral rename'
+          git push origin "HEAD:${HEAD_REF}"
