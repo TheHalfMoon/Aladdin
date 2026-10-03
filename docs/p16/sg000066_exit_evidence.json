@@ -191,10 +191,13 @@
       "apps/quntal-mcp/src/parity-inventory.test.ts",
       "apps/quntal-mcp/src/surface.test.ts",
       "apps/quntal-mcp/src/kernel.test.ts",
-      "apps/quntal-mcp/src/fs-mutation.test.ts",
       "apps/quntal-mcp/src/process.test.ts",
-      "apps/quntal-mcp/src/desktop.test.ts",
-      "apps/quntal-mcp/src/clipboard-network.test.ts",
+      "apps/quntal-mcp/src/clipboard.test.ts",
+      "apps/quntal-mcp/src/network.test.ts",
+      "apps/quntal-mcp/src/uia.test.ts",
+      "apps/quntal-mcp/src/browser-qualification.test.ts",
+      "apps/quntal-mcp/src/tool-contract.test.ts",
+      "apps/quntal-mcp/src/transport-contract.test.ts",
       "apps/quntal-mcp/src/p16-exit.test.ts"
     ]
   },
