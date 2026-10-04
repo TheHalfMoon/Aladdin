@@ -1,0 +1,73 @@
+{
+  "id": "SG-000073",
+  "title": "Computer-use architecture and provenance freeze",
+  "program": "QDRAL-P18",
+  "state": "GRAIN",
+  "risk": "high",
+  "created": "2026-10-04",
+  "base": "49cf73562d6cc91faee24a7fe8f4a1f9fccccfbe",
+  "dependencies": [
+    "SG-000072"
+  ],
+  "objective": "Freeze the QDRAL-P18 computer-use architecture and donor provenance without widening authority: pin exact donor commit revisions, record exact reused and reference paths with licenses and reuse classifications, freeze the canonical ComputerActionProposal vocabulary and target identity vocabulary, fix process, IPC, trust, approval, and lease boundaries, record the denied-authority list, and fix the browser-host packaging strategy and Windows provider boundaries. Prove donor code is not independently reachable from MCP or remote interfaces and that no donor parser or backend receives authority-bearing fields.",
+  "scope": {
+    "include": [
+      "pinned UI-TARS donor revision bytedance/UI-TARS-desktop@2ff41a9e515828c5bd5b276e493d73aa0bdf4a3a with exact reused and reference paths, file and package licenses, required notices, and reuse classifications",
+      "canonical ComputerActionProposal vocabulary (proposal data only, never executable authority) and target identity vocabulary",
+      "process boundaries, IPC boundaries, and trust, approval, and lease boundaries between Deskal policy kernel and low-authority providers",
+      "denied-authority list carried forward from the P18 plan",
+      "browser-host packaging strategy and Windows provider boundaries",
+      "proof that donor code is not independently reachable from MCP or remote interfaces"
+    ],
+    "exclude": [
+      "browser launch or attachment",
+      "donor runtime dependency",
+      "network loading",
+      "capture or synthetic input",
+      "new MCP tools, profiles, or remote authority",
+      "any new kernel capability, approval class, trust right, lease right, shell, interpreter, or generic network authority"
+    ]
+  },
+  "authority_delta": {
+    "filesystem": "None.",
+    "process": "None.",
+    "network": "None.",
+    "browser": "None.",
+    "ui_input": "None.",
+    "secrets": "None.",
+    "approval": "None.",
+    "privileged": "None."
+  },
+  "invariants": [
+    "architecture work never widens authority to prove a point",
+    "model and provider output remains untrusted proposal input",
+    "no donor parser or backend receives authority-bearing fields"
+  ],
+  "acceptance": [
+    {
+      "id": "A1",
+      "claim": "Donor revisions, exact reused and reference paths, licenses, notices, and reuse classifications are recorded and every reused path resolves to its pinned revision."
+    },
+    {
+      "id": "A2",
+      "claim": "The ComputerActionProposal vocabulary carries proposal data only, target identities are Deskal-issued, and process, IPC, trust, approval, and lease boundaries are fixed with a denied-authority list."
+    },
+    {
+      "id": "A3",
+      "claim": "Donor code is proven unreachable from MCP and remote interfaces, and exact-head CI, genuine TypeSafe Jev, Alibaba Open Code Review, manual review of excluded files, and zero unresolved review threads all pass."
+    }
+  ],
+  "successor_requirements": {
+    "sg_000074": "SG-000074 may activate only after SG-000073 closes canonically with the frozen architecture as its base."
+  },
+  "review": {
+    "diffcipline": true,
+    "jev_semantic_review": true,
+    "alibaba_open_code_review": "required exact-range qualification where integrated",
+    "security_review": true,
+    "exact_head_ci": true,
+    "native_windows": true,
+    "release_artifact_qualification": true
+  },
+  "done_when": "The P18 architecture and donor provenance are frozen, bounded, and proven unreachable from authority surfaces, with no authority delta."
+}
