@@ -198,9 +198,11 @@ test("authorization metadata advertises only what the relay implements", () => {
   assert.equal(metadata.authorization_response_iss_parameter_supported, true);
 });
 
-test("successor and P18 grains stay inactive while SG-000067 is active", () => {
-  const specs = readdirSync(join(repo, ".specgrain", "specs"));
-  for (let n = 68; n <= 86; n += 1) {
-    assert.equal(specs.includes(`SG-0000${String(n)}.json`), false, `SG-0000${String(n)} must not be activated`);
-  }
+test("exactly one grain is active and no later grain is activated ahead of it", () => {
+  const dir = join(repo, ".specgrain", "specs");
+  const specs = readdirSync(dir).filter((name) => /^SG-\d{6}\.json$/.test(name)).sort();
+  const active = specs.filter((name) => (JSON.parse(readFileSync(join(dir, name), "utf8")) as { state: string }).state !== "CLOSED");
+  assert.equal(active.length, 1, `active grains: ${active.join(", ")}`);
+  assert.equal(specs[specs.length - 1], active[0], "no grain beyond the active grain exists");
+  assert.ok((active[0] ?? "") >= "SG-000067.json", "SG-000067 or its lawful successor is active");
 });

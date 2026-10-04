@@ -1,0 +1,87 @@
+{
+  "id": "SG-000068",
+  "title": "Claude distribution",
+  "program": "COTRA-P17",
+  "state": "GRAIN",
+  "risk": "high",
+  "created": "2026-10-04",
+  "base": "a28019e103d93a66f93eb1c72702f7ef179a90c7",
+  "dependencies": [
+    "SG-000067"
+  ],
+  "objective": "Qualify the currently supported Claude integration paths over Qdral's existing authority without widening it: the local Claude Desktop extension and Claude Code configuration over the canonical stdio entrypoint, and the remote Claude custom connector over the existing public Streamable HTTP relay edge, OAuth 2.1, device pairing, and remote-session lease, so the same Qdral pairing, remote identity, and local policy and approval boundary apply as for every other provider; keep Claude directory listing and target-account availability as externally observed states.",
+  "scope": {
+    "include": [
+      "re-verification of current official Claude connector documentation (transports, OAuth client identification, callback URLs, plan availability) before implementation and again before closeout",
+      "remote custom-connector qualification over the existing relay: dynamic client registration with Claude's published callback URLs, PKCE S256, exact resource and audience binding, issuer identification, and the core tool profile with contract annotations and security schemes",
+      "loopback redirect handling for native clients such as Claude Code that follows RFC 8252 port-agnostic loopback matching for registered loopback redirects without accepting non-loopback hosts, other schemes, or path changes",
+      "local Claude Desktop extension and Claude Code configuration examples generated or checked against the canonical tool catalog and entrypoint, with no secrets",
+      "the existing anthropic provider kind kept mapped to the core remote profile in the tool contract, with unknown provider kinds still denied",
+      "an explicit distribution record keeping SOFTWARE_READY separate from directory listing and target-account availability",
+      "regression tests proving no Claude-specific path bypasses qdrald, the canonical MCP builder, relay authorization, or the remote-session lease, and that no authority widens"
+    ],
+    "exclude": [
+      "claiming Claude directory listing or account availability without directly observed external evidence",
+      "embedding OAuth client secrets, tokens, relay keys, or other secrets in examples or evidence",
+      "any new kernel capability, MCP tool, OAuth scope, profile, approval class, trust right, executable admission, lease right, browser or desktop actuation, shell, interpreter, or generic network authority",
+      "paid hosting, domains, or services made mandatory",
+      "activating SG-000069 or any QDRAL-P18 grain before this grain closes canonically"
+    ]
+  },
+  "authority_delta": {
+    "filesystem": "None.",
+    "process": "None.",
+    "network": "None; the existing relay edge serves Claude as one more OAuth client.",
+    "browser": "None.",
+    "ui_input": "None.",
+    "secrets": "None; examples and evidence must be secret-free.",
+    "approval": "None.",
+    "privileged": "None."
+  },
+  "invariants": [
+    "a Claude connection receives exactly the core remote profile and nothing more than any other provider",
+    "loopback redirect matching never accepts a non-loopback host, a different scheme, or a different path",
+    "provider identity is metadata, never authority; qdrald, OAuth ceilings, device binding, the remote-session lease, workspace trust, and local approval remain authoritative",
+    "no software result promotes a provider-controlled distribution state"
+  ],
+  "acceptance": [
+    {
+      "id": "A1",
+      "claim": "A Claude-compatible remote connector flow over the existing relay passes registration, authorization with Claude's callback URLs, token exchange with exact resource binding, and core-profile discovery and calls, with fail-closed negative cases."
+    },
+    {
+      "id": "A2",
+      "claim": "Native-client loopback redirects match port-agnostically per RFC 8252 for registered loopback redirects and reject every non-loopback, scheme, or path variation."
+    },
+    {
+      "id": "A3",
+      "claim": "Local Claude Desktop and Claude Code configurations are checked against the canonical catalog and entrypoint, contain no secrets, and Claude directory and account states remain unpromoted."
+    },
+    {
+      "id": "A4",
+      "claim": "Exact-head CI, genuine TypeSafe Jev, Alibaba Open Code Review, manual review of excluded files, current official Claude requirement re-verification, and zero unresolved review threads all pass."
+    }
+  ],
+  "external_requirements_verified": {
+    "date": "2026-10-04",
+    "source_policy": "Official Claude documentation must be re-checked before closeout.",
+    "sources": [
+      "https://www.claude.com/docs/connectors/custom/remote-mcp",
+      "https://support.claude.com/en/articles/11503834"
+    ]
+  },
+  "successor_requirements": {
+    "sg_000069": "The next COTRA-P17 provider/distribution grain may activate only after SG-000068 closes canonically.",
+    "p18": "SG-000073 through SG-000086 remain new-grain-only and may not activate during SG-000068."
+  },
+  "review": {
+    "diffcipline": true,
+    "jev_semantic_review": true,
+    "alibaba_open_code_review": "required exact-range qualification where integrated",
+    "security_review": true,
+    "exact_head_ci": true,
+    "native_windows": true,
+    "release_artifact_qualification": true
+  },
+  "done_when": "Claude local and remote integration paths are qualified over Qdral's existing authority with identical boundaries to other providers, and every provider-controlled state remains explicit external evidence."
+}

@@ -2,7 +2,7 @@
   "id": "SG-000067",
   "title": "OpenAI public plugin package",
   "program": "COTRA-P17",
-  "state": "GRAIN",
+  "state": "CLOSED",
   "risk": "high",
   "created": "2026-10-03",
   "base": "dea92a454a91e999105d5f3a463b3a63368b4109",
@@ -98,5 +98,25 @@
     "native_windows": true,
     "release_artifact_qualification": true
   },
-  "done_when": "Qdral has one exact, tested, secret-free, current-format OpenAI plugin package and review bundle that is SOFTWARE_READY and SUBMISSION_READY over the existing governed relay/MCP authority, while every provider-controlled publication state remains explicit external evidence rather than a software claim."
+  "done_when": "Qdral has one exact, tested, secret-free, current-format OpenAI plugin package and review bundle that is SOFTWARE_READY and SUBMISSION_READY over the existing governed relay/MCP authority, while every provider-controlled publication state remains explicit external evidence rather than a software claim.",
+  "qualified_head": "fbdd6e034c0d2bd8a3cc25bb2d739cab4b6d0149",
+  "implementation_base": "479594786197978411b259cfbc101984ec618b35",
+  "implementation_merge": "a28019e103d93a66f93eb1c72702f7ef179a90c7",
+  "pre_merge_ci": "37177228108",
+  "pre_merge_review_gates": "37177228101",
+  "post_merge_ci": "37177575052",
+  "canonical_evidence": {
+    "implementation_pr": 181,
+    "implementation_base": "479594786197978411b259cfbc101984ec618b35",
+    "qualified_head": "fbdd6e034c0d2bd8a3cc25bb2d739cab4b6d0149",
+    "pre_merge_ci": "37177228108",
+    "pre_merge_review_gates": "37177228101",
+    "merge_sha": "a28019e103d93a66f93eb1c72702f7ef179a90c7",
+    "post_merge_ci": "37177575052",
+    "jev": "PASSED: genuine TypeSafe Jev exact-diff review covered 29/29 hunks with zero findings and zero blocking findings, pin 31f89602797fb7bea007f8a480bf368bf564954e",
+    "ocr": "PASSED: Alibaba Open Code Review v1.12.9 exact-range delegation over 23 changed files, 12 reviewable with delegated rules applied and 11 excluded (apps/qdral-mcp/src/openai-plugin.test.ts and apps/qdral-relay/src/self-host.test.ts by default-path classification; SECURITY.md, distribution/openai/assets/logo.svg, distribution/openai/review/DEMO_RECORDING.md, distribution/openai/review/RELEASE_NOTES.md, docs/legal/PRIVACY.md, docs/legal/TERMS.md, docs/p17/OPENAI_PLUGIN.md, docs/relay/SELF_HOSTING.md, and docs/security/SG-000067_OPENAI_PLUGIN_NOTE.md by unsupported-extension classification) manually reviewed",
+    "security_review": "PASS on exact qualified head: a current-format Agent Plugins plugin.json with OpenAI metadata only under extensions.com.openai and an mcp.json declaring exactly one streamable-http server supplied at build time; a builder and validator deriving the review tool scan from in-process discovery through the authoritative builder on the relay transport and rejecting non-core or local-only tools, annotation or securityScheme drift from the tool contract, extra servers, fields, or extensions, escaping assets, unsafe endpoints, and secret patterns; per-tool _meta.securitySchemes derived from the contract with no anonymous tool; a fixed false advertisement of client ID metadata documents the relay does not implement; an operator-configured domain-verification response that grants no authority (/mcp still 401 with the token); a review bundle with five positive and three negative cases and a distribution state record that keeps provider-controlled states unpromoted and SUBMISSION_READY blocked on owner prerequisites. Official OpenAI requirements re-verified 2026-10-04. No authority added. All closed SG-000001 through SG-000066 regressions pass. CodeRabbit skipped-review and cubic skipping notices evaluated as non-evidence noise with zero substantive findings; zero unresolved threads.",
+    "unresolved_review_threads": 0,
+    "authority_boundary": "OpenAI plugin package builder and validator, review bundle, per-tool security-scheme metadata, a corrected authorization-server metadata flag, and an operator-configured domain-verification response. No kernel capability, MCP tool, OAuth scope, profile, approval class, trust right, executable admission, lease right, actuation, shell, interpreter, or generic network authority is added; SUBMITTED, APPROVED, PUBLISHED, and ACCOUNT_VERIFIED remain NOT_OBSERVED."
+  }
 }

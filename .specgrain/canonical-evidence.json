@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "snapshot_base": "dea92a454a91e999105d5f3a463b3a63368b4109",
+  "snapshot_base": "a28019e103d93a66f93eb1c72702f7ef179a90c7",
   "state_semantics": {
     "GRAIN": "Authorized or active work packet whose acceptance is not yet canonically proven.",
     "PROVEN": "Acceptance and required qualification are proven, but canonical closeout/governance is not yet complete.",
@@ -802,6 +802,18 @@
       "review_basis": "Exact-head genuine TypeSafe Jev 2/2 changed-file hunks and 7/7 slices with zero findings/blocking findings (pin 31f89602797fb7bea007f8a480bf368bf564954e), Alibaba Open Code Review v1.12.9 exact-range delegation over 2 files with 1 reviewable JSON and 1 excluded TypeScript test manually reviewed in full, exact-diff manual security review, Windows/Ubuntu Rust and Node, Governance, Supply chain audit, Relay container, Release qualification, successful 8/8 post-merge CI on the implementation merge, and zero unresolved review threads. CodeRabbit/Qodo/Cubic outputs are not governance evidence.",
       "unresolved_review_threads": 0,
       "authority_boundary": "Evidence and regression tests only. No production/runtime code, donor runtime or dependency, process/browser/screenshot/native-input/generic-network/shell authority, trust/approval/lease mutation, provider implementation, or P18 activation was added."
+    },
+    "SG-000067": {
+      "implementation_pr": 181,
+      "implementation_base": "479594786197978411b259cfbc101984ec618b35",
+      "qualified_head": "fbdd6e034c0d2bd8a3cc25bb2d739cab4b6d0149",
+      "pre_merge_ci": "37177228108",
+      "pre_merge_review_gates": "37177228101",
+      "merge_sha": "a28019e103d93a66f93eb1c72702f7ef179a90c7",
+      "post_merge_ci": "37177575052",
+      "review_basis": "Exact-head genuine TypeSafe Jev 29/29 hunks with zero findings/blocking findings (pin 31f89602797fb7bea007f8a480bf368bf564954e), Alibaba Open Code Review v1.12.9 exact-range delegation over 23 files with 12 reviewable and 11 excluded files manually reviewed, exact-diff manual security review, official OpenAI requirement re-verification on 2026-10-04, Windows/Ubuntu Rust Node Governance, Supply chain audit, Release qualification, and Relay container, successful post-merge CI, and zero unresolved review threads. CodeRabbit skipped-review and cubic skipping notices evaluated as non-evidence noise with zero substantive findings.",
+      "unresolved_review_threads": 0,
+      "authority_boundary": "OpenAI plugin package builder and validator, review bundle, per-tool security-scheme metadata, a corrected authorization-server metadata flag, and an operator-configured domain-verification response. No kernel capability, MCP tool, OAuth scope, profile, approval class, trust right, executable admission, lease right, actuation, shell, interpreter, or generic network authority is added; SUBMITTED, APPROVED, PUBLISHED, and ACCOUNT_VERIFIED remain NOT_OBSERVED."
     }
   }
 }
