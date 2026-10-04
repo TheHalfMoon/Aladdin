@@ -455,7 +455,9 @@ test("SG-000066 imports no Desktop Commander, Kernux, or UI-TARS runtime", () =>
     join(repo, "Cargo.toml"),
     join(repo, "Cargo.lock"),
     join(repo, "apps", "qdral-mcp", "package.json"),
+    join(repo, "apps", "qdral-relay", "package.json"),
     ...collectFiles(join(repo, "apps", "qdral-mcp", "src"), (path) => path.endsWith(".ts") && !path.endsWith(".test.ts")),
+    ...collectFiles(join(repo, "apps", "qdral-relay", "src"), (path) => path.endsWith(".ts") && !path.endsWith(".test.ts")),
     ...collectFiles(join(repo, "crates"), (path) => path.endsWith(".rs"))
   ];
   const forbiddenRuntimeMarkers = [
