@@ -364,6 +364,49 @@ test("SG-000068: Claude web and Claude Code connector flows reach the device wit
   }
 });
 
+test("SG-000069: a Vibe Work-style OAuth connector reaches the core profile and static bearer credentials are refused", async () => {
+  const r = await startRelay(mkdtempSync(join(tmpdir(), "qdral-relay-mistral-")));
+  try {
+    // Vibe Work registers dynamically with an https callback; the exact Mistral
+    // callback is not published, so a representative https callback is used.
+    const linked = await link(r, true, { registerRedirect: "https://vibe-work.example/oauth/callback", clientName: "Vibe Work" });
+    assert.ok(!("denied" in linked));
+    if ("denied" in linked) return;
+    const uplink = startUplink(r, linked);
+    try {
+      const deviceId = loadDeviceKey(linked.devicePaths.key).deviceId;
+      await waitFor(() => r.relay.hub.isOnline(deviceId), "device channel");
+      const init = await mcp(r, linked.accessToken, { jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "Vibe Work", version: "1" } } });
+      assert.equal(init.status, 200);
+      const session = init.headers.get("mcp-session-id") ?? "";
+      await init.text();
+      await (await mcp(r, linked.accessToken, { jsonrpc: "2.0", method: "notifications/initialized" }, session)).text();
+      const list = await mcp(r, linked.accessToken, { jsonrpc: "2.0", id: 2, method: "tools/list" }, session);
+      const listed = ((await list.json()) as { result: { tools: Array<{ name: string }> } }).result.tools;
+      assert.deepEqual(listed.map((t) => t.name).sort(), [...REMOTE_TOOL_NAMES].sort());
+    } finally {
+      await uplink.stop();
+    }
+    // A static API key or loopback-style bearer is not an OAuth access token.
+    for (const credential of ["Q".repeat(40), "qdral-loopback-token-" + "x".repeat(32), "Basic " + Buffer.from("user:pass").toString("base64")]) {
+      const reply = await fetch(`${r.origin}/mcp`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          accept: "application/json, text/event-stream",
+          authorization: credential.startsWith("Basic ") ? credential : `Bearer ${credential}`
+        },
+        body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" })
+      });
+      assert.equal(reply.status, 401, credential.slice(0, 8));
+      assert.ok((reply.headers.get("www-authenticate") ?? "").startsWith("Bearer "), "OAuth challenge");
+      await reply.text();
+    }
+  } finally {
+    await r.close();
+  }
+});
+
 test("negative: authorization code replay is refused and revokes every token issued from the code", async () => {
   const r = await startRelay(mkdtempSync(join(tmpdir(), "qdral-relay-state-")));
   try {
