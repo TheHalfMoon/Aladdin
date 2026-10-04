@@ -24,6 +24,10 @@ qdral mcp serve
   Desktop Extension with the `mcpb` CLI (rename to `manifest.json` at the
   bundle root). Directory listing and review by Anthropic are separate
   external steps and are not claimed here.
+- `claude-code.mcp.json`: project-scoped `.mcp.json` for Claude Code (or
+  `claude mcp add qdral -- qdral mcp stdio`). Claude Code reaches a remote
+  Qdral relay as a custom connector through OAuth with a
+  `http://localhost:<port>/callback` redirect; see `docs/p17/CLAUDE.md`.
 - `codex-config.toml`: `[mcp_servers.qdral]` for `~/.codex/config.toml`.
   Uncomment the HTTP block to use loopback instead of stdio.
 - `vibe-code-config.toml`: `[[mcp_servers]]` for Vibe Code `config.toml`,

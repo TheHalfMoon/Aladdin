@@ -22,6 +22,12 @@ test("client examples use only supported installed entrypoints", () => {
   };
   assert.deepEqual(claude.mcpServers.qdral, { command: "qdral", args: ["mcp", "stdio"] });
 
+  // SG-000068: Claude Code project configuration uses the same stdio entrypoint.
+  const claudeCode = jsonExample("claude-code.mcp.json") as {
+    mcpServers: Record<string, unknown>;
+  };
+  assert.deepEqual(claudeCode, { mcpServers: { qdral: { type: "stdio", command: "qdral", args: ["mcp", "stdio"] } } });
+
   const genericStdio = jsonExample("generic-stdio.json") as {
     command: string;
     args: string[];
@@ -84,4 +90,18 @@ test("desktop extension manifest matches the canonical catalog", () => {
     manifest.tools.map((tool) => tool.name).sort(),
     [...CANONICAL_TOOL_NAMES].sort()
   );
+});
+
+test("SG-000068: Claude directory and account states are never promoted by software", () => {
+  const state = JSON.parse(
+    readFileSync(join(here, "..", "..", "..", "distribution", "claude", "distribution-state.json"), "utf8")
+  ) as { provider_controlled: string[]; status: Record<string, { state: string; evidence: unknown }> };
+  assert.deepEqual(state.provider_controlled, ["DIRECTORY_SUBMITTED", "DIRECTORY_LISTED", "ACCOUNT_VERIFIED"]);
+  for (const name of state.provider_controlled) {
+    const entry = state.status[name];
+    assert.ok(entry !== undefined, name);
+    if (entry.state !== "NOT_OBSERVED") {
+      assert.ok(entry.evidence !== null && typeof entry.evidence === "object", `${name} needs observed Anthropic evidence`);
+    }
+  }
 });
