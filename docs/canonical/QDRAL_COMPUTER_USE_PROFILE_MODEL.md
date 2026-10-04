@@ -3,7 +3,7 @@
 Status: PLANNED PROFILE CONTRACT FOR QDRAL-P18
 Date: 2026-10-03
 
-Profiles are explicit allowlists derived from the authoritative Qdral tool contract. Provider support or implementation presence never implies profile membership.
+Profiles are explicit allowlists derived from the authoritative Deskal tool contract. Provider support or implementation presence never implies profile membership.
 
 ## Target local profiles
 

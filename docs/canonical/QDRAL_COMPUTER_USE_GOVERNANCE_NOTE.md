@@ -7,4 +7,4 @@ The UI-TARS donor study does not modify the authority of SG-000066. In SG-000066
 
 COTRA-P17 remains the provider-distribution/v0.2 sequence and does not depend on implementing QDRAL-P18. QDRAL-P18 is planned after SG-000072 so v0.2 release work is not blocked by computer-use feature expansion.
 
-Historical Cotra evidence remains historical. New planning/runtime identity uses Qdral while existing canonical historical files are not blindly renamed.
+Historical Cotra evidence remains historical. New planning/runtime identity uses Deskal while existing canonical historical files are not blindly renamed.

@@ -26,7 +26,7 @@ Failure never widens authority. A failure in a structured path does not authoriz
 | workspace trust/policy revision change | affected pending identities/approvals/leases fail closed |
 | emergency revoke | affected local/remote computer-use authority is invalidated immediately |
 | lock/logoff/RDP/session transition | affected desktop/capture/input/remote authority invalidated; protected surfaces remain inaccessible |
-| Qdral restart | volatile browser/capture/input/remote leases and volatile target identities invalidated unless a future grain explicitly proves safe persistence |
+| Deskal restart | volatile browser/capture/input/remote leases and volatile target identities invalidated unless a future grain explicitly proves safe persistence |
 | remote disconnect | no surprise offline mutation queue; dispatched mutation is not auto-retried |
 | timeout/cancellation | outcome is typed unknown/cancelled unless a verified provider postcondition proves a result; no fabricated success |
 
@@ -39,4 +39,4 @@ Failure never widens authority. A failure in a structured path does not authoriz
 
 ## Evidence rule
 
-Qdral distinguishes `not_started`, `dispatched`, `completed`, `cancelled`, and `outcome_unknown` where the provider can support that distinction. It never claims a mutation was reverted, terminated, or completed without provider evidence.
+Deskal distinguishes `not_started`, `dispatched`, `completed`, `cancelled`, and `outcome_unknown` where the provider can support that distinction. It never claims a mutation was reverted, terminated, or completed without provider evidence.
