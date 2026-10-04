@@ -1,12 +1,14 @@
-# Qdral
+# Deskal
 
 **Computer Orchestration & Trusted Runtime Access**
 
-Qdral is an open-source, local-first MCP gateway that lets ChatGPT work with an explicitly trusted folder on your Windows computer through a small set of bounded tools, with local approval for anything that changes your computer. It connects through the OpenAI Secure MCP Tunnel, so no inbound port is opened on your machine.
+Deskal is an open-source, local-first MCP gateway that lets ChatGPT work with an explicitly trusted folder on your Windows computer through a small set of bounded tools, with local approval for anything that changes your computer. It connects through the OpenAI Secure MCP Tunnel, so no inbound port is opened on your machine.
 
-Qdral is not a remote shell, a remote desktop, or a "run anything" agent.
+Deskal is not a remote shell, a remote desktop, or a "run anything" agent.
 
-## What ChatGPT can do through Qdral
+> **Compatibility note:** the product name is now **Deskal**. The current v0.2 compatibility surface intentionally retains the `qdral` CLI, `qdrald` daemon, `@qdral/*` packages, `QDRAL_*` environment variables, existing install/storage paths, and the current `TheHalfMoon/Qdral` repository slug until those contracts are migrated separately. See [`docs/identity/DESKAL_RENAME.md`](docs/identity/DESKAL_RENAME.md).
+
+## What ChatGPT can do through Deskal
 
 Exactly these 20 tools are exposed over MCP:
 
@@ -20,30 +22,32 @@ Exactly these 20 tools are exposed over MCP:
 | Git (network) | `git_fetch_preview`, `git_fetch`, `git_push_preview`, `git_push` | local approval; see limitations |
 | Processes | `process_spawn` | local approval; see limitations |
 
-Everything else is denied. Qdral also contains capabilities that are deliberately **not** exposed to ChatGPT in this release (browser automation, Windows UI Automation, screenshots and coordinate input, clipboard, and destination-scoped HTTPS fetch); they cannot be reached over MCP.
+Everything else is denied. Deskal also contains capabilities that are deliberately **not** exposed to ChatGPT in this release (browser automation, Windows UI Automation, screenshots and coordinate input, clipboard, and destination-scoped HTTPS fetch); they cannot be reached over MCP.
 
 ### Current limitations
 
 - `process_spawn` on Windows is restricted to `whoami.exe`, run in an isolated AppContainer.
-- `git_fetch` and `git_push` require destination policies that `qdral` does not configure yet, so they fail closed in an installed Qdral.
+- `git_fetch` and `git_push` require destination policies that the current compatibility runtime does not configure yet, so they fail closed in an installed Deskal runtime.
 - Release binaries are not code-signed (there is no paid certificate under the project's zero-cost rule). Windows SmartScreen may warn; verify the archive with `SHA256SUMS.txt` and the GitHub build-provenance attestation.
-- Qdral runs only while you are signed in, because approvals appear on your desktop.
+- Deskal runs only while you are signed in, because approvals appear on your desktop.
 
 ## How approvals work
 
-- **SOFT approval** — a Qdral dialog appears on your desktop describing the exact action (for example, the file and content hash). Approve or deny it yourself. Each approval is used once, expires quickly, and is bound to that exact action, workspace, and policy.
+- **SOFT approval** — a Deskal dialog appears on your desktop describing the exact action (for example, the file and content hash). Approve or deny it yourself. Each approval is used once, expires quickly, and is bound to that exact action, workspace, and policy.
 - **STRONG approval** — Windows Hello (PIN, fingerprint, or face) for trust changes and emergency revoke.
-- ChatGPT cannot approve its own actions: approvals come only from the local broker, and Qdral's own windows are excluded from automation.
+- ChatGPT cannot approve its own actions: approvals come only from the local broker, and Deskal's own windows are excluded from automation.
 - `qdral approvals` lists recent decisions; `qdral emergency-revoke` invalidates every pending approval.
 
 ## Requirements
 
 - Windows 10 version 1809 (build 17763) or later, or Windows 11, x64.
 - Node.js 20 or later.
-- The official OpenAI tunnel client executable, and a Secure MCP Tunnel id (`tunnel_…`) and runtime key from OpenAI for your ChatGPT workspace. Follow OpenAI's documentation to create them; Qdral does not create, download, or redistribute them.
+- The official OpenAI tunnel client executable, and a Secure MCP Tunnel id (`tunnel_…`) and runtime key from OpenAI for your ChatGPT workspace. Follow OpenAI's documentation to create them; Deskal does not create, download, or redistribute them.
 - No administrator rights. Do not use "Run as administrator".
 
 ## Install
+
+The current transition release keeps the existing archive and executable names for compatibility.
 
 1. Download `qdral-<version>-windows-x64.zip` and `SHA256SUMS.txt` from the project's GitHub Releases page (release automation only prepares drafts; a release appears there once the maintainer publishes it) and verify the hash:
    ```powershell
@@ -56,21 +60,21 @@ Everything else is denied. Qdral also contains capabilities that are deliberatel
    Optionally verify provenance: `gh attestation verify .\qdral-<version>-windows-x64.zip --repo TheHalfMoon/Qdral`.
 2. Extract the archive and run, from the extracted folder:
    `.\qdral.exe install`
-   Every file is checked against `manifest.json` before anything is copied. Qdral installs to `%LOCALAPPDATA%\Qdral`, readable only by you (and Windows itself), and adds `%LOCALAPPDATA%\Qdral\bin` to your user PATH (`--no-path` to skip). Open a new terminal afterwards.
+   Every file is checked against `manifest.json` before anything is copied. The compatibility installer currently installs to `%LOCALAPPDATA%\Qdral`, readable only by you (and Windows itself), and adds `%LOCALAPPDATA%\Qdral\bin` to your user PATH (`--no-path` to skip). Open a new terminal afterwards.
 
 ## Configure
 
 1. Add a workspace (a folder ChatGPT may use):
    `qdral workspace add myproject C:\path\to\project`
-   Folders that contain Qdral's own data (for example your whole user profile) are refused.
+   Folders that contain Deskal's own protected data are refused.
 2. Optionally grant workspace trust with Windows Hello: `qdral workspace trust myproject`.
 3. Configure the tunnel:
    `qdral tunnel setup --client C:\path\to\tunnel-client.exe --tunnel-id tunnel_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx`
-   You are prompted for the runtime key without echo (or pass `--key-file <path>`). The key is stored only in Qdral's protected folder, passed to the tunnel client by file reference, and never printed or logged.
+   You are prompted for the runtime key without echo (or pass `--key-file <path>`). The key is stored only in the protected local folder, passed to the tunnel client by file reference, and never printed or logged.
 
 ## Connect ChatGPT
 
-1. `qdral start` — starts the official tunnel client under Qdral's supervisor. It reports `running` only when the tunnel client is alive and its local health endpoint answers.
+1. `qdral start` — starts the official tunnel client under Deskal's supervisor. It reports `running` only when the tunnel client is alive and its local health endpoint answers.
 2. In ChatGPT, connect to your Secure MCP Tunnel as described in OpenAI's documentation. ChatGPT then sees the 20 tools above.
 
 ## Connect local MCP clients (no tunnel required)
@@ -101,7 +105,7 @@ Codex and other command-based clients use the same command and arguments:
 
 Mistral Vibe Code accepts a stdio entry in its MCP server list with command `qdral` and arguments `["mcp", "stdio"]`. Generic MCP clients and the MCP Inspector connect with transport `stdio`, command `qdral`, and arguments `["mcp", "stdio"]`.
 
-`qdral` here is `%LOCALAPPDATA%\Qdral\bin\qdral.exe` on your user PATH after install. It resolves the active verified release on every launch, refuses tampered or inactive payloads, and fails closed when no workspace is configured. Tested per-client files live in [`examples/mcp-clients`](examples/mcp-clients) (Claude Desktop JSON and Desktop Extension manifest, Codex TOML, Vibe Code TOML, generic shapes, and the Inspector qualification script).
+`qdral` here is the retained compatibility command at `%LOCALAPPDATA%\Qdral\bin\qdral.exe` on your user PATH after install. It resolves the active verified release on every launch, refuses tampered or inactive payloads, and fails closed when no workspace is configured. Tested per-client files live in [`examples/mcp-clients`](examples/mcp-clients) (Claude Desktop JSON and Desktop Extension manifest, Codex TOML, Vibe Code TOML, generic shapes, and the Inspector qualification script).
 
 ## Connect over loopback HTTP (no tunnel required)
 
@@ -129,20 +133,20 @@ Mistral Vibe Code HTTP mode and generic Streamable HTTP clients connect to the p
 
 ## Diagnose problems
 
-Run `qdral doctor`. Each check reports `PASS`, `WARN`, `FAIL`, or `????` (could not be checked) with one line of evidence — Qdral never reports health it did not observe. Logs are in `%LOCALAPPDATA%\Qdral\logs` (`tunnel.log`, `supervisor.log`, `lifecycle.log`); tunnel output is redacted before it is written.
+Run `qdral doctor`. Each check reports `PASS`, `WARN`, `FAIL`, or `????` (could not be checked) with one line of evidence — Deskal never reports health it did not observe. Logs are currently stored in the compatibility path `%LOCALAPPDATA%\Qdral\logs` (`tunnel.log`, `supervisor.log`, `lifecycle.log`); tunnel output is redacted before it is written.
 
 ## Update
 
-Qdral never checks for or downloads updates by itself.
+Deskal never checks for or downloads updates by itself.
 
 1. Download and verify the new release as in Install, then extract it.
 2. `qdral update --source C:\path\to\extracted-release --check` shows the version change.
-3. `qdral update --source C:\path\to\extracted-release` stops Qdral, switches versions, has the new version verify itself, and restarts it. If the new version fails its own check, the previous version is restored automatically and `qdral doctor` reports why.
+3. `qdral update --source C:\path\to\extracted-release` stops the runtime, switches versions, has the new version verify itself, and restarts it. If the new version fails its own check, the previous version is restored automatically and `qdral doctor` reports why.
 4. `qdral rollback` returns to the previous version. Older versions require `--allow-downgrade`.
 
 ## Uninstall
 
-- `qdral uninstall` stops Qdral and removes its programs and the PATH entry. Your configuration, tunnel key, logs, and audit/approval/trust history are **kept** and listed.
+- `qdral uninstall` stops Deskal and removes its programs and the PATH entry. Your configuration, tunnel key, logs, and audit/approval/trust history are **kept** and listed.
 - `qdral uninstall --purge-data --yes` also deletes that data.
 - Your workspaces are never touched.
 
@@ -154,10 +158,13 @@ Qdral never checks for or downloads updates by itself.
 - [Installer and lifecycle design](docs/canonical/P12_INSTALLER_LIFECYCLE_DESIGN.md)
 - [Dependency and license review](docs/research/DEPENDENCY_LICENSE_REVIEW.md)
 - [Diffcipline](docs/governance/DIFFCIPLINE.md)
+- [Deskal identity record](docs/identity/DESKAL_RENAME.md)
 
 ## Building from source
 
 `npm ci --ignore-scripts && npm run build`, then `cargo build --release --locked -p qdrald -p qdral-lifecycle --bins`, then `node scripts/package-release.mjs --out <dir>` to assemble a release directory and `node scripts/archive-release.mjs --release <dir> --out <dir>.zip` to archive it. CI builds with the deterministic flags in `.github/actions/build-package-qualify/action.yml` and checks that an independent rebuild is byte-identical.
+
+The `qdral*` Cargo and release identifiers in this command are compatibility identifiers retained during the Deskal rename and are not the current product brand.
 
 ## License
 
