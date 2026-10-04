@@ -407,6 +407,36 @@ test("SG-000069: a Vibe Work-style OAuth connector reaches the core profile and 
   }
 });
 
+test("SG-000070: a Codex-style OAuth client with a loopback redirect reaches the core profile", async () => {
+  const r = await startRelay(mkdtempSync(join(tmpdir(), "qdral-relay-codex-")));
+  try {
+    const linked = await link(r, true, {
+      registerRedirect: "http://127.0.0.1/callback",
+      useRedirect: "http://127.0.0.1:1455/callback",
+      clientName: "Codex"
+    });
+    assert.ok(!("denied" in linked));
+    if ("denied" in linked) return;
+    const uplink = startUplink(r, linked);
+    try {
+      const deviceId = loadDeviceKey(linked.devicePaths.key).deviceId;
+      await waitFor(() => r.relay.hub.isOnline(deviceId), "device channel");
+      const init = await mcp(r, linked.accessToken, { jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "codex", version: "1" } } });
+      assert.equal(init.status, 200);
+      const session = init.headers.get("mcp-session-id") ?? "";
+      await init.text();
+      await (await mcp(r, linked.accessToken, { jsonrpc: "2.0", method: "notifications/initialized" }, session)).text();
+      const list = await mcp(r, linked.accessToken, { jsonrpc: "2.0", id: 2, method: "tools/list" }, session);
+      const listed = ((await list.json()) as { result: { tools: Array<{ name: string }> } }).result.tools;
+      assert.deepEqual(listed.map((t) => t.name).sort(), [...REMOTE_TOOL_NAMES].sort());
+    } finally {
+      await uplink.stop();
+    }
+  } finally {
+    await r.close();
+  }
+});
+
 test("negative: authorization code replay is refused and revokes every token issued from the code", async () => {
   const r = await startRelay(mkdtempSync(join(tmpdir(), "qdral-relay-state-")));
   try {

@@ -338,6 +338,24 @@ pub fn run(layout: &Layout, platform: &dyn Platform) -> DoctorReport {
         None => check("recovery", CheckStatus::Unknown, "no install record"),
     });
 
+    // SG-000070 client integration readiness. These checks only read state:
+    // they never print credentials, tokens, or keys, and never change
+    // configuration, trust, or remote authority.
+    checks.push(match crate::mcp::resolve_stdio_launch(layout, platform) {
+        Ok((launch, _)) if launch.script.is_file() && launch.qdrald.is_file() => check(
+            "mcp_stdio_entrypoint",
+            CheckStatus::Pass,
+            "`qdral mcp stdio` resolves to the verified MCP server and qdrald for local clients (Claude, Codex, Vibe Code, generic MCP)",
+        ),
+        Ok(_) => check(
+            "mcp_stdio_entrypoint",
+            CheckStatus::Fail,
+            "the verified install is missing the MCP server or qdrald",
+        ),
+        Err(error) => check("mcp_stdio_entrypoint", CheckStatus::Fail, error.message),
+    });
+    checks.push(remote_integration_check(layout));
+
     let retained = layout
         .retained_data()
         .into_iter()
@@ -357,6 +375,56 @@ pub fn run(layout: &Layout, platform: &dyn Platform) -> DoctorReport {
     DoctorReport {
         healthy: !checks.iter().any(|check| check.status == CheckStatus::Fail),
         checks,
+    }
+}
+
+/// Reports whether remote access is enabled and paired, naming only the
+/// relay origin. It never reads or prints the device key or any token.
+fn remote_integration_check(layout: &Layout) -> Check {
+    let uplink = crate::remote::uplink_config_path(layout);
+    if !uplink.exists() {
+        return check(
+            "remote_integration",
+            CheckStatus::Pass,
+            "remote access is not enabled; only local clients can connect",
+        );
+    }
+    let parsed = std::fs::read(&uplink)
+        .ok()
+        .and_then(|bytes| serde_json::from_slice::<serde_json::Value>(&bytes).ok());
+    match parsed {
+        Some(record) => {
+            let origin = record
+                .get("relayOrigin")
+                .and_then(serde_json::Value::as_str)
+                .filter(|origin| {
+                    origin.starts_with("https://") || origin.starts_with("http://127.0.0.1:")
+                })
+                .unwrap_or("an unrecognized relay");
+            let paired = record
+                .get("connections")
+                .and_then(serde_json::Value::as_array)
+                .map(|connections| !connections.is_empty())
+                .unwrap_or(false);
+            check(
+                "remote_integration",
+                if paired {
+                    CheckStatus::Pass
+                } else {
+                    CheckStatus::Warn
+                },
+                if paired {
+                    format!("remote access is paired with {origin}; every remote call still needs a local remote-session lease")
+                } else {
+                    format!("remote access is enabled for {origin} but no connection is paired yet")
+                },
+            )
+        }
+        None => check(
+            "remote_integration",
+            CheckStatus::Fail,
+            "the remote uplink record is unreadable; re-enable remote access",
+        ),
     }
 }
 
@@ -401,6 +469,53 @@ fn approval_surface() -> Check {
 mod tests {
     use super::*;
     use crate::test_support::{temp_dir, FakePlatform};
+
+    #[test]
+    fn remote_integration_reports_state_without_secrets() {
+        let layout = Layout::new(temp_dir("doctor-remote"));
+        let absent = remote_integration_check(&layout);
+        assert_eq!(absent.status, CheckStatus::Pass);
+        assert!(absent.detail.contains("not enabled"));
+
+        let path = crate::remote::uplink_config_path(&layout);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        let secret = "PRIVATE-KEY-MATERIAL-MUST-NOT-PRINT";
+        std::fs::write(
+            &path,
+            format!(
+                r#"{{"relayOrigin":"https://relay.example.com","identity":{{}},"privateKeyJwkBase64":"{secret}","connections":[]}}"#
+            ),
+        )
+        .unwrap();
+        let unpaired = remote_integration_check(&layout);
+        assert_eq!(unpaired.status, CheckStatus::Warn);
+        assert!(unpaired.detail.contains("https://relay.example.com"));
+        assert!(!unpaired.detail.contains(secret));
+
+        std::fs::write(
+            &path,
+            format!(
+                r#"{{"relayOrigin":"https://relay.example.com","identity":{{}},"privateKeyJwkBase64":"{secret}","connections":[{{"remoteConnectionId":"rc"}}]}}"#
+            ),
+        )
+        .unwrap();
+        let paired = remote_integration_check(&layout);
+        assert_eq!(paired.status, CheckStatus::Pass);
+        assert!(paired.detail.contains("remote-session lease"));
+        assert!(!paired.detail.contains(secret));
+
+        std::fs::write(
+            &path,
+            format!(r#"{{"relayOrigin":"javascript:{secret}","connections":[1]}}"#),
+        )
+        .unwrap();
+        let odd = remote_integration_check(&layout);
+        assert!(odd.detail.contains("an unrecognized relay"));
+        assert!(!odd.detail.contains(secret));
+
+        std::fs::write(&path, b"not json").unwrap();
+        assert_eq!(remote_integration_check(&layout).status, CheckStatus::Fail);
+    }
 
     #[test]
     fn uninstalled_root_fails_integrity_without_claiming_health() {
