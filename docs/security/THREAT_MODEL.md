@@ -1,7 +1,12 @@
-# Qdral Threat Model
+# Deskal Threat Model
 
 Status: INITIAL CANONICAL SECURITY MODEL
 Date: 2026-09-23
+
+> Product identity note: this model was authored under the Qdral program name.
+> The current product is Deskal. `qdrald`, `%LOCALAPPDATA%\Qdral` storage
+> paths, and `Qdral`-qualified protected surfaces below denote retained
+> compatibility identifiers governed by `docs/identity/DESKAL_RENAME.md`.
 
 ## 1. Security objective
 
