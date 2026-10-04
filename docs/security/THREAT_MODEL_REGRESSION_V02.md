@@ -4,8 +4,9 @@ Status: SG-000072 RELEASE REGRESSION
 Date: 2026-10-04
 Baseline: `docs/security/THREAT_MODEL.md` (T01-T28),
 `docs/security/UNIVERSAL_CONNECTIVITY_THREAT_MODEL.md` (UC series),
-`docs/security/THREAT_MODEL_REGRESSION.md` (QDRAL-P13 regression, still valid
-for the P13-closed surfaces and not repeated here).
+`docs/security/THREAT_MODEL_REGRESSION.md` (QDRAL-P13 regression evidence,
+retained as historical record; v0.2-relevant controls are re-proven below
+with current tests).
 
 Scope: every v0.2 surface added or exposed after P13 — local MCP edge,
 loopback HTTP transport, relay protocol and device channel, OAuth 2.1

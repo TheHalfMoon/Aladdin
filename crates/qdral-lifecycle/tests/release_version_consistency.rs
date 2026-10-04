@@ -51,67 +51,67 @@ fn workspace_cargo_version(root: &Path) -> String {
 #[test]
 fn every_release_surface_reports_the_single_release_line() {
     let root = repo_root();
-    let mut observed: Vec<(&str, String)> = Vec::new();
-
-    observed.push((
-        "Cargo.toml [workspace.package]",
-        workspace_cargo_version(&root),
-    ));
-    observed.push((
-        "package.json",
-        json_version(&root.join("package.json"), "/version"),
-    ));
-    observed.push((
-        "apps/qdral-mcp/package.json",
-        json_version(&root.join("apps/qdral-mcp/package.json"), "/version"),
-    ));
-    observed.push((
-        "apps/qdral-relay/package.json",
-        json_version(&root.join("apps/qdral-relay/package.json"), "/version"),
-    ));
-    observed.push((
-        "apps/qdral-relay dependency on @qdral/mcp",
-        json_version(
-            &root.join("apps/qdral-relay/package.json"),
-            "/dependencies/@qdral~1mcp",
+    let observed: Vec<(&str, String)> = vec![
+        (
+            "Cargo.toml [workspace.package]",
+            workspace_cargo_version(&root),
         ),
-    ));
-    observed.push((
-        "distribution/codex/qdral/plugin.json",
-        json_version(
-            &root.join("distribution/codex/qdral/plugin.json"),
-            "/version",
+        (
+            "package.json",
+            json_version(&root.join("package.json"), "/version"),
         ),
-    ));
-    observed.push((
-        "examples/mcp-clients/claude-desktop-mcpb-manifest.json",
-        json_version(
-            &root.join("examples/mcp-clients/claude-desktop-mcpb-manifest.json"),
-            "/version",
+        (
+            "apps/qdral-mcp/package.json",
+            json_version(&root.join("apps/qdral-mcp/package.json"), "/version"),
         ),
-    ));
-    observed.push((
-        "package-lock.json root",
-        json_version(&root.join("package-lock.json"), "/version"),
-    ));
-    observed.push((
-        "package-lock.json packages[\"\"]",
-        json_version(&root.join("package-lock.json"), "/packages//version"),
-    ));
-    observed.push((
-        "package-lock.json apps/qdral-mcp",
-        json_version(
-            &root.join("package-lock.json"),
-            "/packages/apps~1qdral-mcp/version",
+        (
+            "apps/qdral-relay/package.json",
+            json_version(&root.join("apps/qdral-relay/package.json"), "/version"),
         ),
-    ));
-    observed.push((
-        "package-lock.json apps/qdral-relay",
-        json_version(
-            &root.join("package-lock.json"),
-            "/packages/apps~1qdral-relay/version",
+        (
+            "apps/qdral-relay dependency on @qdral/mcp",
+            json_version(
+                &root.join("apps/qdral-relay/package.json"),
+                "/dependencies/@qdral~1mcp",
+            ),
         ),
-    ));
+        (
+            "distribution/codex/qdral/plugin.json",
+            json_version(
+                &root.join("distribution/codex/qdral/plugin.json"),
+                "/version",
+            ),
+        ),
+        (
+            "examples/mcp-clients/claude-desktop-mcpb-manifest.json",
+            json_version(
+                &root.join("examples/mcp-clients/claude-desktop-mcpb-manifest.json"),
+                "/version",
+            ),
+        ),
+        (
+            "package-lock.json root",
+            json_version(&root.join("package-lock.json"), "/version"),
+        ),
+        (
+            "package-lock.json packages[\"\"]",
+            json_version(&root.join("package-lock.json"), "/packages//version"),
+        ),
+        (
+            "package-lock.json apps/qdral-mcp",
+            json_version(
+                &root.join("package-lock.json"),
+                "/packages/apps~1qdral-mcp/version",
+            ),
+        ),
+        (
+            "package-lock.json apps/qdral-relay",
+            json_version(
+                &root.join("package-lock.json"),
+                "/packages/apps~1qdral-relay/version",
+            ),
+        ),
+    ];
 
     let server = read(&root.join("apps/qdral-mcp/src/server.ts"));
     let marker = format!("version: \"{EXPECTED_RELEASE_VERSION}\"");
@@ -142,12 +142,12 @@ fn cargo_lock_pins_every_qdral_crate_to_the_release_line() {
     let mut current_name: Option<String> = None;
     for line in text.lines() {
         let line = line.trim();
-        if line.starts_with("name = ") {
-            current_name = Some(line["name = ".len()..].trim_matches('"').to_owned());
-        } else if line.starts_with("version = ") {
+        if let Some(stripped) = line.strip_prefix("name = ") {
+            current_name = Some(stripped.trim_matches('"').to_owned());
+        } else if let Some(stripped) = line.strip_prefix("version = ") {
             if let Some(name) = current_name.take() {
                 if name == "qdrald" || name.starts_with("qdral-") {
-                    let version = line["version = ".len()..].trim_matches('"');
+                    let version = stripped.trim_matches('"');
                     assert_eq!(
                         version, EXPECTED_RELEASE_VERSION,
                         "Cargo.lock pins {name} at {version}, expected {EXPECTED_RELEASE_VERSION}"

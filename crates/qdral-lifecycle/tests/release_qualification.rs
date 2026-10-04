@@ -1,9 +1,9 @@
 //! Release-artifact qualification. Runs only when `QDRAL_RELEASE_DIR` names a
 //! release directory produced by `scripts/package-release.mjs`, as the
-//! release-qualification CI job does. It installs the packaged artifact (the
-//! real `qdral-mcp` app with its production dependencies), drives MCP through
-//! the installed runtime, and exercises update, downgrade refusal, rollback,
-//! failed-update recovery, and uninstall. The `fake_tunnel_client` example
+//! release-qualification CI job does. It installs a 0.1.0-versioned image of
+//! the packaged artifact, updates it to the candidate, drives MCP through
+//! the installed runtime, and exercises further update, downgrade refusal,
+//! rollback, failed-update recovery, and uninstall. The `fake_tunnel_client` example
 //! stands in for the official OpenAI tunnel client only.
 #![cfg(windows)]
 
@@ -233,9 +233,14 @@ fn packaged_release_installs_runs_updates_recovers_and_uninstalls() {
     fs::write(&key_file, SECRET).unwrap();
     let tunnel_log = root.join("logs").join("tunnel.log");
 
-    // Install the packaged artifact from its own directory.
+    // SG-000072: prove the 0.1.0 line updates cleanly to this candidate.
+    // Install a 0.1.0-versioned image of the packaged payload first (same
+    // config schema, previous release line), then update to the real
+    // candidate and require the version record to show the transition.
+    let previous_labeled = derived_release(&release, "0.1.0", None);
+    cleanup.track(&previous_labeled);
     let installed = json_ok(&qdral(
-        &release.join("qdral.exe"),
+        &previous_labeled.join("qdral.exe"),
         &local,
         &[
             "install",
@@ -245,8 +250,17 @@ fn packaged_release_installs_runs_updates_recovers_and_uninstalls() {
             "--json",
         ],
     ));
-    assert_eq!(installed["install"]["version"], base_version.as_str());
+    assert_eq!(installed["install"]["version"], "0.1.0");
+    let upgraded = json_ok(&qdral(
+        &previous_labeled.join("qdral.exe"),
+        &local,
+        &["update", "--source", release.to_str().unwrap(), "--json"],
+    ));
+    assert_eq!(upgraded["update"]["to"], base_version.as_str());
     let cli = root.join("bin").join("qdral.exe");
+    let version = json_ok(&qdral(&cli, &local, &["version", "--json"]));
+    assert_eq!(version["installed"], base_version.as_str());
+    assert_eq!(version["previous"], "0.1.0");
     json_ok(&qdral(
         &cli,
         &local,

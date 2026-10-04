@@ -10,23 +10,27 @@ Deskal is not a remote shell, a remote desktop, or a "run anything" agent.
 
 ## What ChatGPT can do through Deskal
 
-Exactly these 20 tools are exposed over MCP:
+Exactly these 31 tools are exposed over local MCP:
 
 | Area | Tools | Approval |
 |---|---|---|
 | Status | `system_status`, `workspace_get` | none (read-only) |
-| Files in a trusted workspace | `fs_stat`, `fs_list`, `fs_read`, `fs_search` | none (read-only, bounded) |
-| File writes | `fs_write_preview`, `fs_write` | local approval for each write, bound to the exact content and current file hash |
+| Files in a trusted workspace | `fs_stat`, `fs_list`, `fs_read`, `fs_read_range`, `fs_search`, `fs_find` | none (read-only, bounded) |
+| File writes | `fs_write_preview`, `fs_write`, `fs_edit`, `fs_mkdir`, `fs_move` | local approval for each write, bound to the exact content and current file hash |
+| File removal | `fs_remove` | Windows Hello (STRONG), single files or empty directories only |
+| Desktop observation | `desktop_window_list`, `desktop_window_tree` | none (read-only, bounded, local-only) |
+| Clipboard | `clipboard_read`, `clipboard_write` | local approval for each use; secrets refused; local-only |
+| Network | `web_fetch` | local approval per destination; public HTTPS only; local-only |
 | Git (local) | `git_status`, `git_diff`, `git_log` | none (read-only) |
 | Git (local changes) | `git_branch_create`, `git_stage`, `git_unstage`, `git_commit` | local approval, bound to the exact repository state |
 | Git (network) | `git_fetch_preview`, `git_fetch`, `git_push_preview`, `git_push` | local approval; see limitations |
 | Processes | `process_spawn` | local approval; see limitations |
 
-Everything else is denied. Deskal also contains capabilities that are deliberately **not** exposed to ChatGPT in this release (browser automation, Windows UI Automation, screenshots and coordinate input, clipboard, and destination-scoped HTTPS fetch); they cannot be reached over MCP.
+Everything else is denied. Remote clients (ChatGPT through the tunnel or relay, and other providers) see only the 26-tool `core` profile: desktop observation, clipboard, and network fetch are local-only and cannot be reached remotely. Browser automation, screenshots, coordinate input, and UI actuation remain unreachable over MCP entirely.
 
 ### Current limitations
 
-- `process_spawn` on Windows is restricted to `whoami.exe`, run in an isolated AppContainer.
+- `process_spawn` on Windows launches only locally registered, hash-pinned native executables with constrained argv; adding or changing a registry entry requires Windows Hello on the machine.
 - `git_fetch` and `git_push` require destination policies that the current compatibility runtime does not configure yet, so they fail closed in an installed Deskal runtime.
 - Release binaries are not code-signed (there is no paid certificate under the project's zero-cost rule). Windows SmartScreen may warn; verify the archive with `SHA256SUMS.txt` and the GitHub build-provenance attestation.
 - Deskal runs only while you are signed in, because approvals appear on your desktop.
@@ -75,11 +79,11 @@ The current transition release keeps the existing archive and executable names f
 ## Connect ChatGPT
 
 1. `qdral start` — starts the official tunnel client under Deskal's supervisor. It reports `running` only when the tunnel client is alive and its local health endpoint answers.
-2. In ChatGPT, connect to your Secure MCP Tunnel as described in OpenAI's documentation. ChatGPT then sees the 20 tools above.
+2. In ChatGPT, connect to your Secure MCP Tunnel as described in OpenAI's documentation. ChatGPT then sees the 26-tool core profile above.
 
 ## Connect local MCP clients (no tunnel required)
 
-Local clients that can launch a command use `qdral mcp stdio`. It starts the same authoritative MCP server over standard input and output, with the same 20 tools and the same local approvals. No tunnel setup is needed. Standard output stays the MCP channel, so run it only through the client configuration below, not by hand.
+Local clients that can launch a command use `qdral mcp stdio`. It starts the same authoritative MCP server over standard input and output, with the same 31 tools and the same local approvals. No tunnel setup is needed. Standard output stays the MCP channel, so run it only through the client configuration below, not by hand.
 
 Claude Desktop (`claude_desktop_config.json`):
 
@@ -109,7 +113,7 @@ Mistral Vibe Code accepts a stdio entry in its MCP server list with command `qdr
 
 ## Connect over loopback HTTP (no tunnel required)
 
-`qdral mcp serve` exposes the same 20 tools over Streamable HTTP on `127.0.0.1` only. It never binds a LAN address. Every request needs a per-user bearer credential:
+`qdral mcp serve` exposes the same 31 tools over Streamable HTTP on `127.0.0.1` only. It never binds a LAN address. Every request needs a per-user bearer credential:
 
 ```powershell
 $env:QDRAL_LOOPBACK_TOKEN = "<at-least-32-characters-you-choose>"
@@ -154,7 +158,7 @@ Deskal never checks for or downloads updates by itself.
 
 - [Architecture and delivery plan](docs/canonical/ARCHITECTURE_AND_DELIVERY_PLAN.md)
 - [Current canonical state](docs/canonical/CURRENT.md)
-- [Threat model](docs/security/THREAT_MODEL.md) and [regression matrix](docs/security/THREAT_MODEL_REGRESSION.md)
+- [Threat model](docs/security/THREAT_MODEL.md) and [v0.2 regression matrix](docs/security/THREAT_MODEL_REGRESSION_V02.md)
 - [Installer and lifecycle design](docs/canonical/P12_INSTALLER_LIFECYCLE_DESIGN.md)
 - [Dependency and license review](docs/research/DEPENDENCY_LICENSE_REVIEW.md)
 - [Diffcipline](docs/governance/DIFFCIPLINE.md)

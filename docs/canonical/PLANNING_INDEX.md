@@ -69,7 +69,7 @@ canonically.
 | `docs/canonical/QDRAL_COMPUTER_USE_DECISIONS.md`, `..._AUTHORITY_MODEL.md`, `..._EXECUTION_RULE.md`, `..._NO_FALLBACK.md`, `..._LOCAL_FIRST.md`, `..._ZERO_COST.md`, `..._SECURITY_DENIALS.md` | Planned authority boundaries; normative for P18 grains once activated. |
 | `docs/canonical/QDRAL_COMPUTER_USE_ACCEPTANCE_MATRIX.md`, `..._TEST_MATRIX.md`, `..._FAILURE_SEMANTICS.md`, `..._RESOURCE_BOUNDS.md`, `..._PROFILE_MODEL.md`, `..._LICENSE_POLICY.md`, `..._DONOR_MATRIX.md`, `..._REVIEW_GATE.md` | Planned qualification contracts; normative for P18 grains once activated. |
 | `docs/canonical/P12_INSTALLER_LIFECYCLE_DESIGN.md` | Delivered COTRA-P12 design basis for the shipped installer/lifecycle. `COTRA-P12` naming is retained program history. |
-| `docs/security/THREAT_MODEL.md`, `docs/security/THREAT_MODEL_REGRESSION.md` | Threat baseline (P13 regression); SG-000072 regresses it for v0.2. |
+| `docs/security/THREAT_MODEL.md`, `docs/security/THREAT_MODEL_REGRESSION_V02.md` | Living threat baseline and the live v0.2 regression. |
 | `docs/security/UNIVERSAL_CONNECTIVITY_THREAT_MODEL.md` | Connectivity threat analysis supporting P17 distribution work. |
 | `docs/security/SG-*.md` per-grain notes for closed grains | Design records of closed authority; read with the grain's evidence entry. |
 | `docs/security/CLIENT_CONNECTION_PROFILE_MODEL.md`, `..._REMOTE_PRINCIPAL_AUTH_MODEL.md`, `..._REMOTE_SESSION_AUTHORIZATION.md`, `..._RELEASE_SECURITY_REVIEW.md` | Authentication, session, and release review models. |
@@ -92,6 +92,8 @@ canonically.
 | `docs/canonical/ARCHITECTURE_AND_DELIVERY_PLAN.md` | Delivered through COTRA-P13. Its Cotra-era product statements are superseded; the current state is recorded in `CURRENT.md`. |
 | `docs/canonical/UNIVERSAL_AI_ACCESS_PLAN.md` | Proposal whose provider-neutral decisions were absorbed by the closed P17 grains; its `Cotra v0.2.x` product naming is superseded. |
 | `docs/identity/QDRAL_RENAME.md`, `docs/identity/QUNTAL_RENAME.md` | Historical rename records; immutable provenance. |
+| `docs/security/THREAT_MODEL_REGRESSION.md` | Point-in-time QDRAL-P13 regression evidence with P13-era counts; superseded for v0.2 by `THREAT_MODEL_REGRESSION_V02.md`. |
+| `docs/security/RELEASE_SECURITY_REVIEW.md` | SG-000046 program-level review for the P13 release line; superseded for v0.2 by the SG-000072 exit record. |
 | `docs/p16/sg000066_exit_evidence.json` | Closed P16 exit evidence. |
 | `.specgrain/specs/SG-000001.json` through `SG-000071.json` and `.specgrain/canonical-evidence.json` | Closed-grain provenance; machine-readable evidence ledger. |
 | Dated `CURRENT.md` ledger entries below the historical marker | Past frontiers recorded verbatim. |
