@@ -1,11 +1,11 @@
 {
-  "name": "qdral",
+  "name": "deskal",
   "interface": {
-    "displayName": "Qdral"
+    "displayName": "Deskal"
   },
   "plugins": [
     {
-      "name": "qdral",
+      "name": "deskal",
       "source": {
         "source": "local",
         "path": "./distribution/codex/qdral"
