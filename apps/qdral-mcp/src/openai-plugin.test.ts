@@ -37,7 +37,7 @@ function mutate(files: PackageFiles, path: string, change: (value: Record<string
   return { ...files, [path]: JSON.stringify(parsed) };
 }
 
-test("the package builds reproducibly from clean source and validates", async () => {
+test("the Deskal package builds reproducibly from clean source and validates", async () => {
   const first = await buildPackage();
   const second = await buildPackage();
   assert.deepEqual(first, second, "the package is deterministic");
@@ -56,7 +56,7 @@ test("the package builds reproducibly from clean source and validates", async ()
   const mcp = JSON.parse(first["mcp.json"] ?? "") as { mcpServers: Record<string, unknown> };
   assert.deepEqual(mcp.mcpServers, { qdral: { type: "streamable-http", url: MCP_URL } });
   const plugin = JSON.parse(first["plugin.json"] ?? "") as Record<string, unknown>;
-  assert.equal(plugin.name, "qdral");
+  assert.equal(plugin.name, "deskal");
   assert.equal(plugin.license, "Apache-2.0");
   assert.deepEqual(Object.keys(plugin.extensions as object), ["com.openai"]);
 });

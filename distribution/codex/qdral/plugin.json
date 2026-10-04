@@ -1,23 +1,23 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
-  "name": "qdral",
+  "name": "deskal",
   "version": "0.1.0",
-  "description": "Local, policy-checked computer access for Codex through Qdral: bounded workspace files, local Git, registered build tools, and read-only desktop observation, with every change approved on this computer.",
+  "description": "Local, policy-checked computer access for Codex through Deskal: bounded workspace files, local Git, registered build tools, and read-only desktop observation, with every change approved on this computer.",
   "author": { "name": "TheHalfMoon", "url": "https://github.com/TheHalfMoon" },
-  "homepage": "https://github.com/TheHalfMoon/Qdral",
-  "repository": "https://github.com/TheHalfMoon/Qdral",
+  "homepage": "https://github.com/TheHalfMoon/Deskal",
+  "repository": "https://github.com/TheHalfMoon/Deskal",
   "license": "Apache-2.0",
   "keywords": ["computer access", "local approval", "workspace", "git", "mcp"],
   "extensions": {
     "com.openai": {
       "interface": {
-        "displayName": "Qdral",
+        "displayName": "Deskal",
         "shortDescription": "Bounded, locally approved access to this computer.",
         "developerName": "TheHalfMoon",
         "category": "Productivity",
-        "websiteURL": "https://github.com/TheHalfMoon/Qdral",
-        "privacyPolicyURL": "https://github.com/TheHalfMoon/Qdral/blob/main/docs/legal/PRIVACY.md",
-        "termsOfServiceURL": "https://github.com/TheHalfMoon/Qdral/blob/main/docs/legal/TERMS.md",
+        "websiteURL": "https://github.com/TheHalfMoon/Deskal",
+        "privacyPolicyURL": "https://github.com/TheHalfMoon/Deskal/blob/main/docs/legal/PRIVACY.md",
+        "termsOfServiceURL": "https://github.com/TheHalfMoon/Deskal/blob/main/docs/legal/TERMS.md",
         "brandColor": "#1F4E79",
         "composerIcon": "./assets/logo.svg",
         "logo": "./assets/logo.svg"

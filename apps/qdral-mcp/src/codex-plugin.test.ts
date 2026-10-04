@@ -14,18 +14,20 @@ const pluginDir = join(repo, "distribution", "codex", "qdral");
 const read = (path: string): Record<string, unknown> => JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>;
 
 /**
- * SG-000070: the Codex plugin package is a local stdio integration. It
- * declares exactly the canonical `qdral mcp stdio` entrypoint, carries no
- * endpoint or secret, and its marketplace entry points at this directory.
+ * SG-000070: the Deskal Codex plugin package is a local stdio integration.
+ * It retains the canonical `qdral mcp stdio` compatibility entrypoint,
+ * carries no endpoint or secret, and its marketplace entry points at this
+ * compatibility directory.
  */
-test("the Codex plugin declares exactly the canonical local stdio entrypoint", () => {
+test("the Deskal Codex plugin declares exactly the canonical local stdio entrypoint", () => {
   const plugin = read(join(pluginDir, "plugin.json"));
   assert.equal(plugin.$schema, PLUGIN_SCHEMA_URL);
-  assert.equal(plugin.name, "qdral");
+  assert.equal(plugin.name, "deskal");
   const version = (read(join(repo, "apps", "qdral-mcp", "package.json")) as { version: string }).version;
   assert.equal(plugin.version, version, "plugin version follows the release version");
   assert.deepEqual(Object.keys(plugin.extensions as object), ["com.openai"]);
   const iface = ((plugin.extensions as Record<string, Record<string, Record<string, unknown>>>)["com.openai"]!.interface)!;
+  assert.equal(iface.displayName, "Deskal");
   for (const field of ["composerIcon", "logo"]) {
     const asset = String(iface[field]);
     assert.ok(asset.startsWith("./assets/") && !asset.includes(".."), field);
@@ -43,17 +45,17 @@ test("the Codex plugin declares exactly the canonical local stdio entrypoint", (
   }
 });
 
-test("the repository marketplace lists exactly the Qdral plugin from this repository", () => {
+test("the repository marketplace lists exactly the Deskal plugin from this repository", () => {
   const marketplace = read(join(repo, ".agents", "plugins", "marketplace.json")) as {
     name: string;
     interface: { displayName: string };
     plugins: Array<{ name: string; source: { source: string; path: string }; policy: Record<string, string>; category: string }>;
   };
-  assert.equal(marketplace.name, "qdral");
-  assert.equal(marketplace.interface.displayName, "Qdral");
+  assert.equal(marketplace.name, "deskal");
+  assert.equal(marketplace.interface.displayName, "Deskal");
   assert.equal(marketplace.plugins.length, 1);
   const entry = marketplace.plugins[0]!;
-  assert.equal(entry.name, "qdral");
+  assert.equal(entry.name, "deskal");
   assert.equal(entry.source.source, "local");
   assert.equal(entry.source.path, "./distribution/codex/qdral");
   assert.ok(existsSync(join(repo, entry.source.path, "plugin.json")));
