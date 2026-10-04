@@ -95,15 +95,23 @@ interface Linked {
 }
 
 /** Run the complete standards-based linking flow against a self-hosted relay. */
-async function link(r: Relay, approve = true): Promise<Linked | { denied: string }> {
+interface LinkOptions {
+  readonly registerRedirect?: string;
+  readonly useRedirect?: string;
+  readonly clientName?: string;
+}
+
+async function link(r: Relay, approve = true, options: LinkOptions = {}): Promise<Linked | { denied: string }> {
   const deviceDir = mkdtempSync(join(tmpdir(), "qdral-device-"));
   const devicePaths = { key: join(deviceDir, "device_key.json"), uplink: join(deviceDir, "uplink.json") };
   await enableRemote({ relayOrigin: r.origin, defaultWorkspace: "default", deviceKeyPath: devicePaths.key, uplinkPath: devicePaths.uplink, fetch: fetchImpl, nowMs: Date.now() });
-  const redirect = "http://127.0.0.1:9/callback";
+  const registerRedirect = options.registerRedirect ?? "http://127.0.0.1:9/callback";
+  const redirect = options.useRedirect ?? registerRedirect;
+  const clientName = options.clientName ?? "Test client";
   const registered = await fetch(`${r.origin}/oauth/register`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ redirect_uris: [redirect], client_name: "Test client", token_endpoint_auth_method: "none", scope: "qdral.read qdral.write" })
+    body: JSON.stringify({ redirect_uris: [registerRedirect], client_name: clientName, token_endpoint_auth_method: "none", scope: "qdral.read qdral.write" })
   });
   assert.equal(registered.status, 201);
   const clientId = ((await registered.json()) as { client_id: string }).client_id;
@@ -141,8 +149,8 @@ async function link(r: Relay, approve = true): Promise<Linked | { denied: string
     },
     confirm: async (request) => {
       await codeEntered;
-      assert.equal(request.clientName, "Test client");
-      assert.equal(request.redirectOrigin, "http://127.0.0.1:9");
+      assert.equal(request.clientName, clientName);
+      assert.equal(request.redirectOrigin, new URL(redirect).origin);
       assert.deepEqual(request.scopes, ["qdral.read"]);
       return approve;
     }
@@ -281,6 +289,77 @@ test("a standards OAuth client links through device pairing and reaches the devi
     assert.equal((await mcp(r, linked.accessToken, { jsonrpc: "2.0", id: 3, method: "tools/list" }, session)).status, 401);
   } finally {
     await uplink?.stop();
+    await r.close();
+  }
+});
+
+test("SG-000068: Claude web and Claude Code connector flows reach the device with the core profile only", async () => {
+  const r = await startRelay(mkdtempSync(join(tmpdir(), "qdral-relay-claude-")));
+  try {
+    for (const options of [
+      { registerRedirect: "https://claude.ai/api/mcp/auth_callback", clientName: "Claude" },
+      { registerRedirect: "http://localhost/callback", useRedirect: "http://localhost:61264/callback", clientName: "Claude Code MCP Client" }
+    ]) {
+      const linked = await link(r, true, options);
+      assert.ok(!("denied" in linked), options.clientName);
+      if ("denied" in linked) continue;
+      const uplink = startUplink(r, linked);
+      try {
+        const deviceId = loadDeviceKey(linked.devicePaths.key).deviceId;
+        await waitFor(() => r.relay.hub.isOnline(deviceId), "device channel");
+        const init = await mcp(r, linked.accessToken, { jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: options.clientName, version: "1" } } });
+        assert.equal(init.status, 200);
+        const session = init.headers.get("mcp-session-id") ?? "";
+        await init.text();
+        await (await mcp(r, linked.accessToken, { jsonrpc: "2.0", method: "notifications/initialized" }, session)).text();
+        const list = await mcp(r, linked.accessToken, { jsonrpc: "2.0", id: 2, method: "tools/list" }, session);
+        const listed = ((await list.json()) as { result: { tools: Array<{ name: string; _meta?: Record<string, unknown> }> } }).result.tools;
+        assert.deepEqual(listed.map((t) => t.name).sort(), [...REMOTE_TOOL_NAMES].sort(), options.clientName);
+        for (const tool of listed) {
+          assert.deepEqual(tool._meta?.securitySchemes, securitySchemesFor(tool.name));
+        }
+        // A local-only tool is refused at the edge for this connector too.
+        const local = await mcp(r, linked.accessToken, { jsonrpc: "2.0", id: 3, method: "tools/call", params: { name: "clipboard_read", arguments: {} } }, session);
+        assert.equal(local.status, 403);
+        await local.text();
+      } finally {
+        await uplink.stop();
+      }
+    }
+    // Negative: a redirect that differs in anything but the loopback port is refused before any page renders.
+    const registered = await fetch(`${r.origin}/oauth/register`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ redirect_uris: ["http://localhost/callback", "https://claude.ai/api/mcp/auth_callback"], client_name: "Claude", token_endpoint_auth_method: "none", scope: "qdral.read" })
+    });
+    const clientId = ((await registered.json()) as { client_id: string }).client_id;
+    for (const bad of [
+      "http://localhost:61264/other",
+      "https://localhost:61264/callback",
+      "http://127.0.0.1:61264/callback",
+      "http://localhost.evil.example:61264/callback",
+      "https://claude.ai:8443/api/mcp/auth_callback",
+      "https://evil.example/api/mcp/auth_callback"
+    ]) {
+      const authorize = new URL(`${r.origin}/oauth/authorize`);
+      for (const [key, value] of Object.entries({
+        response_type: "code",
+        client_id: clientId,
+        redirect_uri: bad,
+        code_challenge: pkceS256Challenge(generatePkceVerifier()),
+        code_challenge_method: "S256",
+        resource: `${r.origin}/mcp`,
+        scope: "qdral.read",
+        state: "state-" + "s".repeat(24)
+      })) {
+        authorize.searchParams.set(key, value);
+      }
+      const reply = await fetch(authorize, { redirect: "manual" });
+      assert.equal(reply.status, 400, bad);
+      assert.equal(reply.headers.get("location"), null, bad);
+      await reply.text();
+    }
+  } finally {
     await r.close();
   }
 });

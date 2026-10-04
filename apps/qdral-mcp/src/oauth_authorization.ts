@@ -357,7 +357,49 @@ export function isAcceptableRedirectUri(value: unknown): value is string {
   if (url.protocol === "https:") {
     return true;
   }
-  return url.protocol === "http:" && (url.hostname === "127.0.0.1" || url.hostname === "[::1]");
+  // SG-000068: native clients such as Claude Code listen on
+  // http://localhost:<port>/callback. `localhost` is accepted for redirect
+  // URIs only, never for issuer or resource identifiers.
+  return url.protocol === "http:" && isLoopbackHostname(url.hostname);
+}
+
+/** Loopback hostnames a native client may use for its redirect listener. */
+const LOOPBACK_HOSTNAMES = new Set(["127.0.0.1", "[::1]", "localhost"]);
+
+function isLoopbackHostname(hostname: string): boolean {
+  return LOOPBACK_HOSTNAMES.has(hostname);
+}
+
+/**
+ * SG-000068 redirect matching. A redirect matches a registered redirect
+ * exactly, or, for a registered loopback `http` redirect used by a native
+ * client such as Claude Code, it may differ only in the port, as RFC 8252
+ * section 7.3 requires because the client binds an ephemeral port per
+ * session. Scheme, hostname, path, and query must still match exactly, so
+ * no non-loopback host, other scheme, or other path is ever accepted.
+ */
+export function redirectUriMatches(registered: readonly string[], requested: unknown): requested is string {
+  if (!isNonEmptyString(requested) || !isAcceptableRedirectUri(requested)) {
+    return false;
+  }
+  if (registered.includes(requested)) {
+    return true;
+  }
+  const asked = parseUrl(requested);
+  if (asked === null || asked.protocol !== "http:" || !isLoopbackHostname(asked.hostname)) {
+    return false;
+  }
+  return registered.some((entry) => {
+    const known = parseUrl(entry);
+    return (
+      known !== null &&
+      known.protocol === "http:" &&
+      isLoopbackHostname(known.hostname) &&
+      known.hostname === asked.hostname &&
+      known.pathname === asked.pathname &&
+      known.search === asked.search
+    );
+  });
 }
 
 /**
@@ -736,7 +778,7 @@ export function validateAuthorizationRequest(
   if (client === undefined || !validateClientRegistration(client).ok) {
     return deny("REMOTE_AUTH_INVALID", "client_unknown");
   }
-  if (!isNonEmptyString(request.redirect_uri) || !client.redirectUris.includes(request.redirect_uri)) {
+  if (!redirectUriMatches(client.redirectUris, request.redirect_uri)) {
     return deny("REMOTE_AUTH_INVALID", "redirect_mismatch");
   }
   if (request.response_type !== "code") {

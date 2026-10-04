@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "qdral": {
+      "type": "stdio",
+      "command": "qdral",
+      "args": ["mcp", "stdio"]
+    }
+  }
+}

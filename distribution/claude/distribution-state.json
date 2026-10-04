@@ -1,0 +1,22 @@
+{
+  "schema": "qdral-claude-distribution-state/1",
+  "paths": {
+    "remote_custom_connector": "Claude custom connector pointing at the owner's Qdral relay /mcp endpoint, OAuth through dynamic client registration",
+    "claude_code": "Claude Code over the local stdio entrypoint (examples/mcp-clients/claude-code.mcp.json) or as a remote connector with a localhost loopback redirect",
+    "claude_desktop_local": "Claude Desktop over the local stdio entrypoint (examples/mcp-clients/claude-desktop.json) or a packed .mcpb Desktop Extension (examples/mcp-clients/claude-desktop-mcpb-manifest.json)"
+  },
+  "states": ["SOFTWARE_READY", "DIRECTORY_SUBMITTED", "DIRECTORY_LISTED", "ACCOUNT_VERIFIED"],
+  "provider_controlled": ["DIRECTORY_SUBMITTED", "DIRECTORY_LISTED", "ACCOUNT_VERIFIED"],
+  "status": {
+    "SOFTWARE_READY": { "state": "PENDING_SG-000068_CLOSEOUT", "evidence": null },
+    "DIRECTORY_SUBMITTED": { "state": "NOT_OBSERVED", "evidence": null },
+    "DIRECTORY_LISTED": { "state": "NOT_OBSERVED", "evidence": null },
+    "ACCOUNT_VERIFIED": { "state": "NOT_OBSERVED", "evidence": null }
+  },
+  "external_prerequisites": [
+    "a deployed public HTTPS Qdral relay host operated by the owner",
+    "a Claude account on a plan that allows custom connectors, used to add the connector and observe a working session",
+    "any Connectors Directory submission is an owner action and is recorded only from observed Anthropic evidence"
+  ],
+  "promotion_rule": "No software, test, or CI result promotes any provider-controlled state. They change only by recording directly observed Anthropic evidence in this file through a governed change."
+}

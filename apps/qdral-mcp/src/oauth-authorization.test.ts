@@ -37,6 +37,7 @@ import {
   generateRemotePrincipalId,
   generateTokenSigningKey,
   isAcceptableRedirectUri,
+  redirectUriMatches,
   isClientIdMetadataDocumentUrl,
   isIssuerIdentifier,
   isResourceIdentifier,
@@ -240,7 +241,11 @@ test("issuer, resource, redirect, and client metadata URL shapes are strict", ()
   }
   assert.ok(isAcceptableRedirectUri(REDIRECT));
   assert.ok(isAcceptableRedirectUri("http://127.0.0.1:43123/callback"));
-  assert.ok(!isAcceptableRedirectUri("http://localhost:43123/callback"));
+  // SG-000068: native clients (Claude Code) redirect to localhost; accepted
+  // for redirect URIs only, never for issuer or resource identifiers.
+  assert.ok(isAcceptableRedirectUri("http://localhost:43123/callback"));
+  assert.ok(!isAcceptableRedirectUri("http://localhost.evil.example:43123/callback"));
+  assert.ok(!isAcceptableRedirectUri("http://user@localhost:43123/callback"));
   assert.ok(!isAcceptableRedirectUri("http://provider.example/callback"));
   assert.ok(!isAcceptableRedirectUri("https://provider.example/callback#frag"));
   assert.ok(isClientIdMetadataDocumentUrl(CLIENT_ID));
@@ -1014,4 +1019,39 @@ test("oauth module carries no network, tool, kernel, approval, or transport auth
   for (const rel of ["transports/relay_device.ts", "entrypoints/relay_device.ts"]) {
     assert.ok(!readSource(rel).includes("oauth_authorization"), `${rel} must not import OAuth yet`);
   }
+});
+
+test("SG-000068 loopback redirects match port-agnostically and nothing else widens", () => {
+  const registered = ["http://localhost/callback", "http://127.0.0.1:5000/cb", "https://claude.ai/api/mcp/auth_callback"];
+  for (const ok of [
+    "http://localhost/callback",
+    "http://localhost:61264/callback",
+    "http://localhost:3118/callback",
+    "http://127.0.0.1:5000/cb",
+    "http://127.0.0.1:49152/cb",
+    "https://claude.ai/api/mcp/auth_callback"
+  ]) {
+    assert.ok(redirectUriMatches(registered, ok), ok);
+  }
+  for (const bad of [
+    "http://127.0.0.1:61264/callback",
+    "http://localhost:61264/cb",
+    "http://localhost:61264/callback/extra",
+    "http://localhost:61264/callback?x=1",
+    "https://localhost:61264/callback",
+    "http://localhost.evil.example:61264/callback",
+    "http://[::1]:61264/callback",
+    "https://claude.ai:8443/api/mcp/auth_callback",
+    "https://claude.com/api/mcp/auth_callback",
+    "https://claude.ai/api/mcp/auth_callback?x=1",
+    "http://localhost:61264/callback#f",
+    "",
+    42,
+    null
+  ]) {
+    assert.equal(redirectUriMatches(registered, bad), false, String(bad));
+  }
+  // Port-agnostic matching applies only to loopback http registrations.
+  assert.equal(redirectUriMatches(["https://app.example/cb"], "https://app.example:444/cb"), false);
+  assert.equal(redirectUriMatches([], "http://localhost:1/callback"), false);
 });
