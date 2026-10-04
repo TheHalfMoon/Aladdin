@@ -32,4 +32,4 @@ Unknown, missing, non-finite, negative, overflowed, or above-ceiling resource re
 
 ## Backpressure rule
 
-On resource exhaustion Qdral returns a typed bounded-resource failure. It does not spawn an unbounded helper, silently increase a ceiling, switch to a less-governed backend, or queue a mutation for surprise later execution.
+On resource exhaustion Deskal returns a typed bounded-resource failure. It does not spawn an unbounded helper, silently increase a ceiling, switch to a less-governed backend, or queue a mutation for surprise later execution.

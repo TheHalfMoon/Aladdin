@@ -1,22 +1,22 @@
 # Dependency and License Review
 
-Status: QDRAL-P13 review of every third-party component in the Qdral Windows x64 release, recorded with the evidence used. This is an engineering review, not legal advice; it records declared licenses and shipped license texts and does not claim legal certainty.
+Status: SG-000072 v0.2 review of every third-party component in the Deskal Windows x64 release, recorded with the evidence used. This is an engineering review, not legal advice; it records declared licenses and shipped license texts and does not claim legal certainty. Every component version below was re-verified against the live `Cargo.lock` and `package-lock.json` on 2026-10-04; the shipped dependency closure is unchanged since the QDRAL-P13 review.
 
 Scope: the crates linked into the shipped binaries (`qdral.exe`, `qdral-mcp-host.exe`, `qdrald.exe`) for `x86_64-pc-windows-msvc`, following normal (non-dev) dependency edges from `cargo metadata`, and the npm packages present in the packaged `app\qdral-mcp\node_modules`. Development-only dependencies (TypeScript, `@types/node`, test-only crates) are listed separately because they are not distributed.
 
 Sources: `Cargo.lock` (exact versions and registry SHA-256 checksums), `package-lock.json` (exact versions and integrity hashes), each package's declared license, and the license files the package itself ships (collected into `THIRD_PARTY_NOTICES.txt` by `scripts/third-party-notices.mjs`).
 
-## Qdral
+## Deskal
 
 | Component | License | Notes |
 |---|---|---|
-| Qdral (all workspace crates and `@qdral/mcp`) | Apache-2.0 | `LICENSE` at the repository root, shipped in the release payload. |
+| Deskal (all workspace crates and `@qdral/mcp`) | Apache-2.0 | `LICENSE` at the repository root, shipped in the release payload. |
 
 ## Rust crates in the shipped binaries
 
 All are from crates.io, pinned by `Cargo.lock` with registry checksums.
 
-| Crate | Version | License | Purpose in Qdral |
+| Crate | Version | License | Purpose in Deskal |
 |---|---|---|---|
 | serde, serde_core, serde_derive | 1.0.229 | MIT OR Apache-2.0 | Typed JSON records, configuration, IPC envelopes |
 | serde_json | 1.0.151 | MIT OR Apache-2.0 | JSON parsing and serialization |
@@ -66,9 +66,9 @@ Pinned by `package-lock.json` and copied into the release from the locked produc
 ## Security considerations
 
 - Rust dependencies are resolved only from crates.io with lockfile checksums; npm dependencies are installed with `npm ci` from the lockfile with integrity hashes.
-- No dependency performs network access on Qdral's behalf except the Windows OS transport (WinHTTP) used by the closed SG-000016/SG-000017/SG-000040 paths.
+- No dependency performs network access on Deskal's behalf except the Windows OS transport (WinHTTP) used by the closed SG-000016/SG-000017/SG-000040 paths.
 - No build script downloads code at build time (`npm` runs with `--ignore-scripts`).
-- Known-vulnerability scanning: on 2026-10-01, `cargo audit` 0.22.2 against the RustSec advisory database (1,277 advisories, updated 2026-09-30) reported 0 vulnerabilities and 0 warnings (no unmaintained, unsound, or yanked crates) for `Cargo.lock`, and `npm audit` reported 0 vulnerabilities for `package-lock.json` (production and development). Both audits run in CI on every change (the `Supply chain audit` job) and fail the build on any known vulnerability.
+- Known-vulnerability scanning: on 2026-10-04, `cargo audit` 0.22.2 against the RustSec advisory database (1,290 advisories, database commit `ef6173cb` dated 2026-10-03) reported 0 vulnerabilities for the 54 crates in `Cargo.lock` (exit 0, verified on native Windows against the SG-000072 tree), and `npm audit` reported 0 vulnerabilities for `package-lock.json` (production and development). Both audits run in CI on every change (the `Supply chain audit` job) and fail the build on any known vulnerability.
 
 ## Third-party notices
 

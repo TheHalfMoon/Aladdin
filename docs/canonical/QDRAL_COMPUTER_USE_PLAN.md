@@ -7,11 +7,11 @@ Pinned donor study input: `bytedance/UI-TARS-desktop@2ff41a9e515828c5bd5b276e493
 
 ## 1. Product decision
 
-Qdral will use selected UI-TARS Desktop subsystems as donor/reference material for a governed computer-use engine. Qdral does not become a UI-TARS fork and UI-TARS does not become part of Qdral's security boundary.
+Deskal will use selected UI-TARS Desktop subsystems as donor/reference material for a governed computer-use engine. Deskal does not become a UI-TARS fork and UI-TARS does not become part of Deskal's security boundary.
 
-Qdral remains the sole authority for policy, trust, approval, typed target identity, lease issuance and consumption, destination policy, audit, revocation, tool exposure, and remote reach.
+Deskal remains the sole authority for policy, trust, approval, typed target identity, lease issuance and consumption, destination policy, audit, revocation, tool exposure, and remote reach.
 
-UI-TARS-derived code or concepts may implement low-authority browser, capture, parsing, rendering, or execution backends only after a separate SpecGrain authorizes the exact authority delta and the backend is qualified against Qdral's existing contracts.
+UI-TARS-derived code or concepts may implement low-authority browser, capture, parsing, rendering, or execution backends only after a separate SpecGrain authorizes the exact authority delta and the backend is qualified against Deskal's existing contracts.
 
 ## 2. Non-negotiable invariants
 
@@ -21,26 +21,26 @@ UI-TARS-derived code or concepts may implement low-authority browser, capture, p
 - No browser, desktop, screenshot, or computer-use capability is exposed before its live provider implementation is qualified shape by shape.
 - Structured browser/UIA actions are preferred over coordinate input. Coordinate input is an explicit lower-ceiling fallback and never a silent fallback.
 - Mutating operations are never automatically retried after dispatch.
-- Lock, logoff, session transition, process/window/document generation drift, workspace revoke, policy revision drift, lease expiry, human interruption, or Qdral restart invalidate the affected volatile authority.
+- Lock, logoff, session transition, process/window/document generation drift, workspace revoke, policy revision drift, lease expiry, human interruption, or Deskal restart invalidate the affected volatile authority.
 - All donor reuse preserves provenance, applicable license notices, modified-file notices where required, and third-party dependency obligations.
 
 ## 3. Donor reuse decisions
 
-| UI-TARS subsystem | Default successor classification | Qdral rule |
+| UI-TARS subsystem | Default successor classification | Deskal rule |
 | --- | --- | --- |
 | Browser MCP/Puppeteer implementation | ADAPT / PORT | Browser engine only; never a second MCP authority edge |
 | `@ui-tars/action-parser` | ADAPT | Syntax-to-proposal adapter only; cannot authorize execution |
 | Operator abstraction | PORT CONCEPT | Split observation/proposal/validation/execution instead of direct model-to-execute |
 | NutJS desktop operator | REFERENCE_ONLY | Raw model-to-mouse/keyboard path is not imported as authority |
 | Screenshot/DPI handling | PORT_SELECTED_LOGIC | Capture must be exact-window scoped and protected-surface aware |
-| RemoteComputerOperator | REFERENCE_ONLY | Qdral remote principal/device/session/lease model remains authoritative |
-| Event stream architecture | ADAPT CONCEPT | Presentation/telemetry layer over canonical Qdral audit, never the audit source of truth |
-| Electron IPC/UI patterns | REFERENCE_ONLY | Qdral renderer remains sandboxed, context-isolated, and low authority |
-| Agent loop/model runtime | REJECT_FOR_CORE | Qdral is provider-neutral and does not delegate authority to a donor agent loop |
+| RemoteComputerOperator | REFERENCE_ONLY | Deskal remote principal/device/session/lease model remains authoritative |
+| Event stream architecture | ADAPT CONCEPT | Presentation/telemetry layer over canonical Deskal audit, never the audit source of truth |
+| Electron IPC/UI patterns | REFERENCE_ONLY | Deskal renderer remains sandboxed, context-isolated, and low authority |
+| Agent loop/model runtime | REJECT_FOR_CORE | Deskal is provider-neutral and does not delegate authority to a donor agent loop |
 | `browser_evaluate` / arbitrary JS | REJECT | No caller-facing arbitrary JavaScript |
 | `run_command` / `run_script` | REJECT | Existing bounded process registry remains the only execution model |
-| Personal browser profile | REJECT | Dedicated Qdral automation profile only |
-| Raw model -> mouse/keyboard | REJECT | All execution flows through Qdral proposal, validation, approval, lease, and postcondition gates |
+| Personal browser profile | REJECT | Dedicated Deskal automation profile only |
+| Raw model -> mouse/keyboard | REJECT | All execution flows through Deskal proposal, validation, approval, lease, and postcondition gates |
 
 ## 4. Target architecture
 
@@ -48,7 +48,7 @@ UI-TARS-derived code or concepts may implement low-authority browser, capture, p
 AI client / model
        |
        v
-Qdral MCP / provider adapter
+Deskal MCP / provider adapter
        |
        v
 Canonical ComputerActionProposal
@@ -72,7 +72,7 @@ low-authority host    Win32/UIA/capture      bounded native input
 Chromium/Edge automation profile
 ```
 
-No donor backend receives direct MCP exposure. Qdral's tool contract remains the only tool-surface source of truth.
+No donor backend receives direct MCP exposure. Deskal's tool contract remains the only tool-surface source of truth.
 
 ## 5. QDRAL-P18 grain sequence
 
@@ -84,7 +84,7 @@ No authority delta. Pin donor revisions/paths/licenses, freeze the canonical act
 
 ### SG-000074 — Live isolated browser-host foundation
 
-Introduce a low-authority `qdral-browser-host` process. It is launched only by Qdral, communicates through a private local framed channel, has no independent MCP/HTTP/LAN listener, owns only a dedicated Qdral automation profile, uses a supported local Chromium-family executable, and never attaches to a personal profile.
+Introduce a low-authority `qdral-browser-host` process. It is launched only by Deskal, communicates through a private local framed channel, has no independent MCP/HTTP/LAN listener, owns only a dedicated Deskal automation profile, uses a supported local Chromium-family executable, and never attaches to a personal profile.
 
 Required defaults:
 
@@ -96,13 +96,13 @@ Required defaults:
 - no inherited unrelated secrets;
 - bounded lifetime/resources;
 - child termination on parent/session invalidation;
-- all browser/page identities server allocated by Qdral.
+- all browser/page identities server allocated by Deskal.
 
 ### SG-000075 — Browser network mediation and real navigation
 
 Make navigation real without converting Chromium into an unbounded network client.
 
-Every top-level destination continues to use Qdral destination validation, address resolution, origin binding, redirect policy, fresh SOFT approval, and typed page generation. Browser subresource traffic is mediated by an egress policy that blocks private, loopback, link-local, metadata, disallowed schemes, external protocol handlers, and transport bypasses.
+Every top-level destination continues to use Deskal destination validation, address resolution, origin binding, redirect policy, fresh SOFT approval, and typed page generation. Browser subresource traffic is mediated by an egress policy that blocks private, loopback, link-local, metadata, disallowed schemes, external protocol handlers, and transport bypasses.
 
 Explicitly cover redirects, iframes, workers/service workers, fetch/XHR, WebSockets, DNS rebinding, QUIC/DoH/WebRTC bypass paths, `file:`, `javascript:`, browser-internal URLs, and download-trigger behavior.
 
@@ -122,13 +122,13 @@ No silent fallback to coordinates. Password-field fill remains denied.
 
 Connect the existing bounded download/upload contracts to the live engine without weakening them.
 
-Downloads land first in protected Qdral staging, then pass destination, type, size, digest, same-origin/redirect, approval, and create-only workspace checks. Chromium never writes directly to arbitrary workspace paths and downloaded content is never auto-opened/executed/extracted.
+Downloads land first in protected Deskal staging, then pass destination, type, size, digest, same-origin/redirect, approval, and create-only workspace checks. Chromium never writes directly to arbitrary workspace paths and downloaded content is never auto-opened/executed/extracted.
 
 Uploads remain restricted to server-recorded admissible artifacts; no caller-controlled arbitrary path is accepted. Exact file-input node identity, source digest/size/media type, workspace trust revision, approval, and one-shot source consumption remain mandatory.
 
 ### SG-000079 — Browser tool exposure and profile qualification
 
-Expose only live-qualified shapes through the authoritative Qdral tool contract. Create an explicit `browser_structured` local profile rather than silently widening existing profiles. Remote mapping remains off until separately authorized.
+Expose only live-qualified shapes through the authoritative Deskal tool contract. Create an explicit `browser_structured` local profile rather than silently widening existing profiles. Remote mapping remains off until separately authorized.
 
 Do not expose `browser_evaluate`, raw CDP, generic JS, personal-profile operations, generic browser filesystem, or raw browser process controls.
 
@@ -136,9 +136,9 @@ Do not expose `browser_evaluate`, raw CDP, generic JS, personal-profile operatio
 
 Implement Windows-first exact-window capture using a native API suitable for per-window capture. Bind capture to process instance, HWND/window identity, window generation, dimensions/DPI, session, policy revision, and a server-issued capture generation.
 
-Deny Qdral approval/trust/revoke windows, Qdral-owned windows, CredentialUIBroker, consent/UAC, LogonUI, secure desktop, other sessions, stale/reused handles, and whole-screen capture.
+Deny Deskal approval/trust/revoke windows, Deskal-owned windows, CredentialUIBroker, consent/UAC, LogonUI, secure desktop, other sessions, stale/reused handles, and whole-screen capture.
 
-Introduce a local-only `CaptureLease` for repeated observation. It is exact-window scoped, time bounded, revocable, cannot be minted through MCP/model input, and is invalidated by window/process replacement, lock/logoff/session transition, policy change, or Qdral restart.
+Introduce a local-only `CaptureLease` for repeated observation. It is exact-window scoped, time bounded, revocable, cannot be minted through MCP/model input, and is invalidated by window/process replacement, lock/logoff/session transition, policy change, or Deskal restart.
 
 ### SG-000081 — Structured desktop actuation
 
@@ -162,7 +162,7 @@ Initial verbs: click, double-click, right-click, bounded scroll, bounded Unicode
 
 ### SG-000083 — Canonical ComputerAction IR and model adapters
 
-Define a provider-neutral `ComputerActionProposal` that carries only untrusted proposal data. Implement separately testable parsers/adapters for UI-TARS and other authorized providers as needed. The adapter may normalize action syntax but cannot create or override Qdral target IDs, approvals, leases, trust, policy, risk class, or execution outcome.
+Define a provider-neutral `ComputerActionProposal` that carries only untrusted proposal data. Implement separately testable parsers/adapters for UI-TARS and other authorized providers as needed. The adapter may normalize action syntax but cannot create or override Deskal target IDs, approvals, leases, trust, policy, risk class, or execution outcome.
 
 Malformed, ambiguous, unsupported, oversized, stale, or authority-bearing adapter fields fail closed.
 
@@ -186,7 +186,7 @@ Mutating operations are never auto-retried. Crash/restart invalidates affected v
 
 ### SG-000086 — P18 exit and v0.3 readiness
 
-P18 exits only when all exposed browser/desktop/computer-use shapes are live-qualified on their target OS/runtime, every denied authority is regression-tested, exact tool/profile contracts match shipped discovery, and release artifacts pass the normal Qdral exact-head CI, security review, TypeSafe Jev, Alibaba Open Code Review, manual excluded-file review, SBOM/provenance, and post-merge verification requirements.
+P18 exits only when all exposed browser/desktop/computer-use shapes are live-qualified on their target OS/runtime, every denied authority is regression-tested, exact tool/profile contracts match shipped discovery, and release artifacts pass the normal Deskal exact-head CI, security review, TypeSafe Jev, Alibaba Open Code Review, manual excluded-file review, SBOM/provenance, and post-merge verification requirements.
 
 ## 6. Tool-surface model after P18
 
@@ -203,13 +203,13 @@ Unknown profiles fail closed. Adding a live provider implementation does not aut
 
 ## 7. Browser engine packaging
 
-Production must not run `npx ...@latest` or fetch runtime code dynamically. The selected browser-host code and dependencies are pinned and included in the release/SBOM. Prefer a supported locally installed Edge/Chromium-family executable on Windows with executable/path/publisher verification and a Qdral-owned profile. Unsupported/missing engines return a typed unavailable result; they never fall back to a personal profile.
+Production must not run `npx ...@latest` or fetch runtime code dynamically. The selected browser-host code and dependencies are pinned and included in the release/SBOM. Prefer a supported locally installed Edge/Chromium-family executable on Windows with executable/path/publisher verification and a Deskal-owned profile. Unsupported/missing engines return a typed unavailable result; they never fall back to a personal profile.
 
 `qdral doctor` should report browser executable identity/version, profile location/class, host version, protocol compatibility, and whether live browser capability is qualified and locally enabled.
 
 ## 8. Event/audit model
 
-A presentation event stream may report bounded lifecycle events such as proposal creation, policy decision, approval request/result, lease issuance/consumption/revocation, observation generation, action start/result, postcondition result, interruption, and failure. Canonical security evidence remains Qdral's audit/evidence system. Event UI cannot grant authority or become the only source of security truth.
+A presentation event stream may report bounded lifecycle events such as proposal creation, policy decision, approval request/result, lease issuance/consumption/revocation, observation generation, action start/result, postcondition result, interruption, and failure. Canonical security evidence remains Deskal's audit/evidence system. Event UI cannot grant authority or become the only source of security truth.
 
 ## 9. P18 definition of done
 

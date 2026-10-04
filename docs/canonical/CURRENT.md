@@ -1,13 +1,15 @@
-# Qdral Current Identity Notice
+# Deskal Current Identity Notice
 
 Status: ACTIVE PRODUCT IDENTITY
-Effective date: 2026-10-03
+Effective date: 2026-10-04
 
-Qdral is the current product and project name. Quntal and Cotra references in the historical ledger below identify earlier names of this same project and are intentionally preserved rather than rewritten. Current project-owned packages, crates, executables, CLI names, environment variables, paths, documentation, and repository references are governed by `docs/identity/QDRAL_RENAME.md`. This identity change grants no new authority.
+Deskal is the current product and project name. Qdral, Quntal, and Cotra are superseded product identities and must not be presented as the current product. Qdral-derived identifiers (CLI `qdral`, daemon `qdrald`, npm packages `@qdral/mcp` and `@qdral/relay`, `QDRAL_*` environment variables, `qdral.*` OAuth scopes, `qdral-*` source paths, install/storage paths containing `Qdral`/`qdral`, and the `qdral` MCP compatibility name) remain compatibility identifiers governed by `docs/identity/DESKAL_RENAME.md`; they do not define the current product brand. "QDRAL-P18 is a retained compatibility/program identifier within the Deskal product; it is not the current product brand." COTRA-P16, COTRA-P17, and QDRAL-P18 likewise name governed programs, not the product. This identity change grants no new authority.
 
 ---
 
-# Cotra Current Canonical Frontier
+# Deskal Current Canonical Frontier
+
+> Historical ledger note: every dated entry below this marker records a past canonical frontier verbatim and is historical evidence. Superseded product names (Cotra, Quntal, Qdral) appearing below identify earlier names of this same project and are intentionally preserved rather than rewritten. The current product identity is stated above and in `docs/identity/DESKAL_RENAME.md`.
 
 Status: COMPLETE_CANONICAL
 Date: 2026-10-01

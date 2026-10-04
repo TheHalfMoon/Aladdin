@@ -818,3 +818,83 @@ test("SG-000067: the domain-verification path returns only the configured token 
     await new Promise<void>((resolve) => unconfigured.server.close(() => resolve()));
   }
 });
+
+test("relay backup restores device identities, client registrations, and revocations into a clean instance", async () => {
+  const stateDir = mkdtempSync(join(tmpdir(), "qdral-relay-backup-"));
+  const first = await startRelay(stateDir);
+  const kept = await link(first);
+  if ("denied" in kept) {
+    throw new Error("unexpected denial");
+  }
+  const revoked = await link(first);
+  if ("denied" in revoked) {
+    throw new Error("unexpected denial");
+  }
+  const keptId = loadDeviceKey(kept.devicePaths.key).deviceId;
+  const revokedId = loadDeviceKey(revoked.devicePaths.key).deviceId;
+  first.store.revokeDevice(revokedId);
+  const port = first.port;
+  await first.close();
+  // Canonical backup: copy the single state file while the relay is stopped.
+  const backupDir = mkdtempSync(join(tmpdir(), "qdral-relay-restore-"));
+  writeFileSync(join(backupDir, STATE_FILE), readFileSync(join(stateDir, STATE_FILE)));
+  // The restore reuses the same origin so token audience still matches.
+  const second = await startRelay(backupDir, port);
+  try {
+    assert.equal(second.store.device(keptId)?.revoked, false);
+    assert.equal(second.store.device(revokedId)?.revoked, true);
+    assert.ok(second.store.clients().size >= 2);
+    assert.deepEqual(second.store.verificationKeys(), first.store.verificationKeys());
+    // The revoked device stays revoked after the restore: its family was
+    // deleted with the revocation, so its tokens no longer verify.
+    // A pooled keep-alive socket to the stopped server is reset once.
+    let denied: Response;
+    try {
+      denied = await mcp(second, revoked.accessToken, { jsonrpc: "2.0", id: 1, method: "initialize", params: {} });
+    } catch {
+      denied = await mcp(second, revoked.accessToken, { jsonrpc: "2.0", id: 1, method: "initialize", params: {} });
+    }
+    assert.equal(denied.status, 401);
+    await denied.text();
+    // The surviving device still authenticates (offline, so nothing dispatches).
+    const offline = await mcp(second, kept.accessToken, { jsonrpc: "2.0", id: 1, method: "initialize", params: {} });
+    assert.equal(offline.status, 503);
+    assert.ok((await offline.text()).includes("DEVICE_OFFLINE"));
+  } finally {
+    await second.close();
+  }
+});
+
+test("a tampered backup fails closed and a fresh state mints a new signing key", async () => {
+  const stateDir = mkdtempSync(join(tmpdir(), "qdral-relay-tamper-"));
+  const first = await startRelay(stateDir);
+  const linked = await link(first);
+  if ("denied" in linked) {
+    throw new Error("unexpected denial");
+  }
+  const before = first.store.verificationKeys();
+  const port = first.port;
+  await first.close();
+  const bytes = readFileSync(join(stateDir, STATE_FILE), "utf8");
+  const tamperedDir = mkdtempSync(join(tmpdir(), "qdral-relay-tampered-"));
+  writeFileSync(join(tamperedDir, STATE_FILE), bytes.replace('"revoked":false', '"revoked":true'));
+  assert.throws(() => new FileRelayStore(tamperedDir), RelayStateError);
+  // Signing-key compromise response: a fresh state mints a new key and never
+  // trusts tokens from the compromised state (same origin, unknown key).
+  const freshDir = mkdtempSync(join(tmpdir(), "qdral-relay-fresh-"));
+  const fresh = await startRelay(freshDir, port);
+  try {
+    assert.notDeepEqual(fresh.store.verificationKeys(), before);
+    // A pooled keep-alive socket to the stopped server is reset once.
+    let refused: Response;
+    try {
+      refused = await mcp(fresh, linked.accessToken, { jsonrpc: "2.0", id: 1, method: "initialize", params: {} });
+    } catch {
+      refused = await mcp(fresh, linked.accessToken, { jsonrpc: "2.0", id: 1, method: "initialize", params: {} });
+    }
+    assert.equal(refused.status, 401);
+    await refused.text();
+  } finally {
+    await fresh.close();
+  }
+});

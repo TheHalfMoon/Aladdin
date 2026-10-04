@@ -7,7 +7,7 @@ This matrix is normative planning input. An implementation grain may narrow a ca
 
 | Domain | Required proof before exposure |
 | --- | --- |
-| Browser host | isolated Qdral profile; supported executable identity; sandbox enabled; no public control listener; deterministic supervision/cleanup |
+| Browser host | isolated Deskal profile; supported executable identity; sandbox enabled; no public control listener; deterministic supervision/cleanup |
 | Browser network | public-destination policy; DNS re-resolution; redirect checks; subresource mediation; no private/metadata/bypass route |
 | Browser identity | exact profile/page/origin/page generation/document generation/node identity; stale/forged/cross-scope failure |
 | Browser observation | bounded DOM/AX; password/secret redaction; no cookie/storage/credential/raw-JS/CDP exposure |

@@ -1,9 +1,15 @@
-# Qdral Universal Connectivity Threat Model
+# Deskal Universal Connectivity Threat Model
 
 Status: IMPLEMENTATION-READY PROPOSAL
 Base: `5feff3f15cc7e20464cafffd7b87d713b65a012f`
 Date: 2026-10-01
 Companion: `docs/canonical/UNIVERSAL_AI_ACCESS_PLAN.md`
+
+> Product identity note: this analysis was authored under the Qdral program
+> name. The current product is Deskal. `qdrald`, `%LOCALAPPDATA%\Qdral`
+> storage paths, and `Qdral`-qualified protected surfaces below denote
+> retained compatibility identifiers governed by
+> `docs/identity/DESKAL_RENAME.md`.
 
 ## 1. Scope
 

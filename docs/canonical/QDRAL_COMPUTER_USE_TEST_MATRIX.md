@@ -47,7 +47,7 @@ The implementation grains may split or extend these tests, but an exposed capabi
 ## Desktop/capture
 
 - same-session live window and exact-window capture;
-- Qdral/protected/security window exclusion;
+- Deskal/protected/security window exclusion;
 - CredentialUIBroker/UAC/consent/LogonUI/secure desktop;
 - PID/HWND reuse and class drift;
 - DPI scaling, resize/move, multi-monitor;

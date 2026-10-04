@@ -1,6 +1,6 @@
 {
   "name": "@qdral/relay",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "license": "Apache-2.0",
   "type": "module",
@@ -13,7 +13,7 @@
     "test": "npm run build && node --test --test-timeout=120000 dist/*.test.js"
   },
   "dependencies": {
-    "@qdral/mcp": "0.1.0",
+    "@qdral/mcp": "0.2.0",
     "@modelcontextprotocol/server": "2.1.0"
   },
   "devDependencies": {
