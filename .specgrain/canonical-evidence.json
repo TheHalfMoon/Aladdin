@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "snapshot_base": "5959cb3def5b5820aa4bde617eed6bbf429288bf",
+  "snapshot_base": "49cf73562d6cc91faee24a7fe8f4a1f9fccccfbe",
   "state_semantics": {
     "GRAIN": "Authorized or active work packet whose acceptance is not yet canonically proven.",
     "PROVEN": "Acceptance and required qualification are proven, but canonical closeout/governance is not yet complete.",
@@ -862,6 +862,18 @@
       "review_basis": "Exact-head genuine TypeSafe Jev 5/5 hunks with zero findings/blocking findings (pin 31f89602797fb7bea007f8a480bf368bf564954e), Alibaba Open Code Review v1.12.9 exact-range delegation over 4 files with 1 reviewable and 3 excluded files manually reviewed, exact-diff manual security review, official provider requirement re-verification where applicable, Windows/Ubuntu Rust Node Governance, Supply chain audit, Release qualification, and Relay container, successful post-merge CI, and zero unresolved review threads. CodeRabbit skipped-review and cubic skipping notices evaluated as non-evidence noise with zero substantive findings.",
       "unresolved_review_threads": 0,
       "authority_boundary": "Negative isolation tests and documentation only. No production code, kernel capability, MCP tool, OAuth scope, profile, approval class, trust right, executable admission, lease right, actuation, shell, interpreter, or generic network authority changes."
+    },
+    "SG-000072": {
+      "implementation_pr": 192,
+      "implementation_base": "7bf3b58a08ba188a23cfd83f5ba1c5978163c49e",
+      "qualified_head": "924e17e98bee745d2799120c5e3500d706f37fb8",
+      "pre_merge_ci": "37209722778",
+      "pre_merge_review_gates": "37209721596",
+      "merge_sha": "49cf73562d6cc91faee24a7fe8f4a1f9fccccfbe",
+      "post_merge_ci": "37210363031",
+      "review_basis": "Exact-head genuine TypeSafe Jev 82/82 hunks with zero findings/blocking findings (pin 31f89602797fb7bea007f8a480bf368bf564954e), Alibaba Open Code Review v1.12.9 exact-range delegation over 40 files with 11 reviewable and 29 excluded files manually reviewed, exact-diff manual security review, Deskal planning-identity hardening with qdral compatibility identifiers preserved, Windows/Ubuntu Rust Node Governance, Supply chain audit, Release qualification (0.2.0 candidate with 0.1.0-to-0.2.0 update path, SBOM, provenance, byte-identical reproducibility), and Relay container, successful post-merge CI, and zero unresolved review threads. CodeRabbit skipped-review and cubic skipping notices evaluated as non-evidence noise with zero substantive findings.",
+      "unresolved_review_threads": 0,
+      "authority_boundary": "Release hardening, regression tests, and documentation only. No new MCP tool, schema change, capability, approval class, trust right, executable admission, lease right, network, browser, UIA, clipboard, installer, elevation, or provider submission authority."
     }
   }
 }

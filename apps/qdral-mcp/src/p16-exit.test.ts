@@ -475,9 +475,29 @@ test("SG-000066 imports no Desktop Commander, Kernux, or UI-TARS runtime", () =>
 });
 
 test("future P18 grains remain outside the active SpecGrain registry", () => {
-  const specs = new Set(readdirSync(join(repo, ".specgrain", "specs")));
+  const dir = join(repo, ".specgrain", "specs");
+  const specs = new Set(readdirSync(dir));
+  // P18 grains activate sequentially starting at SG-000073, and only after
+  // the P17 exit (SG-000072 CLOSED): no gaps, no out-of-order activation,
+  // and at most one non-closed grain at a time.
+  const sg72 = JSON.parse(readFileSync(join(dir, "SG-000072.json"), "utf8")) as { state: string };
+  const p17Exited = sg72.state === "CLOSED";
+  let openCount = 0;
   for (let n = 73; n <= 86; n += 1) {
     const id = `SG-${String(n).padStart(6, "0")}.json`;
-    assert.equal(specs.has(id), false, `${id} must not be activated during SG-000066`);
+    if (!specs.has(id)) {
+      for (let m = n + 1; m <= 86; m += 1) {
+        const later = `SG-${String(m).padStart(6, "0")}.json`;
+        assert.equal(specs.has(later), false, `${later} activates out of order`);
+      }
+      break;
+    }
+    assert.ok(p17Exited, `${id} must not be activated before the P17 exit`);
+    const state = (JSON.parse(readFileSync(join(dir, id), "utf8")) as { state: string }).state;
+    assert.ok(state === "GRAIN" || state === "PROVEN" || state === "CLOSED", `${id} has unknown state ${state}`);
+    if (state !== "CLOSED") {
+      openCount += 1;
+    }
   }
+  assert.ok(openCount <= 1, `at most one active P18 grain, found ${openCount}`);
 });
