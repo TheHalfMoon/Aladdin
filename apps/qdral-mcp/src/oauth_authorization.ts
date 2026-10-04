@@ -436,7 +436,10 @@ export function buildAuthorizationServerMetadata(issuer: string): AuthorizationS
     revocation_endpoint_auth_methods_supported: [...CLIENT_AUTH_METHODS],
     scopes_supported: [...OAUTH_SCOPES],
     authorization_response_iss_parameter_supported: true,
-    client_id_metadata_document_supported: true
+    // SG-000067: client ID metadata documents are not implemented by the
+    // relay's authorization endpoint, so they are not advertised; clients
+    // use dynamic client registration.
+    client_id_metadata_document_supported: false
   };
 }
 

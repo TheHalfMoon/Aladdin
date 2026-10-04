@@ -79,6 +79,7 @@ preserve the original host (Caddy does by default).
 | `listenHost`, `listenPort` | Listener (default `127.0.0.1:8787`). |
 | `stateDir` | Durable state directory (owner-only files). |
 | `allowedOrigins` | Browser origins allowed to call `/mcp`; default none. |
+| `openaiAppsChallenge` | Optional OpenAI domain-verification token (8 to 512 URL-safe characters) served as plain text at `/.well-known/openai-apps-challenge`; grants no authority (SG-000067). |
 | `quotas` | Optional limits; each value is bounded by a hard ceiling. |
 
 Quotas (defaults / hard ceilings): `maxDevices` 1000 / 100000,

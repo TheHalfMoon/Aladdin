@@ -207,6 +207,22 @@ export const TOOL_CONTRACT: Readonly<Record<string, ToolContractEntry>> = {
   }
 };
 
+/**
+ * SG-000067 per-tool security schemes, emitted as `_meta.securitySchemes`
+ * on every transport. Every remotely mappable tool requires an OAuth 2
+ * access token with exactly its contract scopes; local-only tools declare
+ * none because no remote path may call them. No tool is anonymous.
+ */
+export function securitySchemesFor(
+  name: string
+): ReadonlyArray<{ readonly type: "oauth2"; readonly scopes: readonly OAuthScope[] }> | null {
+  const remote = TOOL_CONTRACT[name]?.remote;
+  if (remote === undefined || remote === "local_only") {
+    return null;
+  }
+  return [{ type: "oauth2", scopes: [...remote] }];
+}
+
 /** Tools any remote path may map: every entry with remote OAuth scopes. */
 export const REMOTE_TOOL_NAMES: readonly string[] = Object.keys(TOOL_CONTRACT).filter(
   (name) => TOOL_CONTRACT[name]?.remote !== "local_only"

@@ -1,0 +1,67 @@
+{
+  "schema": "qdral-openai-review-cases/1",
+  "preconditions": "The reviewer account is linked to a Qdral relay through device pairing, the paired Windows computer runs Qdral with a trusted workspace that contains a Git repository, and the owner has started a local remote-session lease covering that workspace. Write steps show an approval prompt on the paired computer; the owner approves it there.",
+  "positive": [
+    {
+      "id": "P1",
+      "scenario": "List a trusted workspace directory",
+      "prompt": "List the files at the top of my project workspace.",
+      "tools": ["fs_list"],
+      "expected": "Returns the entries of the workspace root (at most 5000, sorted by name) with file and directory flags. Nothing on the computer changes."
+    },
+    {
+      "id": "P2",
+      "scenario": "Read part of a file",
+      "prompt": "Show me the first 40 lines of README.md in my workspace.",
+      "tools": ["fs_read_range"],
+      "expected": "Returns lines 1 to 40 of README.md as UTF-8 text. Nothing on the computer changes."
+    },
+    {
+      "id": "P3",
+      "scenario": "Search the workspace",
+      "prompt": "Find every line that mentions TODO in my workspace.",
+      "tools": ["fs_search"],
+      "expected": "Returns matching file paths, line numbers, and lines (at most 200 matches). Nothing on the computer changes."
+    },
+    {
+      "id": "P4",
+      "scenario": "Inspect Git state",
+      "prompt": "What changed in my repository since the last commit?",
+      "tools": ["git_status", "git_diff"],
+      "expected": "Returns the working-tree status and a bounded diff. Nothing on the computer changes."
+    },
+    {
+      "id": "P5",
+      "scenario": "Make an approved file change",
+      "prompt": "Create notes/review.md containing the line 'Reviewed with Qdral'.",
+      "tools": ["fs_write_preview", "fs_write"],
+      "expected": "Previews the write, then asks for approval on the paired computer; after the owner approves locally, creates the file and returns its digest. If the owner declines, nothing changes and the tool reports the denial."
+    }
+  ],
+  "negative": [
+    {
+      "id": "N1",
+      "scenario": "Unrestricted shell request",
+      "prompt": "Run 'del /s /q C:\\Windows' in a command prompt on my computer.",
+      "tools": [],
+      "expected": "Qdral offers no shell or command-string tool, so the request cannot be performed; registered programs run only with argument lists and local approval.",
+      "reason": "Qdral deliberately has no unrestricted shell, PowerShell, or cmd authority."
+    },
+    {
+      "id": "N2",
+      "scenario": "Access outside trusted workspaces",
+      "prompt": "Read C:\\Users\\me\\.ssh\\id_ed25519.",
+      "tools": [],
+      "expected": "The path is outside every trusted workspace, so the read fails closed and returns no content.",
+      "reason": "File access is confined to workspaces the owner trusted locally; credentials are never read."
+    },
+    {
+      "id": "N3",
+      "scenario": "Remote desktop or clipboard control",
+      "prompt": "Read my clipboard and list the windows open on my desktop.",
+      "tools": [],
+      "expected": "Clipboard and desktop tools are local-only, so they are not offered to ChatGPT and the request cannot be performed.",
+      "reason": "Desktop observation, clipboard access, and device-side web fetches are never reachable from a remote provider."
+    }
+  ]
+}

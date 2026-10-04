@@ -9,7 +9,7 @@ import { registerGitPushTools } from "./git_push.js";
 import { KernelClient } from "./kernel.js";
 import { processSpawnInputSchema } from "./process.js";
 import { projectKernelResult } from "./result.js";
-import { TOOL_CONTRACT, profileTools, remoteProfileForProvider, type ToolSurfaceProfile } from "./tool_contract.js";
+import { TOOL_CONTRACT, profileTools, remoteProfileForProvider, securitySchemesFor, type ToolSurfaceProfile } from "./tool_contract.js";
 
 /**
  * Transport identity for the local MCP edge.
@@ -72,10 +72,11 @@ function contractGatedServer(server: McpServer, allowed: ReadonlySet<string>): M
       return undefined;
     }
     const { title, ...hints } = entry.annotations;
+    const meta = securitySchemesFor(name);
     return (server.registerTool as unknown as (n: string, c: Record<string, unknown>, h: unknown) => unknown).call(
       server,
       name,
-      { ...config, title, annotations: { title, ...hints } },
+      { ...config, title, annotations: { title, ...hints }, ...(meta === null ? {} : { _meta: { securitySchemes: meta } }) },
       handler
     );
   };

@@ -17,9 +17,18 @@ export interface RelayConfig {
   readonly stateDir: string;
   readonly allowedOrigins: readonly string[];
   readonly quotas: QuotaConfig;
+  /** SG-000067 OpenAI domain-verification token, served as plain text. */
+  readonly openaiAppsChallenge: string | null;
 }
 
-const FIELDS = new Set(["publicOrigin", "listenHost", "listenPort", "stateDir", "allowedOrigins", "quotas"]);
+const FIELDS = new Set(["publicOrigin", "listenHost", "listenPort", "stateDir", "allowedOrigins", "quotas", "openaiAppsChallenge"]);
+
+/**
+ * A provider domain-verification token is a public, provider-issued value.
+ * It is restricted to URL-safe characters so it can never inject markup or
+ * headers into the plain-text response.
+ */
+export const APPS_CHALLENGE_PATTERN = /^[A-Za-z0-9._~-]{8,512}$/;
 
 export function parseRelayConfig(text: string): RelayConfig {
   let raw: unknown;
@@ -56,13 +65,18 @@ export function parseRelayConfig(text: string): RelayConfig {
   if (!Array.isArray(allowedOrigins) || !allowedOrigins.every((entry) => typeof entry === "string" && /^https:\/\/[^/]+$/.test(entry))) {
     throw new Error("allowedOrigins must be a list of https origins");
   }
+  const challenge = config.openaiAppsChallenge ?? null;
+  if (challenge !== null && (typeof challenge !== "string" || !APPS_CHALLENGE_PATTERN.test(challenge))) {
+    throw new Error("openaiAppsChallenge must be 8 to 512 URL-safe characters");
+  }
   return {
     publicOrigin: origin,
     listenHost,
     listenPort,
     stateDir: config.stateDir,
     allowedOrigins: allowedOrigins as string[],
-    quotas: validateQuotas(config.quotas)
+    quotas: validateQuotas(config.quotas),
+    openaiAppsChallenge: challenge
   };
 }
 

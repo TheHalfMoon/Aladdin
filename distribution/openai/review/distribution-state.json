@@ -1,0 +1,23 @@
+{
+  "schema": "qdral-openai-distribution-state/1",
+  "states": ["SOFTWARE_READY", "SUBMISSION_READY", "SUBMITTED", "APPROVED", "PUBLISHED", "ACCOUNT_VERIFIED"],
+  "provider_controlled": ["SUBMITTED", "APPROVED", "PUBLISHED", "ACCOUNT_VERIFIED"],
+  "status": {
+    "SOFTWARE_READY": { "state": "PENDING_SG-000067_CLOSEOUT", "evidence": null },
+    "SUBMISSION_READY": {
+      "state": "BLOCKED",
+      "blockers": [
+        "PUBLIC_RELAY_ENDPOINT_NOT_DEPLOYED: no production HTTPS relay host exists; the package is built with --mcp-url only after the owner deploys a self-hosted relay on a host they control",
+        "DOMAIN_CHALLENGE_TOKEN_NOT_ISSUED: OpenAI issues the /.well-known/openai-apps-challenge token only in the owner's platform account",
+        "LEGAL_DOCUMENTS_NOT_OWNER_APPROVED: docs/legal/PRIVACY.md and docs/legal/TERMS.md are drafts that the owner must review and publish",
+        "DEMO_RECORDING_NOT_CAPTURED: the walkthrough video requires the owner's paired computer and account",
+        "REVIEWER_TEST_ACCOUNT_NOT_PROVISIONED: OpenAI review needs a dedicated test account with a paired computer"
+      ]
+    },
+    "SUBMITTED": { "state": "NOT_OBSERVED", "evidence": null },
+    "APPROVED": { "state": "NOT_OBSERVED", "evidence": null },
+    "PUBLISHED": { "state": "NOT_OBSERVED", "evidence": null },
+    "ACCOUNT_VERIFIED": { "state": "NOT_OBSERVED", "evidence": null }
+  },
+  "promotion_rule": "No software, test, or CI result promotes any state. Provider-controlled states change only by recording directly observed provider evidence (submission ID, review decision, directory listing URL, or a target-account observation) in this file through a governed change."
+}

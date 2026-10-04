@@ -27,6 +27,7 @@ function main(argv: readonly string[]): void {
     allowedOrigins: config.allowedOrigins,
     store,
     quotas: config.quotas,
+    openaiAppsChallenge: config.openaiAppsChallenge,
     log: (event) => process.stdout.write(`${new Date().toISOString()} ${event}\n`)
   });
   relay.server.listen(config.listenPort, config.listenHost, () => {
