@@ -1,0 +1,73 @@
+{
+  "id": "SG-000074",
+  "title": "Live isolated browser host",
+  "program": "QDRAL-P18",
+  "state": "GRAIN",
+  "risk": "high",
+  "created": "2026-10-04",
+  "base": "686b170badf9c7d2033ea448313f14189bb73db7",
+  "dependencies": [
+    "SG-000073"
+  ],
+  "objective": "Create the low-authority Deskal browser host without exposing any browser capability: a Deskal-launched child process speaking a private local framed IPC protocol, with no independent public MCP endpoint and no independent HTTP or LAN control surface, a dedicated automation profile only with ephemeral default, browser sandbox enabled, no remote-debugging TCP listener, no inherited secrets or extensions, server-owned browser and page identities, bounded process lifetime and child counts, deterministic cleanup, and parent and session invalidation killing browser authority. Missing or unsupported engines return typed unavailable and never fall back to a personal browser.",
+  "scope": {
+    "include": [
+      "Deskal-launched low-authority browser host process with private local framed IPC",
+      "dedicated automation profile only, ephemeral by default, sandbox enabled, no remote-debugging listener, no secret or extension inheritance",
+      "server-owned browser and page identities with bounded lifetime, bounded child counts, and deterministic cleanup",
+      "parent and session invalidation killing browser authority",
+      "typed unavailable for missing or unsupported engines with no personal-browser fallback",
+      "real integration tests for launch, isolation, supervision, and cleanup"
+    ],
+    "exclude": [
+      "navigation or page loading",
+      "DOM observation or actuation",
+      "downloads, uploads, or transfers",
+      "capture or input",
+      "new MCP tools, profiles, or remote authority",
+      "any caller-reachable control surface beyond the private Deskal channel"
+    ]
+  },
+  "authority_delta": {
+    "filesystem": "None beyond the dedicated ephemeral automation profile directory owned by Deskal.",
+    "process": "One Deskal-supervised low-authority browser child process family with bounded children and deterministic cleanup; no new public spawn authority.",
+    "network": "None. The host performs no navigation in this grain.",
+    "browser": "None exposed. The host exists but no browser capability is reachable until later grains qualify it shape by shape.",
+    "ui_input": "None.",
+    "secrets": "None. The host inherits no unrelated secrets.",
+    "approval": "None.",
+    "privileged": "None."
+  },
+  "invariants": [
+    "the host is never an independent principal",
+    "no public control surface ever appears on the host",
+    "unsupported engines stay unavailable, never weaker"
+  ],
+  "acceptance": [
+    {
+      "id": "A1",
+      "claim": "The host launches only under Deskal supervision with private IPC, dedicated ephemeral profile, sandbox, bounded lifetime, and deterministic cleanup, proven by real integration tests."
+    },
+    {
+      "id": "A2",
+      "claim": "No independent MCP endpoint, HTTP/LAN listener, debugging listener, personal profile, secret inheritance, or extension inheritance exists, and missing engines return typed unavailable."
+    },
+    {
+      "id": "A3",
+      "claim": "Exact-head CI, genuine TypeSafe Jev, Alibaba Open Code Review, manual review of excluded files, and zero unresolved review threads all pass."
+    }
+  ],
+  "successor_requirements": {
+    "sg_000075": "SG-000075 may activate only after SG-000074 closes canonically with the isolated host as its base."
+  },
+  "review": {
+    "diffcipline": true,
+    "jev_semantic_review": true,
+    "alibaba_open_code_review": "required exact-range qualification where integrated",
+    "security_review": true,
+    "exact_head_ci": true,
+    "native_windows": true,
+    "release_artifact_qualification": true
+  },
+  "done_when": "A live isolated browser host exists under Deskal supervision with no reachable capability and no fallback, proven by integration tests."
+}

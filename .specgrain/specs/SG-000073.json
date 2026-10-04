@@ -2,7 +2,7 @@
   "id": "SG-000073",
   "title": "Computer-use architecture and provenance freeze",
   "program": "QDRAL-P18",
-  "state": "GRAIN",
+  "state": "CLOSED",
   "risk": "high",
   "created": "2026-10-04",
   "base": "49cf73562d6cc91faee24a7fe8f4a1f9fccccfbe",
@@ -69,5 +69,25 @@
     "native_windows": true,
     "release_artifact_qualification": true
   },
-  "done_when": "The P18 architecture and donor provenance are frozen, bounded, and proven unreachable from authority surfaces, with no authority delta."
+  "done_when": "The P18 architecture and donor provenance are frozen, bounded, and proven unreachable from authority surfaces, with no authority delta.",
+  "qualified_head": "5a63f7bbe5168336dd3e7fb008ad0b68c08853f6",
+  "implementation_base": "4ec8f9e1211cf61e268cf872a154c960d19c8ffe",
+  "implementation_merge": "686b170badf9c7d2033ea448313f14189bb73db7",
+  "pre_merge_ci": "37213682535",
+  "pre_merge_review_gates": "37213681953",
+  "post_merge_ci": "37214376515",
+  "canonical_evidence": {
+    "implementation_pr": 194,
+    "implementation_base": "4ec8f9e1211cf61e268cf872a154c960d19c8ffe",
+    "qualified_head": "5a63f7bbe5168336dd3e7fb008ad0b68c08853f6",
+    "pre_merge_ci": "37213682535",
+    "pre_merge_review_gates": "37213681953",
+    "merge_sha": "686b170badf9c7d2033ea448313f14189bb73db7",
+    "post_merge_ci": "37214376515",
+    "jev": "PASSED: genuine TypeSafe Jev exact-diff review covered 4/4 hunks with zero findings and zero blocking findings, pin 31f89602797fb7bea007f8a480bf368bf564954e",
+    "ocr": "PASSED: Alibaba Open Code Review v1.12.9 exact-range delegation over 4 changed files, 1 reviewable with delegated rules applied and 3 excluded by extension classification and manually reviewed (architecture/provenance note, freeze tests, and the no-runtime test widening)",
+    "security_review": "PASS on exact qualified head: frozen sixteen-verb proposal vocabulary with exact-set regression tests; ten forbidden authority-bearing fields excluded from target and envelope shapes; pinned donor revision with verified Apache-2.0 licenses and examined paths; reuse classifications, boundaries, denied authority, packaging strategy, and Windows provider boundaries recorded; donor-runtime marker coverage widened to relay sources with unreachability from MCP and remote interfaces proven. No defect was found and no authority changed. All closed SG-000001 through SG-000072 regressions pass in exact-head CI. CodeRabbit skipped-review and cubic skipping notices evaluated as non-evidence noise with zero substantive findings; zero unresolved threads.",
+    "unresolved_review_threads": 0,
+    "authority_boundary": "Frozen vocabulary data, exact-set tests, and documentation only. No browser launch, donor dependency, tool, profile, lease, or authority change."
+  }
 }
