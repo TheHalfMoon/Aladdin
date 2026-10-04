@@ -1,4 +1,4 @@
-# Qdral open-source relay (SG-000057). Build from the repository root:
+# Deskal open-source relay (SG-000057). Build from the repository root:
 #   docker build -f apps/qdral-relay/Dockerfile -t qdral-relay .
 # Base image pinned by digest (node 24.19.0, Alpine 3.23).
 FROM node:24.19.0-alpine3.23@sha256:244cc2b53f46f9e876304391d17682b0ddae9ac33491f4857e25e35a36ba7995 AS build

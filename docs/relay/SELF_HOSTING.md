@@ -1,8 +1,8 @@
-# Self-Hosting the Qdral Relay
+# Self-Hosting the Deskal Relay
 
 Status: OPERATOR GUIDE (SG-000057)
 
-The Qdral relay is open source (Apache-2.0) and self-hosting is the canonical,
+The Deskal relay is open source (Apache-2.0) and self-hosting is the canonical,
 zero-cost way to give a hosted AI client remote access to your own computer.
 Nothing in this guide requires a paid API, paid cloud, paid database, paid
 identity provider, or paid relay.
@@ -96,6 +96,9 @@ token signing key. It is written atomically with an integrity checksum. If it
 is corrupt or tampered with, the relay refuses to start instead of forgetting
 revocations. Back it up like any secret: anyone with the file can mint tokens
 for this relay (they still cannot act on a computer without a local lease).
+The canonical backup/restore procedure, signing-key compromise response,
+incident runbook, and recovery objectives are in
+`docs/relay/OPERATOR_RECOVERY.md`.
 
 ## Linking a computer and an AI client
 

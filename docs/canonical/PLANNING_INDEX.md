@@ -75,7 +75,7 @@ canonically.
 | `docs/security/CLIENT_CONNECTION_PROFILE_MODEL.md`, `..._REMOTE_PRINCIPAL_AUTH_MODEL.md`, `..._REMOTE_SESSION_AUTHORIZATION.md`, `..._RELEASE_SECURITY_REVIEW.md` | Authentication, session, and release review models. |
 | `docs/p16/CAPABILITY_PARITY.md`, `..._TOOL_CONTRACT.md`, `..._BROWSER_QUALIFICATION.md`, `..._DESKTOP_QUALIFICATION.md`, `..._capability_parity_inventory.json` | Capability inventory, tool contract, and pre-P18 qualification records. |
 | `docs/p17/OPENAI_PLUGIN.md`, `..._CLAUDE.md`, `..._MISTRAL.md`, `..._CODEX_AND_GENERIC_MCP.md` | Provider distribution records for the P17 sequence. |
-| `docs/relay/SELF_HOSTING.md`, `..._REFERENCE_DEPLOYMENT.md` | Operator deployment documentation. |
+| `docs/relay/SELF_HOSTING.md`, `..._REFERENCE_DEPLOYMENT.md`, `..._OPERATOR_RECOVERY.md` | Operator deployment, backup/restore, compromise response, runbook, and recovery objectives. |
 | `docs/legal/PRIVACY.md`, `..._TERMS.md` | Legal notices. |
 
 ### COMPATIBILITY_CONTRACT
