@@ -10,6 +10,7 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { buildProtectedResourceMetadata } from "@qdral/mcp/dist/oauth_authorization.js";
 import { RELAY_BOUNDS } from "@qdral/mcp/dist/relay_contract.js";
+import { APPS_CHALLENGE_PATTERN } from "./config.js";
 import { AuthorizationService, type HttpReply } from "./authorization.js";
 import { DeviceChannelHub, type HubReply } from "./device_channel.js";
 import { McpEdge, type EdgeConfig } from "./edge.js";
@@ -29,6 +30,12 @@ export interface RelayServerConfig extends EdgeConfig {
   readonly clock?: () => number;
   readonly pollWaitMs?: number;
   readonly log?: (event: string) => void;
+  /**
+   * SG-000067 OpenAI domain-verification token. The response proves domain
+   * control to the provider only; it grants no workspace trust, approval,
+   * executable admission, device enrollment, or remote-session authority.
+   */
+  readonly openaiAppsChallenge?: string | null;
 }
 
 export interface RelayServer {
@@ -120,6 +127,15 @@ export function createRelayServer(config: RelayServerConfig): RelayServer {
         (path === "/.well-known/oauth-protected-resource" || path === "/.well-known/oauth-protected-resource/mcp")
       ) {
         send(response, 200, { "content-type": "application/json" }, metadata);
+        return;
+      }
+      if (request.method === "GET" && path === "/.well-known/openai-apps-challenge") {
+        const challenge = config.openaiAppsChallenge ?? null;
+        if (challenge === null || !APPS_CHALLENGE_PATTERN.test(challenge)) {
+          send(response, 404, { "content-type": "application/json" }, JSON.stringify({ error: "not_found" }));
+          return;
+        }
+        send(response, 200, { "content-type": "text/plain; charset=utf-8" }, challenge);
         return;
       }
       if (request.method === "GET" && path === "/healthz") {

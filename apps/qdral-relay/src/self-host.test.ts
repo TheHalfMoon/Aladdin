@@ -14,7 +14,7 @@ import { generatePkceVerifier, pkceS256Challenge } from "@qdral/mcp/dist/oauth_a
 import { enableRemote, pairRemote } from "@qdral/mcp/dist/remote_enrollment.js";
 import { loadDeviceKey } from "@qdral/mcp/dist/uplink_state.js";
 import { CANONICAL_TOOL_NAMES } from "@qdral/mcp/dist/server.js";
-import { REMOTE_TOOL_NAMES } from "@qdral/mcp/dist/tool_contract.js";
+import { REMOTE_TOOL_NAMES, securitySchemesFor } from "@qdral/mcp/dist/tool_contract.js";
 import { parseRelayConfig } from "./config.js";
 import { FileRelayStore, RelayStateError, STATE_FILE } from "./file_store.js";
 import { DEFAULT_QUOTAS, QUOTA_CEILINGS, validateQuotas } from "./quotas.js";
@@ -253,9 +253,14 @@ test("a standards OAuth client links through device pairing and reaches the devi
     await init.text();
     assert.equal((await mcp(r, linked.accessToken, { jsonrpc: "2.0", method: "notifications/initialized" }, session)).status, 202);
     const list = await mcp(r, linked.accessToken, { jsonrpc: "2.0", id: 2, method: "tools/list" }, session);
-    const tools = ((await list.json()) as { result: { tools: Array<{ name: string }> } }).result.tools.map((t) => t.name).sort();
+    const listed = ((await list.json()) as { result: { tools: Array<{ name: string; _meta?: Record<string, unknown> }> } }).result.tools;
+    const tools = listed.map((t) => t.name).sort();
     // SG-000065: remote discovery lists exactly the core profile.
     assert.deepEqual(tools, [...REMOTE_TOOL_NAMES].sort());
+    // SG-000067: every remote tool declares its exact OAuth scheme in _meta.
+    for (const tool of listed) {
+      assert.deepEqual(tool._meta?.securitySchemes, securitySchemesFor(tool.name), tool.name);
+    }
     assert.ok(CANONICAL_TOOL_NAMES.length > REMOTE_TOOL_NAMES.length);
 
     // Refresh requires a fresh device proof over the live channel and rotates.
@@ -472,5 +477,77 @@ test("self-host configuration is strict", () => {
     { publicOrigin: "https://relay.example.com", stateDir: "/s", allowedOrigins: ["*"] }
   ]) {
     assert.throws(() => parseRelayConfig(JSON.stringify(bad)), JSON.stringify(bad));
+  }
+  // SG-000067 domain-verification token: optional, URL-safe, bounded.
+  assert.equal(ok.openaiAppsChallenge, null);
+  const withChallenge = parseRelayConfig(
+    JSON.stringify({ publicOrigin: "https://relay.example.com", stateDir: "/s", openaiAppsChallenge: "abcDEF123._~-token" })
+  );
+  assert.equal(withChallenge.openaiAppsChallenge, "abcDEF123._~-token");
+  for (const challenge of ["short", "has space token", "<script>alert(1)</script>", "x".repeat(513), 12345678, "line\nbreak-token"]) {
+    assert.throws(
+      () => parseRelayConfig(JSON.stringify({ publicOrigin: "https://relay.example.com", stateDir: "/s", openaiAppsChallenge: challenge })),
+      String(challenge)
+    );
+  }
+});
+
+test("SG-000067: the domain-verification path returns only the configured token and grants nothing", async () => {
+  const stateDir = mkdtempSync(join(tmpdir(), "qdral-relay-challenge-"));
+  const port = await freePort();
+  const origin = `http://127.0.0.1:${port}`;
+  const token = "openai-domain-token_1234.abc~";
+  const relay = createRelayServer({
+    publicOrigin: origin,
+    issuer: origin,
+    allowedOrigins: [],
+    store: new FileRelayStore(stateDir),
+    openaiAppsChallenge: token
+  });
+  await new Promise<void>((resolve) => relay.server.listen(port, "127.0.0.1", resolve));
+  try {
+    const challenge = await fetch(`${origin}/.well-known/openai-apps-challenge`);
+    assert.equal(challenge.status, 200);
+    assert.equal(challenge.headers.get("content-type"), "text/plain; charset=utf-8");
+    assert.equal(challenge.headers.get("cache-control"), "no-store");
+    assert.equal(await challenge.text(), token);
+    for (const method of ["POST", "PUT", "DELETE"]) {
+      const other = await fetch(`${origin}/.well-known/openai-apps-challenge`, { method });
+      assert.notEqual(other.status, 200, method);
+      await other.text();
+    }
+    // Knowing the token is not authority: the MCP edge still requires OAuth.
+    const unauthenticated = await fetch(`${origin}/mcp`, {
+      method: "POST",
+      headers: { "content-type": "application/json", accept: "application/json, text/event-stream", authorization: `Bearer ${token}` },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" })
+    });
+    assert.equal(unauthenticated.status, 401);
+    await unauthenticated.text();
+    const metadata = (await (await fetch(`${origin}/.well-known/oauth-authorization-server`)).json()) as Record<string, unknown>;
+    assert.equal(metadata.client_id_metadata_document_supported, false);
+    assert.deepEqual(metadata.code_challenge_methods_supported, ["S256"]);
+    assert.equal(metadata.authorization_response_iss_parameter_supported, true);
+  } finally {
+    relay.server.closeAllConnections();
+    await new Promise<void>((resolve) => relay.server.close(() => resolve()));
+  }
+  const unconfiguredPort = await freePort();
+  const unconfiguredOrigin = `http://127.0.0.1:${unconfiguredPort}`;
+  const unconfigured = createRelayServer({
+    publicOrigin: unconfiguredOrigin,
+    issuer: unconfiguredOrigin,
+    allowedOrigins: [],
+    store: new FileRelayStore(mkdtempSync(join(tmpdir(), "qdral-relay-challenge-"))),
+    openaiAppsChallenge: null
+  });
+  await new Promise<void>((resolve) => unconfigured.server.listen(unconfiguredPort, "127.0.0.1", resolve));
+  try {
+    const missing = await fetch(`${unconfiguredOrigin}/.well-known/openai-apps-challenge`);
+    assert.equal(missing.status, 404);
+    await missing.text();
+  } finally {
+    unconfigured.server.closeAllConnections();
+    await new Promise<void>((resolve) => unconfigured.server.close(() => resolve()));
   }
 });
