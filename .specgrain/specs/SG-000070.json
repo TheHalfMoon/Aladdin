@@ -2,7 +2,7 @@
   "id": "SG-000070",
   "title": "Codex and generic MCP distribution",
   "program": "COTRA-P17",
-  "state": "GRAIN",
+  "state": "CLOSED",
   "risk": "high",
   "created": "2026-10-04",
   "base": "11a08bf9bae23bd44baf0f9c758e35613e668ef6",
@@ -82,5 +82,25 @@
     "native_windows": true,
     "release_artifact_qualification": true
   },
-  "done_when": "Codex and generic MCP clients are packaged, configured, diagnosed, and interoperability-tested over Qdral's existing authority, with every provider-controlled state explicit external evidence."
+  "done_when": "Codex and generic MCP clients are packaged, configured, diagnosed, and interoperability-tested over Qdral's existing authority, with every provider-controlled state explicit external evidence.",
+  "qualified_head": "1511f37f0320d2963e63fc92dd174f6842c4250b",
+  "implementation_base": "dc32bbf81527f5008c4b5cb9608b13cc9a9c7676",
+  "implementation_merge": "1eb4e5983af3643585a19d87883ec31fe80e1867",
+  "pre_merge_ci": "37181176713",
+  "pre_merge_review_gates": "37181176752",
+  "post_merge_ci": "37181541786",
+  "canonical_evidence": {
+    "implementation_pr": 187,
+    "implementation_base": "dc32bbf81527f5008c4b5cb9608b13cc9a9c7676",
+    "qualified_head": "1511f37f0320d2963e63fc92dd174f6842c4250b",
+    "pre_merge_ci": "37181176713",
+    "pre_merge_review_gates": "37181176752",
+    "merge_sha": "1eb4e5983af3643585a19d87883ec31fe80e1867",
+    "post_merge_ci": "37181541786",
+    "jev": "PASSED: genuine TypeSafe Jev exact-diff review covered 11/11 hunks with zero findings and zero blocking findings, pin 31f89602797fb7bea007f8a480bf368bf564954e",
+    "ocr": "PASSED: Alibaba Open Code Review v1.12.9 exact-range delegation over 9 changed files, 4 reviewable with delegated rules applied and 5 excluded (apps/qdral-mcp/src/codex-plugin.test.ts and apps/qdral-relay/src/self-host.test.ts by default-path classification; distribution/codex/qdral/assets/logo.svg, docs/p17/CODEX_AND_GENERIC_MCP.md, and docs/security/SG-000070_CODEX_GENERIC_MCP_NOTE.md by unsupported-extension classification) manually reviewed",
+    "security_review": "PASS on exact qualified head: a portable Codex plugin package declaring exactly one local stdio server qdral mcp stdio with no endpoint, environment, header, or secret, listed by the repository marketplace; interoperability tests proving stdio and loopback discovery are identical, relay discovery is exactly the core profile, and shared tools carry identical metadata on every transport; a Codex-style OAuth client with a loopback redirect on a different port reaching exactly the core profile through the real relay; doctor checks for the stdio entrypoint and remote integration that name only the relay origin and are unit-tested never to print the device private key. Unconfirmed stdio and marketplace policy shapes are marked UNVERIFIED. Official Codex requirements re-verified 2026-10-04. No authority added. All closed SG-000001 through SG-000069 regressions pass. CodeRabbit skipped-review and cubic skipping notices evaluated as non-evidence noise with zero substantive findings; zero unresolved threads.",
+    "unresolved_review_threads": 0,
+    "authority_boundary": "Codex plugin package and repository marketplace, interoperability tests, read-only doctor checks, and documentation. No kernel capability, MCP tool, OAuth scope, profile, approval class, trust right, executable admission, lease right, actuation, shell, interpreter, static relay credential, or generic network authority is added."
+  }
 }

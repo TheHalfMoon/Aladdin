@@ -1,0 +1,71 @@
+{
+  "id": "SG-000071",
+  "title": "Cross-provider isolation qualification",
+  "program": "COTRA-P17",
+  "state": "GRAIN",
+  "risk": "high",
+  "created": "2026-10-04",
+  "base": "1eb4e5983af3643585a19d87883ec31fe80e1867",
+  "dependencies": [
+    "SG-000070"
+  ],
+  "objective": "Prove with explicit negative tests over the real relay, device uplink, authoritative MCP builder, and qdrald lease gate that a connection established for one provider cannot reuse another provider's OAuth token, refresh family, principal, remote connection, route, device binding, client registration, workspace admission, remote-session lease, or approval, and that identical local approval and policy boundaries apply to every provider; fix every isolation defect at its root without adding authority.",
+  "scope": {
+    "include": [
+      "a multi-provider topology on one relay with distinct OAuth clients representing ChatGPT, Claude, Codex, Vibe Work, and a generic client, each paired to its own connection and optionally sharing one device",
+      "negative tests for cross-provider use of access tokens, refresh tokens and families, authorization codes, PKCE verifiers, sessions, routes, client identifiers, redirect URIs, scope ceilings, and device bindings",
+      "negative tests at the qdrald lease gate for cross-connection, cross-client, and cross-provider remote-session lease use and for workspace admission outside a connection's lease",
+      "proof that revoking one provider's connection or token does not affect another provider's connection except through an explicit device revoke or emergency revoke",
+      "proof that approvals and local policy are identical for every provider and that no provider identity or metadata changes authority",
+      "root-cause fixes for any isolation defect found"
+    ],
+    "exclude": [
+      "any new kernel capability, MCP tool, OAuth scope, profile, approval class, trust right, executable admission, lease right, actuation, shell, interpreter, or generic network authority",
+      "claims about provider directory or account states",
+      "activating SG-000072 or any QDRAL-P18 grain before this grain closes canonically"
+    ]
+  },
+  "authority_delta": {
+    "filesystem": "None.",
+    "process": "None.",
+    "network": "None beyond test-local loopback relays.",
+    "browser": "None.",
+    "ui_input": "None.",
+    "secrets": "None.",
+    "approval": "None.",
+    "privileged": "None."
+  },
+  "invariants": [
+    "no credential, session, route, lease, or approval issued for one provider authorizes another",
+    "revocation scoped to one provider never silently revokes or widens another",
+    "provider identity is metadata, never authority"
+  ],
+  "acceptance": [
+    {
+      "id": "A1",
+      "claim": "Every listed cross-provider reuse attempt fails closed at the relay edge, the token endpoint, the device uplink, or the qdrald lease gate, with the expected typed failure."
+    },
+    {
+      "id": "A2",
+      "claim": "Scoped revocation isolates providers, and approvals and local policy are identical for every provider."
+    },
+    {
+      "id": "A3",
+      "claim": "Exact-head CI, genuine TypeSafe Jev, Alibaba Open Code Review, manual review of excluded files, and zero unresolved review threads all pass."
+    }
+  ],
+  "successor_requirements": {
+    "sg_000072": "v0.2 release hardening may activate only after SG-000071 closes canonically.",
+    "p18": "SG-000073 through SG-000086 remain new-grain-only and may not activate during SG-000071."
+  },
+  "review": {
+    "diffcipline": true,
+    "jev_semantic_review": true,
+    "alibaba_open_code_review": "required exact-range qualification where integrated",
+    "security_review": true,
+    "exact_head_ci": true,
+    "native_windows": true,
+    "release_artifact_qualification": true
+  },
+  "done_when": "Cross-provider isolation is proven by explicit negative tests across every credential, session, route, lease, and approval boundary, with every defect fixed at its root."
+}
