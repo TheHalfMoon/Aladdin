@@ -18,6 +18,29 @@ const historicalContentAllowed = (path) =>
 
 const isBinary = (bytes) => bytes.subarray(0, Math.min(bytes.length, 8192)).includes(0);
 
+// Exact historical tokens that a current file may contain because it reads
+// immutable evidence recorded under the superseded identity. Only these
+// literal tokens are allowed in these files; any other superseded identity
+// in them still fails the gate.
+const historicalTokensAllowed = new Map([
+  [
+    "apps/qdral-mcp/src/p16-exit.test.ts",
+    [
+      '"quntal-p16-exit-evidence/2"', // schema of the immutable SG-000066 evidence file
+      "/^apps\\/quntal-mcp\\//", // historical evidence path prefix mapped to the current path
+      "/^crates\\/quntald\\//" // historical evidence path prefix mapped to the current path
+    ]
+  ]
+]);
+
+const withoutAllowedTokens = (path, text) => {
+  let remaining = text;
+  for (const token of historicalTokensAllowed.get(path) ?? []) {
+    remaining = remaining.split(token).join("");
+  }
+  return remaining;
+};
+
 const pathResidue = tracked.filter(
   (path) => path !== "docs/identity/QUNTAL_RENAME.md" && superseded.test(path)
 );
@@ -30,7 +53,7 @@ for (const path of tracked) {
   if (historicalContentAllowed(path)) continue;
   const bytes = readFileSync(path);
   if (isBinary(bytes)) continue;
-  if (superseded.test(bytes.toString("utf8"))) contentResidue.push(path);
+  if (superseded.test(withoutAllowedTokens(path, bytes.toString("utf8")))) contentResidue.push(path);
 }
 if (contentResidue.length) {
   throw new Error(`superseded identity remains outside the historical allowlist:\n${contentResidue.join("\n")}`);
