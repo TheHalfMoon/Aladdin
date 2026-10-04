@@ -101,8 +101,8 @@ for (const [path, expected] of [
 }
 
 const cargoRoot = readFileSync("Cargo.toml", "utf8");
-if (!cargoRoot.includes('repository = "https://github.com/TheHalfMoon/Qdral"')) {
-  throw new Error("Cargo workspace repository compatibility slug is not TheHalfMoon/Qdral");
+if (!cargoRoot.includes('repository = "https://github.com/TheHalfMoon/Deskal"')) {
+  throw new Error("Cargo workspace repository is not TheHalfMoon/Deskal");
 }
 
 if (supersededUnqualified.test(readFileSync(".specgrain/specs/SG-000067.json", "utf8"))) {
@@ -121,7 +121,7 @@ for (const expected of [
   "Relay package: `@qdral/relay`",
   "Environment-variable prefix: `QDRAL_`",
   "OAuth scope prefix: `qdral.`",
-  "Repository compatibility slug: `TheHalfMoon/Qdral`"
+  "Repository identity: `TheHalfMoon/Deskal`"
 ]) {
   if (!identity.includes(expected)) throw new Error(`Deskal identity record is missing: ${expected}`);
 }
