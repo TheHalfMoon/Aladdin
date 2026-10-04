@@ -2,7 +2,7 @@
   "id": "SG-000069",
   "title": "Mistral distribution",
   "program": "COTRA-P17",
-  "state": "GRAIN",
+  "state": "CLOSED",
   "risk": "high",
   "created": "2026-10-04",
   "base": "6de6742eae81bacf4f886046b6d79aed02e15ff4",
@@ -83,5 +83,25 @@
     "native_windows": true,
     "release_artifact_qualification": true
   },
-  "done_when": "Mistral local and remote integration paths are qualified over Qdral's existing authority with identical boundaries to other providers, the Vibe Code remote limitation is recorded honestly, and every provider-controlled state remains explicit external evidence."
+  "done_when": "Mistral local and remote integration paths are qualified over Qdral's existing authority with identical boundaries to other providers, the Vibe Code remote limitation is recorded honestly, and every provider-controlled state remains explicit external evidence.",
+  "qualified_head": "0b095d837d10c3fed4b6e1814518b04451912969",
+  "implementation_base": "ff2c174090755f19e94f0cd323fe618ad89a569a",
+  "implementation_merge": "11a08bf9bae23bd44baf0f9c758e35613e668ef6",
+  "pre_merge_ci": "37179678126",
+  "pre_merge_review_gates": "37179678138",
+  "post_merge_ci": "37180045511",
+  "canonical_evidence": {
+    "implementation_pr": 185,
+    "implementation_base": "ff2c174090755f19e94f0cd323fe618ad89a569a",
+    "qualified_head": "0b095d837d10c3fed4b6e1814518b04451912969",
+    "pre_merge_ci": "37179678126",
+    "pre_merge_review_gates": "37179678138",
+    "merge_sha": "11a08bf9bae23bd44baf0f9c758e35613e668ef6",
+    "post_merge_ci": "37180045511",
+    "jev": "PASSED: genuine TypeSafe Jev exact-diff review covered 5/5 hunks with zero findings and zero blocking findings, pin 31f89602797fb7bea007f8a480bf368bf564954e",
+    "ocr": "PASSED: Alibaba Open Code Review v1.12.9 exact-range delegation over 5 changed files, 1 reviewable with delegated rules applied and 4 excluded (apps/qdral-mcp/src/client-examples.test.ts and apps/qdral-relay/src/self-host.test.ts by default-path classification; docs/p17/MISTRAL.md and docs/security/SG-000069_MISTRAL_DISTRIBUTION_NOTE.md by unsupported-extension classification) manually reviewed",
+    "security_review": "PASS on exact qualified head: Vibe Code CLI stdio and loopback streamable-http examples are pinned to the canonical entrypoint and the loopback bearer contract through api_key_env with no literal credential and no remote URL; the Vibe Code limitation that OAuth-protected servers are unsupported is recorded instead of adding any static credential path, and the relay refuses static bearer, loopback-style, and Basic credentials with 401 and an OAuth challenge; a Vibe Work-style dynamically registered OAuth connector with an https callback pairs a device through the real relay and discovers exactly the core profile; Mistral directory and account states remain unpromoted under test. Official Mistral requirements re-verified 2026-10-04. No authority added. All closed SG-000001 through SG-000068 regressions pass. CodeRabbit skipped-review and cubic skipping notices evaluated as non-evidence noise with zero substantive findings; zero unresolved threads.",
+    "unresolved_review_threads": 0,
+    "authority_boundary": "Mistral integration qualification through tests, example verification, a distribution record, and documentation. No kernel capability, MCP tool, OAuth scope, profile, approval class, trust right, executable admission, lease right, actuation, shell, interpreter, static relay credential, or generic network authority is added; Mistral directory and account states remain NOT_OBSERVED."
+  }
 }

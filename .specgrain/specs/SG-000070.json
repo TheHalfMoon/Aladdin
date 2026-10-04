@@ -1,0 +1,86 @@
+{
+  "id": "SG-000070",
+  "title": "Codex and generic MCP distribution",
+  "program": "COTRA-P17",
+  "state": "GRAIN",
+  "risk": "high",
+  "created": "2026-10-04",
+  "base": "11a08bf9bae23bd44baf0f9c758e35613e668ef6",
+  "dependencies": [
+    "SG-000069"
+  ],
+  "objective": "Complete packaged Codex and generic MCP integration over Qdral's existing authority without widening it: a Codex plugin package for the local stdio entrypoint installable from the repository marketplace, Codex configuration for the local stdio and loopback paths and for the remote relay through Codex's OAuth login with dynamic client registration and loopback redirects, provider-neutral generic MCP examples, interoperability tests proving every transport serves exactly its contract profile, and setup and doctor diagnostics that report client integration readiness without exposing secrets.",
+  "scope": {
+    "include": [
+      "re-verification of current official Codex MCP and plugin documentation before implementation and again before closeout",
+      "a Codex plugin package (portable plugin.json, the Codex compatibility manifest where required, and an MCP configuration for the local stdio entrypoint) checked against the canonical entrypoint and catalog, with no secrets and no remote endpoint",
+      "Codex config.toml examples for stdio, the loopback listener with bearer_token_env_var, and the remote relay through codex mcp login, checked against the canonical contracts",
+      "generic MCP examples and an interoperability suite proving stdio, loopback HTTP, and relay discovery serve exactly their contract profiles with identical tool metadata for shared tools",
+      "setup and doctor diagnostics that report MCP entrypoint and client-configuration readiness without printing secrets or widening authority",
+      "regression tests proving no Codex-specific or generic path bypasses qdrald, the canonical MCP builder, relay authorization, or the remote-session lease"
+    ],
+    "exclude": [
+      "claiming Codex marketplace or account availability without directly observed external evidence",
+      "embedding secrets in packages, examples, or evidence",
+      "any new kernel capability, MCP tool, OAuth scope, profile, approval class, trust right, executable admission, lease right, actuation, shell, interpreter, or generic network authority",
+      "a static credential path on the public relay",
+      "activating SG-000071 or any QDRAL-P18 grain before this grain closes canonically"
+    ]
+  },
+  "authority_delta": {
+    "filesystem": "None.",
+    "process": "None.",
+    "network": "None.",
+    "browser": "None.",
+    "ui_input": "None.",
+    "secrets": "None; packages, examples, diagnostics, and evidence must be secret-free.",
+    "approval": "None.",
+    "privileged": "None."
+  },
+  "invariants": [
+    "every transport serves exactly its contract profile; shared tools carry identical metadata",
+    "provider identity is metadata, never authority",
+    "diagnostics never print secrets or change authority",
+    "no software result promotes a provider-controlled distribution state"
+  ],
+  "acceptance": [
+    {
+      "id": "A1",
+      "claim": "The Codex plugin package and Codex configuration examples validate against current official requirements and the canonical entrypoint, catalog, and contracts with no secrets."
+    },
+    {
+      "id": "A2",
+      "claim": "Interoperability tests prove stdio, loopback HTTP, and relay discovery serve exactly their contract profiles with identical metadata for shared tools, and a Codex-style OAuth client with a loopback redirect reaches the core profile through the real relay."
+    },
+    {
+      "id": "A3",
+      "claim": "Setup and doctor diagnostics report client integration readiness without secrets, and no authority widens."
+    },
+    {
+      "id": "A4",
+      "claim": "Exact-head CI, genuine TypeSafe Jev, Alibaba Open Code Review, manual review of excluded files, current official Codex requirement re-verification, and zero unresolved review threads all pass."
+    }
+  ],
+  "external_requirements_verified": {
+    "date": "2026-10-04",
+    "source_policy": "Official Codex documentation must be re-checked before closeout.",
+    "sources": [
+      "https://learn.chatgpt.com/docs/extend/mcp?surface=cli",
+      "https://developers.openai.com/plugins/build/plugins/"
+    ]
+  },
+  "successor_requirements": {
+    "sg_000071": "Cross-provider isolation qualification may activate only after SG-000070 closes canonically.",
+    "p18": "SG-000073 through SG-000086 remain new-grain-only and may not activate during SG-000070."
+  },
+  "review": {
+    "diffcipline": true,
+    "jev_semantic_review": true,
+    "alibaba_open_code_review": "required exact-range qualification where integrated",
+    "security_review": true,
+    "exact_head_ci": true,
+    "native_windows": true,
+    "release_artifact_qualification": true
+  },
+  "done_when": "Codex and generic MCP clients are packaged, configured, diagnosed, and interoperability-tested over Qdral's existing authority, with every provider-controlled state explicit external evidence."
+}
