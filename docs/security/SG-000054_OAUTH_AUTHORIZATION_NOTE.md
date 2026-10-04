@@ -1,6 +1,6 @@
 # SG-000054 OAuth 2.1 Authorization Note
 
-Status: IMPLEMENTATION FOR QUNTAL-P15
+Status: IMPLEMENTATION FOR QDRAL-P15
 SpecGrain: SG-000054
 Base: `26075a9966535f029053d379ca3ef1b910b633c2` (grain base `518406cffdd2cd37625f35a87580c0e2c49483c5`)
 Date: 2026-10-02
@@ -10,8 +10,8 @@ Companions:
 - `docs/security/REMOTE_PRINCIPAL_AUTH_MODEL.md`
 - `docs/security/REMOTE_SESSION_AUTHORIZATION.md`
 - `docs/security/CLIENT_CONNECTION_PROFILE_MODEL.md`
-- `apps/quntal-mcp/src/oauth_authorization.ts`
-- `apps/quntal-mcp/src/oauth-authorization.test.ts`
+- `apps/qdral-mcp/src/oauth_authorization.ts`
+- `apps/qdral-mcp/src/oauth-authorization.test.ts`
 
 ## 1. Purpose
 
@@ -42,7 +42,7 @@ transport skeleton does not import it.
 Effective remote permission remains the intersection defined in
 `REMOTE_PRINCIPAL_AUTH_MODEL.md` section 12: remote OAuth scope AND the
 active local remote-session lease AND the locally enabled tool-surface
-profile AND workspace policy AND the `quntald` capability and provider
+profile AND workspace policy AND the `qdrald` capability and provider
 ceiling AND required local approval. Any denial wins.
 
 ## 3. Cryptography
@@ -155,14 +155,14 @@ later grain after current provider requirements are reverified.
 `OAUTH_SCOPE_TOOL_MATRIX` states the required scopes for every one of the
 20 canonical tools and is tested to cover exactly `CANONICAL_TOOL_NAMES`:
 
-- `quntal.read`: `system_status`, `workspace_get`, `fs_stat`, `fs_list`,
+- `qdral.read`: `system_status`, `workspace_get`, `fs_stat`, `fs_list`,
   `fs_read`, `fs_search`, `git_status`, `git_diff`, `git_log`;
-- `quntal.write`: `fs_write_preview`, `fs_write`, `git_branch_create`,
+- `qdral.write`: `fs_write_preview`, `fs_write`, `git_branch_create`,
   `git_stage`, `git_unstage`, `git_commit`, `git_fetch_preview`,
   `git_fetch`, `git_push_preview`, `git_push`;
-- `quntal.execute`: `process_spawn`.
+- `qdral.execute`: `process_spawn`.
 
-Preview tools that exist to prepare a write require `quntal.write`. Every
+Preview tools that exist to prepare a write require `qdral.write`. Every
 required scope must be present in both the current token and the leased
 OAuth scope ceiling. Only the `core` profile is mapped; `developer`,
 `desktop_structured`, `coordinate_fallback`, and any other profile deny
@@ -205,10 +205,10 @@ and remote key headers, unknown keys, forged signatures under a known
 
 ## 14. Scanner precision change
 
-`surface.test.ts` forbids references to the `quntal.exe` lifecycle
-executable in tool sources. Its pattern `/quntal\.exe/i` also matched the
-canonical OAuth scope name `quntal.execute`. The pattern is now
-`/quntal\.exe\b/i`, which still matches every reference to the executable
+`surface.test.ts` forbids references to the `qdral.exe` lifecycle
+executable in tool sources. Its pattern `/qdral\.exe/i` also matched the
+canonical OAuth scope name `qdral.execute`. The pattern is now
+`/qdral\.exe\b/i`, which still matches every reference to the executable
 and no longer matches the scope name. No other regression test changed.
 
 ## 15. Non-goals

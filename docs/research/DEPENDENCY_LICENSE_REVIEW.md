@@ -1,22 +1,22 @@
 # Dependency and License Review
 
-Status: QUNTAL-P13 review of every third-party component in the Quntal Windows x64 release, recorded with the evidence used. This is an engineering review, not legal advice; it records declared licenses and shipped license texts and does not claim legal certainty.
+Status: QDRAL-P13 review of every third-party component in the Qdral Windows x64 release, recorded with the evidence used. This is an engineering review, not legal advice; it records declared licenses and shipped license texts and does not claim legal certainty.
 
-Scope: the crates linked into the shipped binaries (`quntal.exe`, `quntal-mcp-host.exe`, `quntald.exe`) for `x86_64-pc-windows-msvc`, following normal (non-dev) dependency edges from `cargo metadata`, and the npm packages present in the packaged `app\quntal-mcp\node_modules`. Development-only dependencies (TypeScript, `@types/node`, test-only crates) are listed separately because they are not distributed.
+Scope: the crates linked into the shipped binaries (`qdral.exe`, `qdral-mcp-host.exe`, `qdrald.exe`) for `x86_64-pc-windows-msvc`, following normal (non-dev) dependency edges from `cargo metadata`, and the npm packages present in the packaged `app\qdral-mcp\node_modules`. Development-only dependencies (TypeScript, `@types/node`, test-only crates) are listed separately because they are not distributed.
 
 Sources: `Cargo.lock` (exact versions and registry SHA-256 checksums), `package-lock.json` (exact versions and integrity hashes), each package's declared license, and the license files the package itself ships (collected into `THIRD_PARTY_NOTICES.txt` by `scripts/third-party-notices.mjs`).
 
-## Quntal
+## Qdral
 
 | Component | License | Notes |
 |---|---|---|
-| Quntal (all workspace crates and `@quntal/mcp`) | Apache-2.0 | `LICENSE` at the repository root, shipped in the release payload. |
+| Qdral (all workspace crates and `@qdral/mcp`) | Apache-2.0 | `LICENSE` at the repository root, shipped in the release payload. |
 
 ## Rust crates in the shipped binaries
 
 All are from crates.io, pinned by `Cargo.lock` with registry checksums.
 
-| Crate | Version | License | Purpose in Quntal |
+| Crate | Version | License | Purpose in Qdral |
 |---|---|---|---|
 | serde, serde_core, serde_derive | 1.0.229 | MIT OR Apache-2.0 | Typed JSON records, configuration, IPC envelopes |
 | serde_json | 1.0.151 | MIT OR Apache-2.0 | JSON parsing and serialization |
@@ -60,13 +60,13 @@ Pinned by `package-lock.json` and copied into the release from the locked produc
 
 | Package | Version | License | Purpose |
 |---|---|---|---|
-| typescript | 5.9.3 | Apache-2.0 | Compiles `apps/quntal-mcp` |
+| typescript | 5.9.3 | Apache-2.0 | Compiles `apps/qdral-mcp` |
 | @types/node, undici-types | 24.10.1 / 7.16.0 | MIT | Node.js type definitions |
 
 ## Security considerations
 
 - Rust dependencies are resolved only from crates.io with lockfile checksums; npm dependencies are installed with `npm ci` from the lockfile with integrity hashes.
-- No dependency performs network access on Quntal's behalf except the Windows OS transport (WinHTTP) used by the closed SG-000016/SG-000017/SG-000040 paths.
+- No dependency performs network access on Qdral's behalf except the Windows OS transport (WinHTTP) used by the closed SG-000016/SG-000017/SG-000040 paths.
 - No build script downloads code at build time (`npm` runs with `--ignore-scripts`).
 - Known-vulnerability scanning: on 2026-10-01, `cargo audit` 0.22.2 against the RustSec advisory database (1,277 advisories, updated 2026-09-30) reported 0 vulnerabilities and 0 warnings (no unmaintained, unsound, or yanked crates) for `Cargo.lock`, and `npm audit` reported 0 vulnerabilities for `package-lock.json` (production and development). Both audits run in CI on every change (the `Supply chain audit` job) and fail the build on any known vulnerability.
 

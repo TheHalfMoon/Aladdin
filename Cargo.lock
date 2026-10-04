@@ -84,10 +84,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "quntal-approval"
+name = "qdral-approval"
 version = "0.1.0"
 dependencies = [
- "quntal-contracts",
+ "qdral-contracts",
  "serde",
  "serde_json",
  "sha2",
@@ -95,16 +95,16 @@ dependencies = [
 ]
 
 [[package]]
-name = "quntal-audit"
+name = "qdral-audit"
 version = "0.1.0"
 dependencies = [
- "quntal-contracts",
+ "qdral-contracts",
  "serde",
  "serde_json",
 ]
 
 [[package]]
-name = "quntal-contracts"
+name = "qdral-contracts"
 version = "0.1.0"
 dependencies = [
  "serde",
@@ -112,12 +112,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "quntal-lifecycle"
+name = "qdral-lifecycle"
 version = "0.1.0"
 dependencies = [
- "quntal-approval",
- "quntal-policy",
- "quntal-tunnel",
+ "qdral-approval",
+ "qdral-policy",
+ "qdral-tunnel",
  "serde",
  "serde_json",
  "sha2",
@@ -125,35 +125,35 @@ dependencies = [
 ]
 
 [[package]]
-name = "quntal-policy"
+name = "qdral-policy"
 version = "0.1.0"
 dependencies = [
- "quntal-approval",
- "quntal-contracts",
- "quntal-provider-browser",
- "quntal-provider-clipboard",
- "quntal-provider-network",
- "quntal-provider-uia",
+ "qdral-approval",
+ "qdral-contracts",
+ "qdral-provider-browser",
+ "qdral-provider-clipboard",
+ "qdral-provider-network",
+ "qdral-provider-uia",
  "serde",
  "serde_json",
  "sha2",
 ]
 
 [[package]]
-name = "quntal-provider-browser"
+name = "qdral-provider-browser"
 version = "0.1.0"
 dependencies = [
- "quntal-contracts",
+ "qdral-contracts",
  "serde",
  "serde_json",
  "sha2",
 ]
 
 [[package]]
-name = "quntal-provider-clipboard"
+name = "qdral-provider-clipboard"
 version = "0.1.0"
 dependencies = [
- "quntal-contracts",
+ "qdral-contracts",
  "serde",
  "serde_json",
  "sha2",
@@ -161,41 +161,41 @@ dependencies = [
 ]
 
 [[package]]
-name = "quntal-provider-fs"
+name = "qdral-provider-fs"
 version = "0.1.0"
 dependencies = [
- "quntal-contracts",
+ "qdral-contracts",
  "serde_json",
  "sha2",
 ]
 
 [[package]]
-name = "quntal-provider-git"
+name = "qdral-provider-git"
 version = "0.1.0"
 dependencies = [
- "quntal-contracts",
+ "qdral-contracts",
  "serde_json",
 ]
 
 [[package]]
-name = "quntal-provider-network"
+name = "qdral-provider-network"
 version = "0.1.0"
 dependencies = [
- "quntal-contracts",
+ "qdral-contracts",
  "serde_json",
  "sha2",
  "windows-sys",
 ]
 
 [[package]]
-name = "quntal-provider-process"
+name = "qdral-provider-process"
 version = "0.1.0"
 
 [[package]]
-name = "quntal-provider-uia"
+name = "qdral-provider-uia"
 version = "0.1.0"
 dependencies = [
- "quntal-contracts",
+ "qdral-contracts",
  "serde",
  "serde_json",
  "sha2",
@@ -203,7 +203,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "quntal-tunnel"
+name = "qdral-tunnel"
 version = "0.1.0"
 dependencies = [
  "serde",
@@ -211,20 +211,20 @@ dependencies = [
 ]
 
 [[package]]
-name = "quntald"
+name = "qdrald"
 version = "0.1.0"
 dependencies = [
- "quntal-approval",
- "quntal-audit",
- "quntal-contracts",
- "quntal-policy",
- "quntal-provider-browser",
- "quntal-provider-clipboard",
- "quntal-provider-fs",
- "quntal-provider-git",
- "quntal-provider-network",
- "quntal-provider-process",
- "quntal-provider-uia",
+ "qdral-approval",
+ "qdral-audit",
+ "qdral-contracts",
+ "qdral-policy",
+ "qdral-provider-browser",
+ "qdral-provider-clipboard",
+ "qdral-provider-fs",
+ "qdral-provider-git",
+ "qdral-provider-network",
+ "qdral-provider-process",
+ "qdral-provider-uia",
  "serde",
  "serde_json",
  "sha2",

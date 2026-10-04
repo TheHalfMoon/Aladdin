@@ -1,6 +1,6 @@
 # Structured Browser Exposure Qualification (SG-000062)
 
-Status: CANONICAL DECISION FOR QUNTAL-P16
+Status: CANONICAL DECISION FOR QDRAL-P16
 
 ## Question
 
@@ -13,11 +13,11 @@ implementation does not have.
 
 ## Evidence
 
-- `crates/quntal-provider-browser` and `crates/quntald/src/browser.rs` launch no
+- `crates/qdral-provider-browser` and `crates/qdrald/src/browser.rs` launch no
   browser process, attach to none, and open no DevTools, debugger, WebSocket,
   or socket channel. The only process launches in the crate are test helpers
   that create junctions.
-- Pages are records in a Quntal page registry. Navigation validates and
+- Pages are records in a Qdral page registry. Navigation validates and
   records the destination; it does not load the page in an engine.
 - `build_snapshot` documents and implements "deterministic structural
   metadata bound to the page generation and document generation, never live
@@ -62,6 +62,6 @@ it only exercised policy bookkeeping.
   A future grain must bring a live, isolated engine and qualify every shape
   against it before exposure.
 
-`apps/quntal-mcp/src/browser-qualification.test.ts` pins this decision: no
+`apps/qdral-mcp/src/browser-qualification.test.ts` pins this decision: no
 MCP tool is browser-named, the browser layer launches and attaches nothing,
 and every shape above is recorded as not exposed.

@@ -1,0 +1,409 @@
+use qdral_lifecycle::install::{InstallOptions, Installer, UninstallOptions};
+use qdral_lifecycle::layout::Layout;
+use qdral_lifecycle::manifest::MANIFEST_FILE;
+use qdral_lifecycle::{host_platform, ErrorKind, LifecycleError};
+use serde_json::json;
+use std::path::PathBuf;
+
+const HELP: &str = "\
+Qdral - Computer Orchestration & Trusted Runtime Access
+
+Install and maintenance:
+  qdral install [--source <release-dir>] [--node <node.exe>] [--no-path]
+      Install or repair the per-user install under %LOCALAPPDATA%\\Qdral. The release
+      directory defaults to the directory containing this qdral.exe. Every payload
+      file is verified against manifest.json before anything is copied. Administrator
+      rights are not required; an elevated \"Run as administrator\" prompt is refused.
+  qdral uninstall [--purge-data --yes]
+      Stop Qdral, then remove binaries, the version pointer, and the PATH entry.
+      Configuration, secrets, logs, and audit/approval/trust history are kept unless
+      --purge-data --yes is given. Workspaces are never touched.
+  qdral version
+      Show this CLI version and the installed and previous versions.
+
+Configuration:
+  qdral workspace add <id> <directory>    Add a workspace the agent may use.
+  qdral workspace remove <id>             Remove a workspace from configuration.
+  qdral workspace list                    List workspaces and their trust state.
+  qdral workspace trust <id>              Grant workspace trust (Windows Hello).
+  qdral workspace untrust <id>            Revoke workspace trust (Windows Hello).
+  qdral tunnel setup --client <tunnel-client.exe> --tunnel-id <tunnel_...> [--key-file <path>]
+      Configure the official OpenAI tunnel client. Without --key-file the runtime key
+      is read from a hidden console prompt. The key is stored owner-only and passed to
+      the tunnel client by file reference; it is never printed or logged.
+  qdral tunnel show                       Show the tunnel configuration (never the key).
+
+Updates:
+  qdral update --source <release-dir> [--check] [--allow-downgrade] [--reinstall]
+      Verify a downloaded release and switch to it. Qdral never downloads or checks
+      for updates itself; get releases from the project's GitHub Releases page. A
+      running instance is stopped and restarted. If the new version fails its own
+      integrity check, the previous version is restored automatically.
+  qdral rollback                          Switch back to the retained previous version.
+
+Runtime:
+  qdral start [--wait <seconds>]          Start the supervised tunnel client.
+  qdral stop [--wait <seconds>]           Stop it and verify termination.
+  qdral status                            Show install, configuration, and runtime state.
+  qdral doctor                            Run diagnostics; exits non-zero on failures.
+
+Local MCP (no tunnel required):
+  qdral mcp stdio                         Run the authoritative MCP server over stdio
+      for local AI clients (Claude Desktop, Codex, Mistral Vibe Code, generic
+      MCP clients). Uses the active verified install with the sanitized
+      environment. Standard output stays the MCP channel.
+  qdral mcp serve [--port <1-65535>]      Serve the same MCP server over loopback
+      Streamable HTTP at http://127.0.0.1:<port>/mcp (ephemeral port by
+      default). Requires QDRAL_LOOPBACK_TOKEN of at least 32 characters in
+      the environment. Binds 127.0.0.1 only and never opens a LAN port.
+
+Approvals:
+  qdral approvals [--limit <n>]           Show recent approval decisions.
+  qdral emergency-revoke                  Invalidate all pending approvals and every
+      remote session lease (Windows Hello).
+
+Protected executables (process_spawn never runs shells or interpreters):
+  qdral exec add <id> <path.exe> [--subcommands a,b] [--deny-args x,y] [--max-args N]
+      Register one native executable outside every workspace (Windows Hello). Its path,
+      size, and SHA-256 are pinned and re-verified before every launch.
+  qdral exec remove <id>                  Remove a registered executable.
+  qdral exec list                         Show registered executables.
+
+Remote sessions (outbound-only; no inbound port is opened):
+  qdral remote enable --relay <origin> [--workspace <id>]
+      Create this device's key and register it with a relay (Windows Hello).
+  qdral remote pair                       Pair an AI client that asks for a pairing code
+      (Windows Hello, then confirm the exact client and scopes on this console).
+  qdral remote connect                    Run the device uplink to the paired relay.
+  qdral remote allow --connection <rc-id> [--workspaces <id,...>] [--scopes <s,...>]
+      [--minutes <1-15>] [--read-mode session|per_request|disabled]
+      Allow one paired remote connection for at most 15 minutes (Windows Hello).
+      Without an active lease every remote request fails with REMOTE_SESSION_INACTIVE.
+  qdral remote revoke [--connection <rc-id>]  End one or every remote session lease.
+  qdral remote status                     Show remote session leases.
+
+Every command accepts --json for machine-readable output.
+";
+
+mod commands;
+
+pub(crate) struct Args {
+    command: String,
+    rest: Vec<String>,
+}
+
+impl Args {
+    /// Takes the next argument that is not an option.
+    pub(crate) fn positional(&mut self, what: &str) -> Result<String, LifecycleError> {
+        match self.rest.iter().position(|arg| !arg.starts_with("--")) {
+            Some(index) => Ok(self.rest.remove(index)),
+            None => Err(LifecycleError::usage(format!("missing {what}"))),
+        }
+    }
+
+    pub(crate) fn flag(&mut self, name: &str) -> bool {
+        match self.rest.iter().position(|arg| arg == name) {
+            Some(index) => {
+                self.rest.remove(index);
+                true
+            }
+            None => false,
+        }
+    }
+
+    pub(crate) fn value(&mut self, name: &str) -> Result<Option<String>, LifecycleError> {
+        match self.rest.iter().position(|arg| arg == name) {
+            Some(index) if index + 1 < self.rest.len() => {
+                let value = self.rest.remove(index + 1);
+                self.rest.remove(index);
+                Ok(Some(value))
+            }
+            Some(_) => Err(LifecycleError::usage(format!("{name} requires a value"))),
+            None => Ok(None),
+        }
+    }
+
+    pub(crate) fn finish(&self) -> Result<(), LifecycleError> {
+        match self.rest.first() {
+            Some(extra) => Err(LifecycleError::usage(format!(
+                "unexpected argument {extra:?}; run `qdral help`"
+            ))),
+            None => Ok(()),
+        }
+    }
+}
+
+fn main() {
+    let mut raw = std::env::args().skip(1);
+    let command = raw.next().unwrap_or_else(|| "help".into());
+    let mut args = Args {
+        command,
+        rest: raw.collect(),
+    };
+    if args.command == "supervise" {
+        let code = match Layout::for_current_user() {
+            Ok(layout) => qdral_lifecycle::lifecycle::supervise(&layout),
+            Err(error) => {
+                eprintln!("qdral supervise: {}", error.message);
+                2
+            }
+        };
+        std::process::exit(code);
+    }
+    if args.command == "remote"
+        && matches!(
+            args.rest.first().map(String::as_str),
+            Some("enable") | Some("pair")
+        )
+    {
+        let action = args.rest.remove(0);
+        let code = match commands::remote_enroll(&mut args, &action) {
+            Ok(code) => code,
+            Err(error) => {
+                eprintln!("qdral: {}", error.message);
+                error.kind.exit_code()
+            }
+        };
+        std::process::exit(code);
+    }
+    if args.command == "remote" && args.rest.first().map(String::as_str) == Some("connect") {
+        args.rest.remove(0);
+        let code = match commands::remote_connect(&mut args) {
+            Ok(code) => code,
+            Err(error) => {
+                eprintln!("qdral: {}", error.message);
+                error.kind.exit_code()
+            }
+        };
+        std::process::exit(code);
+    }
+    if args.command == "mcp" {
+        let code = match commands::mcp(&mut args) {
+            Ok(code) => code,
+            Err(error) => {
+                eprintln!("qdral: {}", error.message);
+                error.kind.exit_code()
+            }
+        };
+        std::process::exit(code);
+    }
+    let json_output = args.flag("--json");
+    match run(&mut args) {
+        Ok(output) => {
+            if json_output {
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&output.json).unwrap_or_default()
+                );
+            } else {
+                print!("{}", output.human);
+            }
+            if output.exit_code != 0 {
+                std::process::exit(output.exit_code);
+            }
+        }
+        Err(error) => {
+            if json_output {
+                println!(
+                    "{}",
+                    json!({"ok": false, "error": {"kind": error.kind, "message": error.message}})
+                );
+            } else {
+                eprintln!("qdral: {}", error.message);
+            }
+            std::process::exit(error.kind.exit_code());
+        }
+    }
+}
+
+pub(crate) struct Output {
+    /// Process exit code for a command that produced output but must still
+    /// report failure (for example `doctor` with failing checks).
+    pub(crate) exit_code: i32,
+    pub(crate) human: String,
+    pub(crate) json: serde_json::Value,
+}
+
+fn run(args: &mut Args) -> Result<Output, LifecycleError> {
+    // State-changing commands hold the per-install lifecycle lock for their
+    // whole duration so they never interleave across processes.
+    let mutating = matches!(
+        args.command.as_str(),
+        "install" | "uninstall" | "update" | "rollback" | "start" | "stop" | "workspace" | "tunnel"
+    );
+    let _lock = if mutating {
+        Some(qdral_lifecycle::lifecycle::lock(
+            &Layout::for_current_user()?,
+        )?)
+    } else {
+        None
+    };
+    match args.command.as_str() {
+        "help" | "--help" | "-h" => {
+            args.finish()?;
+            Ok(Output {
+                exit_code: 0,
+                human: HELP.into(),
+                json: json!({"ok": true, "help": HELP}),
+            })
+        }
+        "install" => install(args),
+        "uninstall" => uninstall(args),
+        "version" | "--version" => version(args),
+        "workspace" => commands::workspace(args),
+        "tunnel" => commands::tunnel(args),
+        "start" => commands::start(args),
+        "stop" => commands::stop(args),
+        "status" => commands::status(args),
+        "doctor" => commands::doctor(args),
+        "approvals" => commands::approvals(args),
+        "emergency-revoke" => commands::emergency_revoke(args),
+        "exec" => commands::exec(args),
+        "remote" => commands::remote(args),
+        "update" => commands::update(args),
+        "rollback" => commands::rollback(args),
+        "self-check" => commands::self_check(args),
+        other => Err(LifecycleError::usage(format!(
+            "unknown command {other:?}; run `qdral help`"
+        ))),
+    }
+}
+
+fn install(args: &mut Args) -> Result<Output, LifecycleError> {
+    let source = match args.value("--source")? {
+        Some(source) => PathBuf::from(source),
+        None => default_release_dir()?,
+    };
+    let node = args.value("--node")?.map(PathBuf::from);
+    let add_to_path = !args.flag("--no-path");
+    args.finish()?;
+    let platform = host_platform();
+    let installer = Installer::new(Layout::for_current_user()?, platform.as_ref());
+    let report = installer.install(&source, &InstallOptions { node, add_to_path })?;
+    let mut human = format!(
+        "Qdral {} {} at {}\n  lifecycle CLI: {}\n  Node.js: {}\n",
+        report.version,
+        if report.repaired_existing {
+            "verified and repaired"
+        } else {
+            "installed and verified"
+        },
+        report.version_dir.display(),
+        report.cli.display(),
+        report.node_path.display(),
+    );
+    if report.path_entry_added {
+        human.push_str(
+            "  PATH: the Qdral bin directory is on your user PATH (open a new terminal)\n",
+        );
+    } else {
+        human.push_str("  PATH: not modified\n");
+    }
+    human.push_str("  User data kept across updates and uninstall:\n");
+    for path in &report.retained_data {
+        human.push_str(&format!("    {}\n", path.display()));
+    }
+    Ok(Output {
+        exit_code: 0,
+        human,
+        json: json!({"ok": true, "install": report}),
+    })
+}
+
+fn default_release_dir() -> Result<PathBuf, LifecycleError> {
+    let exe =
+        std::env::current_exe().map_err(|error| LifecycleError::io("locate qdral.exe", error))?;
+    let dir = exe
+        .parent()
+        .ok_or_else(|| LifecycleError::usage("pass --source <release-dir>"))?
+        .to_path_buf();
+    if dir.join(MANIFEST_FILE).is_file() {
+        Ok(dir)
+    } else {
+        Err(LifecycleError::usage(
+            "no manifest.json next to qdral.exe; pass --source <release-dir>",
+        ))
+    }
+}
+
+fn uninstall(args: &mut Args) -> Result<Output, LifecycleError> {
+    let purge_data = args.flag("--purge-data");
+    let confirmed = args.flag("--yes");
+    args.finish()?;
+    if purge_data && !confirmed {
+        return Err(LifecycleError::usage(
+            "--purge-data permanently deletes configuration, secrets, logs, and history; add --yes to confirm",
+        ));
+    }
+    let layout = Layout::for_current_user()?;
+    let mut human = String::new();
+    if layout.supervisor_record().exists() {
+        let stopped = qdral_lifecycle::lifecycle::stop(&layout, std::time::Duration::from_secs(20))
+            .map_err(|error| {
+                LifecycleError::conflict(format!(
+                    "Qdral could not be stopped, so nothing was uninstalled: {}",
+                    error.message
+                ))
+            })?;
+        human.push_str(&format!("Stopped Qdral first: {}.\n", stopped.detail));
+    }
+    let platform = host_platform();
+    let installer = Installer::new(layout, platform.as_ref());
+    let report = installer.uninstall(&UninstallOptions { purge_data })?;
+    human.push_str("Qdral uninstalled.\n");
+    for (label, paths) in [
+        ("Removed", &report.removed),
+        ("Kept (user data)", &report.retained),
+        ("Purged", &report.purged),
+        ("Could not remove", &report.residual),
+    ] {
+        if !paths.is_empty() {
+            human.push_str(&format!("  {label}:\n"));
+            for path in paths {
+                human.push_str(&format!("    {}\n", path.display()));
+            }
+        }
+    }
+    if report.path_entry_removed {
+        human.push_str("  PATH: the Qdral bin directory was removed from your user PATH\n");
+    }
+    if let Some(relocated) = &report.relocated_cli {
+        human.push_str(&format!(
+            "  The running qdral.exe was moved to {} for OS temp cleanup\n",
+            relocated.display()
+        ));
+    }
+    if !report.residual.is_empty() {
+        return Err(LifecycleError::new(
+            ErrorKind::Io,
+            format!("{human}Some items could not be removed; close programs using them and rerun"),
+        ));
+    }
+    Ok(Output {
+        exit_code: 0,
+        human,
+        json: json!({"ok": true, "uninstall": report}),
+    })
+}
+
+fn version(args: &mut Args) -> Result<Output, LifecycleError> {
+    args.finish()?;
+    let cli = env!("CARGO_PKG_VERSION");
+    let layout = Layout::for_current_user()?;
+    let current: Option<qdral_lifecycle::layout::CurrentRecord> =
+        qdral_lifecycle::layout::read_current(&layout)?;
+    let record: Option<qdral_lifecycle::layout::InstallRecord> =
+        qdral_lifecycle::layout::read_install(&layout)?;
+    let installed = current.as_ref().map(|current| current.version.clone());
+    let previous = record.and_then(|record| record.previous);
+    let human = format!(
+        "qdral CLI {cli}\ninstalled: {}\nprevious: {}\n",
+        installed.as_deref().unwrap_or("not installed"),
+        previous.as_deref().unwrap_or("none"),
+    );
+    Ok(Output {
+        exit_code: 0,
+        human,
+        json: json!({"ok": true, "cli": cli, "installed": installed, "previous": previous}),
+    })
+}

@@ -66,19 +66,19 @@ jobs:
           node-version: "24.19.0"
       - uses: ./.github/actions/build-package-qualify
         with:
-          release-dir: ${{ runner.temp }}/quntal-release
+          release-dir: ${{ runner.temp }}/qdral-release
       - uses: ./.github/actions/reproducibility-check
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
-          release-dir: ${{ runner.temp }}/quntal-release
+          release-dir: ${{ runner.temp }}/qdral-release
           out-dir: ${{ runner.temp }}/dist
       - name: Generate SBOM and provenance
         shell: pwsh
         run: |
-          $release = Join-Path $env:RUNNER_TEMP "quntal-release"
+          $release = Join-Path $env:RUNNER_TEMP "qdral-release"
           $out = Join-Path $env:RUNNER_TEMP "dist"
           $version = (Get-Content (Join-Path $release "manifest.json") | ConvertFrom-Json).version
-          $name = "quntal-$version-windows-x64"
+          $name = "qdral-$version-windows-x64"
           Copy-Item "$release.zip" (Join-Path $out "$name.zip")
           Copy-Item (Join-Path $release "manifest.json") (Join-Path $out "$name.manifest.json")
           Copy-Item (Join-Path $release "THIRD_PARTY_NOTICES.txt") (Join-Path $out "THIRD_PARTY_NOTICES.txt")
@@ -92,7 +92,7 @@ jobs:
           Get-Content (Join-Path $out "SHA256SUMS.txt")
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: quntal-release-candidate-${{ github.event.pull_request.head.sha || github.sha }}
+          name: qdral-release-candidate-${{ github.event.pull_request.head.sha || github.sha }}
           path: ${{ runner.temp }}/dist/*
           if-no-files-found: error
           retention-days: 30
@@ -106,17 +106,17 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - name: Build the pinned self-host relay image
-        run: docker build -f apps/quntal-relay/Dockerfile -t quntal-relay:ci .
+        run: docker build -f apps/qdral-relay/Dockerfile -t qdral-relay:ci .
       - name: Run the relay from a validated configuration and probe it
         run: |
           mkdir -p "$RUNNER_TEMP/relay-config" "$RUNNER_TEMP/relay-state"
           chmod 0777 "$RUNNER_TEMP/relay-state"
           cat > "$RUNNER_TEMP/relay-config/relay.json" <<'JSON'
-          {"publicOrigin":"http://127.0.0.1:8787","listenHost":"0.0.0.0","listenPort":8787,"stateDir":"/var/lib/quntal-relay","allowedOrigins":[]}
+          {"publicOrigin":"http://127.0.0.1:8787","listenHost":"0.0.0.0","listenPort":8787,"stateDir":"/var/lib/qdral-relay","allowedOrigins":[]}
           JSON
           docker run -d --name relay -p 127.0.0.1:8787:8787 \
-            -v "$RUNNER_TEMP/relay-config:/etc/quntal-relay:ro" \
-            -v "$RUNNER_TEMP/relay-state:/var/lib/quntal-relay" quntal-relay:ci
+            -v "$RUNNER_TEMP/relay-config:/etc/qdral-relay:ro" \
+            -v "$RUNNER_TEMP/relay-state:/var/lib/qdral-relay" qdral-relay:ci
           for attempt in $(seq 1 30); do
             if curl -fsS http://127.0.0.1:8787/healthz; then break; fi
             sleep 1
@@ -166,6 +166,8 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - name: Diff check
         run: git diff --check
+      - name: Validate current Qdral identity
+        run: node scripts/check-current-identity.mjs
       - name: Validate SpecGrain JSON and canonical evidence
         shell: python
         run: |

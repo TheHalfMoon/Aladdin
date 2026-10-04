@@ -1,0 +1,12 @@
+[package]
+name = "qdral-audit"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+qdral-contracts = { path = "../qdral-contracts" }
+serde.workspace = true
+serde_json.workspace = true

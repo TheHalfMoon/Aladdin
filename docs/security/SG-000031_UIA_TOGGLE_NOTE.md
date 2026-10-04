@@ -1,23 +1,23 @@
 # SG-000031 - Structured UIA TogglePattern actuation security note
 
 Status: IMPLEMENTATION CANDIDATE
-Program: QUNTAL-P09
+Program: QDRAL-P09
 Grain: SG-000031
 
 ## Purpose
 
-SG-000031 establishes the fourth narrow QUNTAL-P09 structured actuation
+SG-000031 establishes the fourth narrow QDRAL-P09 structured actuation
 grain on top of the SG-000027 observation registry, the SG-000028 invoke
 registry, the SG-000029 value registry, the SG-000030 select registry,
 the SG-000018 replay-resistant foundation, SG-000019 class enforcement,
-SG-000020 trust and revoke records, and the closed QUNTAL-P08 registry: a
+SG-000020 trust and revoke records, and the closed QDRAL-P08 registry: a
 single approved TogglePattern shape bound to server-derived process
 identity, typed window identity, typed element identity, expected tree
 generation, expected control type, expected Toggle pattern support,
 expected enabled state, expected current toggle state, requested target
 toggle state, workspace scope, and policy revision, with fresh SOFT
 approval digest binding including both toggle states, immediate
-pre-actuation stale-target revalidation, and protected Quntal
+pre-actuation stale-target revalidation, and protected Qdral
 approval-surface exclusion.
 
 No other new actuation authority exists in this grain. Invoke remains
@@ -52,7 +52,7 @@ Malformed identities fail closed as `InvalidRequest`.
 Only `CheckBox` and `RadioButton` control types with `Toggle` pattern
 support and enabled state actuate. All other control types, unsupported
 patterns, disabled elements, password and secret bearing elements, and
-protected Quntal surfaces are denied as `CapabilityDenied`. Expected
+protected Qdral surfaces are denied as `CapabilityDenied`. Expected
 current toggle is enforced and any state drift fails closed without
 silent retargeting. Evidence carries only identities, generations,
 control type, expected toggle, requested toggle, and approval record.
@@ -80,10 +80,10 @@ drift all fail closed without silent retargeting. A successful toggle
 advances the owning window tree generation and removes its elements so
 stale identities cannot be replayed.
 
-## Protected Quntal surfaces and secrets
+## Protected Qdral surfaces and secrets
 
 Toggle can never target approval dialogs, STRONG presence surfaces,
-workspace trust controls, emergency revoke, or security-sensitive Quntal
+workspace trust controls, emergency revoke, or security-sensitive Qdral
 UI. Password and secret bearing elements are denied as targets, and
 current secret values never enter records, history, logs, MCP responses,
 snapshots, or evidence packets. Fail closed on uncertainty.

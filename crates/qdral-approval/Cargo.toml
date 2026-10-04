@@ -1,0 +1,19 @@
+[package]
+name = "qdral-approval"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[features]
+test-support = []
+
+[dependencies]
+qdral-contracts = { path = "../qdral-contracts" }
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.52", features = ["Foundation", "Security_Credentials_UI"] }

@@ -1,9 +1,9 @@
-# Quntal Diffcipline
+# Qdral Diffcipline
 
 Status: ACTIVE PLANNING RULE
 Date: 2026-09-23
 
-Diffcipline is Quntal's exact-diff execution discipline. Its purpose is to prevent useful work from becoming unauditable work.
+Diffcipline is Qdral's exact-diff execution discipline. Its purpose is to prevent useful work from becoming unauditable work.
 
 ## 1. Core rule
 

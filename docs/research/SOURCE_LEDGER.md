@@ -1,9 +1,9 @@
-# Quntal Source Ledger
+# Qdral Source Ledger
 
 Snapshot date: 2026-09-23
 Purpose: research, provenance, dependency evaluation, and bounded source reuse.
 
-This ledger records the source state used for Quntal planning. A pin is not automatic authorization to copy code. Reuse still requires a file-level provenance and license decision.
+This ledger records the source state used for Qdral planning. A pin is not automatic authorization to copy code. Reuse still requires a file-level provenance and license decision.
 
 ## Official product and platform references
 
@@ -18,9 +18,9 @@ Planning facts:
 - no inbound public firewall port is required;
 - local targets may be stdio or HTTP;
 - ChatGPT and other supported OpenAI surfaces can use the hosted tunnel endpoint;
-- tunnel transport and Quntal authorization are separate concerns.
+- tunnel transport and Qdral authorization are separate concerns.
 
-Quntal use:
+Qdral use:
 - default connectivity for ChatGPT;
 - do not reimplement the tunnel in v1;
 - supervise the official client and keep its runtime key out of tool payloads and child environments.
@@ -30,7 +30,7 @@ Quntal use:
 Reference:
 https://developers.openai.com/api/docs/guides/tools-connectors-mcp
 
-Quntal use:
+Qdral use:
 - MCP compatibility;
 - explicit approval semantics at the product boundary;
 - local/private server connectivity through tunnel_id.
@@ -43,7 +43,7 @@ References:
 https://learn.microsoft.com/en-us/windows/win32/winauto/entry-uiauto-win32
 https://learn.microsoft.com/en-us/windows/win32/winauto/uiauto-controlpatternsoverview
 
-Quntal use:
+Qdral use:
 - structured desktop inspection/action before coordinate input;
 - selectors based on process/window/AutomationId/control type/name/patterns;
 - invoke/select/value/toggle/scroll patterns.
@@ -53,7 +53,7 @@ Quntal use:
 Reference:
 https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-getfinalpathnamebyhandlew
 
-Quntal use:
+Qdral use:
 - handle-based final path resolution for workspace enforcement;
 - mitigation for symbolic-link/junction escape and path aliasing.
 
@@ -62,7 +62,7 @@ Quntal use:
 Reference:
 https://learn.microsoft.com/en-us/windows/win32/api/dpapi/nf-dpapi-cryptprotectdata
 
-Quntal use:
+Qdral use:
 - one option for per-user secret protection;
 - not sufficient by itself for all service/multi-identity designs.
 
@@ -71,9 +71,9 @@ Quntal use:
 Reference:
 https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_language_modes
 
-Quntal use:
+Qdral use:
 - ConstrainedLanguage can reduce attack surface under supported application-control policy;
-- Quntal does not treat language mode alone as an independent sandbox.
+- Qdral does not treat language mode alone as an independent sandbox.
 
 ## GitHub source pins
 
@@ -110,7 +110,7 @@ Role:
 - benchmark against unrestricted-shell failure modes.
 
 Rule:
-Do not inherit advisory path/blocklist controls as the Quntal security boundary.
+Do not inherit advisory path/blocklist controls as the Qdral security boundary.
 
 ### gunwoo55/unlimited-agent
 
@@ -192,7 +192,7 @@ MIT
 Role:
 - sandbox/runtime isolation research;
 - secret delivery and guest/host boundary patterns;
-- not required for Quntal MVP.
+- not required for Qdral MVP.
 
 ### browser-use/browser-use
 
@@ -259,7 +259,7 @@ Role:
 Reuse classification for SG-000008:
 CONCEPT ONLY.
 
-Quntal independently implements its bounded qualification probe. No rappct implementation source is copied. The source was consulted after the first native Windows launch returned Win32 error 203; its diagnostics informed the investigation. Quntal's repaired implementation is based on Microsoft AppContainer documentation requiring LOCALAPPDATA/TEMP/TMP profile redirection and uses an independently written fixed safe-name environment allowlist.
+Qdral independently implements its bounded qualification probe. No rappct implementation source is copied. The source was consulted after the first native Windows launch returned Win32 error 203; its diagnostics informed the investigation. Qdral's repaired implementation is based on Microsoft AppContainer documentation requiring LOCALAPPDATA/TEMP/TMP profile redirection and uses an independently written fixed safe-name environment allowlist.
 
 ### alibaba/open-code-review
 
@@ -279,7 +279,7 @@ Role:
 Integration:
 EXTERNAL REVIEW TOOL. NO SOURCE COPIED.
 
-Quntal downloads the official Alibaba OpenCodeReview v1.12.9 Linux release binary, verifies its pinned SHA-256 before use, and runs `ocr delegate preview` and `ocr delegate rule` against the exact PR base/head range. OCR Delegation Mode does not itself constitute semantic judgment; the host reviewer must review every OCR-selected file and manually review excluded files. The candidate checkout is treated only as data and its package scripts are never executed.
+Qdral downloads the official Alibaba OpenCodeReview v1.12.9 Linux release binary, verifies its pinned SHA-256 before use, and runs `ocr delegate preview` and `ocr delegate rule` against the exact PR base/head range. OCR Delegation Mode does not itself constitute semantic judgment; the host reviewer must review every OCR-selected file and manually review excluded files. The candidate checkout is treated only as data and its package scripts are never executed.
 
 ### devagrawal09/jev-review
 
@@ -296,7 +296,7 @@ Role:
 Integration:
 EXTERNAL REVIEW TOOL. NO SOURCE COPIED.
 
-Quntal uses a base-controlled `pull_request_target` workflow, checks out the exact base SHA, fetches the PR head only as Git data, and runs the base SHA's exact-diff adapter against `base..head`. The adapter sends every changed-file hunk, including deletions, to genuine TypeSafe Jev structured judgments, records per-hunk coverage and severity-rated findings, and fails closed on incomplete coverage or a blocking finding. PR-controlled code is never executed in the secret-bearing job. The Jev checkout and SDK remain under `RUNNER_TEMP`, outside the Quntal repository working tree. A TypeSafe API key is required. Missing credentials fail the Jev gate explicitly rather than being treated as a pass.
+Qdral uses a base-controlled `pull_request_target` workflow, checks out the exact base SHA, fetches the PR head only as Git data, and runs the base SHA's exact-diff adapter against `base..head`. The adapter sends every changed-file hunk, including deletions, to genuine TypeSafe Jev structured judgments, records per-hunk coverage and severity-rated findings, and fails closed on incomplete coverage or a blocking finding. PR-controlled code is never executed in the secret-bearing job. The Jev checkout and SDK remain under `RUNNER_TEMP`, outside the Qdral repository working tree. A TypeSafe API key is required. Missing credentials fail the Jev gate explicitly rather than being treated as a pass.
 
 ## Source-use decision matrix
 
@@ -336,7 +336,7 @@ Any future donor-derived change must record:
 - source repository;
 - exact source commit;
 - source path;
-- Quntal destination path;
+- Qdral destination path;
 - upstream license;
 - copied vs adapted vs concept-only;
 - modifications;

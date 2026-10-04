@@ -9,25 +9,25 @@
   "dependencies": [
     "SG-000066"
   ],
-  "objective": "Make Quntal SOFTWARE_READY and SUBMISSION_READY for the current OpenAI Plugins Directory without widening Quntal authority: package the existing public Streamable HTTP MCP path using the current portable plugin format, derive OpenAI-facing tool/auth metadata from Quntal's authoritative contracts, prepare domain-verification and review evidence, and keep SUBMITTED, APPROVED, PUBLISHED, and ACCOUNT_VERIFIED as externally observed states that cannot be inferred from software completion.",
+  "objective": "Make Qdral SOFTWARE_READY and SUBMISSION_READY for the current OpenAI Plugins Directory without widening Qdral authority: package the existing public Streamable HTTP MCP path using the current portable plugin format, derive OpenAI-facing tool/auth metadata from Qdral's authoritative contracts, prepare domain-verification and review evidence, and keep SUBMITTED, APPROVED, PUBLISHED, and ACCOUNT_VERIFIED as externally observed states that cannot be inferred from software completion.",
   "scope": {
     "include": [
-      "a portable plugin package rooted in current plugin.json plus the current MCP package configuration for exactly one Quntal remote MCP connection, with OpenAI-specific settings confined to the documented OpenAI extension namespace where required",
+      "a portable plugin package rooted in current plugin.json plus the current MCP package configuration for exactly one Qdral remote MCP connection, with OpenAI-specific settings confined to the documented OpenAI extension namespace where required",
       "production-configuration support for the existing public HTTPS Streamable HTTP MCP relay endpoint without adding a generic proxy or second authorization path",
-      "current OAuth 2.1 protected-resource metadata and per-tool securitySchemes derived from the authoritative Quntal OAuth/tool contract, including exact tool names, descriptions, schemas, annotations, scopes, local-only exclusions, and default-deny behavior",
+      "current OAuth 2.1 protected-resource metadata and per-tool securitySchemes derived from the authoritative Qdral OAuth/tool contract, including exact tool names, descriptions, schemas, annotations, scopes, local-only exclusions, and default-deny behavior",
       "a configurable /.well-known/openai-apps-challenge domain-verification response path or deployment artifact that cannot grant workspace trust, approval, executable admission, device enrollment, or remote-session authority",
       "accurate plugin metadata and configurable HTTPS website, support, privacy, terms, and security-reporting URLs with validation that package artifacts contain no credentials or private keys",
       "a submission/review evidence bundle containing exactly five positive test cases, exactly three negative test cases, release notes, a demo-recording evidence slot, tool-scan/verifier output, and explicit external prerequisite/blocker recording",
       "an explicit distribution state machine preserving SOFTWARE_READY, SUBMISSION_READY, SUBMITTED, APPROVED, PUBLISHED, and ACCOUNT_VERIFIED as distinct states with no automatic promotion",
       "regression tests proving the OpenAI package is generated or checked against the canonical tool contract and OAuth matrix, exposes no local-only tools, contains no secrets, and adds no kernel, approval, trust, lease, executable, process, browser, desktop-input, clipboard, or generic-network authority",
-      "re-verification of current official OpenAI plugin documentation before closeout because provider packaging, review, verification, and directory requirements may change independently of Quntal"
+      "re-verification of current official OpenAI plugin documentation before closeout because provider packaging, review, verification, and directory requirements may change independently of Qdral"
     ],
     "exclude": [
       "claiming or performing provider submission, approval, publication, or account availability without directly observed external evidence and any required owner action",
       "embedding OpenAI API keys, OAuth client secrets, relay private keys, access tokens, refresh tokens, credentials, or other secrets in the plugin package or review bundle",
       "purchasing paid hosting, a paid custom domain, a paid certificate, or another paid publication prerequisite; unavoidable external cost is recorded as a publication blocker under the zero-founder-cost rule",
       "adding or widening any kernel capability, MCP tool, OAuth scope, profile, approval class, workspace trust right, executable-admission right, remote-session lease right, browser/desktop actuation, shell/interpreter, or generic socket/proxy authority",
-      "provider-specific execution logic that bypasses the provider-neutral MCP builder, cotrad policy kernel, existing relay authorization, or existing tool contract",
+      "provider-specific execution logic that bypasses the provider-neutral MCP builder, qdrald policy kernel, existing relay authorization, or existing tool contract",
       "activating SG-000068 or any P18 grain before this grain closes canonically"
     ]
   },
@@ -42,10 +42,10 @@
     "privileged": "None."
   },
   "invariants": [
-    "plugin discovery, tool scanning, directory review, or provider metadata never constitutes authorization; cotrad, OAuth ceilings, device binding, remote-session lease, workspace trust, and approval remain authoritative",
-    "OpenAI-facing tool metadata is derived from or mechanically checked against the canonical Quntal tool contract and cannot silently expose local-only or denied tools",
+    "plugin discovery, tool scanning, directory review, or provider metadata never constitutes authorization; qdrald, OAuth ceilings, device binding, remote-session lease, workspace trust, and approval remain authoritative",
+    "OpenAI-facing tool metadata is derived from or mechanically checked against the canonical Qdral tool contract and cannot silently expose local-only or denied tools",
     "no software or CI result may promote the provider distribution state to SUBMITTED, APPROVED, PUBLISHED, or ACCOUNT_VERIFIED without directly observed external evidence",
-    "the package, fixtures, logs, screenshots, demo evidence, and release artifacts contain no Quntal, OpenAI, OAuth, relay, device, or user secret",
+    "the package, fixtures, logs, screenshots, demo evidence, and release artifacts contain no Qdral, OpenAI, OAuth, relay, device, or user secret",
     "provider requirement drift is checked against current official OpenAI documentation immediately before closeout; stale packaging or review assumptions fail closed",
     "P18 remains inactive and no computer-use authority is introduced by public distribution work"
   ],
@@ -56,7 +56,7 @@
     },
     {
       "id": "A2",
-      "claim": "Every OpenAI-visible tool name, description, input/output schema, annotation, securityScheme, OAuth scope, and profile membership is derived from or mechanically checked against the authoritative Quntal tool/OAuth contracts; local-only and denied tools remain undiscoverable and unauthorized."
+      "claim": "Every OpenAI-visible tool name, description, input/output schema, annotation, securityScheme, OAuth scope, and profile membership is derived from or mechanically checked against the authoritative Qdral tool/OAuth contracts; local-only and denied tools remain undiscoverable and unauthorized."
     },
     {
       "id": "A3",
@@ -68,7 +68,7 @@
     },
     {
       "id": "A5",
-      "claim": "Zero-cost and authority-boundary regressions prove no paid service is made mandatory, no secret enters package/review artifacts, no provider-specific path bypasses cotrad or the canonical MCP builder, no authority widens, and SG-000068 plus SG-000073 through SG-000086 remain inactive."
+      "claim": "Zero-cost and authority-boundary regressions prove no paid service is made mandatory, no secret enters package/review artifacts, no provider-specific path bypasses qdrald or the canonical MCP builder, no authority widens, and SG-000068 plus SG-000073 through SG-000086 remain inactive."
     },
     {
       "id": "A6",
@@ -98,5 +98,5 @@
     "native_windows": true,
     "release_artifact_qualification": true
   },
-  "done_when": "Quntal has one exact, tested, secret-free, current-format OpenAI plugin package and review bundle that is SOFTWARE_READY and SUBMISSION_READY over the existing governed relay/MCP authority, while every provider-controlled publication state remains explicit external evidence rather than a software claim."
+  "done_when": "Qdral has one exact, tested, secret-free, current-format OpenAI plugin package and review bundle that is SOFTWARE_READY and SUBMISSION_READY over the existing governed relay/MCP authority, while every provider-controlled publication state remains explicit external evidence rather than a software claim."
 }

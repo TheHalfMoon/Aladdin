@@ -1,14 +1,14 @@
 {
-  "name": "quntal",
+  "name": "qdral",
   "version": "0.1.0",
   "private": true,
   "workspaces": [
-    "apps/quntal-mcp",
-    "apps/quntal-relay"
+    "apps/qdral-mcp",
+    "apps/qdral-relay"
   ],
   "scripts": {
-    "build": "npm run build --workspace @quntal/mcp && npm run build --workspace @quntal/relay",
-    "typecheck": "npm run typecheck --workspace @quntal/mcp && npm run build --workspace @quntal/mcp && npm run typecheck --workspace @quntal/relay",
-    "test": "npm run test --workspace @quntal/mcp && npm run test --workspace @quntal/relay"
+    "build": "npm run build --workspace @qdral/mcp && npm run build --workspace @qdral/relay",
+    "typecheck": "npm run typecheck --workspace @qdral/mcp && npm run build --workspace @qdral/mcp && npm run typecheck --workspace @qdral/relay",
+    "test": "npm run test --workspace @qdral/mcp && npm run test --workspace @qdral/relay"
   }
 }

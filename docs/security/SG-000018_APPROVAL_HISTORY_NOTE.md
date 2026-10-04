@@ -1,12 +1,12 @@
 # SG-000018 — Approval history with replay resistance security note
 
 Status: IMPLEMENTATION CANDIDATE
-Program: QUNTAL-P07
+Program: QDRAL-P07
 Grain: SG-000018
 
 ## Purpose
 
-SG-000018 introduces the first QUNTAL-P07 strong-approval foundation. It does
+SG-000018 introduces the first QDRAL-P07 strong-approval foundation. It does
 not add strong user-presence verification, trust changes, or new privileged
 authority. It hardens the existing approval broker so that a previous
 approval can never authorize a changed operation and an agent cannot forge or
@@ -46,10 +46,10 @@ the first invalid line fail-closed. Consumption persistence failures fail the
 operation closed so a retry requires a fresh approval.
 
 Known limitation carried explicitly: the file ledger detects tampering and
-stops at the first invalid line, but silent tail truncation of Quntal
+stops at the first invalid line, but silent tail truncation of Qdral
 protected local state by a party with direct filesystem write access to that
 state is not independently detected on reload. Restart replay therefore
-relies on the per-user privacy of Quntal protected state. In-process one-shot
+relies on the per-user privacy of Qdral protected state. In-process one-shot
 enforcement, which is the primary replay boundary for every dispatch path in
 this grain, is unaffected.
 
@@ -61,7 +61,7 @@ request surface, and the kernel never exposes an approve entry point.
 Agent-spawned child processes receive no approval IPC handles, nonces, or
 secrets through the existing sanitized execution environment, and the broker
 contract requires an exact digest, workspace, and policy match that a child
-cannot satisfy without the unconsumed token held only in quntald memory.
+cannot satisfy without the unconsumed token held only in qdrald memory.
 
 ## Retained behavior
 

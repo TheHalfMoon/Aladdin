@@ -1,0 +1,21 @@
+[package]
+name = "qdral-policy"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[lib]
+path = "src/sg000040.rs"
+
+[dependencies]
+qdral-approval = { path = "../qdral-approval" }
+qdral-contracts = { path = "../qdral-contracts" }
+qdral-provider-browser = { path = "../qdral-provider-browser" }
+qdral-provider-clipboard = { path = "../qdral-provider-clipboard" }
+qdral-provider-network = { path = "../qdral-provider-network" }
+qdral-provider-uia = { path = "../qdral-provider-uia" }
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true

@@ -4,7 +4,7 @@ SG-000011 closes the post-primary-exit pipe-drain gap identified during SG-00001
 
 ## Qualified behavior
 
-After the primary contained process exits, stdout and stderr are drained together under an explicit bounded deadline. If both pipes reach EOF, normal Job quiescence verification continues. If the drain deadline expires while Job members remain active, Quntal terminates the Job, requires verified zero active Job processes, and then performs one final bounded drain so inherited pipe handles must reach a terminal state before success.
+After the primary contained process exits, stdout and stderr are drained together under an explicit bounded deadline. If both pipes reach EOF, normal Job quiescence verification continues. If the drain deadline expires while Job members remain active, Qdral terminates the Job, requires verified zero active Job processes, and then performs one final bounded drain so inherited pipe handles must reach a terminal state before success.
 
 If Job termination, zero-active-process verification, or final pipe closure cannot be proven, the executor returns `TerminationUnverified`. Output-limit events retain stream-typed `OutputLimit` semantics and are never promoted without verified termination.
 

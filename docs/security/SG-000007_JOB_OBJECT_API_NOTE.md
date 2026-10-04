@@ -2,7 +2,7 @@
 
 Date: 2026-09-24
 
-Quntal qualifies the Windows Job Object lifecycle primitive without launching or assigning a child process.
+Qdral qualifies the Windows Job Object lifecycle primitive without launching or assigning a child process.
 
 The probe uses:
 - CreateJobObjectW
@@ -13,7 +13,7 @@ The probe uses:
 
 Security interpretation:
 - Job Objects provide process-tree lifecycle and resource controls.
-- Quntal does not treat a Job Object as an authorization sandbox.
+- Qdral does not treat a Job Object as an authorization sandbox.
 - AppContainer remains the intended resource-isolation boundary for future arbitrary child execution.
 - A successor grain must assign a contained child before resume and prove the containment sequence before MCP EXECUTE authority is exposed.
 

@@ -1,27 +1,27 @@
 [workspace]
 resolver = "2"
 members = [
-  "crates/quntal-contracts",
-  "crates/quntal-policy",
-  "crates/quntal-audit",
-  "crates/quntal-approval",
-  "crates/quntal-provider-fs",
-  "crates/quntal-provider-git",
-  "crates/quntal-provider-process",
-  "crates/quntal-provider-browser",
-  "crates/quntal-provider-uia",
-  "crates/quntal-provider-clipboard",
-  "crates/quntal-provider-network",
-  "crates/quntal-tunnel",
-  "crates/quntal-lifecycle",
-  "crates/quntald",
+  "crates/qdral-contracts",
+  "crates/qdral-policy",
+  "crates/qdral-audit",
+  "crates/qdral-approval",
+  "crates/qdral-provider-fs",
+  "crates/qdral-provider-git",
+  "crates/qdral-provider-process",
+  "crates/qdral-provider-browser",
+  "crates/qdral-provider-uia",
+  "crates/qdral-provider-clipboard",
+  "crates/qdral-provider-network",
+  "crates/qdral-tunnel",
+  "crates/qdral-lifecycle",
+  "crates/qdrald",
 ]
 
 [workspace.package]
 version = "0.1.0"
 edition = "2021"
 license = "Apache-2.0"
-repository = "https://github.com/TheHalfMoon/Quntal"
+repository = "https://github.com/TheHalfMoon/Qdral"
 rust-version = "1.82"
 
 [workspace.dependencies]
