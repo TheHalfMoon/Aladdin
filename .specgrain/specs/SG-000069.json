@@ -1,0 +1,87 @@
+{
+  "id": "SG-000069",
+  "title": "Mistral distribution",
+  "program": "COTRA-P17",
+  "state": "GRAIN",
+  "risk": "high",
+  "created": "2026-10-04",
+  "base": "6de6742eae81bacf4f886046b6d79aed02e15ff4",
+  "dependencies": [
+    "SG-000068"
+  ],
+  "objective": "Qualify the currently supported Mistral integration paths over Qdral's existing authority without widening it: Vibe Code CLI over the local stdio entrypoint and the loopback Streamable HTTP listener with its local bearer credential, and the Vibe Work custom MCP connector over the existing public relay with OAuth 2.1 and dynamic client registration, device pairing, and the remote-session lease; record that the Vibe Code CLI cannot use OAuth-protected remote servers instead of adding a static-credential path to the relay; keep Mistral directory and account states as externally observed evidence.",
+  "scope": {
+    "include": [
+      "re-verification of current official Mistral Vibe Code and Vibe Work MCP documentation before implementation and again before closeout",
+      "Vibe Code CLI configuration examples for stdio and loopback streamable-http with api_key_env, checked against the canonical entrypoint and loopback listener contract, with no secrets",
+      "Vibe Work remote custom-connector qualification over the existing relay: dynamic client registration, PKCE S256, exact resource and audience binding, issuer identification, and exactly the core profile with contract annotations and security schemes",
+      "an explicit record that the Vibe Code CLI does not support OAuth-protected MCP servers and therefore has no remote relay path, rather than a static bearer credential on the relay",
+      "an explicit distribution record keeping SOFTWARE_READY separate from Mistral directory listing and target-account availability",
+      "regression tests proving no Mistral-specific path bypasses qdrald, the canonical MCP builder, relay authorization, or the remote-session lease, and that no authority widens"
+    ],
+    "exclude": [
+      "a static API key, bearer token, or basic-auth path on the public relay, or any second authorization path",
+      "claiming Mistral directory listing or account availability without directly observed external evidence",
+      "embedding secrets in examples or evidence",
+      "any new kernel capability, MCP tool, OAuth scope, profile, approval class, trust right, executable admission, lease right, actuation, shell, interpreter, or generic network authority",
+      "paid services made mandatory",
+      "activating SG-000070 or any QDRAL-P18 grain before this grain closes canonically"
+    ]
+  },
+  "authority_delta": {
+    "filesystem": "None.",
+    "process": "None.",
+    "network": "None; the existing relay edge serves Vibe Work as one more OAuth client, and the loopback listener is unchanged.",
+    "browser": "None.",
+    "ui_input": "None.",
+    "secrets": "None; examples and evidence must be secret-free.",
+    "approval": "None.",
+    "privileged": "None."
+  },
+  "invariants": [
+    "a Mistral connection receives exactly the core remote profile and nothing more than any other provider",
+    "the public relay accepts only OAuth access tokens bound to its resource; no static credential path is added",
+    "provider identity is metadata, never authority",
+    "no software result promotes a provider-controlled distribution state"
+  ],
+  "acceptance": [
+    {
+      "id": "A1",
+      "claim": "Vibe Code CLI stdio and loopback examples are pinned to the canonical entrypoint and loopback contract with no secrets, and the absence of a Vibe Code remote path is recorded as a provider limitation."
+    },
+    {
+      "id": "A2",
+      "claim": "A Vibe Work-compatible connector flow over the existing relay passes dynamic registration, authorization, token exchange with exact resource binding, and core-profile discovery and calls, and a static bearer credential is refused."
+    },
+    {
+      "id": "A3",
+      "claim": "Mistral directory and account states remain unpromoted, and no authority widens."
+    },
+    {
+      "id": "A4",
+      "claim": "Exact-head CI, genuine TypeSafe Jev, Alibaba Open Code Review, manual review of excluded files, current official Mistral requirement re-verification, and zero unresolved review threads all pass."
+    }
+  ],
+  "external_requirements_verified": {
+    "date": "2026-10-04",
+    "source_policy": "Official Mistral documentation must be re-checked before closeout.",
+    "sources": [
+      "https://docs.mistral.ai/vibe/code/cli/mcp-servers",
+      "https://docs.mistral.ai/le-chat/knowledge-integrations/connectors/mcp-connectors"
+    ]
+  },
+  "successor_requirements": {
+    "sg_000070": "The next COTRA-P17 provider/distribution grain may activate only after SG-000069 closes canonically.",
+    "p18": "SG-000073 through SG-000086 remain new-grain-only and may not activate during SG-000069."
+  },
+  "review": {
+    "diffcipline": true,
+    "jev_semantic_review": true,
+    "alibaba_open_code_review": "required exact-range qualification where integrated",
+    "security_review": true,
+    "exact_head_ci": true,
+    "native_windows": true,
+    "release_artifact_qualification": true
+  },
+  "done_when": "Mistral local and remote integration paths are qualified over Qdral's existing authority with identical boundaries to other providers, the Vibe Code remote limitation is recorded honestly, and every provider-controlled state remains explicit external evidence."
+}
