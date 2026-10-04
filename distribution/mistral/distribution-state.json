@@ -1,0 +1,25 @@
+{
+  "schema": "qdral-mistral-distribution-state/1",
+  "paths": {
+    "vibe_code_stdio": "Vibe Code CLI over the local stdio entrypoint (examples/mcp-clients/vibe-code-config.toml)",
+    "vibe_code_loopback": "Vibe Code CLI over the loopback Streamable HTTP listener with the local bearer credential from QDRAL_LOOPBACK_TOKEN",
+    "vibe_work_custom_connector": "Vibe Work custom MCP connector pointing at the owner's Qdral relay /mcp endpoint, OAuth 2.1 with dynamic client registration"
+  },
+  "provider_limitations": [
+    "The Vibe Code CLI does not support MCP servers that require OAuth, so it has no remote relay path. Qdral does not add a static API key or bearer credential to the public relay to work around this."
+  ],
+  "states": ["SOFTWARE_READY", "DIRECTORY_SUBMITTED", "DIRECTORY_LISTED", "ACCOUNT_VERIFIED"],
+  "provider_controlled": ["DIRECTORY_SUBMITTED", "DIRECTORY_LISTED", "ACCOUNT_VERIFIED"],
+  "status": {
+    "SOFTWARE_READY": { "state": "PENDING_SG-000069_CLOSEOUT", "evidence": null },
+    "DIRECTORY_SUBMITTED": { "state": "NOT_OBSERVED", "evidence": null },
+    "DIRECTORY_LISTED": { "state": "NOT_OBSERVED", "evidence": null },
+    "ACCOUNT_VERIFIED": { "state": "NOT_OBSERVED", "evidence": null }
+  },
+  "external_prerequisites": [
+    "a deployed public HTTPS Qdral relay host operated by the owner",
+    "a Vibe Work account whose administrator adds the custom connector, used to observe a working session",
+    "any Mistral directory submission is an owner action and is recorded only from observed Mistral evidence"
+  ],
+  "promotion_rule": "No software, test, or CI result promotes any provider-controlled state. They change only by recording directly observed Mistral evidence in this file through a governed change."
+}

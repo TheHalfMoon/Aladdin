@@ -105,3 +105,37 @@ test("SG-000068: Claude directory and account states are never promoted by softw
     }
   }
 });
+
+test("SG-000069: Vibe Code examples use the canonical entrypoint and the loopback bearer contract", () => {
+  const text = example("vibe-code-config.toml");
+  const stdio = text.split("\n").filter((line) => !line.startsWith("#")).join("\n");
+  for (const line of ['name = "qdral"', 'transport = "stdio"', 'command = "qdral"', 'args = ["mcp", "stdio"]']) {
+    assert.ok(stdio.includes(line), line);
+  }
+  for (const line of [
+    '# transport = "streamable-http"',
+    '# url = "http://127.0.0.1:PORT/mcp"',
+    '# api_key_env = "QDRAL_LOOPBACK_TOKEN"',
+    '# api_key_header = "Authorization"',
+    '# api_key_format = "Bearer {token}"'
+  ]) {
+    assert.ok(text.includes(line), line);
+  }
+  assert.doesNotMatch(text, /https:\/\//, "Vibe Code has no remote relay path");
+  assert.doesNotMatch(text, /api_key\s*=|token\s*=\s*"[^{]/, "no literal credential");
+});
+
+test("SG-000069: Mistral directory and account states are never promoted by software", () => {
+  const state = JSON.parse(
+    readFileSync(join(here, "..", "..", "..", "distribution", "mistral", "distribution-state.json"), "utf8")
+  ) as { provider_controlled: string[]; provider_limitations: string[]; status: Record<string, { state: string; evidence: unknown }> };
+  assert.deepEqual(state.provider_controlled, ["DIRECTORY_SUBMITTED", "DIRECTORY_LISTED", "ACCOUNT_VERIFIED"]);
+  assert.ok(state.provider_limitations.some((entry) => entry.includes("does not support MCP servers that require OAuth")));
+  for (const name of state.provider_controlled) {
+    const entry = state.status[name];
+    assert.ok(entry !== undefined, name);
+    if (entry.state !== "NOT_OBSERVED") {
+      assert.ok(entry.evidence !== null && typeof entry.evidence === "object", `${name} needs observed Mistral evidence`);
+    }
+  }
+});
