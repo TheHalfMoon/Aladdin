@@ -85,7 +85,7 @@ dependencies = [
 
 [[package]]
 name = "qdral-approval"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "qdral-contracts",
  "serde",
@@ -96,7 +96,7 @@ dependencies = [
 
 [[package]]
 name = "qdral-audit"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "qdral-contracts",
  "serde",
@@ -105,7 +105,7 @@ dependencies = [
 
 [[package]]
 name = "qdral-contracts"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -113,7 +113,7 @@ dependencies = [
 
 [[package]]
 name = "qdral-lifecycle"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "qdral-approval",
  "qdral-policy",
@@ -126,7 +126,7 @@ dependencies = [
 
 [[package]]
 name = "qdral-policy"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "qdral-approval",
  "qdral-contracts",
@@ -141,7 +141,7 @@ dependencies = [
 
 [[package]]
 name = "qdral-provider-browser"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "qdral-contracts",
  "serde",
@@ -151,7 +151,7 @@ dependencies = [
 
 [[package]]
 name = "qdral-provider-clipboard"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "qdral-contracts",
  "serde",
@@ -162,7 +162,7 @@ dependencies = [
 
 [[package]]
 name = "qdral-provider-fs"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "qdral-contracts",
  "serde_json",
@@ -171,7 +171,7 @@ dependencies = [
 
 [[package]]
 name = "qdral-provider-git"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "qdral-contracts",
  "serde_json",
@@ -179,7 +179,7 @@ dependencies = [
 
 [[package]]
 name = "qdral-provider-network"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "qdral-contracts",
  "serde_json",
@@ -189,11 +189,11 @@ dependencies = [
 
 [[package]]
 name = "qdral-provider-process"
-version = "0.1.0"
+version = "0.2.0"
 
 [[package]]
 name = "qdral-provider-uia"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "qdral-contracts",
  "serde",
@@ -204,7 +204,7 @@ dependencies = [
 
 [[package]]
 name = "qdral-tunnel"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -212,7 +212,7 @@ dependencies = [
 
 [[package]]
 name = "qdrald"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "qdral-approval",
  "qdral-audit",

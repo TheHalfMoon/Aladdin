@@ -25,10 +25,11 @@ const reviewFiles = Object.fromEntries(
   readdirSync(join(source, "review")).map((name) => [name, readFileSync(join(source, "review", name), "utf8")])
 );
 const MCP_URL = "https://relay.qdral.test/mcp";
+const pkgVersion = (JSON.parse(readFileSync(join(here, "..", "package.json"), "utf8")) as { version: string }).version;
 
 async function buildPackage(): Promise<PackageFiles> {
   const tools = await discoverTools({ transportKind: "relay", providerKind: "openai", toolSurfaceProfile: "core" });
-  return buildOpenAIPluginPackage({ config, version: "0.1.0", mcpUrl: MCP_URL, logoSvg, tools, reviewFiles });
+  return buildOpenAIPluginPackage({ config, version: pkgVersion, mcpUrl: MCP_URL, logoSvg, tools, reviewFiles });
 }
 
 function mutate(files: PackageFiles, path: string, change: (value: Record<string, unknown>) => void): PackageFiles {
@@ -126,7 +127,7 @@ test("configuration and endpoint validation fail closed", () => {
   assert.equal(isMcpEndpointUrl(MCP_URL), true);
   assert.ok(validateConfig({ ...config, privacyPolicyURL: "http://example.com/privacy" }).length > 0);
   assert.ok(validateConfig({ ...config, supportURL: `https://example.com/${"a".repeat(1100)}` }).length > 0);
-  assert.throws(() => buildOpenAIPluginPackage({ config, version: "0.1.0", mcpUrl: "https://relay.test/", logoSvg, tools: [] }));
+  assert.throws(() => buildOpenAIPluginPackage({ config, version: "0.2.0", mcpUrl: "https://relay.test/", logoSvg, tools: [] }));
 });
 
 test("listing URLs point at real repository documents and no paid service is required", () => {
