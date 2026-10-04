@@ -23,7 +23,7 @@ emergency revoke, checksum-guarded state, lifecycle install/update/rollback).
 3. Set owner-only permissions on the copy (`chmod 600`). The file contains
    the relay's token signing key: anyone holding it can mint tokens for this
    relay. It contains no MCP payloads, tool arguments, results, bearer
-   tokens, or device private keys — but it is still secret material. Never
+   tokens, or device private keys -- but it is still secret material. Never
    commit it, never paste it into tickets or logs, never publish it.
 4. Record which relay origin and software version the copy belongs to. A
    backup is valid only for the same `publicOrigin`; tokens bind issuer and
@@ -89,7 +89,7 @@ step below names the mechanism; none invents one.
    Recover: restore the newest known-good backup per section 2, or start
    fresh per section 3 if no good backup exists. Verify: section 2 step 4.
 2. Relay state theft (backup or live file disclosed). Contain: treat the
-   signing key as compromised and follow section 3 in full — theft of the
+   signing key as compromised and follow section 3 in full -- theft of the
    file is key compromise even if nothing looks abused yet. Recover: fresh
    key, re-pair, re-register. Verify: old tokens fail; only re-paired
    devices authenticate.

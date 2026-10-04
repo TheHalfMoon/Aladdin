@@ -8,7 +8,7 @@ Baseline: `docs/security/THREAT_MODEL.md` (T01-T28),
 retained as historical record; v0.2-relevant controls are re-proven below
 with current tests).
 
-Scope: every v0.2 surface added or exposed after P13 — local MCP edge,
+Scope: every v0.2 surface added or exposed after P13 -- local MCP edge,
 loopback HTTP transport, relay protocol and device channel, OAuth 2.1
 authorization, device uplink leases and remote sessions, desktop observation,
 clipboard transfer, bounded network fetch, the protected executable registry
@@ -171,7 +171,7 @@ device; challenge/response binds device and epoch; one-time pairing with
 entropy/expiry/one-shot/rate limits; hard, principal-wide, all-route, and
 emergency revocation; envelope verifies principal/connection/device/digest/
 epoch/session; compromised-relay remap fails closed; local lease creation and
-revocation only — the remote caller cannot create, widen, or silently renew;
+revocation only -- the remote caller cannot create, widen, or silently renew;
 reconnect never extends or rebinds; route/profile/policy/trust drift
 deactivates; cross-provider contexts never share a lease.
 
