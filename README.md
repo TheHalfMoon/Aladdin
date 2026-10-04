@@ -6,7 +6,7 @@ Deskal is an open-source, local-first MCP gateway that lets ChatGPT work with an
 
 Deskal is not a remote shell, a remote desktop, or a "run anything" agent.
 
-> **Compatibility note:** the product name is now **Deskal**. The current v0.2 compatibility surface intentionally retains the `qdral` CLI, `qdrald` daemon, `@qdral/*` packages, `QDRAL_*` environment variables, existing install/storage paths, and the current `TheHalfMoon/Qdral` repository slug until those contracts are migrated separately. See [`docs/identity/DESKAL_RENAME.md`](docs/identity/DESKAL_RENAME.md).
+> **Compatibility note:** the product and repository name are now **Deskal**. The current v0.2 compatibility surface intentionally retains the `qdral` CLI, `qdrald` daemon, `@qdral/*` packages, `QDRAL_*` environment variables, and existing install/storage paths until those contracts are migrated separately. See [`docs/identity/DESKAL_RENAME.md`](docs/identity/DESKAL_RENAME.md).
 
 ## What ChatGPT can do through Deskal
 
@@ -57,7 +57,7 @@ The current transition release keeps the existing archive and executable names f
    if (-not $expected -or $actual -ne $expected) { throw "checksum mismatch: do not extract $zip" } else { "checksum OK" }
    ```
    On Linux or WSL, `sha256sum -c --ignore-missing SHA256SUMS.txt` does the same.
-   Optionally verify provenance: `gh attestation verify .\qdral-<version>-windows-x64.zip --repo TheHalfMoon/Qdral`.
+   Optionally verify provenance: `gh attestation verify .\qdral-<version>-windows-x64.zip --repo TheHalfMoon/Deskal`.
 2. Extract the archive and run, from the extracted folder:
    `.\qdral.exe install`
    Every file is checked against `manifest.json` before anything is copied. The compatibility installer currently installs to `%LOCALAPPDATA%\Qdral`, readable only by you (and Windows itself), and adds `%LOCALAPPDATA%\Qdral\bin` to your user PATH (`--no-path` to skip). Open a new terminal afterwards.
