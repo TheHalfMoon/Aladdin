@@ -13,6 +13,7 @@ Current product identity:
 - Root package: `deskal`
 - Public plugin name: `deskal`
 - Public display name: `Deskal`
+- Repository identity: `TheHalfMoon/Deskal`
 
 The earlier product names `Qdral`, `Quntal`, and `Cotra` are superseded product identities and must not be presented as the current product name.
 
@@ -29,13 +30,12 @@ This rename changes the maintained product identity immediately without silently
 - Existing project-owned source paths beginning with `qdral-`
 - Existing local storage and install paths that contain `Qdral` or `qdral`
 - MCP server compatibility name: `qdral`
-- Repository compatibility slug: `TheHalfMoon/Qdral` until the repository owner renames it
 
 Those compatibility identifiers do not define the current product brand. New user-facing product copy must use **Deskal**.
 
 ## Repository rename
 
-The repository owner may rename the GitHub repository from `TheHalfMoon/Qdral` to `TheHalfMoon/Deskal`. Until that metadata change occurs, repository URLs in build metadata may continue to use the existing slug so that links remain valid.
+The GitHub repository identity is now `TheHalfMoon/Deskal`. Current repository, package, plugin, support, security, and release-facing URLs must use the Deskal slug. Historical evidence may retain earlier repository URLs when they are part of immutable provenance.
 
 ## Historical provenance
 
