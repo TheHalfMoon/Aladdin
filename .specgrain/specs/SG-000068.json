@@ -2,7 +2,7 @@
   "id": "SG-000068",
   "title": "Claude distribution",
   "program": "COTRA-P17",
-  "state": "GRAIN",
+  "state": "CLOSED",
   "risk": "high",
   "created": "2026-10-04",
   "base": "a28019e103d93a66f93eb1c72702f7ef179a90c7",
@@ -83,5 +83,25 @@
     "native_windows": true,
     "release_artifact_qualification": true
   },
-  "done_when": "Claude local and remote integration paths are qualified over Qdral's existing authority with identical boundaries to other providers, and every provider-controlled state remains explicit external evidence."
+  "done_when": "Claude local and remote integration paths are qualified over Qdral's existing authority with identical boundaries to other providers, and every provider-controlled state remains explicit external evidence.",
+  "qualified_head": "b3926f4490a3b3f5b1bff5999eabddd99711df34",
+  "implementation_base": "f4685f1755483b7b635f80472bd8b3f11dfd92ec",
+  "implementation_merge": "6de6742eae81bacf4f886046b6d79aed02e15ff4",
+  "pre_merge_ci": "37178513145",
+  "pre_merge_review_gates": "37178513090",
+  "post_merge_ci": "37178873004",
+  "canonical_evidence": {
+    "implementation_pr": 183,
+    "implementation_base": "f4685f1755483b7b635f80472bd8b3f11dfd92ec",
+    "qualified_head": "b3926f4490a3b3f5b1bff5999eabddd99711df34",
+    "pre_merge_ci": "37178513145",
+    "pre_merge_review_gates": "37178513090",
+    "merge_sha": "6de6742eae81bacf4f886046b6d79aed02e15ff4",
+    "post_merge_ci": "37178873004",
+    "jev": "PASSED: genuine TypeSafe Jev exact-diff review covered 15/15 hunks with zero findings and zero blocking findings, pin 31f89602797fb7bea007f8a480bf368bf564954e",
+    "ocr": "PASSED: Alibaba Open Code Review v1.12.9 exact-range delegation over 9 changed files, 3 reviewable with delegated rules applied and 6 excluded (apps/qdral-mcp/src/client-examples.test.ts, apps/qdral-mcp/src/oauth-authorization.test.ts, and apps/qdral-relay/src/self-host.test.ts by default-path classification; docs/p17/CLAUDE.md, docs/security/SG-000068_CLAUDE_DISTRIBUTION_NOTE.md, and examples/mcp-clients/README.md by unsupported-extension classification) manually reviewed",
+    "security_review": "PASS on exact qualified head: redirect URIs accept http://localhost for native clients only as redirects, never as issuer or resource identifiers; the authorization endpoint matches registered redirects exactly or, only for loopback http registrations, port-agnostically per RFC 8252 section 7.3 with scheme, hostname, path, and query exact; https redirects are never port-agnostic and the token endpoint still requires the exact authorization redirect. Relay end-to-end tests prove a Claude web connector and a Claude Code connector each pair a device, discover exactly the core profile with contract security schemes, and are refused a local-only tool, and six redirect variations are refused with no redirect. A Claude Code configuration example is pinned to the canonical stdio entrypoint and Claude directory and account states remain unpromoted under test. Official Claude requirements re-verified 2026-10-04. No authority added. All closed SG-000001 through SG-000067 regressions pass. CodeRabbit skipped-review and cubic skipping notices evaluated as non-evidence noise with zero substantive findings; zero unresolved threads.",
+    "unresolved_review_threads": 0,
+    "authority_boundary": "Claude integration qualification: loopback-redirect matching per RFC 8252 for native clients, configuration examples, a distribution record, and tests. No kernel capability, MCP tool, OAuth scope, profile, approval class, trust right, executable admission, lease right, actuation, shell, interpreter, or generic network authority is added; Claude directory and account states remain NOT_OBSERVED."
+  }
 }
