@@ -9,8 +9,9 @@ Historical evidence is preserved verbatim; preservation is not authorization.
 
 ## 1. Product identity rule
 
-The maintained product identity is Deskal. Qdral, Quntal, and Cotra are
-superseded product identities and must not be presented as the current product.
+The maintained product identity is Deskal. Qdral and Cotra are
+superseded product identities and must not be presented as the current product
+(the rename records in `docs/identity/` govern the full earlier history).
 The compatibility boundary (CLI `qdral`, daemon `qdrald`, npm packages
 `@qdral/mcp` and `@qdral/relay`, `QDRAL_*` environment variables, `qdral.*`
 OAuth scopes, `qdral-*` source paths, install/storage paths containing
@@ -91,7 +92,7 @@ canonically.
 | --- | --- |
 | `docs/canonical/ARCHITECTURE_AND_DELIVERY_PLAN.md` | Delivered through COTRA-P13. Its Cotra-era product statements are superseded; the current state is recorded in `CURRENT.md`. |
 | `docs/canonical/UNIVERSAL_AI_ACCESS_PLAN.md` | Proposal whose provider-neutral decisions were absorbed by the closed P17 grains; its `Cotra v0.2.x` product naming is superseded. |
-| `docs/identity/QDRAL_RENAME.md`, `docs/identity/QUNTAL_RENAME.md` | Historical rename records; immutable provenance. |
+| `docs/identity/` rename records (`DESKAL_RENAME.md`, `QDRAL_RENAME.md`, and the earlier record beside them) | Historical rename records; immutable provenance. |
 | `docs/security/THREAT_MODEL_REGRESSION.md` | Point-in-time QDRAL-P13 regression evidence with P13-era counts; superseded for v0.2 by `THREAT_MODEL_REGRESSION_V02.md`. |
 | `docs/security/RELEASE_SECURITY_REVIEW.md` | SG-000046 program-level review for the P13 release line; superseded for v0.2 by the SG-000072 exit record. |
 | `docs/p16/sg000066_exit_evidence.json` | Closed P16 exit evidence. |
@@ -100,8 +101,7 @@ canonically.
 
 ### SUPERSEDED
 
-No SUPERSEDED document remains. A document that presents Qdral, Quntal, or
-Cotra as the current product, or that contradicts the precedence above, must
+No SUPERSEDED document remains. A document that presents Qdral or Cotra as the current product, or that contradicts the precedence above, must
 be reclassified here or corrected before it is followed.
 
 ## 4. Rules for implementation agents
