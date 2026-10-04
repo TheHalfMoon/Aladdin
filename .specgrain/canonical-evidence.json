@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "snapshot_base": "49cf73562d6cc91faee24a7fe8f4a1f9fccccfbe",
+  "snapshot_base": "686b170badf9c7d2033ea448313f14189bb73db7",
   "state_semantics": {
     "GRAIN": "Authorized or active work packet whose acceptance is not yet canonically proven.",
     "PROVEN": "Acceptance and required qualification are proven, but canonical closeout/governance is not yet complete.",
@@ -874,6 +874,18 @@
       "review_basis": "Exact-head genuine TypeSafe Jev 82/82 hunks with zero findings/blocking findings (pin 31f89602797fb7bea007f8a480bf368bf564954e), Alibaba Open Code Review v1.12.9 exact-range delegation over 40 files with 11 reviewable and 29 excluded files manually reviewed, exact-diff manual security review, Deskal planning-identity hardening with qdral compatibility identifiers preserved, Windows/Ubuntu Rust Node Governance, Supply chain audit, Release qualification (0.2.0 candidate with 0.1.0-to-0.2.0 update path, SBOM, provenance, byte-identical reproducibility), and Relay container, successful post-merge CI, and zero unresolved review threads. CodeRabbit skipped-review and cubic skipping notices evaluated as non-evidence noise with zero substantive findings.",
       "unresolved_review_threads": 0,
       "authority_boundary": "Release hardening, regression tests, and documentation only. No new MCP tool, schema change, capability, approval class, trust right, executable admission, lease right, network, browser, UIA, clipboard, installer, elevation, or provider submission authority."
+    },
+    "SG-000073": {
+      "implementation_pr": 194,
+      "implementation_base": "4ec8f9e1211cf61e268cf872a154c960d19c8ffe",
+      "qualified_head": "5a63f7bbe5168336dd3e7fb008ad0b68c08853f6",
+      "pre_merge_ci": "37213682535",
+      "pre_merge_review_gates": "37213681953",
+      "merge_sha": "686b170badf9c7d2033ea448313f14189bb73db7",
+      "post_merge_ci": "37214376515",
+      "review_basis": "Exact-head genuine TypeSafe Jev 4/4 hunks with zero findings/blocking findings (pin 31f89602797fb7bea007f8a480bf368bf564954e), Alibaba Open Code Review v1.12.9 exact-range delegation over 4 files with 1 reviewable and 3 excluded files manually reviewed, exact-diff manual security review, Windows/Ubuntu Rust Node Governance, Supply chain audit, Release qualification, and Relay container, successful post-merge CI, and zero unresolved review threads. CodeRabbit skipped-review and cubic skipping notices evaluated as non-evidence noise with zero substantive findings.",
+      "unresolved_review_threads": 0,
+      "authority_boundary": "Frozen vocabulary data, exact-set tests, and documentation only. No browser launch, donor dependency, tool, profile, lease, or authority change."
     }
   }
 }
