@@ -2,7 +2,7 @@
   "id": "SG-000072",
   "title": "v0.2 release hardening",
   "program": "COTRA-P17",
-  "state": "GRAIN",
+  "state": "CLOSED",
   "risk": "high",
   "created": "2026-10-04",
   "base": "5959cb3def5b5820aa4bde617eed6bbf429288bf",
@@ -74,5 +74,25 @@
     "native_windows": true,
     "release_artifact_qualification": true
   },
-  "done_when": "The Qdral 0.2.0 release candidate is version-consistent, audited, reproducible, lifecycle-qualified on Windows, free of release blockers under a regression gate, and honestly documented."
+  "done_when": "The Qdral 0.2.0 release candidate is version-consistent, audited, reproducible, lifecycle-qualified on Windows, free of release blockers under a regression gate, and honestly documented.",
+  "qualified_head": "924e17e98bee745d2799120c5e3500d706f37fb8",
+  "implementation_base": "7bf3b58a08ba188a23cfd83f5ba1c5978163c49e",
+  "implementation_merge": "49cf73562d6cc91faee24a7fe8f4a1f9fccccfbe",
+  "pre_merge_ci": "37209722778",
+  "pre_merge_review_gates": "37209721596",
+  "post_merge_ci": "37210363031",
+  "canonical_evidence": {
+    "implementation_pr": 192,
+    "implementation_base": "7bf3b58a08ba188a23cfd83f5ba1c5978163c49e",
+    "qualified_head": "924e17e98bee745d2799120c5e3500d706f37fb8",
+    "pre_merge_ci": "37209722778",
+    "pre_merge_review_gates": "37209721596",
+    "merge_sha": "49cf73562d6cc91faee24a7fe8f4a1f9fccccfbe",
+    "post_merge_ci": "37210363031",
+    "jev": "PASSED: genuine TypeSafe Jev exact-diff review covered 82/82 hunks with zero findings and zero blocking findings, pin 31f89602797fb7bea007f8a480bf368bf564954e",
+    "ocr": "PASSED: Alibaba Open Code Review v1.12.9 exact-range delegation over 40 changed files, 11 reviewable with delegated rules applied and 29 excluded by extension classification and manually reviewed (docs, manifests, and lockfiles; lock diffs are version-only)",
+    "security_review": "PASS on exact qualified head: single 0.2.0 release line with a failing-on-drift regression gate; v0.2 threat regression with 178 mechanically verified test citations and honest UNVERIFIED marks; cargo audit 0 vulnerabilities over 1290 advisories and npm audit 0 vulnerabilities verified on native Windows; permissive-only license review re-verified against live lockfiles with regenerated notices; SBOM, provenance, and byte-identical reproducibility through the release-qualification job; release qualification installs a 0.1.0-versioned image and updates it to the candidate, then exercises upgrade, downgrade refusal, rollback, failed-update recovery, and uninstall; relay backup/restore, tamper-fails-closed, and fresh-signing-key tests; repository-wide release-blocker sweep gate; README and planning identity corrected with qdral compatibility identifiers preserved. No defect was found and no production authority changed. All closed SG-000001 through SG-000071 regressions pass in exact-head CI. The author's local git 2.56 refuses NUL global-config fixtures (pure-git repro, untouched code paths); those tests pass in exact-head CI. CodeRabbit skipped-review and cubic skipping notices evaluated as non-evidence noise with zero substantive findings; zero unresolved threads.",
+    "unresolved_review_threads": 0,
+    "authority_boundary": "Release hardening, regression tests, and documentation only. No new MCP tool, schema change, capability, approval class, trust right, executable admission, lease right, network, browser, UIA, clipboard, installer, elevation, or provider submission authority."
+  }
 }
