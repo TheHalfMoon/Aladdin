@@ -2,7 +2,7 @@
   "id": "SG-000071",
   "title": "Cross-provider isolation qualification",
   "program": "COTRA-P17",
-  "state": "GRAIN",
+  "state": "CLOSED",
   "risk": "high",
   "created": "2026-10-04",
   "base": "1eb4e5983af3643585a19d87883ec31fe80e1867",
@@ -67,5 +67,25 @@
     "native_windows": true,
     "release_artifact_qualification": true
   },
-  "done_when": "Cross-provider isolation is proven by explicit negative tests across every credential, session, route, lease, and approval boundary, with every defect fixed at its root."
+  "done_when": "Cross-provider isolation is proven by explicit negative tests across every credential, session, route, lease, and approval boundary, with every defect fixed at its root.",
+  "qualified_head": "db116004048b453b0b080cfa58a0bb78c1d1358f",
+  "implementation_base": "27d03f13f937ec976c98192a6a0e93bfa4d3da8d",
+  "implementation_merge": "5959cb3def5b5820aa4bde617eed6bbf429288bf",
+  "pre_merge_ci": "37182624857",
+  "pre_merge_review_gates": "37182624826",
+  "post_merge_ci": "37182980267",
+  "canonical_evidence": {
+    "implementation_pr": 189,
+    "implementation_base": "27d03f13f937ec976c98192a6a0e93bfa4d3da8d",
+    "qualified_head": "db116004048b453b0b080cfa58a0bb78c1d1358f",
+    "pre_merge_ci": "37182624857",
+    "pre_merge_review_gates": "37182624826",
+    "merge_sha": "5959cb3def5b5820aa4bde617eed6bbf429288bf",
+    "post_merge_ci": "37182980267",
+    "jev": "PASSED: genuine TypeSafe Jev exact-diff review covered 5/5 hunks with zero findings and zero blocking findings, pin 31f89602797fb7bea007f8a480bf368bf564954e",
+    "ocr": "PASSED: Alibaba Open Code Review v1.12.9 exact-range delegation over 4 changed files, 1 reviewable with delegated rules applied and 3 excluded (apps/qdral-mcp/src/tool-contract.test.ts and apps/qdral-relay/src/self-host.test.ts by default-path classification; docs/security/SG-000071_CROSS_PROVIDER_ISOLATION_NOTE.md by unsupported-extension classification) manually reviewed",
+    "security_review": "PASS on exact qualified head: with ChatGPT-style and Claude-style clients paired to one device over the real relay and uplink, each provider's calls carry only its own connection, tokens are unknown on the other provider's session, refresh tokens and spent authorization codes cannot be redeemed by the other client, revoking one provider's connection stops only that provider with nothing dispatched for it, and only a device revoke ends both; at the qdrald lease gate every single-field forgery of provider kind, client profile, revision, principal, device, epoch, or tool surface is REMOTE_SESSION_INACTIVE, pinned transport connections are exclusive, scope ceilings never lend across leases, and revoking one lease leaves the other active; every provider maps to the same core tool set, contract entries carry no provider field, and approval class depends only on capability and operation. No isolation defect was found and no production code changed. All closed SG-000001 through SG-000070 regressions pass. CodeRabbit skipped-review and cubic skipping notices evaluated as non-evidence noise with zero substantive findings; zero unresolved threads.",
+    "unresolved_review_threads": 0,
+    "authority_boundary": "Negative isolation tests and documentation only. No production code, kernel capability, MCP tool, OAuth scope, profile, approval class, trust right, executable admission, lease right, actuation, shell, interpreter, or generic network authority changes."
+  }
 }

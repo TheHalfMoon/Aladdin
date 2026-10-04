@@ -1,0 +1,78 @@
+{
+  "id": "SG-000072",
+  "title": "v0.2 release hardening",
+  "program": "COTRA-P17",
+  "state": "GRAIN",
+  "risk": "high",
+  "created": "2026-10-04",
+  "base": "5959cb3def5b5820aa4bde617eed6bbf429288bf",
+  "dependencies": [
+    "SG-000071"
+  ],
+  "objective": "Harden and qualify the Qdral v0.2 release without widening authority: set one consistent 0.2.0 version across every package, crate, manifest, plugin, and release artifact; regress the threat model against every v0.2 surface; audit dependencies and licenses; produce SBOM, provenance, and a byte-identical reproducibility record for the release candidate; qualify fresh Windows install, update, rollback, recovery, and uninstall; sweep the repository for TODO, FIXME, HACK, placeholders, stubs, temporary bypasses, dead code, dead workflows, mocks outside tests, inappropriate panics, unused dependencies, stale documentation, stale canonical statements, inconsistent versions, and secret leakage; fix every release blocker at its root; and record provider integration evidence states honestly.",
+  "scope": {
+    "include": [
+      "a single 0.2.0 version across the root and workspace npm packages, Rust crates, the Desktop Extension manifest, OpenAI and Codex plugin packages, release manifest, and runtime version reporting, with a test that fails on drift",
+      "threat-model regression mapping every v0.2 surface (local MCP, loopback HTTP, relay, OAuth, device uplink, desktop observation, clipboard, fetch, plugins) to its controls and tests",
+      "dependency vulnerability audit (cargo audit, npm audit) and license review of every shipped dependency with notices regenerated",
+      "SBOM, provenance, and reproducibility evidence for the 0.2.0 release candidate built by CI",
+      "fresh Windows install, update from 0.1.0, rollback, recovery, and uninstall qualification",
+      "a repository-wide sweep for TODO, FIXME, HACK, placeholders, stubs, temporary bypasses, dead code and workflows, mocks outside tests, inappropriate unimplemented, panic, or unreachable, unused dependencies, stale documentation and canonical statements, and secret leakage, with a regression gate",
+      "correction of stale canonical residual-limitation statements superseded by closed grains",
+      "a provider integration evidence summary that separates software readiness from every externally observed provider state"
+    ],
+    "exclude": [
+      "publishing a GitHub release, pushing a release tag, or claiming code signing; those remain owner actions",
+      "any new kernel capability, MCP tool, OAuth scope, profile, approval class, trust right, executable admission, lease right, actuation, shell, interpreter, or generic network authority",
+      "paid services, certificates, or audits made mandatory",
+      "activating SG-000073 or any QDRAL-P18 grain before this grain closes canonically"
+    ]
+  },
+  "authority_delta": {
+    "filesystem": "None.",
+    "process": "None.",
+    "network": "None.",
+    "browser": "None.",
+    "ui_input": "None.",
+    "secrets": "None.",
+    "approval": "None.",
+    "privileged": "None."
+  },
+  "invariants": [
+    "release qualification never weakens a security control to pass",
+    "every release claim is backed by CI or real Windows evidence or is recorded UNVERIFIED",
+    "provider-controlled states remain external evidence"
+  ],
+  "acceptance": [
+    {
+      "id": "A1",
+      "claim": "Every package, crate, manifest, plugin, and release artifact reports 0.2.0, and a test fails on version drift."
+    },
+    {
+      "id": "A2",
+      "claim": "Threat-model regression, dependency audit, license review, SBOM, provenance, and reproducibility pass for the CI-built 0.2.0 release candidate."
+    },
+    {
+      "id": "A3",
+      "claim": "Fresh Windows install, update, rollback, recovery, and uninstall pass, and the repository sweep finds no release blocker, enforced by a regression gate."
+    },
+    {
+      "id": "A4",
+      "claim": "Exact-head CI, genuine TypeSafe Jev, Alibaba Open Code Review, manual review of excluded files, release qualification, and zero unresolved review threads all pass."
+    }
+  ],
+  "successor_requirements": {
+    "p17_exit": "The COTRA-P17 exit and v0.2 canonical record are written in the governance change that closes SG-000072.",
+    "sg_000073": "SG-000073 is the first reserved QDRAL-P18 grain; it may activate only after SG-000072 and COTRA-P17 close canonically and the reserved P18 identifiers are re-verified unused."
+  },
+  "review": {
+    "diffcipline": true,
+    "jev_semantic_review": true,
+    "alibaba_open_code_review": "required exact-range qualification where integrated",
+    "security_review": true,
+    "exact_head_ci": true,
+    "native_windows": true,
+    "release_artifact_qualification": true
+  },
+  "done_when": "The Qdral 0.2.0 release candidate is version-consistent, audited, reproducible, lifecycle-qualified on Windows, free of release blockers under a regression gate, and honestly documented."
+}
