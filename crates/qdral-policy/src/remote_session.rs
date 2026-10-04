@@ -782,6 +782,130 @@ mod tests {
         assert_eq!(again.pin_connection, None);
     }
 
+    /// SG-000071: two providers paired to the same device each hold their
+    /// own lease. A context from one provider can never use the other's
+    /// lease, whatever single identity field it shares or changes.
+    #[test]
+    fn cross_provider_contexts_never_share_a_lease() {
+        let openai = lease();
+        let mut claude_request = lease_request();
+        claude_request.remote_connection_id = format!("rc-{}", "d".repeat(32));
+        claude_request.provider_kind = "anthropic".into();
+        claude_request.client_profile_id = "profile-2".into();
+        let claude = build_lease(
+            &claude_request,
+            "lease-2".into(),
+            &env(NOW),
+            &["default".into(), "other".into()],
+        )
+        .unwrap();
+        let leases = vec![openai.clone(), claude.clone()];
+        let read = request("fs.read", "read", "default");
+
+        // Each provider's own context is admitted by its own lease only.
+        let mut claude_remote = remote();
+        claude_remote.remote_connection_id = claude.remote_connection_id.clone();
+        claude_remote.provider_kind = "anthropic".into();
+        claude_remote.client_profile_id = "profile-2".into();
+        claude_remote.connection_id = "cn-2".into();
+        assert!(check_remote_dispatch(&leases, &read, &remote(), &env(NOW + 1)).is_ok());
+        assert!(check_remote_dispatch(&leases, &read, &claude_remote, &env(NOW + 1)).is_ok());
+
+        // Provider B presenting provider A's connection with any of its own
+        // identity fields is inactive.
+        type Mutation = Box<dyn Fn(&mut RemoteContext)>;
+        let mutations: Vec<(&str, Mutation)> = vec![
+            (
+                "provider kind",
+                Box::new(|r| r.provider_kind = "anthropic".into()),
+            ),
+            (
+                "client profile",
+                Box::new(|r| r.client_profile_id = "profile-2".into()),
+            ),
+            (
+                "client profile revision",
+                Box::new(|r| r.client_profile_revision = 2),
+            ),
+            (
+                "principal",
+                Box::new(|r| r.principal = format!("rp-{}", "e".repeat(32))),
+            ),
+            (
+                "device",
+                Box::new(|r| r.device_id = format!("dev-{}", "f".repeat(32))),
+            ),
+            ("device epoch", Box::new(|r| r.device_epoch = 2)),
+            (
+                "tool surface",
+                Box::new(|r| r.tool_surface_profile = "desktop_structured".into()),
+            ),
+        ];
+        for (label, mutate) in &mutations {
+            let mut forged = remote();
+            mutate(&mut forged);
+            let message = inactive_code(check_remote_dispatch(
+                std::slice::from_ref(&openai),
+                &read,
+                &forged,
+                &env(NOW + 1),
+            ));
+            assert!(!message.is_empty(), "{label}");
+        }
+        // Provider A's identity fields on provider B's connection are inactive.
+        let mut borrowed = remote();
+        borrowed.remote_connection_id = claude.remote_connection_id.clone();
+        inactive_code(check_remote_dispatch(
+            &leases,
+            &read,
+            &borrowed,
+            &env(NOW + 1),
+        ));
+
+        // A connection pinned by provider A cannot be used by provider B's
+        // transport connection.
+        let pinned = pin_connection(&leases, &remote().remote_connection_id, "cn-1");
+        let mut other_transport = remote();
+        other_transport.connection_id = "cn-2".into();
+        inactive_code(check_remote_dispatch(
+            &pinned,
+            &read,
+            &other_transport,
+            &env(NOW + 2),
+        ));
+
+        // Scope ceilings are per lease: provider A's write ceiling never lends
+        // provider B a scope its own lease lacks.
+        let mut narrow_request = claude_request.clone();
+        narrow_request.scope_ceiling = vec!["qdral.read".into()];
+        let narrow = build_lease(
+            &narrow_request,
+            "lease-3".into(),
+            &env(NOW),
+            &["default".into(), "other".into()],
+        )
+        .unwrap();
+        let write = request("fs.write", "write", "default");
+        inactive_code(check_remote_dispatch(
+            &[openai.clone(), narrow],
+            &write,
+            &claude_remote,
+            &env(NOW + 3),
+        ));
+
+        // Revoking provider A's lease leaves provider B active.
+        let mut revoked_a = openai.clone();
+        revoked_a.revoked = true;
+        let after = vec![revoked_a, claude.clone()];
+        inactive_code(check_remote_dispatch(
+            &after,
+            &read,
+            &remote(),
+            &env(NOW + 4),
+        ));
+        assert!(check_remote_dispatch(&after, &read, &claude_remote, &env(NOW + 4)).is_ok());
+    }
+
     #[test]
     fn no_lease_expired_lease_and_revoked_lease_are_inactive() {
         let req = request("fs.read", "read", "default");

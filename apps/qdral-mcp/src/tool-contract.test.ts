@@ -254,3 +254,17 @@ test("the contract document is generated from the same contract", () => {
   assert.ok(doc.includes(`| \`core\` | relay (remote) | ${SURFACE_PROFILES.core.length} |`));
   assert.ok(doc.includes(`| \`desktop_structured\` | stdio and loopback HTTP (local) | ${SURFACE_PROFILES.desktop_structured.length} |`));
 });
+
+test("SG-000071: approvals, scopes, and tool sets are identical for every provider", () => {
+  const sets = Object.keys(REMOTE_PROVIDER_PROFILES).map((providerKind) =>
+    [...allowedToolsFor({ transportKind: "relay", providerKind, toolSurfaceProfile: "core" })].sort()
+  );
+  for (const set of sets) {
+    assert.deepEqual(set, sets[0]);
+  }
+  for (const entry of Object.values(TOOL_CONTRACT)) {
+    assert.deepEqual(Object.keys(entry).sort(), ["annotations", "approval", "capability", "effect", "operation", "outputBound", "remote"]);
+  }
+  const rust = readFileSync(join(repo, "crates", "qdral-policy", "src", "sg000019.rs"), "utf8");
+  assert.match(rust, /pub fn approval_class_for\(capability: &str, operation: &str\) -> ApprovalClass/);
+});

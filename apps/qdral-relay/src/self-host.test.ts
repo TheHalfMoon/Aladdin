@@ -99,11 +99,13 @@ interface LinkOptions {
   readonly registerRedirect?: string;
   readonly useRedirect?: string;
   readonly clientName?: string;
+  /** Reuse an existing device (a second provider pairing the same computer). */
+  readonly devicePaths?: { readonly key: string; readonly uplink: string };
 }
 
 async function link(r: Relay, approve = true, options: LinkOptions = {}): Promise<Linked | { denied: string }> {
   const deviceDir = mkdtempSync(join(tmpdir(), "qdral-device-"));
-  const devicePaths = { key: join(deviceDir, "device_key.json"), uplink: join(deviceDir, "uplink.json") };
+  const devicePaths = options.devicePaths ?? { key: join(deviceDir, "device_key.json"), uplink: join(deviceDir, "uplink.json") };
   await enableRemote({ relayOrigin: r.origin, defaultWorkspace: "default", deviceKeyPath: devicePaths.key, uplinkPath: devicePaths.uplink, fetch: fetchImpl, nowMs: Date.now() });
   const registerRedirect = options.registerRedirect ?? "http://127.0.0.1:9/callback";
   const redirect = options.useRedirect ?? registerRedirect;
@@ -433,6 +435,119 @@ test("SG-000070: a Codex-style OAuth client with a loopback redirect reaches the
       await uplink.stop();
     }
   } finally {
+    await r.close();
+  }
+});
+
+test("SG-000071: two providers on one device never share credentials, sessions, routes, or revocation", async () => {
+  const r = await startRelay(mkdtempSync(join(tmpdir(), "qdral-relay-isolation-")));
+  const deviceDir = mkdtempSync(join(tmpdir(), "qdral-device-shared-"));
+  const devicePaths = { key: join(deviceDir, "device_key.json"), uplink: join(deviceDir, "uplink.json") };
+  const controller = new AbortController();
+  let done: Promise<void> = Promise.resolve();
+  try {
+    const gpt = await link(r, true, { registerRedirect: "https://chatgpt.com/connector_platform_oauth_redirect", clientName: "ChatGPT", devicePaths });
+    const claude = await link(r, true, { registerRedirect: "https://claude.ai/api/mcp/auth_callback", clientName: "Claude", devicePaths });
+    assert.ok(!("denied" in gpt) && !("denied" in claude));
+    if ("denied" in gpt || "denied" in claude) return;
+    assert.notEqual(gpt.clientId, claude.clientId);
+    assert.notEqual(gpt.paired.remoteConnectionId, claude.paired.remoteConnectionId);
+
+    // One uplink serves both connections; record which connection each
+    // dispatched call carries.
+    const pair = loadDeviceKey(devicePaths.key);
+    const uplinkDocument = JSON.parse(readFileSync(devicePaths.uplink, "utf8")) as { connections: PairedConnection[] };
+    assert.equal(uplinkDocument.connections.length, 2);
+    const dispatched: string[] = [];
+    done = runDeviceUplink(
+      { relayOrigin: r.origin, identity: { deviceId: pair.deviceId, deviceEpoch: pair.epoch }, privateKeyJwkBase64: pair.privateKeyJwkBase64, connections: uplinkDocument.connections },
+      {
+        fetch: fetchImpl,
+        dispatcher: createMcpFrameDispatcher({
+          defaultWorkspace: "default",
+          kernelFactory: (remote) =>
+            ({
+              sessionId: "stub",
+              remote,
+              call: async () => {
+                dispatched.push(remote.remoteConnectionId);
+                return { version: 1, request_id: "r", ok: false, error: { code: "REMOTE_SESSION_INACTIVE", message: "no lease" } };
+              },
+              close: () => {},
+              pending: new Map(),
+              child: {} as never
+            }) as unknown as KernelClient
+        }),
+        revocations: () => [],
+        signal: controller.signal,
+        sleep: (ms) => new Promise((resolve) => setTimeout(resolve, Math.min(ms, 50)))
+      }
+    );
+    await waitFor(() => r.relay.hub.isOnline(pair.deviceId), "device channel");
+
+    const open = async (token: string): Promise<string> => {
+      const init = await mcp(r, token, { jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "iso", version: "1" } } });
+      assert.equal(init.status, 200);
+      const id = init.headers.get("mcp-session-id") ?? "";
+      await init.text();
+      await (await mcp(r, token, { jsonrpc: "2.0", method: "notifications/initialized" }, id)).text();
+      return id;
+    };
+    const read = (id: number) => ({ jsonrpc: "2.0", id, method: "tools/call", params: { name: "fs_read", arguments: { path: "README.md" } } });
+    const sg = await open(gpt.accessToken);
+    const sc = await open(claude.accessToken);
+
+    const ok1 = await mcp(r, gpt.accessToken, read(2), sg);
+    const ok2 = await mcp(r, claude.accessToken, read(3), sc);
+    assert.equal(ok1.status, 200);
+    assert.equal(ok2.status, 200);
+    await ok1.text();
+    await ok2.text();
+    assert.deepEqual(dispatched, [gpt.paired.remoteConnectionId, claude.paired.remoteConnectionId], "each call carries its own provider connection");
+
+    // A provider token on the other provider's session is unknown.
+    for (const [token, foreign] of [[gpt.accessToken, sc], [claude.accessToken, sg]] as const) {
+      const reply = await mcp(r, token, read(4), foreign);
+      assert.equal(reply.status, 404);
+      await reply.text();
+    }
+    // A provider's refresh token cannot be redeemed by the other provider's client.
+    for (const [refresh, client] of [[gpt.refreshToken, claude.clientId], [claude.refreshToken, gpt.clientId]] as const) {
+      const cross = await form(r.origin, "/oauth/token", { grant_type: "refresh_token", refresh_token: refresh, client_id: client, resource: `${r.origin}/mcp` });
+      assert.equal(cross.status, 400);
+      assert.equal(cross.json.error_description, "client_mismatch");
+    }
+    // A provider's spent authorization code cannot be redeemed by the other provider.
+    const crossCode = await form(r.origin, "/oauth/token", {
+      grant_type: "authorization_code",
+      code: gpt.code,
+      client_id: claude.clientId,
+      redirect_uri: claude.redirect,
+      code_verifier: gpt.verifier,
+      resource: `${r.origin}/mcp`
+    });
+    assert.equal(crossCode.status, 400);
+
+    // Revoking one provider's connection leaves the other provider working.
+    const before = dispatched.length;
+    r.store.revokeConnection(gpt.paired.remoteConnectionId);
+    const revoked = await mcp(r, gpt.accessToken, read(5), sg);
+    assert.notEqual(revoked.status, 200);
+    await revoked.text();
+    const still = await mcp(r, claude.accessToken, read(6), sc);
+    assert.equal(still.status, 200);
+    await still.text();
+    assert.deepEqual(dispatched.slice(before), [claude.paired.remoteConnectionId], "nothing reached the device for the revoked provider");
+
+    // Only an explicit device revoke ends every provider on that computer.
+    r.store.revokeDevice(pair.deviceId);
+    const gone = await mcp(r, claude.accessToken, read(7), sc);
+    assert.notEqual(gone.status, 200);
+    await gone.text();
+  } finally {
+    controller.abort();
+    r.relay.hub.closeChannel(loadDeviceKey(devicePaths.key).deviceId);
+    await done;
     await r.close();
   }
 });
