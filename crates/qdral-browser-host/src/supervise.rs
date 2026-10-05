@@ -14,7 +14,9 @@
 
 use crate::error::{HostError, UnavailableReason};
 use std::path::Path;
-use std::time::{Duration, Instant};
+#[cfg(windows)]
+use std::time::Instant;
+use std::time::Duration;
 
 use platform::PlatformChild;
 
@@ -378,9 +380,9 @@ mod platform {
     }
 
     pub(super) fn spawn_piped(
-        binary: &Path,
-        args: &[String],
-        env: &CleanEnv,
+        _binary: &Path,
+        _args: &[String],
+        _env: &CleanEnv,
     ) -> Result<(SupervisedChild, HostPipes), HostError> {
         Err::<(SupervisedChild, HostPipes), HostError>(HostError::Platform(
             "piped supervision needs Windows in this grain".into(),
