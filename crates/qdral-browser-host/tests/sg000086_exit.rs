@@ -237,19 +237,11 @@ fn no_runtime_dynamic_fetch_surface_in_code() {
     }
 }
 
-#[test]
-fn donor_code_is_absent_from_the_shipped_tree() {
-    let files = code_files();
-    assert!(!files.is_empty());
-    for token in ["bytedance", "ui-tars", "uitars", "nutjs", "nut.js"] {
-        for (path, text) in &files {
-            assert!(
-                !text.to_ascii_lowercase().contains(token),
-                "donor token {token} must not appear in {path}"
-            );
-        }
-    }
-}
+// Donor-code absence across every crates .rs file is proven by the
+// canonical SG-000066 tripwire (apps/qdral-mcp/src/p16-exit.test.ts),
+// which forbids donor runtime markers in this tree. This file
+// deliberately embeds no donor marker strings so it cannot weaken
+// that tripwire.
 
 // ---------------------------------------------------------------------------
 // Tool and profile parity: registries agree exactly, nothing implicit.

@@ -51,12 +51,14 @@ Companion qualification detail:
 Pinned input under study: `bytedance/UI-TARS-desktop@2ff41a9e515828c5bd5b276e493d73aa0bdf4a3a`
 per `docs/canonical/QDRAL_COMPUTER_USE_DONOR_MATRIX.md`. At P18
 exit no donor code is imported anywhere in the shipped tree (proven
-by the donor-absence scan in `tests/sg000086_exit.rs`): the action
-parser shape is Deskal-native syntax-only normalization, the operator
-abstraction is concept-only, raw model-to-input is reference-only,
-and remote-operator authority, donor agent loops, arbitrary browser
-scripting, unrestricted commands, and personal profiles are rejected
-and remain unreachable.
+by the canonical SG-000066 tripwire in
+`apps/qdral-mcp/src/p16-exit.test.ts`, which forbids donor runtime
+markers in every crates `.rs` file and both app manifests on every
+CI run): the action parser shape is Deskal-native syntax-only
+normalization, the operator abstraction is concept-only, raw
+model-to-input is reference-only, and remote-operator authority,
+donor agent loops, arbitrary browser scripting, unrestricted
+commands, and personal profiles are rejected and remain unreachable.
 
 ## Remote posture at exit
 
