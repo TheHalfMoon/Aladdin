@@ -14,9 +14,9 @@
 
 use crate::error::{HostError, UnavailableReason};
 use std::path::Path;
+use std::time::Duration;
 #[cfg(windows)]
 use std::time::Instant;
-use std::time::Duration;
 
 use platform::PlatformChild;
 
