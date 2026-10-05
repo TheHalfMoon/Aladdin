@@ -11,6 +11,7 @@ mod observation;
 mod profile;
 mod proto;
 mod supervise;
+mod transfers;
 
 pub use actuation::{
     coordinate_fallback, dispatch, retry_after_dispatch, role_supports_action, target_digest,
@@ -43,4 +44,11 @@ pub use proto::{
 pub use supervise::{
     spawn_engine_null, spawn_host_piped, HostPipes, SupervisedChild, JOB_ACTIVE_PROCESS_LIMIT,
     LAUNCH_GRACE, SHUTDOWN_TIMEOUT,
+};
+pub use transfers::{
+    execute_automatically, extract_automatically, open_automatically, reparse_safe_contained,
+    sniff_denied_class, validate_download_type, validate_relative_destination,
+    validate_transfer_size, validate_upload_source, DeniedContentClass, DownloadSource,
+    PresentedUpload, RecordedUpload, DOWNLOAD_SOURCE_TTL_MS, MAX_DESTINATION_BYTES,
+    MAX_TRANSFER_BYTES,
 };
