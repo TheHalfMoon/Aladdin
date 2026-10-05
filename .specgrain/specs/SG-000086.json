@@ -1,0 +1,69 @@
+{
+  "id": "SG-000086",
+  "title": "P18 exit and release readiness",
+  "program": "QDRAL-P18",
+  "state": "GRAIN",
+  "risk": "high",
+  "created": "2026-10-06",
+  "base": "52224b6c2a93e6d40b1ce3974d92c3636ff38572",
+  "dependencies": [
+    "SG-000085"
+  ],
+  "objective": "Exit QDRAL-P18 with a final evidence matrix classifying every capability as exactly one of PROVEN, NOT_EXPOSED, or UNVERIFIED with no exposed UNVERIFIED row, verified tool and profile parity with shipped behavior, pinned packaging and supply-chain qualification (locks, licenses, notices, SBOM, provenance, reproducibility), and confirmation of the repository-pinned UI-TARS donor revision with its classification obligations preserved.",
+  "scope": {
+    "include": [
+      "final evidence matrix over browser host, networking, identities, observation, actuation, transfers, capture, UIA, coordinates, model adapters, remote leases, failure semantics, privacy, ceilings, denied authority, packaging, audits, notices, SBOM, provenance, reproducibility, Windows, parity, CI, Jev, OCR, manual review, and post-merge verification",
+      "tool and profile parity verification against shipped discovery and docs",
+      "packaging and supply-chain verification with pinned dependencies and no runtime dynamic donor-code fetching",
+      "UI-TARS donor pin, provenance, license, notices, and classification verification"
+    ],
+    "exclude": [
+      "new capabilities",
+      "new authority",
+      "remote execution enablement",
+      "unrelated feature expansion"
+    ]
+  },
+  "authority_delta": {
+    "filesystem": "None. Exit qualification only.",
+    "process": "None. Exit qualification only.",
+    "network": "None. Exit qualification only.",
+    "browser": "None. Exit qualification only.",
+    "ui_input": "None. Exit qualification only.",
+    "secrets": "None. Exit qualification only.",
+    "approval": "None. Exit qualification only.",
+    "privileged": "None."
+  },
+  "invariants": [
+    "exit adds no authority",
+    "exposed plus unverified blocks P18 closure",
+    "unknown profiles fail closed"
+  ],
+  "acceptance": [
+    {
+      "id": "A1",
+      "claim": "Every matrix row is classified PROVEN, NOT_EXPOSED, or UNVERIFIED with evidence, and no exposed UNVERIFIED row remains."
+    },
+    {
+      "id": "A2",
+      "claim": "Tool and profile parity, packaging, supply-chain, donor, Windows, and release qualification are proven with exact artifacts."
+    },
+    {
+      "id": "A3",
+      "claim": "Exact-head CI, genuine TypeSafe Jev, Alibaba Open Code Review, manual review of excluded files, and zero unresolved review threads all pass."
+    }
+  ],
+  "successor_requirements": {
+    "post_p18": "No successor program may activate until P18 closes canonically; any successor requires separate governance."
+  },
+  "review": {
+    "diffcipline": true,
+    "jev_semantic_review": true,
+    "alibaba_open_code_review": "required exact-range qualification where integrated",
+    "security_review": true,
+    "exact_head_ci": true,
+    "native_windows": true,
+    "release_artifact_qualification": true
+  },
+  "done_when": "P18 is exited canonically with a complete evidence matrix and release readiness proven."
+}
