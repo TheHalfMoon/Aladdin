@@ -5,6 +5,7 @@ mod actuation;
 mod argv;
 mod discovery;
 mod error;
+mod exposure;
 mod host;
 mod navigation;
 mod observation;
@@ -21,6 +22,11 @@ pub use actuation::{
 pub use argv::{assert_argv_clean, build_argv};
 pub use discovery::{discover_engine, Engine, EngineKind, SearchConfig};
 pub use error::{HostError, UnavailableReason};
+pub use exposure::{
+    is_denied_shape, is_live_exposed, is_qualified_shape, profile_tools,
+    remote_browser_mapping_enabled, BROWSER_STRUCTURED_PROFILE, DENIED_BROWSER_SHAPES,
+    LIVE_BROWSER_MCP_TOOLS, PREEXISTING_PROFILES, QUALIFIED_BROWSER_SHAPES,
+};
 pub use host::{HostIdentity, LiveHost, Supervisor, HANDSHAKE_TIMEOUT};
 pub use navigation::{
     check_rebinding_consistent, download_trigger_allowed, external_handler_allowed, mediate_frame,
