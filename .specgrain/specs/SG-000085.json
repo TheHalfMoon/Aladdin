@@ -1,0 +1,71 @@
+{
+  "id": "SG-000085",
+  "title": "P18 adversarial, security, privacy, and performance qualification",
+  "program": "QDRAL-P18",
+  "state": "GRAIN",
+  "risk": "high",
+  "created": "2026-10-06",
+  "base": "1c21cad5e7d1d652d61bc73c1db4bedc577fe771",
+  "dependencies": [
+    "SG-000084"
+  ],
+  "objective": "Qualify the complete P18 implementation surface adversarially without adding features: build a traceability matrix from requirement to implementation to tests to CI to review to evidence, and prove browser and network mediation, browser identities, transfers, exact-window capture, structured UIA, coordinate input, model adapters, remote lease isolation, failure semantics, resource ceilings, privacy, and denied authority hold under hostile, stale, replay, drift, and overflow conditions.",
+  "scope": {
+    "include": [
+      "traceability matrix covering every P18 capability from requirement through evidence",
+      "adversarial tests for browser and network mediation, identities, transfers, capture, UIA, coordinate input, model adapters, remote isolation, and failure semantics",
+      "explicit numeric server-owned hard ceilings for all applicable resources",
+      "privacy proof for screenshots, browser content, secrets, credential fields, and protected surfaces",
+      "static plus runtime proof that explicitly denied authority remains unreachable"
+    ],
+    "exclude": [
+      "new capabilities",
+      "new authority",
+      "new MCP tools or profiles",
+      "remote execution enablement",
+      "unrelated feature expansion"
+    ]
+  },
+  "authority_delta": {
+    "filesystem": "None. Qualification only.",
+    "process": "None. Qualification only.",
+    "network": "None. Qualification only.",
+    "browser": "None. Qualification only.",
+    "ui_input": "None. Qualification only.",
+    "secrets": "None. Qualification only.",
+    "approval": "None. Qualification only.",
+    "privileged": "None."
+  },
+  "invariants": [
+    "qualification adds no authority",
+    "failure never widens authority",
+    "exposed plus unverified blocks P18 closure"
+  ],
+  "acceptance": [
+    {
+      "id": "A1",
+      "claim": "Every P18 capability is traced from requirement to implementation to tests to CI to review to evidence, with explicit PROVEN, NOT_EXPOSED, or UNVERIFIED classification and no exposed UNVERIFIED row."
+    },
+    {
+      "id": "A2",
+      "claim": "Adversarial, stale, replay, drift, overflow, and confusion tests prove fail-closed behavior across browser, identity, transfer, capture, UIA, coordinate, adapter, remote, and failure-semantics surfaces, with privacy and ceiling proofs."
+    },
+    {
+      "id": "A3",
+      "claim": "Exact-head CI, genuine TypeSafe Jev, Alibaba Open Code Review, manual review of excluded files, and zero unresolved review threads all pass."
+    }
+  ],
+  "successor_requirements": {
+    "sg_000086": "SG-000086 may activate only after SG-000085 closes canonically with the full P18 qualification matrix as its base."
+  },
+  "review": {
+    "diffcipline": true,
+    "jev_semantic_review": true,
+    "alibaba_open_code_review": "required exact-range qualification where integrated",
+    "security_review": true,
+    "exact_head_ci": true,
+    "native_windows": true,
+    "release_artifact_qualification": true
+  },
+  "done_when": "The P18 surface is fully qualified adversarially with a complete evidence matrix and no exposed unverified capability."
+}
