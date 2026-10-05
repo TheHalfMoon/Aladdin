@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "snapshot_base": "630c612992326046e5168f7987f109b9bb5a709f",
+  "snapshot_base": "afe0eb799796a0e8ba023f312920925031906609",
   "state_semantics": {
     "GRAIN": "Authorized or active work packet whose acceptance is not yet canonically proven.",
     "PROVEN": "Acceptance and required qualification are proven, but canonical closeout/governance is not yet complete.",
@@ -922,6 +922,18 @@
       "review_basis": "Exact-head genuine TypeSafe Jev 3/3 hunks with zero findings/blocking findings (pin 31f89602797fb7bea007f8a480bf368bf564954e), Alibaba Open Code Review v1.12.9 exact-range delegation over 2 files with 2 reviewable and 0 excluded, exact-diff manual security review, Windows/Ubuntu Rust Node Governance, Supply chain audit, Release qualification, and Relay container, successful post-merge CI, and zero unresolved review threads. CodeRabbit skipped-review and cubic skipping notices evaluated as non-evidence noise with zero substantive findings.",
       "unresolved_review_threads": 0,
       "authority_boundary": "Read-only observation policy data and tests only. No actuation, scripting, debugging, credential access, process, network, MCP, approval, lease, trust, or remote authority change."
+    },
+    "SG-000077": {
+      "implementation_pr": 202,
+      "implementation_base": "a2a41bf3c2cfc4c9b73ba8552a11d9295bb1f8ee",
+      "qualified_head": "20a26476f97743f88bf9067341d4c85c53bc8f48",
+      "pre_merge_ci": "37323886915",
+      "pre_merge_review_gates": "37323887110",
+      "merge_sha": "afe0eb799796a0e8ba023f312920925031906609",
+      "post_merge_ci": "37325201617",
+      "review_basis": "Exact-head genuine TypeSafe Jev 3/3 hunks with zero findings/blocking findings (pin 31f89602797fb7bea007f8a480bf368bf564954e), Alibaba Open Code Review v1.12.9 exact-range delegation over 2 files with 2 reviewable and 0 excluded, exact-diff manual security review, Windows/Ubuntu Rust Node Governance, Supply chain audit, Release qualification, and Relay container, successful post-merge CI, and zero unresolved review threads. CodeRabbit skipped-review and cubic skipping notices evaluated as non-evidence noise with zero substantive findings.",
+      "unresolved_review_threads": 0,
+      "authority_boundary": "Verified actuation policy data and tests only. No coordinate fallback, password fill, process, network, MCP, lease, trust, or remote authority change."
     }
   }
 }
