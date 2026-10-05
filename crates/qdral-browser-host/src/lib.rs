@@ -6,6 +6,7 @@ mod discovery;
 mod error;
 mod host;
 mod navigation;
+mod observation;
 mod profile;
 mod proto;
 mod supervise;
@@ -19,6 +20,14 @@ pub use navigation::{
     mediate_popup, mediate_service_worker, mediate_subresource, mediate_worker,
     parse_navigation_url, permission_allowed, validate_navigation, validate_redirect, DnsResolver,
     NavigationTarget, RedirectChain, SubresourceKind, MAX_REDIRECT_HOPS, MAX_URL_BYTES,
+};
+pub use observation::{
+    cdp_command, check_freshness, devtools_open, evaluate_javascript, observe_snapshot,
+    read_credentials, redact_value, select_by_caller_selector, short_digest,
+    validate_identity_field, DocumentIdentity, InputNode, NodeIdentity, Observation,
+    ObservationGate, ObservationScope, ObservedNode, PageIdentity, MAX_CONCURRENT_OBSERVATIONS,
+    MAX_IDENTITY_BYTES, MAX_OBSERVATION_DEPTH, MAX_OBSERVATION_MS, MAX_OBSERVED_NODES,
+    MAX_SNAPSHOT_BYTES, MAX_VALUE_BYTES,
 };
 pub use profile::{adopt_profile, setup_ephemeral_profile, AutomationProfile};
 pub use proto::{
