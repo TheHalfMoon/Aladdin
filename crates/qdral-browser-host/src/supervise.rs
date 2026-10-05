@@ -380,12 +380,39 @@ mod platform {
     }
 
     pub(super) fn spawn_piped(
-        _binary: &Path,
-        _args: &[String],
-        _env: &CleanEnv,
+        binary: &Path,
+        args: &[String],
+        env: &CleanEnv,
     ) -> Result<(SupervisedChild, HostPipes), HostError> {
-        Err::<(SupervisedChild, HostPipes), HostError>(HostError::Platform(
-            "piped supervision needs Windows in this grain".into(),
+        // Off Windows the same private piped shape holds with
+        // process-handle supervision and drop-kill. The hard
+        // kill-on-close parent-death guarantee is Windows-only and is
+        // recorded as a platform boundary in the SG-000074 note.
+        let mut child = std::process::Command::new(binary)
+            .args(args)
+            .env_clear()
+            .envs(env.iter().cloned())
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::null())
+            .spawn()
+            .map_err(|_| HostError::Unavailable(UnavailableReason::LaunchFailed))?;
+        let stdin = child
+            .stdin
+            .take()
+            .ok_or_else(|| HostError::Platform("host stdin unavailable".into()))?;
+        let stdout = child
+            .stdout
+            .take()
+            .ok_or_else(|| HostError::Platform("host stdout unavailable".into()))?;
+        Ok((
+            SupervisedChild {
+                inner: PlatformChild { child },
+            },
+            HostPipes {
+                stdin,
+                stdout: std::io::BufReader::new(stdout),
+            },
         ))
     }
 }
