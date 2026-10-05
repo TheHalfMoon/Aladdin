@@ -1,0 +1,72 @@
+{
+  "id": "SG-000076",
+  "title": "Live DOM and accessibility observation",
+  "program": "QDRAL-P18",
+  "state": "GRAIN",
+  "risk": "high",
+  "created": "2026-10-05",
+  "base": "5bf404a069f732aa4a6a5167ea95ff28dbe99d75",
+  "dependencies": [
+    "SG-000075"
+  ],
+  "objective": "Bind live DOM and accessibility observation to exact workspace, browser profile, page, origin, page generation, document generation, and server-issued node identity, with bounded nodes, depth, bytes, time, and concurrency, password and secret redaction, and denial of arbitrary JavaScript, generic CDP, DevTools, credential storage reads, and caller-defined selectors as authority.",
+  "scope": {
+    "include": [
+      "server-issued typed node identity bound to workspace, profile, page, origin, page and document generations",
+      "bounded observation: node count, depth, bytes, execution time, concurrent observations",
+      "password and secret content redaction in observations, records, logs, and evidence",
+      "denial of arbitrary JavaScript, generic CDP, DevTools, and credential storage reads",
+      "denial of caller-defined selectors as authority",
+      "real integration tests for observation binding, bounds, and redaction"
+    ],
+    "exclude": [
+      "DOM actuation or mutation",
+      "downloads, uploads, or transfers",
+      "capture or input",
+      "new MCP tools, profiles, or remote authority",
+      "any caller-reachable evaluation or debugging surface"
+    ]
+  },
+  "authority_delta": {
+    "filesystem": "None beyond the SG-000074 dedicated ephemeral automation profile directory owned by Deskal.",
+    "process": "None beyond the SG-000074 Deskal-supervised low-authority browser child process family.",
+    "network": "None beyond SG-000075 governed navigation decisions for the isolated host.",
+    "browser": "Read-only observation only. No actuation, scripting, debugging, or credential access.",
+    "ui_input": "None.",
+    "secrets": "None. Password and secret content is redacted and never enters records, logs, or evidence.",
+    "approval": "None.",
+    "privileged": "None."
+  },
+  "invariants": [
+    "observations never carry secrets",
+    "stale page, document, or node identities fail closed",
+    "no evaluation or debugging surface ever appears"
+  ],
+  "acceptance": [
+    {
+      "id": "A1",
+      "claim": "Observations bind exact workspace, profile, page, origin, page generation, document generation, and server-issued node identity within explicit numeric bounds, proven by binding tests."
+    },
+    {
+      "id": "A2",
+      "claim": "Password and secret content is redacted everywhere, and arbitrary JavaScript, generic CDP, DevTools, credential reads, and caller-defined selectors as authority are denied."
+    },
+    {
+      "id": "A3",
+      "claim": "Exact-head CI, genuine TypeSafe Jev, Alibaba Open Code Review, manual review of excluded files, and zero unresolved review threads all pass."
+    }
+  ],
+  "successor_requirements": {
+    "sg_000077": "SG-000077 may activate only after SG-000076 closes canonically with bound observation as its base."
+  },
+  "review": {
+    "diffcipline": true,
+    "jev_semantic_review": true,
+    "alibaba_open_code_review": "required exact-range qualification where integrated",
+    "security_review": true,
+    "exact_head_ci": true,
+    "native_windows": true,
+    "release_artifact_qualification": true
+  },
+  "done_when": "Bound live DOM and accessibility observation exists with redacted secrets and no evaluation surface, proven by binding and adversarial tests."
+}
