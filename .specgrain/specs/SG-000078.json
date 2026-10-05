@@ -1,0 +1,70 @@
+{
+  "id": "SG-000078",
+  "title": "Bounded transfers",
+  "program": "QDRAL-P18",
+  "state": "GRAIN",
+  "risk": "high",
+  "created": "2026-10-05",
+  "base": "afe0eb799796a0e8ba023f312920925031906609",
+  "dependencies": [
+    "SG-000077"
+  ],
+  "objective": "Enforce bounded downloads into protected staging with validated destinations, type, size, digest, origin and redirect policy, approval, create-only writes, reparse-safe handling, and no automatic open, execute, or extraction; and bounded uploads from server-recorded sources only with exact digest, size, media type, file-input identity, workspace and trust binding, approval, and one-shot consumption with no arbitrary caller path. Prove traversal, UNC, device, ADS, reserved-name, junction, symlink, reparse, changed-source, duplicate, replay, and crash-cleanup behavior.",
+  "scope": {
+    "include": [
+      "download staging protection, destination validation, type validation, size bound, digest, origin and redirect policy",
+      "download approval, create-only destination, reparse-safe path handling, no automatic open, execute, or extraction",
+      "upload server-recorded source only with exact digest, size, media type, and file-input identity",
+      "upload workspace and trust binding, approval, one-shot consumption, no arbitrary caller path",
+      "traversal, UNC, device, ADS, reserved-name, junction, symlink, reparse, changed-source, duplicate, replay, and crash-cleanup tests"
+    ],
+    "exclude": [
+      "automatic file opening, execution, or extraction",
+      "arbitrary caller-selected transfer paths",
+      "capture or input leases",
+      "new MCP tools, profiles, or remote authority"
+    ]
+  },
+  "authority_delta": {
+    "filesystem": "Create-only writes inside the approved workspace transfer root owned by Deskal. No overwrite, rename, delete, or truncate.",
+    "process": "None beyond the SG-000074 Deskal-supervised low-authority browser child process family.",
+    "network": "None beyond SG-000075 governed navigation decisions for the isolated host.",
+    "browser": "Bounded transfer staging only. No execution, opening, or extraction of transferred content.",
+    "ui_input": "None.",
+    "secrets": "None. Transfer content digests only; no secret material in records.",
+    "approval": "None. Transfers consume existing fresh approvals; no approval minting.",
+    "privileged": "None."
+  },
+  "invariants": [
+    "transferred content is never executed, opened, or extracted",
+    "no caller path ever reaches the filesystem",
+    "changed or replayed sources fail closed"
+  ],
+  "acceptance": [
+    {
+      "id": "A1",
+      "claim": "Downloads enforce staging, destination, type, size, digest, origin policy, approval, create-only writes, and reparse safety with no automatic handling, proven by attack tests."
+    },
+    {
+      "id": "A2",
+      "claim": "Uploads enforce server-recorded sources with exact digest, size, media type, file-input identity, workspace and trust binding, approval, and one-shot consumption with no caller path."
+    },
+    {
+      "id": "A3",
+      "claim": "Exact-head CI, genuine TypeSafe Jev, Alibaba Open Code Review, manual review of excluded files, and zero unresolved review threads all pass."
+    }
+  ],
+  "successor_requirements": {
+    "sg_000079": "SG-000079 may activate only after SG-000078 closes canonically with bounded transfers as its base."
+  },
+  "review": {
+    "diffcipline": true,
+    "jev_semantic_review": true,
+    "alibaba_open_code_review": "required exact-range qualification where integrated",
+    "security_review": true,
+    "exact_head_ci": true,
+    "native_windows": true,
+    "release_artifact_qualification": true
+  },
+  "done_when": "Bounded downloads and uploads exist with staging, validation, approval, and one-shot semantics and no automatic handling, proven by attack tests."
+}
