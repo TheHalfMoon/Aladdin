@@ -2,7 +2,7 @@
   "id": "SG-000074",
   "title": "Live isolated browser host",
   "program": "QDRAL-P18",
-  "state": "GRAIN",
+  "state": "CLOSED",
   "risk": "high",
   "created": "2026-10-04",
   "base": "686b170badf9c7d2033ea448313f14189bb73db7",
@@ -69,5 +69,25 @@
     "native_windows": true,
     "release_artifact_qualification": true
   },
-  "done_when": "A live isolated browser host exists under Deskal supervision with no reachable capability and no fallback, proven by integration tests."
+  "done_when": "A live isolated browser host exists under Deskal supervision with no reachable capability and no fallback, proven by integration tests.",
+  "qualified_head": "56ba05ded1f08401813f059c523a02a5706b0a18",
+  "implementation_base": "6efd3e499f5cac9609893a62fc22325b026d3803",
+  "implementation_merge": "88f2bccc77853a887850c12f601032dc1a12635a",
+  "pre_merge_ci": "37304612218",
+  "pre_merge_review_gates": "37304608582",
+  "post_merge_ci": "37305537838",
+  "canonical_evidence": {
+    "implementation_pr": 196,
+    "implementation_base": "6efd3e499f5cac9609893a62fc22325b026d3803",
+    "qualified_head": "56ba05ded1f08401813f059c523a02a5706b0a18",
+    "pre_merge_ci": "37304612218",
+    "pre_merge_review_gates": "37304608582",
+    "merge_sha": "88f2bccc77853a887850c12f601032dc1a12635a",
+    "post_merge_ci": "37305537838",
+    "jev": "PASSED: genuine TypeSafe Jev exact-diff review covered 14/14 hunks with zero findings and zero blocking findings, pin 31f89602797fb7bea007f8a480bf368bf564954e",
+    "ocr": "PASSED: Alibaba Open Code Review v1.12.9 exact-range delegation over 14 changed files, 12 reviewable with delegated rules applied and 2 excluded by extension classification and manually reviewed (Cargo.lock dependency addition and SG-000074 security note)",
+    "security_review": "PASS on exact qualified head: Deskal-supervised host with private piped channel and hello/ping/shutdown vocabulary only; dedicated ephemeral profile with engine-bound marker and deterministic destroy; frozen argv with sandbox and no debugging, extension, or web-security weakening; scrubbed environment with no secret inheritance and no personal-profile resolution; discovery allowlist with version probe and Windows publisher verification; one live host bound with 32-process job limit, 64 KiB frames, bounded handshake and shutdown; parent and session invalidation killing authority; missing and unsupported engines return typed unavailable with no personal-browser fallback. No MCP tool, navigation, observation, actuation, transfer, capture, input, or remote authority. All closed SG-000001 through SG-000073 regressions pass in exact-head CI. Qodo billing-blocked, CodeRabbit skipped-review, and cubic skipping notices evaluated as non-evidence noise with zero substantive findings; zero unresolved threads.",
+    "unresolved_review_threads": 0,
+    "authority_boundary": "One Deskal-supervised low-authority host family with no reachable capability. No MCP tool, navigation, observation, actuation, transfer, capture, input, lease, or remote authority change."
+  }
 }

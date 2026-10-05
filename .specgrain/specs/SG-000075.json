@@ -1,0 +1,75 @@
+{
+  "id": "SG-000075",
+  "title": "Browser network mediation",
+  "program": "QDRAL-P18",
+  "state": "GRAIN",
+  "risk": "high",
+  "created": "2026-10-05",
+  "base": "88f2bccc77853a887850c12f601032dc1a12635a",
+  "dependencies": [
+    "SG-000074"
+  ],
+  "objective": "Implement governed navigation for the isolated Deskal browser host without exposing a generic proxy: public HTTPS only with DNS resolution and re-resolution, DNS rebinding denial, redirect widening denial with hop-by-hop revalidation, downgrade denial, loop and limit enforcement, loopback, link-local, private-network, and metadata-endpoint denial where policy requires, unsafe-scheme denial including file, javascript, browser-internal URLs, and external protocol handlers, and mediated iframe, popup, worker, service-worker, XHR/fetch, WebSocket, QUIC, DoH, WebRTC, download-trigger, and permission behavior. The browser never becomes a generic proxy.",
+  "scope": {
+    "include": [
+      "governed navigation policy for the isolated host: public HTTPS, DNS resolution and re-resolution, rebinding denial",
+      "redirect widening denial with hop-by-hop revalidation, downgrade denial, loop detection, redirect limits",
+      "loopback, link-local, and private-network denial where policy requires, cloud metadata endpoint denial",
+      "unsafe-scheme denial: file, javascript, browser-internal URLs, external protocol handlers",
+      "iframe, popup and new-window mediation",
+      "worker and service-worker mediation",
+      "XHR/fetch, WebSocket, QUIC, DoH, and WebRTC bypass denial",
+      "download-trigger mediation and browser permission mediation",
+      "proof that the host cannot become a generic proxy"
+    ],
+    "exclude": [
+      "DOM observation or actuation",
+      "downloads, uploads, or transfers beyond trigger mediation",
+      "capture or input",
+      "new MCP tools, profiles, or remote authority",
+      "arbitrary browser JavaScript or generic CDP"
+    ]
+  },
+  "authority_delta": {
+    "filesystem": "None beyond the SG-000074 dedicated ephemeral automation profile directory owned by Deskal.",
+    "process": "None beyond the SG-000074 Deskal-supervised low-authority browser child process family.",
+    "network": "Governed navigation decisions only for the isolated host; no generic socket, proxy, tunnel, or egress authority.",
+    "browser": "Governed navigation policy only. DOM, actuation, transfers, capture, and input remain unexposed until later grains qualify them shape by shape.",
+    "ui_input": "None.",
+    "secrets": "None. No credential or session material enters records, logs, or evidence.",
+    "approval": "None. Navigation remains subject to existing approval boundaries where applicable.",
+    "privileged": "None."
+  },
+  "invariants": [
+    "the host never becomes a generic proxy",
+    "private, loopback, and metadata targets stay unreachable",
+    "unsafe schemes never navigate or execute"
+  ],
+  "acceptance": [
+    {
+      "id": "A1",
+      "claim": "Governed navigation enforces public HTTPS, DNS re-resolution, rebinding denial, redirect widening denial, downgrade denial, loop and limit enforcement, and private and metadata denial, proven by adversarial tests."
+    },
+    {
+      "id": "A2",
+      "claim": "Unsafe schemes, external handlers, iframe and popup escape, worker and service-worker escape, XHR/fetch, WebSocket, QUIC, DoH, WebRTC bypass, download triggers, and permission prompts are denied or mediated with no proxy widening."
+    },
+    {
+      "id": "A3",
+      "claim": "Exact-head CI, genuine TypeSafe Jev, Alibaba Open Code Review, manual review of excluded files, and zero unresolved review threads all pass."
+    }
+  ],
+  "successor_requirements": {
+    "sg_000076": "SG-000076 may activate only after SG-000075 closes canonically with governed navigation as its base."
+  },
+  "review": {
+    "diffcipline": true,
+    "jev_semantic_review": true,
+    "alibaba_open_code_review": "required exact-range qualification where integrated",
+    "security_review": true,
+    "exact_head_ci": true,
+    "native_windows": true,
+    "release_artifact_qualification": true
+  },
+  "done_when": "Governed navigation exists for the isolated host with no generic proxy capability, proven by adversarial tests."
+}
