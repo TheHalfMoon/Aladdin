@@ -1,0 +1,70 @@
+{
+  "id": "SG-000080",
+  "title": "Exact-window capture",
+  "program": "QDRAL-P18",
+  "state": "GRAIN",
+  "risk": "high",
+  "created": "2026-10-05",
+  "base": "647fe93bf369da19c360f399534af8105e79ce64",
+  "dependencies": [
+    "SG-000079"
+  ],
+  "objective": "Implement Windows-first exact-window capture bound to process identity, HWND, window generation, session, geometry, DPI, policy revision, and capture generation, denying Deskal authority surfaces, CredentialUIBroker, UAC and consent, LogonUI, secure desktop, other sessions, stale and reused HWND, and whole-screen capture. CaptureLease is local-issued, exact-window scoped, time, frame, rate, byte, and pixel bounded, revocable, and never minted by model or remote callers.",
+  "scope": {
+    "include": [
+      "exact-window capture bound to process, HWND, window generation, session, geometry, DPI, policy revision, and capture generation",
+      "denial of authority surfaces, CredentialUIBroker, UAC, LogonUI, secure desktop, other sessions, stale HWND, and whole-screen capture",
+      "local-issued revocable CaptureLease with time, frame, rate, byte, and pixel bounds",
+      "invalidation on process and window replacement, lock and logoff, session change, RDP transition, policy change, and restart",
+      "stale, replay, drift, and adversarial tests"
+    ],
+    "exclude": [
+      "whole-screen and background capture streaming",
+      "credential and security-dialog automation",
+      "model or remote CaptureLease minting",
+      "new MCP tools, profiles, or remote authority"
+    ]
+  },
+  "authority_delta": {
+    "filesystem": "None beyond already-closed transfer staging.",
+    "process": "None beyond the SG-000074 Deskal-supervised low-authority browser child process family.",
+    "network": "None beyond SG-000075 governed navigation decisions for the isolated host.",
+    "browser": "Read-only exact-window capture policy only. No streaming and no protected-surface capture.",
+    "ui_input": "None.",
+    "secrets": "None. Capture payloads never enter logs and protected surfaces are never captured.",
+    "approval": "None. Capture consumes existing fresh approvals; no approval minting.",
+    "privileged": "None."
+  },
+  "invariants": [
+    "protected and foreign surfaces are never captured",
+    "stale and reused window handles fail closed",
+    "no lease survives invalidation"
+  ],
+  "acceptance": [
+    {
+      "id": "A1",
+      "claim": "Capture binds exact process, HWND, window generation, session, geometry, DPI, policy revision, and capture generation, proven by binding tests."
+    },
+    {
+      "id": "A2",
+      "claim": "Authority surfaces, secure desktop, foreign sessions, stale handles, and whole-screen capture are denied, and CaptureLease is local-issued, bounded, revocable, and non-model-mintable."
+    },
+    {
+      "id": "A3",
+      "claim": "Exact-head CI, genuine TypeSafe Jev, Alibaba Open Code Review, manual review of excluded files, and zero unresolved review threads all pass."
+    }
+  ],
+  "successor_requirements": {
+    "sg_000081": "SG-000081 may activate only after SG-000080 closes canonically with exact-window capture as its base."
+  },
+  "review": {
+    "diffcipline": true,
+    "jev_semantic_review": true,
+    "alibaba_open_code_review": "required exact-range qualification where integrated",
+    "security_review": true,
+    "exact_head_ci": true,
+    "native_windows": true,
+    "release_artifact_qualification": true
+  },
+  "done_when": "Exact-window capture exists with binding, denial, bounded revocable leases, and invalidation, proven by adversarial tests."
+}

@@ -2,7 +2,7 @@
   "id": "SG-000079",
   "title": "Browser tool exposure",
   "program": "QDRAL-P18",
-  "state": "GRAIN",
+  "state": "CLOSED",
   "risk": "high",
   "created": "2026-10-05",
   "base": "6b91566f4a205f20072437901869170b8cbe51c7",
@@ -68,5 +68,25 @@
     "native_windows": true,
     "release_artifact_qualification": true
   },
-  "done_when": "Qualified browser exposure exists under browser_structured with full parity and no widening, proven by parity tests."
+  "done_when": "Qualified browser exposure exists under browser_structured with full parity and no widening, proven by parity tests.",
+  "qualified_head": "bf0f1d9cfd6081b8bce6252898ed494a9c19b599",
+  "implementation_base": "46f0906c391631e427afa2dbdbe5eb72ffd0c339",
+  "implementation_merge": "647fe93bf369da19c360f399534af8105e79ce64",
+  "pre_merge_ci": "37337588183",
+  "pre_merge_review_gates": "37337588537",
+  "post_merge_ci": "37338749037",
+  "canonical_evidence": {
+    "implementation_pr": 206,
+    "implementation_base": "46f0906c391631e427afa2dbdbe5eb72ffd0c339",
+    "qualified_head": "bf0f1d9cfd6081b8bce6252898ed494a9c19b599",
+    "pre_merge_ci": "37337588183",
+    "pre_merge_review_gates": "37337588537",
+    "merge_sha": "647fe93bf369da19c360f399534af8105e79ce64",
+    "post_merge_ci": "37338749037",
+    "jev": "PASSED: genuine TypeSafe Jev exact-diff review covered 3/3 hunks with zero findings and zero blocking findings, pin 31f89602797fb7bea007f8a480bf368bf564954e",
+    "ocr": "PASSED: Alibaba Open Code Review v1.12.9 exact-range delegation over 2 changed files, 2 reviewable with delegated rules applied and 0 excluded",
+    "security_review": "PASS on exact qualified head: explicit browser_structured profile with exactly the twelve already-qualified closed-registry shapes as the maximum admissible set; empty live MCP set; denied evaluation, JavaScript, CDP, personal-profile, process, filesystem, and remote shapes; disabled remote mapping; failing-closed profile resolution. Four exactness, emptiness, non-widening, and denial tests. Preexisting core and desktop_structured profiles gain nothing. No process, network, MCP, lease, trust, or remote authority. All closed SG-000001 through SG-000078 regressions pass in exact-head CI. CodeRabbit skipped-review and cubic skipping notices evaluated as non-evidence noise with zero substantive findings; zero unresolved threads.",
+    "unresolved_review_threads": 0,
+    "authority_boundary": "Exposure contract metadata and tests only. No new capability, profile widening, process, network, MCP, lease, trust, or remote authority change."
+  }
 }
