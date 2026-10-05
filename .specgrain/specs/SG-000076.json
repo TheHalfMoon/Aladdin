@@ -2,7 +2,7 @@
   "id": "SG-000076",
   "title": "Live DOM and accessibility observation",
   "program": "QDRAL-P18",
-  "state": "GRAIN",
+  "state": "CLOSED",
   "risk": "high",
   "created": "2026-10-05",
   "base": "5bf404a069f732aa4a6a5167ea95ff28dbe99d75",
@@ -68,5 +68,25 @@
     "native_windows": true,
     "release_artifact_qualification": true
   },
-  "done_when": "Bound live DOM and accessibility observation exists with redacted secrets and no evaluation surface, proven by binding and adversarial tests."
+  "done_when": "Bound live DOM and accessibility observation exists with redacted secrets and no evaluation surface, proven by binding and adversarial tests.",
+  "qualified_head": "120cdefe3ef0374f1b921214d42237458c43fcbe",
+  "implementation_base": "50d5c91014b83cdb857a3650329a5ee013e2eb87",
+  "implementation_merge": "630c612992326046e5168f7987f109b9bb5a709f",
+  "pre_merge_ci": "37317902159",
+  "pre_merge_review_gates": "37317902384",
+  "post_merge_ci": "37319163305",
+  "canonical_evidence": {
+    "implementation_pr": 200,
+    "implementation_base": "50d5c91014b83cdb857a3650329a5ee013e2eb87",
+    "qualified_head": "120cdefe3ef0374f1b921214d42237458c43fcbe",
+    "pre_merge_ci": "37317902159",
+    "pre_merge_review_gates": "37317902384",
+    "merge_sha": "630c612992326046e5168f7987f109b9bb5a709f",
+    "post_merge_ci": "37319163305",
+    "jev": "PASSED: genuine TypeSafe Jev exact-diff review covered 3/3 hunks with zero findings and zero blocking findings, pin 31f89602797fb7bea007f8a480bf368bf564954e",
+    "ocr": "PASSED: Alibaba Open Code Review v1.12.9 exact-range delegation over 2 changed files, 2 reviewable with delegated rules applied and 0 excluded",
+    "security_review": "PASS on exact qualified head: read-only observation bound to workspace, profile, page, origin, and generations with server-issued node identity; hard ceilings for nodes, depth, bytes, time, and concurrency with truncation reporting; password and secret redaction with digests replacing raw values; freshness checks failing closed on stale generations; denied javascript, CDP, DevTools, credential-read, and caller-selector surfaces. Seven binding, bound, redaction, stale, concurrency, and denial tests. No actuation, scripting, debugging, credential access, process, network, MCP, approval, lease, trust, or remote authority. All closed SG-000001 through SG-000075 regressions pass in exact-head CI. CodeRabbit skipped-review and cubic skipping notices evaluated as non-evidence noise with zero substantive findings; zero unresolved threads.",
+    "unresolved_review_threads": 0,
+    "authority_boundary": "Read-only observation policy data and tests only. No actuation, scripting, debugging, credential access, process, network, MCP, approval, lease, trust, or remote authority change."
+  }
 }
