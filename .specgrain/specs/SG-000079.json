@@ -1,0 +1,72 @@
+{
+  "id": "SG-000079",
+  "title": "Browser tool exposure",
+  "program": "QDRAL-P18",
+  "state": "GRAIN",
+  "risk": "high",
+  "created": "2026-10-05",
+  "base": "6b91566f4a205f20072437901869170b8cbe51c7",
+  "dependencies": [
+    "SG-000078"
+  ],
+  "objective": "Expose only live-qualified browser shapes through the explicit browser_structured profile with no implicit widening of existing profiles, no remote mapping, and continued absence of browser_evaluate, arbitrary JavaScript, generic CDP, personal-profile control, raw process control, and generic filesystem authority. Tool discovery, documentation, profile tables, OAuth scope tables, and runtime implementation must agree mechanically.",
+  "scope": {
+    "include": [
+      "explicit browser_structured profile with only live-qualified shapes",
+      "mechanical agreement across tool discovery, documentation, profile tables, OAuth scope tables, and runtime",
+      "proof that no existing profile widens implicitly",
+      "proof that remote browser mapping remains disabled",
+      "parity tests for every exposed and denied shape"
+    ],
+    "exclude": [
+      "browser_evaluate and arbitrary JavaScript",
+      "generic CDP and DevTools",
+      "personal-profile control",
+      "raw browser process control",
+      "generic browser filesystem authority",
+      "remote browser mapping"
+    ]
+  },
+  "authority_delta": {
+    "filesystem": "None beyond already-closed transfer staging.",
+    "process": "None beyond the SG-000074 Deskal-supervised low-authority browser child process family.",
+    "network": "None beyond SG-000075 governed navigation decisions for the isolated host.",
+    "browser": "Exposure metadata only for already-qualified shapes. No new capability.",
+    "ui_input": "None.",
+    "secrets": "None.",
+    "approval": "None. Exposure changes no approval semantics.",
+    "privileged": "None."
+  },
+  "invariants": [
+    "discovery, docs, profiles, scopes, and runtime agree exactly",
+    "no profile widens without its own governed grain",
+    "remote mapping stays disabled"
+  ],
+  "acceptance": [
+    {
+      "id": "A1",
+      "claim": "Only live-qualified shapes appear under browser_structured with mechanical parity across discovery, docs, profiles, scopes, and runtime, proven by parity tests."
+    },
+    {
+      "id": "A2",
+      "claim": "Existing profiles do not widen, remote mapping stays disabled, and browser_evaluate, arbitrary JavaScript, generic CDP, personal-profile, process, and filesystem shapes stay absent."
+    },
+    {
+      "id": "A3",
+      "claim": "Exact-head CI, genuine TypeSafe Jev, Alibaba Open Code Review, manual review of excluded files, and zero unresolved review threads all pass."
+    }
+  ],
+  "successor_requirements": {
+    "sg_000080": "SG-000080 may activate only after SG-000079 closes canonically with qualified exposure as its base."
+  },
+  "review": {
+    "diffcipline": true,
+    "jev_semantic_review": true,
+    "alibaba_open_code_review": "required exact-range qualification where integrated",
+    "security_review": true,
+    "exact_head_ci": true,
+    "native_windows": true,
+    "release_artifact_qualification": true
+  },
+  "done_when": "Qualified browser exposure exists under browser_structured with full parity and no widening, proven by parity tests."
+}
