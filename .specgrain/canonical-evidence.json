@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "snapshot_base": "88f2bccc77853a887850c12f601032dc1a12635a",
+  "snapshot_base": "5bf404a069f732aa4a6a5167ea95ff28dbe99d75",
   "state_semantics": {
     "GRAIN": "Authorized or active work packet whose acceptance is not yet canonically proven.",
     "PROVEN": "Acceptance and required qualification are proven, but canonical closeout/governance is not yet complete.",
@@ -898,6 +898,18 @@
       "review_basis": "Exact-head genuine TypeSafe Jev 14/14 hunks with zero findings/blocking findings (pin 31f89602797fb7bea007f8a480bf368bf564954e), Alibaba Open Code Review v1.12.9 exact-range delegation over 14 files with 12 reviewable and 2 excluded files manually reviewed, exact-diff manual security review, Windows/Ubuntu Rust Node Governance, Supply chain audit, Release qualification, and Relay container, successful post-merge CI, and zero unresolved review threads. Qodo billing-blocked, CodeRabbit skipped-review, and cubic skipping notices evaluated as non-evidence noise with zero substantive findings.",
       "unresolved_review_threads": 0,
       "authority_boundary": "One Deskal-supervised low-authority host family with no reachable capability. No MCP tool, navigation, observation, actuation, transfer, capture, input, lease, or remote authority change."
+    },
+    "SG-000075": {
+      "implementation_pr": 198,
+      "implementation_base": "110a176843ad9969d87b61d879b06e1de0d64d6b",
+      "qualified_head": "08acb09e89405f3706c72804f3a482fb8434816e",
+      "pre_merge_ci": "37310405838",
+      "pre_merge_review_gates": "37310405882",
+      "merge_sha": "5bf404a069f732aa4a6a5167ea95ff28dbe99d75",
+      "post_merge_ci": "37311864614",
+      "review_basis": "Exact-head genuine TypeSafe Jev 3/3 hunks with zero findings/blocking findings (pin 31f89602797fb7bea007f8a480bf368bf564954e), Alibaba Open Code Review v1.12.9 exact-range delegation over 2 files with 2 reviewable and 0 excluded, exact-diff manual security review, Windows/Ubuntu Rust Node Governance, Supply chain audit, Release qualification, and Relay container, successful post-merge CI, and zero unresolved review threads. CodeRabbit skipped-review and cubic skipping notices evaluated as non-evidence noise with zero substantive findings.",
+      "unresolved_review_threads": 0,
+      "authority_boundary": "Governed navigation policy data and adversarial tests only. No browser launch, donor dependency, tool, profile, lease, or authority change beyond the SG-000074 host family."
     }
   }
 }

@@ -2,7 +2,7 @@
   "id": "SG-000075",
   "title": "Browser network mediation",
   "program": "QDRAL-P18",
-  "state": "GRAIN",
+  "state": "CLOSED",
   "risk": "high",
   "created": "2026-10-05",
   "base": "88f2bccc77853a887850c12f601032dc1a12635a",
@@ -71,5 +71,25 @@
     "native_windows": true,
     "release_artifact_qualification": true
   },
-  "done_when": "Governed navigation exists for the isolated host with no generic proxy capability, proven by adversarial tests."
+  "done_when": "Governed navigation exists for the isolated host with no generic proxy capability, proven by adversarial tests.",
+  "qualified_head": "08acb09e89405f3706c72804f3a482fb8434816e",
+  "implementation_base": "110a176843ad9969d87b61d879b06e1de0d64d6b",
+  "implementation_merge": "5bf404a069f732aa4a6a5167ea95ff28dbe99d75",
+  "pre_merge_ci": "37310405838",
+  "pre_merge_review_gates": "37310405882",
+  "post_merge_ci": "37311864614",
+  "canonical_evidence": {
+    "implementation_pr": 198,
+    "implementation_base": "110a176843ad9969d87b61d879b06e1de0d64d6b",
+    "qualified_head": "08acb09e89405f3706c72804f3a482fb8434816e",
+    "pre_merge_ci": "37310405838",
+    "pre_merge_review_gates": "37310405882",
+    "merge_sha": "5bf404a069f732aa4a6a5167ea95ff28dbe99d75",
+    "post_merge_ci": "37311864614",
+    "jev": "PASSED: genuine TypeSafe Jev exact-diff review covered 3/3 hunks with zero findings and zero blocking findings, pin 31f89602797fb7bea007f8a480bf368bf564954e",
+    "ocr": "PASSED: Alibaba Open Code Review v1.12.9 exact-range delegation over 2 changed files, 2 reviewable with delegated rules applied and 0 excluded",
+    "security_review": "PASS on exact qualified head: pure navigation policy with no I/O beyond caller-provided DNS resolver; public HTTPS-only parsing with bounded host and port 443; rebinding consistency checks; exact-origin redirect matching with 5-hop limit and loop detection; loopback, link-local, private, and metadata denial; unsafe-scheme and external-handler denial; same-origin frame, popup, worker, and service-worker mediation; XHR and fetch same-origin mediation with WebSocket, QUIC, DoH, and WebRTC bypass denial; download-trigger and permission denial. Nine adversarial unit tests cover happy path and every denial class. No process, network, MCP, approval, lease, trust, or remote authority. All closed SG-000001 through SG-000074 regressions pass in exact-head CI. CodeRabbit skipped-review and cubic skipping notices evaluated as non-evidence noise with zero substantive findings; zero unresolved threads.",
+    "unresolved_review_threads": 0,
+    "authority_boundary": "Governed navigation policy data, exact-origin tests, and documentation surface only. No browser launch, donor dependency, tool, profile, lease, or authority change beyond the SG-000074 host family."
+  }
 }
