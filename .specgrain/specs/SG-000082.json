@@ -2,7 +2,7 @@
   "id": "SG-000082",
   "title": "Governed coordinate fallback",
   "program": "QDRAL-P18",
-  "state": "GRAIN",
+  "state": "CLOSED",
   "risk": "high",
   "created": "2026-10-05",
   "base": "0a4a8c2822a1583f4a9c7b0c4425b58616a49974",
@@ -66,5 +66,25 @@
     "native_windows": true,
     "release_artifact_qualification": true
   },
-  "done_when": "Governed coordinate fallback exists with binding, leases, interruption, and bounded verbs, proven by adversarial tests."
+  "done_when": "Governed coordinate fallback exists with binding, leases, interruption, and bounded verbs, proven by adversarial tests.",
+  "qualified_head": "e4f77f3a55323f02a8a08626c721223f0f5cca82",
+  "implementation_base": "6ab3ab0a8efb2baab5f556d380a13b10b6c5bfc6",
+  "implementation_merge": "4da740635af525d1c54c18527664c323ab018fe8",
+  "pre_merge_ci": "37356402615",
+  "pre_merge_review_gates": "37356402726",
+  "post_merge_ci": "37357672099",
+  "canonical_evidence": {
+    "implementation_pr": 212,
+    "implementation_base": "6ab3ab0a8efb2baab5f556d380a13b10b6c5bfc6",
+    "qualified_head": "e4f77f3a55323f02a8a08626c721223f0f5cca82",
+    "pre_merge_ci": "37356402615",
+    "pre_merge_review_gates": "37356402726",
+    "merge_sha": "4da740635af525d1c54c18527664c323ab018fe8",
+    "post_merge_ci": "37357672099",
+    "jev": "PASSED: genuine TypeSafe Jev exact-diff review covered 3/3 hunks with zero findings and zero blocking findings, pin 31f89602797fb7bea007f8a480bf368bf564954e",
+    "ocr": "PASSED: Alibaba Open Code Review v1.12.9 exact-range delegation over 2 changed files, 2 reviewable with delegated rules applied and 0 excluded",
+    "security_review": "PASS on exact qualified head: proposals bound to capture generation, window, geometry, DPI, action, and coordinates with inside-window and verb-bound validation; fresh single-use InputLease with TTL and interruption epoch binding; one exact action per execution; human interruption and revocation; five bounded verbs only; denied hotkeys, drag, streams, and clipboard typing. Four binding, drift, expiry, interruption, and denial tests. No automatic fallback, standing sessions, MCP, lease beyond the input lease, trust, or remote authority. All closed SG-000001 through SG-000081 regressions pass in exact-head CI. CodeRabbit skipped-review and cubic skipping notices evaluated as non-evidence noise with zero substantive findings; zero unresolved threads.",
+    "unresolved_review_threads": 0,
+    "authority_boundary": "Governed coordinate policy data and tests only. No automatic fallback, standing sessions, widened verbs, MCP, trust, or remote authority change beyond the single-use input lease."
+  }
 }

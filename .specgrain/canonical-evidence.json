@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "snapshot_base": "0a4a8c2822a1583f4a9c7b0c4425b58616a49974",
+  "snapshot_base": "4da740635af525d1c54c18527664c323ab018fe8",
   "state_semantics": {
     "GRAIN": "Authorized or active work packet whose acceptance is not yet canonically proven.",
     "PROVEN": "Acceptance and required qualification are proven, but canonical closeout/governance is not yet complete.",
@@ -982,6 +982,18 @@
       "review_basis": "Exact-head genuine TypeSafe Jev 3/3 hunks with zero findings/blocking findings (pin 31f89602797fb7bea007f8a480bf368bf564954e), Alibaba Open Code Review v1.12.9 exact-range delegation over 2 files with 2 reviewable and 0 excluded, exact-diff manual security review, Windows/Ubuntu Rust Node Governance, Supply chain audit, Release qualification, and Relay container, successful post-merge CI, and zero unresolved review threads. CodeRabbit skipped-review and cubic skipping notices evaluated as non-evidence noise with zero substantive findings.",
       "unresolved_review_threads": 0,
       "authority_boundary": "Structured UIA policy data and tests only. No synthetic input, coordinate, MCP, lease, trust, or remote authority change."
+    },
+    "SG-000082": {
+      "implementation_pr": 212,
+      "implementation_base": "6ab3ab0a8efb2baab5f556d380a13b10b6c5bfc6",
+      "qualified_head": "e4f77f3a55323f02a8a08626c721223f0f5cca82",
+      "pre_merge_ci": "37356402615",
+      "pre_merge_review_gates": "37356402726",
+      "merge_sha": "4da740635af525d1c54c18527664c323ab018fe8",
+      "post_merge_ci": "37357672099",
+      "review_basis": "Exact-head genuine TypeSafe Jev 3/3 hunks with zero findings/blocking findings (pin 31f89602797fb7bea007f8a480bf368bf564954e), Alibaba Open Code Review v1.12.9 exact-range delegation over 2 files with 2 reviewable and 0 excluded, exact-diff manual security review, Windows/Ubuntu Rust Node Governance, Supply chain audit, Release qualification, and Relay container, successful post-merge CI, and zero unresolved review threads. CodeRabbit skipped-review and cubic skipping notices evaluated as non-evidence noise with zero substantive findings.",
+      "unresolved_review_threads": 0,
+      "authority_boundary": "Governed coordinate policy data and tests only. No automatic fallback, standing sessions, widened verbs, MCP, trust, or remote authority change beyond the single-use input lease."
     }
   }
 }
