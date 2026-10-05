@@ -199,11 +199,19 @@ test("authorization metadata advertises only what the relay implements", () => {
   assert.equal(metadata.authorization_response_iss_parameter_supported, true);
 });
 
-test("exactly one grain is active and no later grain is activated ahead of it", () => {
+test("at most one grain is active and no later grain is activated ahead of it", () => {
   const dir = join(repo, ".specgrain", "specs");
   const specs = readdirSync(dir).filter((name) => /^SG-\d{6}\.json$/.test(name)).sort();
   const active = specs.filter((name) => (JSON.parse(readFileSync(join(dir, name), "utf8")) as { state: string }).state !== "CLOSED");
-  assert.equal(active.length, 1, `active grains: ${active.join(", ")}`);
-  assert.equal(specs[specs.length - 1], active[0], "no grain beyond the active grain exists");
-  assert.ok((active[0] ?? "") >= "SG-000067.json", "SG-000067 or its lawful successor is active");
+  assert.ok(active.length <= 1, `parallel active grains: ${active.join(", ")}`);
+  if (active.length === 1) {
+    assert.equal(specs[specs.length - 1], active[0], "no grain beyond the active grain exists");
+    assert.ok((active[0] ?? "") >= "SG-000067.json", "SG-000067 or its lawful successor is active");
+    return;
+  }
+  // Zero active grains is lawful only at a recorded program exit: the
+  // canonical frontier must state the exit and name no active grain.
+  const current = readFileSync(join(repo, "docs", "canonical", "CURRENT.md"), "utf8");
+  assert.ok(current.includes("QDRAL-P18 is exited"), "zero active grains requires a recorded program exit");
+  assert.ok(current.includes("No grain is active"), "zero active grains requires an explicit no-active-grain record");
 });
