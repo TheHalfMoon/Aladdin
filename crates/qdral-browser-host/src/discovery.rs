@@ -432,7 +432,9 @@ mod tests {
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
         fs::write(dir.join("firefox.exe"), b"fake").unwrap();
-        let search = SearchConfig::with_extra_roots(vec![dir.clone()]);
+        // Isolated scope: the machine may ship a real engine, which must
+        // not satisfy this test either way.
+        let search = SearchConfig::isolated(vec![dir.clone()]);
         assert!(matches!(
             discover_engine(&search),
             Err(HostError::Unavailable(
