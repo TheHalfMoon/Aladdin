@@ -14,6 +14,7 @@ mod observation;
 mod profile;
 mod proposal;
 mod proto;
+mod remote_leases;
 mod supervise;
 mod transfers;
 mod uia;
@@ -67,6 +68,12 @@ pub use proposal::{
 pub use proto::{
     decode_frame, encode_frame, write_frame, HostReply, HostRequest, MAX_FRAME_BYTES,
     PROTOCOL_GENERATION,
+};
+pub use remote_leases::{
+    background_stream, check_lease, delayed_execution, issue_local, issue_remote, offline_queue,
+    remote_execution_allowed, renew_silently, resurrect, self_approve, validate_route, widen_lease,
+    LeaseScope, RemoteLease, LEASE_CAPABILITIES, MAX_LEASE_CAPABILITIES, MAX_LEASE_FIELD_BYTES,
+    MAX_LEASE_TARGETS, MAX_REMOTE_LEASE_MS,
 };
 pub use supervise::{
     spawn_engine_null, spawn_host_piped, HostPipes, SupervisedChild, JOB_ACTIVE_PROCESS_LIMIT,
