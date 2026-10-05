@@ -1,0 +1,69 @@
+{
+  "id": "SG-000084",
+  "title": "Remote computer-use leases",
+  "program": "QDRAL-P18",
+  "state": "GRAIN",
+  "risk": "high",
+  "created": "2026-10-05",
+  "base": "a06c8cffb42f5403ad102e7577b65accfe20022c",
+  "dependencies": [
+    "SG-000083"
+  ],
+  "objective": "Keep remote computer use disabled until lease isolation is proven: RemoteComputerUseLease binds provider, principal, exact device, route, session and route epoch, workspace, allowed capability set, allowed targets and windows, expiry, and policy revision, with local issuance and revocation only. Remote callers cannot create, widen, silently renew, self-approve, or resurrect authority. No background screen stream, offline mutation queue, surprise delayed execution, or cross-provider, cross-principal, cross-device, or cross-session reuse. Compromised-relay route confusion fails closed locally.",
+  "scope": {
+    "include": [
+      "lease binding to provider, principal, device, route, epochs, workspace, capabilities, targets, expiry, and policy revision",
+      "local-only issuance and revocation with no remote creation, widening, renewal, self-approval, or resurrection",
+      "denial of background streams, offline queues, delayed execution, and cross-scope reuse",
+      "compromised-relay route-confusion tests with local fail-closed behavior"
+    ],
+    "exclude": [
+      "remote approval minting",
+      "background screen streaming",
+      "offline mutation queues",
+      "new MCP tools, profiles, or remote authority"
+    ]
+  },
+  "authority_delta": {
+    "filesystem": "None beyond already-closed transfer staging.",
+    "process": "None beyond the SG-000074 Deskal-supervised low-authority browser child process family.",
+    "network": "None beyond SG-000075 governed navigation decisions for the isolated host.",
+    "browser": "None. Remote leases grant no browser capability in this grain.",
+    "ui_input": "None. No remote input authority in this grain.",
+    "secrets": "None. Lease records carry bindings only, never secrets.",
+    "approval": "None. Remote callers cannot mint local approvals.",
+    "privileged": "None."
+  },
+  "invariants": [
+    "remote use stays disabled until isolation is proven",
+    "leases never cross provider, principal, device, or session bounds",
+    "compromised relays fail closed locally"
+  ],
+  "acceptance": [
+    {
+      "id": "A1",
+      "claim": "Leases bind all required fields with local-only issuance and revocation, proven by binding tests."
+    },
+    {
+      "id": "A2",
+      "claim": "Remote creation, widening, renewal, self-approval, resurrection, streams, queues, delayed execution, and cross-scope reuse are denied, with compromised-relay confusion failing closed."
+    },
+    {
+      "id": "A3",
+      "claim": "Exact-head CI, genuine TypeSafe Jev, Alibaba Open Code Review, manual review of excluded files, and zero unresolved review threads all pass."
+    }
+  ],
+  "successor_requirements": {
+    "sg_000085": "SG-000085 may activate only after SG-000084 closes canonically with proven lease isolation as its base."
+  },
+  "review": {
+    "diffcipline": true,
+    "jev_semantic_review": true,
+    "alibaba_open_code_review": "required exact-range qualification where integrated",
+    "security_review": true,
+    "exact_head_ci": true,
+    "native_windows": true,
+    "release_artifact_qualification": true
+  },
+  "done_when": "Remote lease isolation exists with binding, local control, denial, and fail-closed relay behavior, proven by adversarial tests."
+}

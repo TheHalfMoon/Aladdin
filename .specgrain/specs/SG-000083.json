@@ -2,7 +2,7 @@
   "id": "SG-000083",
   "title": "Computer action IR and model adapters",
   "program": "QDRAL-P18",
-  "state": "GRAIN",
+  "state": "CLOSED",
   "risk": "high",
   "created": "2026-10-05",
   "base": "4da740635af525d1c54c18527664c323ab018fe8",
@@ -66,5 +66,25 @@
     "native_windows": true,
     "release_artifact_qualification": true
   },
-  "done_when": "The proposal IR and UI-TARS adapter exist with syntax-only normalization and closed failure on hostile inputs, proven by adversarial tests."
+  "done_when": "The proposal IR and UI-TARS adapter exist with syntax-only normalization and closed failure on hostile inputs, proven by adversarial tests.",
+  "qualified_head": "36d10839cdfc11e1b300fe17b9c705ef240de884",
+  "implementation_base": "fd8decd3d81ab4c399c09074340f87a58a9b2f2b",
+  "implementation_merge": "a06c8cffb42f5403ad102e7577b65accfe20022c",
+  "pre_merge_ci": "37363441131",
+  "pre_merge_review_gates": "37363436926",
+  "post_merge_ci": "37365153779",
+  "canonical_evidence": {
+    "implementation_pr": 214,
+    "implementation_base": "fd8decd3d81ab4c399c09074340f87a58a9b2f2b",
+    "qualified_head": "36d10839cdfc11e1b300fe17b9c705ef240de884",
+    "pre_merge_ci": "37363441131",
+    "pre_merge_review_gates": "37363436926",
+    "merge_sha": "a06c8cffb42f5403ad102e7577b65accfe20022c",
+    "post_merge_ci": "37365153779",
+    "jev": "PASSED: genuine TypeSafe Jev exact-diff review covered 3/3 hunks with zero findings and zero blocking findings, pin 31f89602797fb7bea007f8a480bf368bf564954e",
+    "ocr": "PASSED: Alibaba Open Code Review v1.12.9 exact-range delegation over 2 changed files, 2 reviewable with delegated rules applied and 0 excluded",
+    "security_review": "PASS on exact qualified head: strict canonical IR over sixteen frozen verbs, twelve target fields, four envelope fields, and ten forbidden fields denied at every level; size, finite-number, overflow, unknown-field, duplicate-key, and truncation denial; provider output-record adapter normalizing five action shapes with non-finite, range, text, and smuggling denial; denied direct-backend invocation and target minting; neutral provider terminology preserving the closed no-donor-runtime regression. Six exact-set, malformed, smuggling, non-finite, adapter, and differential tests. No donor import, authority grant, minting, backend path, process, network, MCP, lease, trust, or remote authority. All closed SG-000001 through SG-000082 regressions pass in exact-head CI. CodeRabbit skipped-review and cubic skipping notices evaluated as non-evidence noise with zero substantive findings; zero unresolved threads.",
+    "unresolved_review_threads": 0,
+    "authority_boundary": "Proposal IR and adapter syntax data and tests only. No donor import, authority grant, minting, backend path, process, network, MCP, lease, trust, or remote authority change."
+  }
 }
