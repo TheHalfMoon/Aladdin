@@ -1,0 +1,70 @@
+{
+  "id": "SG-000083",
+  "title": "Computer action IR and model adapters",
+  "program": "QDRAL-P18",
+  "state": "GRAIN",
+  "risk": "high",
+  "created": "2026-10-05",
+  "base": "4da740635af525d1c54c18527664c323ab018fe8",
+  "dependencies": [
+    "SG-000082"
+  ],
+  "objective": "Define the provider-neutral ComputerActionProposal carrying untrusted proposal data only, with adapters normalizing provider syntax only and never granting authority. Implement the UI-TARS adapter behind the canonical IR only. Prove malformed, oversized, truncated, ambiguous, unknown, authority-smuggling, NaN, infinite, overflow, forged-identity, and direct-backend inputs fail closed, with fuzz, property, and differential tests where valuable.",
+  "scope": {
+    "include": [
+      "canonical ComputerActionProposal vocabulary as untrusted proposal data only",
+      "adapter syntax normalization with no authority grant",
+      "UI-TARS adapter behind the canonical IR only",
+      "malformed, oversized, truncated, ambiguous, unknown, and authority-smuggling input denial",
+      "NaN, infinity, overflow, forged-identity, and direct-backend denial",
+      "fuzz, property, and differential tests where valuable"
+    ],
+    "exclude": [
+      "model or adapter authority minting",
+      "direct backend invocation paths",
+      "new MCP tools, profiles, or remote authority"
+    ]
+  },
+  "authority_delta": {
+    "filesystem": "None beyond already-closed transfer staging.",
+    "process": "None beyond the SG-000074 Deskal-supervised low-authority browser child process family.",
+    "network": "None beyond SG-000075 governed navigation decisions for the isolated host.",
+    "browser": "Proposal syntax only. No execution authority in adapters.",
+    "ui_input": "None. Proposals carry no execution right.",
+    "secrets": "None. Proposal parsing never retains secrets.",
+    "approval": "None. Proposals cannot mint or satisfy approvals.",
+    "privileged": "None."
+  },
+  "invariants": [
+    "adapters never grant authority",
+    "model output stays untrusted input",
+    "unknown and forged inputs fail closed"
+  ],
+  "acceptance": [
+    {
+      "id": "A1",
+      "claim": "The canonical IR carries proposal data only with no executable authority, proven by shape tests."
+    },
+    {
+      "id": "A2",
+      "claim": "The UI-TARS adapter normalizes syntax behind the IR and all malformed, smuggling, non-finite, forged, and direct-backend inputs fail closed."
+    },
+    {
+      "id": "A3",
+      "claim": "Exact-head CI, genuine TypeSafe Jev, Alibaba Open Code Review, manual review of excluded files, and zero unresolved review threads all pass."
+    }
+  ],
+  "successor_requirements": {
+    "sg_000084": "SG-000084 may activate only after SG-000083 closes canonically with the proposal IR as its base."
+  },
+  "review": {
+    "diffcipline": true,
+    "jev_semantic_review": true,
+    "alibaba_open_code_review": "required exact-range qualification where integrated",
+    "security_review": true,
+    "exact_head_ci": true,
+    "native_windows": true,
+    "release_artifact_qualification": true
+  },
+  "done_when": "The proposal IR and UI-TARS adapter exist with syntax-only normalization and closed failure on hostile inputs, proven by adversarial tests."
+}
