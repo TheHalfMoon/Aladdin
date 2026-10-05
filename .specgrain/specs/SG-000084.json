@@ -2,7 +2,7 @@
   "id": "SG-000084",
   "title": "Remote computer-use leases",
   "program": "QDRAL-P18",
-  "state": "GRAIN",
+  "state": "CLOSED",
   "risk": "high",
   "created": "2026-10-05",
   "base": "a06c8cffb42f5403ad102e7577b65accfe20022c",
@@ -65,5 +65,25 @@
     "native_windows": true,
     "release_artifact_qualification": true
   },
-  "done_when": "Remote lease isolation exists with binding, local control, denial, and fail-closed relay behavior, proven by adversarial tests."
+  "done_when": "Remote lease isolation exists with binding, local control, denial, and fail-closed relay behavior, proven by adversarial tests.",
+  "qualified_head": "6bdae2935d227bbcef9240ba69977434c60ec9b3",
+  "implementation_base": "e19a5eb478e26165c2e949e1ddeab04a62111d94",
+  "implementation_merge": "1c21cad5e7d1d652d61bc73c1db4bedc577fe771",
+  "pre_merge_ci": "37379145470",
+  "pre_merge_review_gates": "37379144400",
+  "post_merge_ci": "37380133805",
+  "canonical_evidence": {
+    "implementation_pr": 216,
+    "implementation_base": "e19a5eb478e26165c2e949e1ddeab04a62111d94",
+    "qualified_head": "6bdae2935d227bbcef9240ba69977434c60ec9b3",
+    "pre_merge_ci": "37379145470",
+    "pre_merge_review_gates": "37379144400",
+    "merge_sha": "1c21cad5e7d1d652d61bc73c1db4bedc577fe771",
+    "post_merge_ci": "37380133805",
+    "jev": "PASSED: genuine TypeSafe Jev exact-diff review covered 3/3 hunks with zero findings and zero blocking findings, pin 31f89602797fb7bea007f8a480bf368bf564954e",
+    "ocr": "PASSED: Alibaba Open Code Review v1.12.9 exact-range delegation over 2 changed files, 2 reviewable with delegated rules applied and 0 excluded",
+    "security_review": "PASS on exact qualified head: RemoteComputerUseLease binds provider, principal, exact device, route, session and route epochs, workspace, closed capability set, bounded targets, expiry inside a 15-minute ceiling, and policy revision, with local-only issuance and revocation; remote issuance, widening, silent renewal, self-approval, resurrection, background screen streams, offline mutation queues, and delayed execution all return typed denial; cross-provider, cross-principal, cross-device, cross-session, route-epoch, workspace, and policy drift fail closed; compromised-relay route confusion fails closed locally; remote execution stays disabled. Four binding, drift, denial, and relay-confusion tests. No new MCP tools, profiles, network, process, secret, approval, or remote authority.",
+    "unresolved_review_threads": 0,
+    "authority_boundary": "Lease binding data and denial tests only. No remote execution, no new MCP surface, no approval minting, no streaming, no queues, no authority widening of any kind."
+  }
 }
