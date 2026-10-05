@@ -2,7 +2,7 @@
   "id": "SG-000085",
   "title": "P18 adversarial, security, privacy, and performance qualification",
   "program": "QDRAL-P18",
-  "state": "GRAIN",
+  "state": "CLOSED",
   "risk": "high",
   "created": "2026-10-06",
   "base": "1c21cad5e7d1d652d61bc73c1db4bedc577fe771",
@@ -67,5 +67,25 @@
     "native_windows": true,
     "release_artifact_qualification": true
   },
-  "done_when": "The P18 surface is fully qualified adversarially with a complete evidence matrix and no exposed unverified capability."
+  "done_when": "The P18 surface is fully qualified adversarially with a complete evidence matrix and no exposed unverified capability.",
+  "qualified_head": "83cfd8ae1ae2413f3ce3bb52719f864577d39e22",
+  "implementation_base": "b6fd6a0125d92d3d46eeea692756b2f9e2679757",
+  "implementation_merge": "52224b6c2a93e6d40b1ce3974d92c3636ff38572",
+  "pre_merge_ci": "37384784568",
+  "pre_merge_review_gates": "37384784626",
+  "post_merge_ci": "37385568363",
+  "canonical_evidence": {
+    "implementation_pr": 218,
+    "implementation_base": "b6fd6a0125d92d3d46eeea692756b2f9e2679757",
+    "qualified_head": "83cfd8ae1ae2413f3ce3bb52719f864577d39e22",
+    "pre_merge_ci": "37384784568",
+    "pre_merge_review_gates": "37384784626",
+    "merge_sha": "52224b6c2a93e6d40b1ce3974d92c3636ff38572",
+    "post_merge_ci": "37385568363",
+    "jev": "PASSED: genuine TypeSafe Jev exact-diff review covered 2/2 hunks with zero findings and zero blocking findings, pin 31f89602797fb7bea007f8a480bf368bf564954e",
+    "ocr": "PASSED: Alibaba Open Code Review v1.12.9 exact-range delegation over 2 changed files, 1 reviewable with delegated rules applied and 1 excluded (docs/canonical/P18_QUALIFICATION.md, unsupported extension, manually reviewed)",
+    "security_review": "PASS on exact qualified head: 22 integration tests lock every published server-owned ceiling and prove boundary enforcement, secret-free errors with redaction, exact failure classification with no mutation retry, cross-surface replay and drift denial, closed denial registries, and static source tripwires against shell, script, and remote-process surfaces. Traceability matrix in docs/canonical/P18_QUALIFICATION.md. No production code and no authority change.",
+    "unresolved_review_threads": 0,
+    "authority_boundary": "Tests and documentation only. No production code, no MCP surface, no authority widening of any kind."
+  }
 }
