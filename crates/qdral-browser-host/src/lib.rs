@@ -4,6 +4,7 @@
 mod actuation;
 mod argv;
 mod capture;
+mod coordinates;
 mod discovery;
 mod error;
 mod exposure;
@@ -27,6 +28,11 @@ pub use capture::{
     CaptureGeometry, CaptureLease, CaptureProcess, CaptureScope, CaptureTarget, CaptureWindow,
     InvalidationEvent, MAX_CAPTURE_BYTES, MAX_CAPTURE_DPI, MAX_CAPTURE_FRAMES, MAX_CAPTURE_HEIGHT,
     MAX_CAPTURE_LEASE_MS, MAX_CAPTURE_RATE_PER_MINUTE, MAX_CAPTURE_WIDTH, MIN_CAPTURE_DPI,
+};
+pub use coordinates::{
+    arbitrary_drag, clipboard_typing, execute_one, hotkey_press, input_stream, proposal_digest,
+    validate_proposal, CoordinateAction, CoordinateProposal, InputLease, InterruptionTracker,
+    INPUT_LEASE_TTL_MS, MAX_INPUT_TEXT_CHARS, MAX_SCROLL_DELTA,
 };
 pub use discovery::{discover_engine, Engine, EngineKind, SearchConfig};
 pub use error::{HostError, UnavailableReason};
