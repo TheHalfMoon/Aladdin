@@ -1,6 +1,7 @@
 //! SG-000074 public surface: discovery, profile, argv, protocol,
 //! supervision, and errors. No MCP tools, no network, no execution.
 
+mod actuation;
 mod argv;
 mod discovery;
 mod error;
@@ -11,6 +12,11 @@ mod profile;
 mod proto;
 mod supervise;
 
+pub use actuation::{
+    coordinate_fallback, dispatch, retry_after_dispatch, role_supports_action, target_digest,
+    verify_postcondition, verify_target, ActuationTarget, ApprovalToken, DispatchOutcome,
+    SupportedAction,
+};
 pub use argv::{assert_argv_clean, build_argv};
 pub use discovery::{discover_engine, Engine, EngineKind, SearchConfig};
 pub use error::{HostError, UnavailableReason};
