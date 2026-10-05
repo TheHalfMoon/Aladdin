@@ -1,0 +1,70 @@
+{
+  "id": "SG-000082",
+  "title": "Governed coordinate fallback",
+  "program": "QDRAL-P18",
+  "state": "GRAIN",
+  "risk": "high",
+  "created": "2026-10-05",
+  "base": "0a4a8c2822a1583f4a9c7b0c4425b58616a49974",
+  "dependencies": [
+    "SG-000081"
+  ],
+  "objective": "Implement governed coordinate fallback as lower-ceiling authority that is never automatic: every proposal binds exact capture generation, target window, geometry, DPI, action, and coordinates, and every execution requires a fresh InputLease, one approval where applicable, one exact action, and one execution. Human physical input interrupts and revokes active synthetic input authority. Initial verbs are click, double-click, right-click, bounded scroll, and bounded Unicode text input only.",
+  "scope": {
+    "include": [
+      "proposal binding to exact capture generation, target window, geometry, DPI, action, and coordinates",
+      "fresh InputLease per execution with one approval where applicable, one exact action, and one execution",
+      "human physical input interruption and revocation of synthetic authority",
+      "click, double-click, right-click, bounded scroll, and bounded Unicode text input verbs only",
+      "stale, replay, drift, interruption, and adversarial tests"
+    ],
+    "exclude": [
+      "automatic fallback from any structured failure",
+      "unrestricted hotkeys, arbitrary drag, free-form streams, and clipboard typing",
+      "standing input sessions and lease reuse",
+      "new MCP tools, profiles, or remote authority"
+    ]
+  },
+  "authority_delta": {
+    "filesystem": "None beyond already-closed transfer staging.",
+    "process": "None beyond the SG-000074 Deskal-supervised low-authority browser child process family.",
+    "network": "None beyond SG-000075 governed navigation decisions for the isolated host.",
+    "browser": "Governed coordinate proposals bound to exact capture generations only. Never automatic.",
+    "ui_input": "Single exact synthetic actions under fresh InputLease with human interruption. No streams and no standing sessions.",
+    "secrets": "None. Input content never carries secrets and never enters records.",
+    "approval": "None. Executions consume existing fresh approvals; no approval minting.",
+    "privileged": "None."
+  },
+  "invariants": [
+    "coordinate control never engages automatically",
+    "one lease authorizes exactly one action exactly once",
+    "human input always wins over synthetic input"
+  ],
+  "acceptance": [
+    {
+      "id": "A1",
+      "claim": "Proposals bind exact capture generation, window, geometry, DPI, action, and coordinates, proven by binding tests."
+    },
+    {
+      "id": "A2",
+      "claim": "Execution requires a fresh InputLease with approval, performs one action once, and human physical input interrupts and revokes synthetic authority."
+    },
+    {
+      "id": "A3",
+      "claim": "Exact-head CI, genuine TypeSafe Jev, Alibaba Open Code Review, manual review of excluded files, and zero unresolved review threads all pass."
+    }
+  ],
+  "successor_requirements": {
+    "sg_000083": "SG-000083 may activate only after SG-000082 closes canonically with governed coordinates as its base."
+  },
+  "review": {
+    "diffcipline": true,
+    "jev_semantic_review": true,
+    "alibaba_open_code_review": "required exact-range qualification where integrated",
+    "security_review": true,
+    "exact_head_ci": true,
+    "native_windows": true,
+    "release_artifact_qualification": true
+  },
+  "done_when": "Governed coordinate fallback exists with binding, leases, interruption, and bounded verbs, proven by adversarial tests."
+}
