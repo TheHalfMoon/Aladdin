@@ -3,6 +3,7 @@
 
 mod actuation;
 mod argv;
+mod capture;
 mod discovery;
 mod error;
 mod exposure;
@@ -20,6 +21,12 @@ pub use actuation::{
     SupportedAction,
 };
 pub use argv::{assert_argv_clean, build_argv};
+pub use capture::{
+    capture_binding_digest, invalidate_on, is_protected_surface, validate_capture_target,
+    CaptureGeometry, CaptureLease, CaptureProcess, CaptureScope, CaptureTarget, CaptureWindow,
+    InvalidationEvent, MAX_CAPTURE_BYTES, MAX_CAPTURE_DPI, MAX_CAPTURE_FRAMES, MAX_CAPTURE_HEIGHT,
+    MAX_CAPTURE_LEASE_MS, MAX_CAPTURE_RATE_PER_MINUTE, MAX_CAPTURE_WIDTH, MIN_CAPTURE_DPI,
+};
 pub use discovery::{discover_engine, Engine, EngineKind, SearchConfig};
 pub use error::{HostError, UnavailableReason};
 pub use exposure::{
