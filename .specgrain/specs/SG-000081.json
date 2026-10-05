@@ -2,7 +2,7 @@
   "id": "SG-000081",
   "title": "Structured UIA",
   "program": "QDRAL-P18",
-  "state": "GRAIN",
+  "state": "CLOSED",
   "risk": "high",
   "created": "2026-10-05",
   "base": "eaa3e9944e2885c27ceca8c1d0df132581bf4abb",
@@ -68,5 +68,25 @@
     "native_windows": true,
     "release_artifact_qualification": true
   },
-  "done_when": "Structured UIA exists for all five patterns with binding, denial, and drift handling, proven by adversarial tests."
+  "done_when": "Structured UIA exists for all five patterns with binding, denial, and drift handling, proven by adversarial tests.",
+  "qualified_head": "a1d72abe8d54e0c9b3e2a631ca03f39ba4afc675",
+  "implementation_base": "7ae06390e7c29ccb1789e0786e4e430445d6cf8a",
+  "implementation_merge": "0a4a8c2822a1583f4a9c7b0c4425b58616a49974",
+  "pre_merge_ci": "37349106065",
+  "pre_merge_review_gates": "37349106286",
+  "post_merge_ci": "37350352228",
+  "canonical_evidence": {
+    "implementation_pr": 210,
+    "implementation_base": "7ae06390e7c29ccb1789e0786e4e430445d6cf8a",
+    "qualified_head": "a1d72abe8d54e0c9b3e2a631ca03f39ba4afc675",
+    "pre_merge_ci": "37349106065",
+    "pre_merge_review_gates": "37349106286",
+    "merge_sha": "0a4a8c2822a1583f4a9c7b0c4425b58616a49974",
+    "post_merge_ci": "37350352228",
+    "jev": "PASSED: genuine TypeSafe Jev exact-diff review covered 3/3 hunks with zero findings and zero blocking findings, pin 31f89602797fb7bea007f8a480bf368bf564954e",
+    "ocr": "PASSED: Alibaba Open Code Review v1.12.9 exact-range delegation over 2 changed files, 2 reviewable with delegated rules applied and 0 excluded",
+    "security_review": "PASS on exact qualified head: five UIA patterns on exact typed elements with pattern support and enabled state; exact process, window, element, role, state, pattern, workspace, policy, approval, and postcondition binding; PID reuse and restart denial; destroyed, reused, disappeared, replaced, and role-change denial; protected, password, and secret denial; bounded values; expected-state select and toggle; bounded scroll; one-shot approvals; generation-advancing success; denied keyboard, mouse, and coordinate fallbacks. Five pattern, drift, replay, and denial tests. No synthetic input, coordinate, MCP, lease, trust, or remote authority. All closed SG-000001 through SG-000080 regressions pass in exact-head CI. CodeRabbit skipped-review and cubic skipping notices evaluated as non-evidence noise with zero substantive findings; zero unresolved threads.",
+    "unresolved_review_threads": 0,
+    "authority_boundary": "Structured UIA policy data and tests only. No synthetic input, coordinate, MCP, lease, trust, or remote authority change."
+  }
 }
