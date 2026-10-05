@@ -2,7 +2,7 @@
   "id": "SG-000078",
   "title": "Bounded transfers",
   "program": "QDRAL-P18",
-  "state": "GRAIN",
+  "state": "CLOSED",
   "risk": "high",
   "created": "2026-10-05",
   "base": "afe0eb799796a0e8ba023f312920925031906609",
@@ -66,5 +66,25 @@
     "native_windows": true,
     "release_artifact_qualification": true
   },
-  "done_when": "Bounded downloads and uploads exist with staging, validation, approval, and one-shot semantics and no automatic handling, proven by attack tests."
+  "done_when": "Bounded downloads and uploads exist with staging, validation, approval, and one-shot semantics and no automatic handling, proven by attack tests.",
+  "qualified_head": "39f8801719f01be897f1c6ace185503ecd196d79",
+  "implementation_base": "27e0c6db332a1c76f96c32f854b48ad556dbd82f",
+  "implementation_merge": "6b91566f4a205f20072437901869170b8cbe51c7",
+  "pre_merge_ci": "37330535193",
+  "pre_merge_review_gates": "37330535958",
+  "post_merge_ci": "37331866717",
+  "canonical_evidence": {
+    "implementation_pr": 204,
+    "implementation_base": "27e0c6db332a1c76f96c32f854b48ad556dbd82f",
+    "qualified_head": "39f8801719f01be897f1c6ace185503ecd196d79",
+    "pre_merge_ci": "37330535193",
+    "pre_merge_review_gates": "37330535958",
+    "merge_sha": "6b91566f4a205f20072437901869170b8cbe51c7",
+    "post_merge_ci": "37331866717",
+    "jev": "PASSED: genuine TypeSafe Jev exact-diff review covered 3/3 hunks with zero findings and zero blocking findings, pin 31f89602797fb7bea007f8a480bf368bf564954e",
+    "ocr": "PASSED: Alibaba Open Code Review v1.12.9 exact-range delegation over 2 changed files, 2 reviewable with delegated rules applied and 0 excluded",
+    "security_review": "PASS on exact qualified head: canonical relative destinations with traversal, UNC, device, ADS, reserved, and length denial; reparse-safe lexical containment; denied content sniffing for executable, archive, and document classes; filename, media, and content agreement; size agreement within 8 MiB; one-shot expiring download sources; exact upload validation over digest, size, media, file-input, and workspace; denied automatic open, execute, and extraction. Five destination, content, source, and handling tests. No process, network, MCP, lease, trust, or remote authority. All closed SG-000001 through SG-000077 regressions pass in exact-head CI. CodeRabbit skipped-review and cubic skipping notices evaluated as non-evidence noise with zero substantive findings; zero unresolved threads.",
+    "unresolved_review_threads": 0,
+    "authority_boundary": "Bounded transfer staging policy data and tests only. No execution, opening, extraction, process, network, MCP, lease, trust, or remote authority change."
+  }
 }
