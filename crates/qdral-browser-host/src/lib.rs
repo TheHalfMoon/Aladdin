@@ -59,8 +59,8 @@ pub use observation::{
 };
 pub use profile::{adopt_profile, setup_ephemeral_profile, AutomationProfile};
 pub use proposal::{
-    adapt_uitars, invoke_backend_directly, mint_target_identity, parse_proposal,
-    ComputerActionProposal, ProposalValue, UitarsRecord, FORBIDDEN_PROPOSAL_FIELDS,
+    adapt_provider_record, invoke_backend_directly, mint_target_identity, parse_proposal,
+    ComputerActionProposal, ProposalValue, ProviderRecord, FORBIDDEN_PROPOSAL_FIELDS,
     MAX_PROPOSAL_BYTES, MAX_TARGET_FIELD_BYTES, PROPOSAL_ACTION_VERBS, PROPOSAL_ENVELOPE_FIELDS,
     PROPOSAL_TARGET_FIELDS,
 };

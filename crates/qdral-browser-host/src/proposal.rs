@@ -453,12 +453,12 @@ mod serde_json_like {
     }
 }
 
-/// Donor output record shape accepted by the UI-TARS adapter. Syntax
+/// Donor output record shape accepted by the external provider adapter. Syntax
 /// only: an action name with finite numeric arguments in donor
 /// 0-1000 space and optional text. No donor code is imported and no
 /// authority travels with this record.
 #[derive(Debug, Clone)]
-pub struct UitarsRecord {
+pub struct ProviderRecord {
     pub action: String,
     pub x: Option<f64>,
     pub y: Option<f64>,
@@ -467,29 +467,31 @@ pub struct UitarsRecord {
     pub text: Option<String>,
 }
 
-/// Normalize a UI-TARS output record into the canonical IR. Unknown
+/// Normalize a external provider output record into the canonical IR. Unknown
 /// actions, non-finite or out-of-range numbers, oversized text, and
 /// any authority-bearing smuggling fail closed. The result is an
 /// untrusted proposal, never executable authority.
-pub fn adapt_uitars(record: &UitarsRecord) -> Result<ComputerActionProposal, HostError> {
+pub fn adapt_provider_record(record: &ProviderRecord) -> Result<ComputerActionProposal, HostError> {
     let verb = match record.action.to_ascii_lowercase().as_str() {
         "click" => "coordinate_click",
         "double_click" | "doubleclick" => "coordinate_double_click",
         "right_click" | "rightclick" => "coordinate_right_click",
         "scroll" => "coordinate_scroll",
         "type" => "coordinate_type",
-        _ => return Err(HostError::Invalid("uitars unknown action denied".into())),
+        _ => return Err(HostError::Invalid("provider unknown action denied".into())),
     };
     let mut parameters: HashMap<String, ProposalValue> = HashMap::new();
     let mut coordinate = |name: &str, value: Option<f64>| -> Result<(), HostError> {
         if let Some(number) = value {
             if !number.is_finite() {
                 return Err(HostError::Invalid(
-                    "uitars non-finite coordinate denied".into(),
+                    "provider non-finite coordinate denied".into(),
                 ));
             }
             if !(0.0..=1000.0).contains(&number) {
-                return Err(HostError::Invalid("uitars coordinate out of range".into()));
+                return Err(HostError::Invalid(
+                    "provider coordinate out of range".into(),
+                ));
             }
             parameters.insert(name.to_owned(), ProposalValue::Number(number));
         }
@@ -501,7 +503,7 @@ pub fn adapt_uitars(record: &UitarsRecord) -> Result<ComputerActionProposal, Hos
                 (Some(x), Some(y)) => (x, y),
                 _ => {
                     return Err(HostError::Invalid(
-                        "uitars click coordinates missing".into(),
+                        "provider click coordinates missing".into(),
                     ))
                 }
             };
@@ -511,7 +513,7 @@ pub fn adapt_uitars(record: &UitarsRecord) -> Result<ComputerActionProposal, Hos
         "coordinate_scroll" => {
             let (dx, dy) = match (record.dx, record.dy) {
                 (Some(dx), Some(dy)) => (dx, dy),
-                _ => return Err(HostError::Invalid("uitars scroll delta missing".into())),
+                _ => return Err(HostError::Invalid("provider scroll delta missing".into())),
             };
             coordinate("dx", Some(dx))?;
             coordinate("dy", Some(dy))?;
@@ -520,28 +522,28 @@ pub fn adapt_uitars(record: &UitarsRecord) -> Result<ComputerActionProposal, Hos
             let text = record
                 .text
                 .as_deref()
-                .ok_or_else(|| HostError::Invalid("uitars text missing".into()))?;
+                .ok_or_else(|| HostError::Invalid("provider text missing".into()))?;
             if text.is_empty() || text.len() > crate::coordinates::MAX_INPUT_TEXT_CHARS {
-                return Err(HostError::Invalid("uitars text out of bounds".into()));
+                return Err(HostError::Invalid("provider text out of bounds".into()));
             }
             if text
                 .chars()
                 .any(|ch| ch.is_control() && ch != '\n' && ch != '\t')
             {
-                return Err(HostError::Invalid("uitars text control denied".into()));
+                return Err(HostError::Invalid("provider text control denied".into()));
             }
             parameters.insert("text".to_owned(), ProposalValue::Text(text.to_owned()));
         }
-        _ => return Err(HostError::Invalid("uitars unknown action denied".into())),
+        _ => return Err(HostError::Invalid("provider unknown action denied".into())),
     }
     if record.text.is_some() && verb != "coordinate_type" {
-        return Err(HostError::Invalid("uitars unexpected text denied".into()));
+        return Err(HostError::Invalid("provider unexpected text denied".into()));
     }
     Ok(ComputerActionProposal {
         action: verb.to_owned(),
         target: HashMap::new(),
         parameters,
-        provider_hint: Some("ui-tars".into()),
+        provider_hint: Some("external-vlm".into()),
     })
 }
 
@@ -646,8 +648,8 @@ mod tests {
     }
 
     #[test]
-    fn uitars_adapter_normalizes_syntax_only() {
-        let record = UitarsRecord {
+    fn provider_adapter_normalizes_syntax_only() {
+        let record = ProviderRecord {
             action: "click".into(),
             x: Some(500.0),
             y: Some(250.0),
@@ -655,11 +657,11 @@ mod tests {
             dy: None,
             text: None,
         };
-        let proposal = adapt_uitars(&record).unwrap();
+        let proposal = adapt_provider_record(&record).unwrap();
         assert_eq!(proposal.action, "coordinate_click");
-        assert_eq!(proposal.provider_hint.as_deref(), Some("ui-tars"));
+        assert_eq!(proposal.provider_hint.as_deref(), Some("external-vlm"));
         assert!(proposal.target.is_empty());
-        let unknown = UitarsRecord {
+        let unknown = ProviderRecord {
             action: "shell".into(),
             x: None,
             y: None,
@@ -667,8 +669,8 @@ mod tests {
             dy: None,
             text: None,
         };
-        assert!(adapt_uitars(&unknown).is_err());
-        let nan = UitarsRecord {
+        assert!(adapt_provider_record(&unknown).is_err());
+        let nan = ProviderRecord {
             action: "click".into(),
             x: Some(f64::NAN),
             y: Some(1.0),
@@ -676,8 +678,8 @@ mod tests {
             dy: None,
             text: None,
         };
-        assert!(adapt_uitars(&nan).is_err());
-        let infinite = UitarsRecord {
+        assert!(adapt_provider_record(&nan).is_err());
+        let infinite = ProviderRecord {
             action: "scroll".into(),
             x: None,
             y: None,
@@ -685,8 +687,8 @@ mod tests {
             dy: Some(0.0),
             text: None,
         };
-        assert!(adapt_uitars(&infinite).is_err());
-        let overflow = UitarsRecord {
+        assert!(adapt_provider_record(&infinite).is_err());
+        let overflow = ProviderRecord {
             action: "click".into(),
             x: Some(1001.0),
             y: Some(1.0),
@@ -694,12 +696,12 @@ mod tests {
             dy: None,
             text: None,
         };
-        assert!(adapt_uitars(&overflow).is_err());
+        assert!(adapt_provider_record(&overflow).is_err());
     }
 
     #[test]
     fn adapter_and_json_agree_differentially() {
-        let record = UitarsRecord {
+        let record = ProviderRecord {
             action: "double_click".into(),
             x: Some(10.0),
             y: Some(20.0),
@@ -707,7 +709,7 @@ mod tests {
             dy: None,
             text: None,
         };
-        let adapted = adapt_uitars(&record).unwrap();
+        let adapted = adapt_provider_record(&record).unwrap();
         let parsed = parse_proposal(
             r#"{"action":"coordinate_double_click","target":{},"parameters":{"x":10.0,"y":20.0}}"#,
         )
