@@ -13,6 +13,7 @@ members = [
   "crates/qdral-provider-clipboard",
   "crates/qdral-provider-network",
   "crates/qdral-tunnel",
+  "crates/qdral-browser-host",
   "crates/qdral-lifecycle",
   "crates/qdrald",
 ]
