@@ -2,7 +2,7 @@
   "id": "SG-000080",
   "title": "Exact-window capture",
   "program": "QDRAL-P18",
-  "state": "GRAIN",
+  "state": "CLOSED",
   "risk": "high",
   "created": "2026-10-05",
   "base": "647fe93bf369da19c360f399534af8105e79ce64",
@@ -66,5 +66,25 @@
     "native_windows": true,
     "release_artifact_qualification": true
   },
-  "done_when": "Exact-window capture exists with binding, denial, bounded revocable leases, and invalidation, proven by adversarial tests."
+  "done_when": "Exact-window capture exists with binding, denial, bounded revocable leases, and invalidation, proven by adversarial tests.",
+  "qualified_head": "150d9bd255286c8f919273e467d826d05f7fd6b1",
+  "implementation_base": "56519911ee7271e3ca9edebf291dca71f9fcba42",
+  "implementation_merge": "eaa3e9944e2885c27ceca8c1d0df132581bf4abb",
+  "pre_merge_ci": "37343435902",
+  "pre_merge_review_gates": "37343436157",
+  "post_merge_ci": "37344714064",
+  "canonical_evidence": {
+    "implementation_pr": 208,
+    "implementation_base": "56519911ee7271e3ca9edebf291dca71f9fcba42",
+    "qualified_head": "150d9bd255286c8f919273e467d826d05f7fd6b1",
+    "pre_merge_ci": "37343435902",
+    "pre_merge_review_gates": "37343436157",
+    "merge_sha": "eaa3e9944e2885c27ceca8c1d0df132581bf4abb",
+    "post_merge_ci": "37344714064",
+    "jev": "PASSED: genuine TypeSafe Jev exact-diff review covered 3/3 hunks with zero findings and zero blocking findings, pin 31f89602797fb7bea007f8a480bf368bf564954e",
+    "ocr": "PASSED: Alibaba Open Code Review v1.12.9 exact-range delegation over 2 changed files, 2 reviewable with delegated rules applied and 0 excluded",
+    "security_review": "PASS on exact qualified head: exact-window binding to process, HWND, generation, session, geometry, DPI, policy, and capture generation; denial of whole-screen, protected surfaces, stale handles, session and policy drift, and geometry and DPI bounds; local-issued CaptureLease with time, frame, rate, byte, and pixel bounds and revocation; invalidation on all lifecycle events. Four binding, denial, lease, and invalidation tests. No streaming, protected capture, model or remote minting, process, network, MCP, lease, trust, or remote authority beyond the lease itself. All closed SG-000001 through SG-000079 regressions pass in exact-head CI. CodeRabbit skipped-review and cubic skipping notices evaluated as non-evidence noise with zero substantive findings; zero unresolved threads.",
+    "unresolved_review_threads": 0,
+    "authority_boundary": "Exact-window capture policy data and tests only. No streaming, protected capture, model or remote minting, process, network, MCP, or remote authority change beyond the local lease."
+  }
 }

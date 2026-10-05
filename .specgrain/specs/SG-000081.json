@@ -1,0 +1,72 @@
+{
+  "id": "SG-000081",
+  "title": "Structured UIA",
+  "program": "QDRAL-P18",
+  "state": "GRAIN",
+  "risk": "high",
+  "created": "2026-10-05",
+  "base": "eaa3e9944e2885c27ceca8c1d0df132581bf4abb",
+  "dependencies": [
+    "SG-000080"
+  ],
+  "objective": "Implement structured Windows UI Automation before coordinate fallback with InvokePattern, ValuePattern, SelectionItemPattern, TogglePattern, and ScrollPattern. Every mutation binds exact process, window, element, role, state, supported pattern, workspace, policy revision, approval, and postcondition. Password, security, and protected surfaces stay denied. Element drift requires a fresh observation and proposal.",
+  "scope": {
+    "include": [
+      "InvokePattern on exact typed Button, Hyperlink, MenuItem, and SplitButton elements",
+      "ValuePattern on exact typed Edit, Document, and ComboBox elements with bounded non-secret values",
+      "SelectionItemPattern on exact typed ListItem, TreeItem, and TabItem elements",
+      "TogglePattern on exact typed CheckBox and RadioButton elements",
+      "ScrollPattern on exact typed ScrollBar, Pane, List, and Tree elements",
+      "exact process, window, element, role, state, pattern, workspace, policy, approval, and postcondition binding per mutation",
+      "password, security, and protected surface denial with fresh observation on drift"
+    ],
+    "exclude": [
+      "coordinate fallback authority",
+      "keyboard, mouse, and SendInput synthesis",
+      "password and protected surface actuation",
+      "new MCP tools, profiles, or remote authority"
+    ]
+  },
+  "authority_delta": {
+    "filesystem": "None beyond already-closed transfer staging.",
+    "process": "None beyond the SG-000074 Deskal-supervised low-authority browser child process family.",
+    "network": "None beyond SG-000075 governed navigation decisions for the isolated host.",
+    "browser": "Structured UIA verification policy only. No coordinate fallback.",
+    "ui_input": "None. No synthetic input in this grain.",
+    "secrets": "None. Password content is never actuated and never enters records.",
+    "approval": "None. Mutations consume existing fresh approvals; no approval minting.",
+    "privileged": "None."
+  },
+  "invariants": [
+    "every mutation is verified before dispatch and after completion",
+    "drifted elements require fresh observation, never retargeting",
+    "protected surfaces are never actuated"
+  ],
+  "acceptance": [
+    {
+      "id": "A1",
+      "claim": "All five patterns actuate only on exact typed elements with pattern support, enabled state, and fresh binding, proven by pattern tests."
+    },
+    {
+      "id": "A2",
+      "claim": "Password, security, and protected surfaces are denied, drift requires fresh observation, and no keyboard, mouse, SendInput, or coordinate authority appears."
+    },
+    {
+      "id": "A3",
+      "claim": "Exact-head CI, genuine TypeSafe Jev, Alibaba Open Code Review, manual review of excluded files, and zero unresolved review threads all pass."
+    }
+  ],
+  "successor_requirements": {
+    "sg_000082": "SG-000082 may activate only after SG-000081 closes canonically with structured UIA as its base."
+  },
+  "review": {
+    "diffcipline": true,
+    "jev_semantic_review": true,
+    "alibaba_open_code_review": "required exact-range qualification where integrated",
+    "security_review": true,
+    "exact_head_ci": true,
+    "native_windows": true,
+    "release_artifact_qualification": true
+  },
+  "done_when": "Structured UIA exists for all five patterns with binding, denial, and drift handling, proven by adversarial tests."
+}
