@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "snapshot_base": "52224b6c2a93e6d40b1ce3974d92c3636ff38572",
+  "snapshot_base": "9f8da57b15cbea563dfaa1d648a2d032ade7e77c",
   "state_semantics": {
     "GRAIN": "Authorized or active work packet whose acceptance is not yet canonically proven.",
     "PROVEN": "Acceptance and required qualification are proven, but canonical closeout/governance is not yet complete.",
@@ -1027,6 +1027,18 @@
       "pre_merge_review_gates": "37384784626",
       "merge_sha": "52224b6c2a93e6d40b1ce3974d92c3636ff38572",
       "post_merge_ci": "37385568363",
+      "review_basis": "Exact-head genuine TypeSafe Jev 2/2 hunks with zero findings/blocking findings (pin 31f89602797fb7bea007f8a480bf368bf564954e), Alibaba Open Code Review v1.12.9 exact-range delegation over 2 files with 1 reviewable and 1 excluded markdown file manually reviewed, exact-diff manual security review, Windows/Ubuntu Rust Node Governance, Supply chain audit, Release qualification, and Relay container, successful post-merge CI, and zero unresolved review threads. CodeRabbit skipped-review and cubic skipping notices evaluated as non-evidence noise with zero substantive findings.",
+      "unresolved_review_threads": 0,
+      "authority_boundary": "Tests and documentation only. No production code, no MCP surface, no authority widening of any kind."
+    },
+    "SG-000086": {
+      "implementation_pr": 220,
+      "implementation_base": "7d17fc5e69f0072e0ccb125390194d965cb811f6",
+      "qualified_head": "93302d722aab2719130e30ce82b0ca3eada142fc",
+      "pre_merge_ci": "37388686963",
+      "pre_merge_review_gates": "37388683923",
+      "merge_sha": "9f8da57b15cbea563dfaa1d648a2d032ade7e77c",
+      "post_merge_ci": "37389484010",
       "review_basis": "Exact-head genuine TypeSafe Jev 2/2 hunks with zero findings/blocking findings (pin 31f89602797fb7bea007f8a480bf368bf564954e), Alibaba Open Code Review v1.12.9 exact-range delegation over 2 files with 1 reviewable and 1 excluded markdown file manually reviewed, exact-diff manual security review, Windows/Ubuntu Rust Node Governance, Supply chain audit, Release qualification, and Relay container, successful post-merge CI, and zero unresolved review threads. CodeRabbit skipped-review and cubic skipping notices evaluated as non-evidence noise with zero substantive findings.",
       "unresolved_review_threads": 0,
       "authority_boundary": "Tests and documentation only. No production code, no MCP surface, no authority widening of any kind."

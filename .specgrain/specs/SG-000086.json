@@ -2,7 +2,7 @@
   "id": "SG-000086",
   "title": "P18 exit and release readiness",
   "program": "QDRAL-P18",
-  "state": "GRAIN",
+  "state": "CLOSED",
   "risk": "high",
   "created": "2026-10-06",
   "base": "52224b6c2a93e6d40b1ce3974d92c3636ff38572",
@@ -65,5 +65,25 @@
     "native_windows": true,
     "release_artifact_qualification": true
   },
-  "done_when": "P18 is exited canonically with a complete evidence matrix and release readiness proven."
+  "done_when": "P18 is exited canonically with a complete evidence matrix and release readiness proven.",
+  "qualified_head": "93302d722aab2719130e30ce82b0ca3eada142fc",
+  "implementation_base": "7d17fc5e69f0072e0ccb125390194d965cb811f6",
+  "implementation_merge": "9f8da57b15cbea563dfaa1d648a2d032ade7e77c",
+  "pre_merge_ci": "37388686963",
+  "pre_merge_review_gates": "37388683923",
+  "post_merge_ci": "37389484010",
+  "canonical_evidence": {
+    "implementation_pr": 220,
+    "implementation_base": "7d17fc5e69f0072e0ccb125390194d965cb811f6",
+    "qualified_head": "93302d722aab2719130e30ce82b0ca3eada142fc",
+    "pre_merge_ci": "37388686963",
+    "pre_merge_review_gates": "37388683923",
+    "merge_sha": "9f8da57b15cbea563dfaa1d648a2d032ade7e77c",
+    "post_merge_ci": "37389484010",
+    "jev": "PASSED: genuine TypeSafe Jev exact-diff review covered 2/2 hunks with zero findings and zero blocking findings, pin 31f89602797fb7bea007f8a480bf368bf564954e",
+    "ocr": "PASSED: Alibaba Open Code Review v1.12.9 exact-range delegation over 2 changed files, 1 reviewable with delegated rules applied and 1 excluded (docs/canonical/P18_EXIT.md, unsupported extension, manually reviewed)",
+    "security_review": "PASS on exact qualified head: 8 exit tests prove version parity, exact pinned dependencies with lockfiles, no runtime dynamic fetching, exact tool and profile parity with no implicit widening, and release-evidence mechanisms. Donor absence proven by the canonical SG-000066 marker tripwire. Exit matrix in docs/canonical/P18_EXIT.md classifies every row PROVEN or NOT_EXPOSED with no exposed UNVERIFIED row. No production code and no authority change.",
+    "unresolved_review_threads": 0,
+    "authority_boundary": "Tests and documentation only. No production code, no MCP surface, no authority widening of any kind."
+  }
 }
