@@ -14,6 +14,7 @@ mod profile;
 mod proto;
 mod supervise;
 mod transfers;
+mod uia;
 
 pub use actuation::{
     coordinate_fallback, dispatch, retry_after_dispatch, role_supports_action, target_digest,
@@ -64,4 +65,10 @@ pub use transfers::{
     validate_transfer_size, validate_upload_source, DeniedContentClass, DownloadSource,
     PresentedUpload, RecordedUpload, DOWNLOAD_SOURCE_TTL_MS, MAX_DESTINATION_BYTES,
     MAX_TRANSFER_BYTES,
+};
+pub use uia::{
+    invoke, is_protected_uia_surface, keyboard_synthesis, mouse_synthesis, scroll, select,
+    set_value, toggle, uia_coordinate_fallback, uia_target_digest, verify_pattern_support,
+    verify_uia_target, ScrollDirection, SupportedPattern, UiaApproval, UiaElement, UiaLive,
+    UiaProcess, UiaTarget, UiaWindow, MAX_SCROLL_AMOUNT, MAX_UIA_VALUE_CHARS, MIN_SCROLL_AMOUNT,
 };
