@@ -52,6 +52,29 @@ jobs:
       - name: Test
         run: npm test
 
+  web:
+    name: Web / ubuntu-latest
+    runs-on: ubuntu-latest
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24.19.0"
+      - name: Install isolated web dependencies
+        run: npm ci --prefix apps/web --ignore-scripts
+      - name: Audit isolated web dependencies
+        run: npm audit --prefix apps/web
+      - name: Typecheck
+        run: npm run web:typecheck
+      - name: Test
+        run: npm run web:test
+      - name: Production build
+        run: npm run web:build
+
   release-qualification:
     name: Release qualification / windows-latest
     runs-on: windows-latest
