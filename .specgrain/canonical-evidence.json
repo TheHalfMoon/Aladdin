@@ -1103,6 +1103,14 @@
       "review_basis": "Activation PR #231 qualified and merged normally before implementation: exact-head CI 37519964095 completed SUCCESS across all 9 jobs; Review Gates 37519964458 completed SUCCESS; genuine TypeSafe Jev reviewed 6/6 hunks with zero findings/blockers; Alibaba Open Code Review v1.12.9 covered 1 reviewable file and the 3 excluded Markdown files were manually reviewed with zero findings; zero unresolved review threads. Implementation PR #233 qualified exact head 0aad4a6a5be04ad2325059c47fb3e77c8ccca647 on base 96258e1393c77b629d185a1d9faf84e68ef7b690: CI 37522867655 completed SUCCESS across all 9 jobs; Review Gates 37522867699 completed SUCCESS; genuine TypeSafe Jev reviewed 11/11 hunks with zero findings/blockers; Alibaba Open Code Review v1.12.9 covered all 4 changed files with zero exclusions; zero unresolved review threads. The exact implementation changed only apps/web/app/globals.css, apps/web/app/layout.tsx, apps/web/app/page.tsx, and apps/web/tests/site.test.mjs; package and lockfiles were unchanged and the canonical logo remained SHA-256 150ae5ccd9fdb6b25a8f0421a64acc2d0bf1615a32c2b33aea92e77700706fce. The implementation merged normally as c1e8c325241c59e21976a3151b7ca601729d4be8. Post-merge CI 37527111593 completed SUCCESS across all 9 jobs and Pages run 37527111787 completed build, deploy, and published-site verification SUCCESS. Live HTTPS returned 200 with canonical URL, Open Graph URL/site identity, Twitter summary metadata, and the static mobile navigation present; no client runtime marker was present. Pages remains workflow-built, HTTPS-enforced, and without a CNAME; repository visibility, default branch, merge methods, description, homepage, and topic allowlist remain unchanged.",
       "unresolved_review_threads": 0,
       "authority_boundary": "Static public website UX, accessibility, canonical/social metadata, responsive navigation, CSS presentation, and regression tests only. No new package dependencies, remote runtime assets, analytics, telemetry, tracking, forms, authentication, payments, hosted APIs, databases, custom domain, Pages configuration, release/tag mutation, installer change, compatibility migration, repository-policy change, or Deskal runtime/MCP authority change."
+    },
+    "SG-000091": {
+      "implementation_pr": 238,
+      "qualified_head": "eab70d3a14f4fbfcf01ca4f87c69c1df8f6cd733",
+      "merge_sha": "e674d4740ab15f39ec524248f8e512e64cb70d06",
+      "pre_merge_ci": "37540701135",
+      "post_merge_ci": "37541526231",
+      "unresolved_review_threads": 0
     }
   }
 }
