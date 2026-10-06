@@ -64,8 +64,10 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: "24.19.0"
-      - name: Install
-        run: npm ci --ignore-scripts
+      - name: Install isolated web dependencies
+        run: npm ci --prefix apps/web --ignore-scripts
+      - name: Audit isolated web dependencies
+        run: npm audit --prefix apps/web
       - name: Typecheck
         run: npm run web:typecheck
       - name: Test

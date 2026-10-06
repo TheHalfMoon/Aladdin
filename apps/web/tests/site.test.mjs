@@ -80,10 +80,19 @@ test("approved Deskal brand geometry is byte-pinned and shared by both variants"
   assert.match(css, /\.brand-mark-color[\s\S]*linear-gradient/);
 });
 
-test("root workspace exposes independent web qualification scripts", async () => {
+test("web dependency graph is isolated from runtime workspaces and lockfile", async () => {
   const pkg = JSON.parse(await read(join(repo, "package.json")));
-  assert.ok(pkg.workspaces.includes("apps/web"));
-  assert.equal(pkg.scripts["web:typecheck"], "npm run typecheck --workspace @deskal/web");
-  assert.equal(pkg.scripts["web:test"], "npm run test --workspace @deskal/web");
-  assert.equal(pkg.scripts["web:build"], "npm run build --workspace @deskal/web");
+  assert.deepEqual([...pkg.workspaces].sort(), ["apps/qdral-mcp", "apps/qdral-relay"].sort());
+  assert.equal(pkg.scripts["web:typecheck"], "npm --prefix apps/web run typecheck");
+  assert.equal(pkg.scripts["web:test"], "npm --prefix apps/web run test");
+  assert.equal(pkg.scripts["web:build"], "npm --prefix apps/web run build");
+
+  const runtimeLock = JSON.parse(await read(join(repo, "package-lock.json")));
+  assert.equal(runtimeLock.packages?.["apps/web"], undefined, "runtime lockfile must not contain the web app");
+
+  const webLock = JSON.parse(await read(join(root, "package-lock.json")));
+  assert.equal(webLock.packages?.[""]?.name, "@deskal/web");
+  assert.equal(webLock.packages?.[""]?.dependencies?.next, "16.3.8");
+  assert.equal(webLock.packages?.[""]?.dependencies?.react, "19.3.0");
+  assert.equal(webLock.packages?.[""]?.dependencies?.["react-dom"], "19.3.0");
 });
