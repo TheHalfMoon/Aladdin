@@ -334,7 +334,7 @@ fn only_the_documented_ignored_tests_exist() {
 }
 
 #[test]
-fn workflow_set_is_exactly_the_governed_trio() {
+fn workflow_set_is_exactly_the_governed_quartet() {
     let root = repo_root();
     let dir = root.join(".github/workflows");
     let mut names: Vec<String> = fs::read_dir(&dir)
@@ -342,5 +342,8 @@ fn workflow_set_is_exactly_the_governed_trio() {
         .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
         .collect();
     names.sort();
-    assert_eq!(names, vec!["ci.yml", "release.yml", "review-gates.yml"]);
+    assert_eq!(
+        names,
+        vec!["ci.yml", "pages.yml", "release.yml", "review-gates.yml"]
+    );
 }
