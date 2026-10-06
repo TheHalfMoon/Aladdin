@@ -38,8 +38,8 @@ authority change.
 
 ## Second grain
 
-SG-000088 is the sole active grain. It publishes the already-qualified static
-website through zero-cost GitHub Pages and connects the website and repository
+SG-000088 is CLOSED canonical. It published the already-qualified static
+website through zero-cost GitHub Pages and connected the website and repository
 to verified public launch entrypoints.
 
 SG-000088 may use GitHub Pages workflow deployment with the minimum required
@@ -50,7 +50,7 @@ distribution, or any Deskal runtime authority change.
 
 ## Successor work
 
-After SG-000088 closes canonically, any remaining launch-completeness work must
+With SG-000088 closed canonically, any remaining launch-completeness work must
 be shaped as a new SpecGrain from the live frontier. No custom domain, dynamic
 service, release publication, installer change, or compatibility migration is
 authorized by the current plan.
