@@ -61,9 +61,21 @@ repository visibility, default branch, merge policy, branch protection, Actions
 settings, secrets, environments, collaborators, installer changes, compatibility
 migration, or any Deskal runtime authority change.
 
+## Fourth grain
+
+SG-000090 is the sole active grain. It makes the already-published Deskal
+website self-describing through exact canonical URL metadata, evidence-bounded
+Open Graph URL/site identity, and a deterministic static sitemap.
+
+SG-000090 may change only isolated static website metadata, sitemap source, and
+their regression tests. It does not authorize analytics, telemetry, tracking,
+cookies, custom DNS, domain-root robots control, dynamic services, release or
+tag mutation, installer changes, compatibility migration, or any Deskal runtime
+authority change.
+
 ## Successor work
 
-With SG-000089 closed canonically, any remaining launch-completeness work must
+After SG-000090 closes canonically, any remaining launch-completeness work must
 be shaped as a new SpecGrain from the live frontier. No custom domain, dynamic
 service, release publication or modification, tag mutation, installer change,
 or compatibility migration is authorized by the current plan.
