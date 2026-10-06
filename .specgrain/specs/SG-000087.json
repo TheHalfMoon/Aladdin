@@ -2,7 +2,7 @@
   "id": "SG-000087",
   "title": "Public website foundation and launch surface",
   "program": "DESKAL-P19",
-  "state": "GRAIN",
+  "state": "CLOSED",
   "risk": "medium",
   "created": "2026-10-06",
   "base": "f06f7b2cca4ff226b8a69cbe1d1c1ad376afd69d",
@@ -80,5 +80,24 @@
     "native_windows": false,
     "release_artifact_qualification": false
   },
-  "done_when": "The public website foundation is merged, exact-head qualified, visually reviewed on desktop and mobile, post-merge CI is green, and canonical evidence records zero runtime authority change."
+  "done_when": "The public website foundation is merged, exact-head qualified, visually reviewed on desktop and mobile, post-merge CI is green, and canonical evidence records zero runtime authority change.",
+  "qualified_head": "f7c525c59b6361b699ac0580a5b3e9cf54902395",
+  "implementation_base": "044703d9fdb6f43f2f7eba0fca4847afd6b4efbe",
+  "implementation_merge": "b7283e71dfeecc5719174fa79c8f6c2e3b9838fe",
+  "pre_merge_ci": "37481050573",
+  "post_merge_ci": "37482332934",
+  "canonical_evidence": {
+    "implementation_pr": 223,
+    "implementation_base": "044703d9fdb6f43f2f7eba0fca4847afd6b4efbe",
+    "qualified_head": "f7c525c59b6361b699ac0580a5b3e9cf54902395",
+    "pre_merge_ci": "37481050573",
+    "merge_sha": "b7283e71dfeecc5719174fa79c8f6c2e3b9838fe",
+    "post_merge_ci": "37482332934",
+    "jev": "PASSED: genuine TypeSafe Jev exact-diff review covered 14/14 hunks with zero findings and zero blocking findings.",
+    "ocr": "PASSED: Alibaba Open Code Review exact-range delegation covered 14 changed files, 11 reviewable and 3 excluded files manually reviewed.",
+    "security_review": "PASS: isolated static-export website dependencies, strict TypeScript, six web tests, optimized build, zero telemetry or hosted control, byte-pinned brand geometry, desktop and mobile visual QA, successful exact-head CI, no runtime source diff, and no authority change.",
+    "unresolved_review_threads": 0,
+    "authority_boundary": "Static public website source, isolated web dependencies and lockfile, root web convenience scripts, and CI only. No runtime or MCP authority change."
+
+  }
 }
