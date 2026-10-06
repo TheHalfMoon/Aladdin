@@ -74,9 +74,22 @@ analytics, telemetry, tracking, forms, authentication, payments, custom DNS,
 Pages configuration changes, release/tag mutation, installer changes,
 compatibility migration, or any Deskal runtime authority.
 
+## Fifth grain
+
+SG-000091 is the sole active grain. It is the DESKAL-P19 exit grain and adds no
+new product capability. It must produce a final launch-completeness evidence
+matrix across SG-000087 through SG-000090, with every required row proven and
+every intentionally absent surface explicitly classified OUT_OF_SCOPE.
+
+SG-000091 may add only exit documentation, regression tests, and the minimum
+canonical governance records required to close the program. It does not
+authorize custom DNS, dynamic services, release or tag mutation, installer or
+package changes, compatibility migration, repository-policy changes, or any
+Deskal runtime authority.
+
 ## Successor work
 
-With SG-000090 closed canonically, any remaining launch-completeness work must
-be shaped as a new SpecGrain from the live frontier. No custom domain, dynamic
+After SG-000091 closes canonically and DESKAL-P19 exits, any further work must
+be separately authorized from live canonical truth. No custom domain, dynamic
 service, release publication or modification, tag mutation, installer change,
-or compatibility migration is authorized by the current plan.
+compatibility migration, or runtime-authority change is authorized by this plan.
