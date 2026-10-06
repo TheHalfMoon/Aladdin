@@ -1,0 +1,94 @@
+{
+  "id": "SG-000088",
+  "title": "Zero-cost public hosting and verified launch entrypoints",
+  "program": "DESKAL-P19",
+  "state": "GRAIN",
+  "risk": "medium",
+  "created": "2026-10-06",
+  "base": "cf836fc6e0b46333a0eb5ae2189fa8e0bbf34366",
+  "dependencies": [
+    "SG-000087"
+  ],
+  "objective": "Publish the already-qualified Deskal static website through a zero-cost GitHub Pages deployment and connect the repository and website to verified public launch entrypoints without adding Deskal runtime authority, mandatory paid infrastructure, telemetry, credentials, backend state, or custom DNS.",
+  "scope": {
+    "include": [
+      "GitHub Pages deployment of the existing apps/web static export from GitHub Actions",
+      "least-privilege Pages workflow permissions with commit-pinned third-party or GitHub actions",
+      "project-page base-path and asset-path handling for the canonical TheHalfMoon/Deskal repository",
+      "post-deployment HTTPS smoke verification of the published site and key static assets",
+      "public website links to the canonical GitHub repository, documentation, and GitHub Releases surface only",
+      "README integration that points users to the canonical hosted website and verified release surface",
+      "tests that prevent telemetry, analytics, forms, authentication, payment, hosted backend, secret, custom-domain, or unverified-download additions"
+    ],
+    "exclude": [
+      "changes to qdral compatibility CLI, daemon, npm packages, environment variables, OAuth scopes, source paths, storage paths, or MCP server name",
+      "changes to local runtime authority, MCP tool exposure, provider execution, approvals, trust, leases, policy, audit, revocation, browser actuation, or process authority",
+      "custom DNS or a custom domain",
+      "analytics, tracking, cookies, authentication, payments, forms, hosted APIs, databases, or server-side rendering",
+      "uploading release binaries to the website or introducing a release distribution path outside GitHub Releases",
+      "publishing or modifying a GitHub Release",
+      "mandatory paid infrastructure or secret-bearing deployment credentials"
+    ]
+  },
+  "authority_delta": {
+    "filesystem": "Repository website source, tests, documentation, and GitHub Pages workflow only; no Deskal runtime filesystem authority changes.",
+    "process": "None at Deskal runtime.",
+    "network": "GitHub Actions may publish the static site to GitHub Pages and perform bounded HTTPS smoke checks against the Pages URL; Deskal runtime network authority is unchanged.",
+    "browser": "None at Deskal runtime.",
+    "ui_input": "None.",
+    "secrets": "No repository or environment secret is required. GitHub Pages deployment may use GitHub-provided short-lived OIDC and Pages tokens scoped only to the workflow.",
+    "approval": "None.",
+    "privileged": "None."
+  },
+  "invariants": [
+    "Deskal remains local-first and the hosted website is documentation and static marketing only",
+    "the website cannot become a control plane, approval surface, runtime transport, relay, or authority broker",
+    "no analytics, telemetry, tracking, cookies, forms, authentication, payments, hosted API, or database is introduced",
+    "no custom domain or DNS change is authorized",
+    "all download CTAs point only to the canonical GitHub Releases surface and do not claim an unpublished version",
+    "GitHub Pages workflow permissions remain limited to contents read, pages write, and id-token write where required",
+    "deployment actions are commit-pinned and no deployment secret is added",
+    "runtime and MCP authority remain unchanged outside this grain's intended website and repository integration surface"
+  ],
+  "acceptance": [
+    {
+      "id": "A1",
+      "claim": "The canonical Deskal static export is published successfully through GitHub Pages at the repository project-site URL over HTTPS, with the home page and required static assets returning successful responses after deployment."
+    },
+    {
+      "id": "A2",
+      "claim": "The Pages workflow uses least privilege, commit-pinned actions, no repository secret, no custom domain, and no backend service; project-page base-path handling works in both CI build output and the deployed site."
+    },
+    {
+      "id": "A3",
+      "claim": "The website and README expose canonical repository, documentation, and GitHub Releases entrypoints only, with no direct unverified artifact URL and no claim that an unpublished release exists."
+    },
+    {
+      "id": "A4",
+      "claim": "Automated tests and source scans prove the hosted surface has no analytics, telemetry, tracking, cookies, forms, authentication, payments, hosted API, database, or runtime-control dependency."
+    },
+    {
+      "id": "A5",
+      "claim": "All existing Rust, Node, governance, supply-chain, release qualification, relay-container, and web gates remain green with no runtime-source authority change."
+    },
+    {
+      "id": "A6",
+      "claim": "Exact-head CI, genuine TypeSafe Jev, Alibaba Open Code Review, manual review of exclusions, zero unresolved blocking review threads, normal merge, successful Pages deployment, and post-merge verification complete before canonical closeout."
+    }
+  ],
+  "successor_requirements": {
+    "custom_domain": "Any custom domain or DNS change requires a separately authorized successor.",
+    "release_publish": "Publishing or changing a release, installer, package registry, or artifact distribution path requires separately authorized successor work.",
+    "dynamic_services": "Any analytics, authentication, forms, payments, hosted API, database, telemetry, or server-side behavior requires separately authorized successor work."
+  },
+  "review": {
+    "diffcipline": true,
+    "jev_semantic_review": true,
+    "alibaba_open_code_review": "required exact-range qualification where integrated",
+    "security_review": true,
+    "exact_head_ci": true,
+    "native_windows": false,
+    "release_artifact_qualification": false
+  },
+  "done_when": "The zero-cost GitHub Pages site is deployed and HTTPS-smoke-verified from the canonical repository, public launch entrypoints are evidence-bounded and point only to canonical repository/docs/releases surfaces, all existing CI remains green, no runtime authority changes, and post-merge verification is complete."
+}
