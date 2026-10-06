@@ -59,7 +59,7 @@ canonically.
 | `docs/canonical/PLANNING_INDEX.md` | This precedence and classification index. |
 | `docs/identity/DESKAL_RENAME.md` | Product identity and compatibility boundary. |
 | `docs/governance/DIFFCIPLINE.md` | Exact-diff execution discipline. |
-| `.specgrain/specs/SG-000088.json` | CLOSED canonical: DESKAL-P19 zero-cost public hosting and verified launch entrypoints. |
+| `.specgrain/specs/SG-000089.json` | The single active grain (DESKAL-P19 canonical public repository metadata and discoverability). |
 | `docs/canonical/DESKAL_POST_P18_LAUNCH_PLAN.md` | Active DESKAL-P19 program plan for post-P18 launch completeness. |
 
 ### ACTIVE_SUPPORTING

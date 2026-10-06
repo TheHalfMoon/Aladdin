@@ -48,9 +48,22 @@ It does not authorize custom DNS, analytics, tracking, cookies, authentication,
 forms, payments, hosted APIs, databases, release publication, alternate artifact
 distribution, or any Deskal runtime authority change.
 
+## Third grain
+
+SG-000089 is the sole active grain. It makes the canonical GitHub repository a
+coherent Deskal launch entrypoint by pinning and applying an evidence-bounded
+repository description, the canonical GitHub Pages homepage, and a bounded
+public topic allowlist.
+
+SG-000089 may mutate only the repository description, homepage, and topics. It
+does not authorize release or tag changes, custom DNS, Pages configuration,
+repository visibility, default branch, merge policy, branch protection, Actions
+settings, secrets, environments, collaborators, installer changes, compatibility
+migration, or any Deskal runtime authority change.
+
 ## Successor work
 
-With SG-000088 closed canonically, any remaining launch-completeness work must
+After SG-000089 closes canonically, any remaining launch-completeness work must
 be shaped as a new SpecGrain from the live frontier. No custom domain, dynamic
-service, release publication, installer change, or compatibility migration is
-authorized by the current plan.
+service, release publication or modification, tag mutation, installer change,
+or compatibility migration is authorized by the current plan.
