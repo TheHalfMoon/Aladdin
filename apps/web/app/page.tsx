@@ -59,6 +59,22 @@ const CodePanel = () => (
   </div>
 );
 
+const MobileNav = () => (
+  <details className="mobile-nav">
+    <summary aria-label="Toggle primary navigation">
+      <span>Menu</span>
+      <span className="mobile-nav-toggle" aria-hidden="true"><i /><i /></span>
+    </summary>
+    <nav className="mobile-nav-panel" aria-label="Mobile primary navigation">
+      <a href="#product">Product</a>
+      <a href="#security">Security</a>
+      <a href="#developers">Developers</a>
+      <a href={releases}>Releases</a>
+      <a href={github}>GitHub</a>
+    </nav>
+  </details>
+);
+
 export default function Home() {
   return (
     <main>
@@ -69,19 +85,20 @@ export default function Home() {
           <span className="brand-mark brand-mark-white" aria-hidden="true" />
           <span>Deskal</span>
         </a>
-        <nav aria-label="Primary navigation">
+        <nav className="desktop-nav" aria-label="Primary navigation">
           <a href="#product">Product</a>
           <a href="#security">Security</a>
           <a href="#developers">Developers</a>
           <a href={releases}>Releases</a>
           <a href={github}>GitHub</a>
         </nav>
+        <MobileNav />
         <a className="header-cta" href={releases}>
           View releases <Arrow />
         </a>
       </header>
 
-      <div id="content">
+      <div id="content" tabIndex={-1}>
         <section className="hero section-shell">
           <div className="hero-aura" aria-hidden="true" />
           <div className="eyebrow"><span className="status-dot" /> Local-first computer access for AI agents</div>
