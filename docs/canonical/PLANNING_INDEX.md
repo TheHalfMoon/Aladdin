@@ -59,13 +59,14 @@ canonically.
 | `docs/canonical/PLANNING_INDEX.md` | This precedence and classification index. |
 | `docs/identity/DESKAL_RENAME.md` | Product identity and compatibility boundary. |
 | `docs/governance/DIFFCIPLINE.md` | Exact-diff execution discipline. |
-| `.specgrain/specs/SG-000072.json` | The single active grain (COTRA-P17 v0.2 release hardening). |
+| `.specgrain/specs/SG-000087.json` | The single active grain (DESKAL-P19 public website foundation and launch surface). |
+| `docs/canonical/DESKAL_POST_P18_LAUNCH_PLAN.md` | Active DESKAL-P19 program plan for post-P18 launch completeness. |
 
 ### ACTIVE_SUPPORTING
 
 | Document | Role |
 | --- | --- |
-| `docs/canonical/QDRAL_COMPUTER_USE_PLAN.md` | Active program plan for the P18 successor. Status PLANNED: it directs future grains only after the P17 exit and the activation gate pass; until then it authorizes no implementation. |
+| `docs/canonical/QDRAL_COMPUTER_USE_PLAN.md` | Closed-program design record for QDRAL-P18. It remains supporting evidence for the delivered computer-use authority boundary but authorizes no new implementation. |
 | `docs/canonical/QDRAL_COMPUTER_USE_STATUS.md`, `..._ACTIVATION_GATE.md`, `..._IMPLEMENTATION_ORDER.md`, `..._GOVERNANCE_NOTE.md`, `..._SCOPE.md`, `..._README.md` | Program sequencing and activation state. |
 | `docs/canonical/QDRAL_COMPUTER_USE_DECISIONS.md`, `..._AUTHORITY_MODEL.md`, `..._EXECUTION_RULE.md`, `..._NO_FALLBACK.md`, `..._LOCAL_FIRST.md`, `..._ZERO_COST.md`, `..._SECURITY_DENIALS.md` | Planned authority boundaries; normative for P18 grains once activated. |
 | `docs/canonical/QDRAL_COMPUTER_USE_ACCEPTANCE_MATRIX.md`, `..._TEST_MATRIX.md`, `..._FAILURE_SEMANTICS.md`, `..._RESOURCE_BOUNDS.md`, `..._PROFILE_MODEL.md`, `..._LICENSE_POLICY.md`, `..._DONOR_MATRIX.md`, `..._REVIEW_GATE.md` | Planned qualification contracts; normative for P18 grains once activated. |
