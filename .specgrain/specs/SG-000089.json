@@ -1,0 +1,103 @@
+{
+  "id": "SG-000089",
+  "title": "Canonical public repository metadata and discoverability",
+  "program": "DESKAL-P19",
+  "state": "GRAIN",
+  "risk": "low",
+  "created": "2026-10-06",
+  "base": "878ddef25d7781a4101b6724baee9f1051ffc59a",
+  "dependencies": [
+    "SG-000088"
+  ],
+  "objective": "Make the canonical GitHub repository itself a coherent Deskal launch entrypoint by pinning and applying evidence-bounded public repository metadata that points to the live Deskal Pages site, without changing releases, installers, runtime authority, merge policy, Pages hosting mode, or any secret-bearing infrastructure.",
+  "desired_metadata": {
+    "description": "Local-first MCP authority layer for safe, bounded computer use and developer workflows.",
+    "homepage": "https://thehalfmoon.github.io/Deskal/",
+    "topics": [
+      "ai-agents",
+      "computer-use",
+      "desktop-automation",
+      "local-first",
+      "mcp",
+      "mcp-server",
+      "windows"
+    ]
+  },
+  "scope": {
+    "include": [
+      "a machine-readable canonical repository-metadata record committed to the repository",
+      "GitHub repository description set exactly to the approved evidence-bounded Deskal description",
+      "GitHub repository homepage set exactly to the canonical HTTPS Pages URL",
+      "GitHub repository topics set to the approved bounded discoverability allowlist",
+      "regression checks that keep the canonical metadata record aligned with the Deskal website and README public entrypoints",
+      "post-application GitHub API verification that the public metadata matches the canonical record"
+    ],
+    "exclude": [
+      "creating, editing, publishing, deleting, or retagging any GitHub Release",
+      "creating, deleting, or moving Git tags",
+      "changing custom domain, DNS, Pages build type, Pages source, or Pages HTTPS enforcement",
+      "changing repository visibility, default branch, branch protection, merge methods, Actions permissions, secrets, environments, or collaborators",
+      "installer changes, package publication, artifact distribution changes, or compatibility identifier migration",
+      "changes to Deskal runtime, MCP tools, policy, approvals, trust, leases, providers, browser authority, desktop authority, filesystem authority, network authority, or process authority"
+    ]
+  },
+  "authority_delta": {
+    "filesystem": "Repository metadata manifest and regression-test source only; no Deskal runtime filesystem authority change.",
+    "process": "None at Deskal runtime.",
+    "network": "One bounded GitHub repository-administration metadata update plus read-back verification; no Deskal runtime network authority change.",
+    "browser": "None.",
+    "ui_input": "None.",
+    "secrets": "No new secret. The existing authorized GitHub connection may perform the metadata mutation.",
+    "approval": "Repository administration metadata only; no runtime approval change.",
+    "privileged": "No Deskal privileged-runtime authority. GitHub repository administration is bounded to description, homepage, and topics."
+  },
+  "invariants": [
+    "the metadata record is descriptive only and grants no Deskal authority",
+    "homepage remains the canonical HTTPS GitHub Pages URL with no custom domain",
+    "topics remain an exact bounded allowlist and do not claim unsupported platforms or capabilities",
+    "GitHub Releases and tags remain byte-for-byte and metadata-wise untouched by this grain",
+    "repository visibility, default branch, merge settings, branch protection, Actions settings, Pages settings, secrets, environments, and collaborators remain unchanged",
+    "all existing Deskal runtime and MCP authority remains unchanged"
+  ],
+  "acceptance": [
+    {
+      "id": "A1",
+      "claim": "A machine-readable canonical metadata record pins the exact approved description, homepage, and topic allowlist and is regression-tested in CI."
+    },
+    {
+      "id": "A2",
+      "claim": "The live GitHub repository description exactly matches the canonical metadata record and remains evidence-bounded."
+    },
+    {
+      "id": "A3",
+      "claim": "The live GitHub repository homepage exactly equals https://thehalfmoon.github.io/Deskal/ and that URL returns HTTPS 200."
+    },
+    {
+      "id": "A4",
+      "claim": "The live GitHub topic set exactly matches the canonical allowlist: ai-agents, computer-use, desktop-automation, local-first, mcp, mcp-server, windows."
+    },
+    {
+      "id": "A5",
+      "claim": "Before-and-after verification proves this grain does not modify GitHub Releases, tags, Pages configuration, repository visibility, default branch, merge methods, or Deskal runtime/MCP source."
+    },
+    {
+      "id": "A6",
+      "claim": "Exact-head CI, genuine TypeSafe Jev, Alibaba Open Code Review, manual review of exclusions, zero unresolved blocking review threads, normal merge, metadata application, API read-back verification, and post-merge CI complete before canonical closeout."
+    }
+  ],
+  "successor_requirements": {
+    "release_or_tag_change": "Any release or tag mutation requires separately authorized successor work.",
+    "custom_domain": "Any custom domain or DNS change requires separately authorized successor work.",
+    "repository_policy": "Any repository visibility, merge policy, branch protection, Actions, environment, secret, or collaborator change requires separately authorized successor work."
+  },
+  "review": {
+    "diffcipline": true,
+    "jev_semantic_review": true,
+    "alibaba_open_code_review": "required exact-range qualification where integrated",
+    "security_review": true,
+    "exact_head_ci": true,
+    "native_windows": false,
+    "release_artifact_qualification": false
+  },
+  "done_when": "The canonical metadata record is merged and qualified, the live GitHub description/homepage/topics exactly match it, the Pages homepage is reachable over HTTPS, excluded repository and release settings are proven unchanged, and post-merge CI is green."
+}
