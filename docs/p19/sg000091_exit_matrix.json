@@ -1,0 +1,273 @@
+{
+  "schema": "deskal-p19-exit-matrix/1",
+  "grain": "SG-000091",
+  "program": "DESKAL-P19",
+  "activation_base": "d58801ec8e9875c65f10d51d6eebd90d1913052e",
+  "activation_head": "78d7d03c4540ea129d249a3a9c7a74ce040867c3",
+  "activation_merge": "064124ce64650de29e69f04d42dbd4ec0a89dbfa",
+  "activation_ci": "37537337236",
+  "activation_review_gates": "37537337399",
+  "activation_post_merge_ci": "37538199470",
+  "authority_delta": "none",
+  "classification_vocabulary": [
+    "PROVEN",
+    "OUT_OF_SCOPE",
+    "UNVERIFIED"
+  ],
+  "prior_grains": [
+    {
+      "id": "SG-000087",
+      "state": "CLOSED",
+      "qualified_head": "f7c525c59b6361b699ac0580a5b3e9cf54902395",
+      "merge": "b7283e71dfeecc5719174fa79c8f6c2e3b9838fe",
+      "post_merge_ci": "37482332934"
+    },
+    {
+      "id": "SG-000088",
+      "state": "CLOSED",
+      "qualified_head": "f9194a7d82385ddd5ecbcbb8a054c2b17c51c8bd",
+      "merge": "efcba086f9e249e70efa9d891098de469ef9581f",
+      "post_merge_ci": "37498630497"
+    },
+    {
+      "id": "SG-000089",
+      "state": "CLOSED",
+      "qualified_head": "2ad84f4d766e756d241f0e6599aca874cacc46b6",
+      "merge": "ef6dbff299ec0bf070a771c7dfdb6e8a99dce5d6",
+      "post_merge_ci": "37511767810"
+    },
+    {
+      "id": "SG-000090",
+      "state": "CLOSED",
+      "qualified_head": "0aad4a6a5be04ad2325059c47fb3e77c8ccca647",
+      "merge": "c1e8c325241c59e21976a3151b7ca601729d4be8",
+      "post_merge_ci": "37527111593"
+    }
+  ],
+  "live_snapshot": {
+    "observed_date": "2026-10-07",
+    "website": {
+      "url": "https://thehalfmoon.github.io/Deskal/",
+      "http_status": 200
+    },
+    "pages": {
+      "build_type": "workflow",
+      "https_enforced": true,
+      "cname": null,
+      "source": {
+        "branch": "main",
+        "path": "/"
+      }
+    },
+    "repository": {
+      "description": "Local-first MCP authority layer for safe, bounded computer use and developer workflows.",
+      "homepage": "https://thehalfmoon.github.io/Deskal/",
+      "topics": [
+        "ai-agents",
+        "computer-use",
+        "desktop-automation",
+        "local-first",
+        "mcp",
+        "mcp-server",
+        "windows"
+      ]
+    }
+  },
+  "rows": [
+    {
+      "id": "identity.deskal",
+      "required": true,
+      "classification": "PROVEN",
+      "evidence": [
+        "README.md",
+        "docs/identity/DESKAL_RENAME.md",
+        "SG-000089"
+      ]
+    },
+    {
+      "id": "brand.logo_geometry",
+      "required": true,
+      "classification": "PROVEN",
+      "evidence": [
+        "apps/web/public/brand/deskal-mark-mask.svg",
+        "SG-000087",
+        "SG-000090"
+      ],
+      "expected_sha256": "150ae5ccd9fdb6b25a8f0421a64acc2d0bf1615a32c2b33aea92e77700706fce"
+    },
+    {
+      "id": "web.static_export",
+      "required": true,
+      "classification": "PROVEN",
+      "evidence": [
+        "apps/web/next.config.ts",
+        "apps/web/tests/site.test.mjs",
+        "SG-000087",
+        "SG-000090"
+      ]
+    },
+    {
+      "id": "web.zero_client_runtime",
+      "required": true,
+      "classification": "PROVEN",
+      "evidence": [
+        "apps/web/app/page.tsx",
+        "apps/web/tests/site.test.mjs",
+        "SG-000090"
+      ]
+    },
+    {
+      "id": "web.no_telemetry_or_hosted_control",
+      "required": true,
+      "classification": "PROVEN",
+      "evidence": [
+        "apps/web/app/page.tsx",
+        "apps/web/app/layout.tsx",
+        "apps/web/tests/site.test.mjs",
+        "SG-000087",
+        "SG-000090"
+      ]
+    },
+    {
+      "id": "pages.workflow_zero_cost",
+      "required": true,
+      "classification": "PROVEN",
+      "evidence": [
+        ".github/workflows/pages.yml",
+        "SG-000088"
+      ]
+    },
+    {
+      "id": "pages.live_https",
+      "required": true,
+      "classification": "PROVEN",
+      "evidence": [
+        "live_snapshot.website",
+        "live_snapshot.pages",
+        "SG-000088",
+        "SG-000090"
+      ]
+    },
+    {
+      "id": "repository.metadata",
+      "required": true,
+      "classification": "PROVEN",
+      "evidence": [
+        "docs/canonical/REPOSITORY_METADATA.json",
+        "live_snapshot.repository",
+        "SG-000089"
+      ]
+    },
+    {
+      "id": "repository.canonical_links",
+      "required": true,
+      "classification": "PROVEN",
+      "evidence": [
+        "README.md",
+        "apps/web/app/page.tsx",
+        "apps/web/tests/site.test.mjs",
+        "SG-000088",
+        "SG-000089"
+      ]
+    },
+    {
+      "id": "ux.responsive_navigation",
+      "required": true,
+      "classification": "PROVEN",
+      "evidence": [
+        "apps/web/app/page.tsx",
+        "apps/web/app/globals.css",
+        "apps/web/tests/site.test.mjs",
+        "SG-000090"
+      ]
+    },
+    {
+      "id": "ux.accessibility",
+      "required": true,
+      "classification": "PROVEN",
+      "evidence": [
+        "apps/web/app/page.tsx",
+        "apps/web/app/globals.css",
+        "apps/web/tests/site.test.mjs",
+        "SG-000090"
+      ]
+    },
+    {
+      "id": "metadata.canonical_social",
+      "required": true,
+      "classification": "PROVEN",
+      "evidence": [
+        "apps/web/app/layout.tsx",
+        "apps/web/tests/site.test.mjs",
+        "SG-000090"
+      ]
+    },
+    {
+      "id": "dependencies.web_runtime_isolation",
+      "required": true,
+      "classification": "PROVEN",
+      "evidence": [
+        "package.json",
+        "package-lock.json",
+        "apps/web/package-lock.json",
+        "apps/web/tests/site.test.mjs",
+        "SG-000087",
+        "SG-000090"
+      ]
+    },
+    {
+      "id": "custom_domain",
+      "required": false,
+      "classification": "OUT_OF_SCOPE",
+      "evidence": [
+        ".github/workflows/pages.yml",
+        "docs/canonical/DESKAL_POST_P18_LAUNCH_PLAN.md"
+      ]
+    },
+    {
+      "id": "dynamic_service",
+      "required": false,
+      "classification": "OUT_OF_SCOPE",
+      "evidence": [
+        "docs/canonical/DESKAL_POST_P18_LAUNCH_PLAN.md"
+      ]
+    },
+    {
+      "id": "release_tag_mutation",
+      "required": false,
+      "classification": "OUT_OF_SCOPE",
+      "evidence": [
+        ".specgrain/specs/SG-000091.json",
+        "docs/canonical/DESKAL_POST_P18_LAUNCH_PLAN.md"
+      ]
+    },
+    {
+      "id": "installer_package_change",
+      "required": false,
+      "classification": "OUT_OF_SCOPE",
+      "evidence": [
+        ".specgrain/specs/SG-000091.json",
+        "docs/canonical/DESKAL_POST_P18_LAUNCH_PLAN.md"
+      ]
+    },
+    {
+      "id": "runtime_mcp_authority_change",
+      "required": false,
+      "classification": "OUT_OF_SCOPE",
+      "evidence": [
+        ".specgrain/specs/SG-000091.json",
+        "docs/canonical/DESKAL_POST_P18_LAUNCH_PLAN.md"
+      ]
+    }
+  ],
+  "exit_invariants": [
+    "Every required row is PROVEN.",
+    "No row is UNVERIFIED.",
+    "SG-000087 through SG-000090 remain CLOSED with canonical evidence intact.",
+    "The public website remains a static export with no client-side control plane.",
+    "GitHub Pages remains workflow-built, HTTPS-enforced, secret-free, and without a custom CNAME.",
+    "Canonical repository description, homepage, and topics remain exact.",
+    "No analytics, telemetry, tracking, forms, authentication, payments, hosted APIs, databases, or mandatory remote runtime asset is added.",
+    "No release, tag, installer, package, compatibility, repository-policy, or runtime/MCP authority mutation is introduced by SG-000091."
+  ]
+}
