@@ -63,7 +63,7 @@ migration, or any Deskal runtime authority change.
 
 ## Fourth grain
 
-SG-000090 is the sole active grain. It hardens the existing public website UX,
+SG-000090 is CLOSED canonical. It hardened the existing public website UX,
 accessibility, metadata, responsive navigation, and static performance while
 preserving the exact approved Deskal brand geometry and evidence-bounded copy.
 
@@ -76,7 +76,7 @@ compatibility migration, or any Deskal runtime authority.
 
 ## Successor work
 
-After SG-000090 closes canonically, any remaining launch-completeness work must
+With SG-000090 closed canonically, any remaining launch-completeness work must
 be shaped as a new SpecGrain from the live frontier. No custom domain, dynamic
 service, release publication or modification, tag mutation, installer change,
 or compatibility migration is authorized by the current plan.

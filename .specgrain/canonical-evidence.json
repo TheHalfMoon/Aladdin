@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "snapshot_base": "ef6dbff299ec0bf070a771c7dfdb6e8a99dce5d6",
+  "snapshot_base": "c1e8c325241c59e21976a3151b7ca601729d4be8",
   "state_semantics": {
     "GRAIN": "Authorized or active work packet whose acceptance is not yet canonically proven.",
     "PROVEN": "Acceptance and required qualification are proven, but canonical closeout/governance is not yet complete.",
@@ -1083,6 +1083,26 @@
       "review_basis": "Activation exact-head TypeSafe Jev reviewed 7/7 hunks with zero blocking findings and Alibaba Open Code Review covered 1 reviewable file plus 3 manually reviewed Markdown exclusions, with zero findings and zero unresolved threads. Implementation exact-head TypeSafe Jev reviewed 2/2 hunks with zero blocking findings (maximum blocker probability 0.18; exact-diff SHA-256 61c23a19c28f3f96ad74a75e8af8f9d0e85c949d019f4a8796d490efe8e9a52a). Alibaba Open Code Review covered both implementation files with zero findings; the exact canonical values are intentionally hard-coded as a regression oracle. Graft rebuilt 5,151 nodes, 8,364 edges, and 211 cards and found zero indexed dependents outside the implementation diff. Exact-head CI and post-merge CI completed SUCCESS, the Pages post-merge run completed SUCCESS, the live repository description, homepage, and topic allowlist matched the canonical metadata record, the homepage returned HTTPS 200, and excluded repository settings remained unchanged.",
       "unresolved_review_threads": 0,
       "authority_boundary": "Canonical GitHub repository description, homepage, topics, machine-readable metadata record, and regression tests only. Releases and tags remained unchanged, Pages remained workflow-built with HTTPS enforced and no CNAME, repository visibility/default branch/merge settings remained unchanged, and no Deskal runtime or MCP authority changed."
+    },
+    "SG-000090": {
+      "implementation_pr": 233,
+      "implementation_base": "96258e1393c77b629d185a1d9faf84e68ef7b690",
+      "qualified_head": "0aad4a6a5be04ad2325059c47fb3e77c8ccca647",
+      "pre_merge_ci": "37522867655",
+      "pre_merge_review_gates": "37522867699",
+      "merge_sha": "c1e8c325241c59e21976a3151b7ca601729d4be8",
+      "post_merge_ci": "37527111593",
+      "activation_pr": 231,
+      "activation_base": "bb20c20daa97b992e8e96a975bb0a8021df45487",
+      "activation_head": "319af1f17254db2b76e0ba3bb5a3c040088c733d",
+      "activation_ci": "37519964095",
+      "activation_review_gates": "37519964458",
+      "activation_merge_sha": "96258e1393c77b629d185a1d9faf84e68ef7b690",
+      "activation_post_merge_ci": "37520976242",
+      "pages_post_merge_run": "37527111787",
+      "review_basis": "Activation PR #231 qualified and merged normally before implementation: exact-head CI 37519964095 completed SUCCESS across all 9 jobs; Review Gates 37519964458 completed SUCCESS; genuine TypeSafe Jev reviewed 6/6 hunks with zero findings/blockers; Alibaba Open Code Review v1.12.9 covered 1 reviewable file and the 3 excluded Markdown files were manually reviewed with zero findings; zero unresolved review threads. Implementation PR #233 qualified exact head 0aad4a6a5be04ad2325059c47fb3e77c8ccca647 on base 96258e1393c77b629d185a1d9faf84e68ef7b690: CI 37522867655 completed SUCCESS across all 9 jobs; Review Gates 37522867699 completed SUCCESS; genuine TypeSafe Jev reviewed 11/11 hunks with zero findings/blockers; Alibaba Open Code Review v1.12.9 covered all 4 changed files with zero exclusions; zero unresolved review threads. The exact implementation changed only apps/web/app/globals.css, apps/web/app/layout.tsx, apps/web/app/page.tsx, and apps/web/tests/site.test.mjs; package and lockfiles were unchanged and the canonical logo remained SHA-256 150ae5ccd9fdb6b25a8f0421a64acc2d0bf1615a32c2b33aea92e77700706fce. The implementation merged normally as c1e8c325241c59e21976a3151b7ca601729d4be8. Post-merge CI 37527111593 completed SUCCESS across all 9 jobs and Pages run 37527111787 completed build, deploy, and published-site verification SUCCESS. Live HTTPS returned 200 with canonical URL, Open Graph URL/site identity, Twitter summary metadata, and the static mobile navigation present; no client runtime marker was present. Pages remains workflow-built, HTTPS-enforced, and without a CNAME; repository visibility, default branch, merge methods, description, homepage, and topic allowlist remain unchanged.",
+      "unresolved_review_threads": 0,
+      "authority_boundary": "Static public website UX, accessibility, canonical/social metadata, responsive navigation, CSS presentation, and regression tests only. No new package dependencies, remote runtime assets, analytics, telemetry, tracking, forms, authentication, payments, hosted APIs, databases, custom domain, Pages configuration, release/tag mutation, installer change, compatibility migration, repository-policy change, or Deskal runtime/MCP authority change."
     }
   }
 }
