@@ -8,6 +8,10 @@ Deskal is not a remote shell, a remote desktop, or a "run anything" agent.
 
 > **Compatibility note:** the product and repository name are now **Deskal**. The current v0.2 compatibility surface intentionally retains the `qdral` CLI, `qdrald` daemon, `@qdral/*` packages, `QDRAL_*` environment variables, and existing install/storage paths until those contracts are migrated separately. See [`docs/identity/DESKAL_RENAME.md`](docs/identity/DESKAL_RENAME.md).
 
+**Website:** https://thehalfmoon.github.io/Deskal/
+
+**Canonical releases:** https://github.com/TheHalfMoon/Deskal/releases
+
 ## What ChatGPT can do through Deskal
 
 Exactly these 31 tools are exposed over local MCP:

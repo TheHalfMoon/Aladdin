@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -16,9 +16,14 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
+  const basePath = process.env.DESKAL_WEB_BASE_PATH ?? "";
+  const style = {
+    "--deskal-mark-mask": `url("${basePath}/brand/deskal-mark-mask.svg")`
+  } as CSSProperties;
+
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body style={style}>{children}</body>
     </html>
   );
 }
