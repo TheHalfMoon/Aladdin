@@ -1,0 +1,87 @@
+{
+  "id": "SG-000091",
+  "title": "P19 exit and public launch completeness",
+  "program": "DESKAL-P19",
+  "state": "GRAIN",
+  "risk": "low",
+  "created": "2026-10-06",
+  "base": "d58801ec8e9875c65f10d51d6eebd90d1913052e",
+  "dependencies": [
+    "SG-000090"
+  ],
+  "objective": "Exit DESKAL-P19 with a final evidence matrix proving the canonical public launch surface is complete and bounded: Deskal identity, website foundation, zero-cost static hosting, HTTPS publication, canonical repository metadata, discoverability, responsive UX, accessibility, canonical/social metadata, dependency isolation, no telemetry or hosted control, and unchanged runtime/release authority.",
+  "scope": {
+    "include": [
+      "a final DESKAL-P19 exit matrix classifying every launch-completeness row as PROVEN, OUT_OF_SCOPE, or UNVERIFIED with exact evidence",
+      "regression tests proving SG-000087 through SG-000090 are CLOSED canonical and their public-launch invariants remain aligned",
+      "verification of canonical website identity, logo geometry, static export, responsive navigation, accessibility markers, canonical/social metadata, and canonical repository/release links",
+      "verification of zero-cost least-privilege GitHub Pages workflow, HTTPS publication, no custom domain, no deployment secret, and live Pages entrypoint",
+      "verification of canonical repository description, homepage, and topic allowlist",
+      "verification that analytics, telemetry, tracking, forms, authentication, payments, hosted APIs, databases, remote runtime assets, and client runtime behavior remain absent",
+      "final DESKAL-P19 program exit record with no new runtime or repository-administration authority"
+    ],
+    "exclude": [
+      "new website features or redesign work",
+      "custom domain or DNS changes",
+      "analytics, telemetry, tracking, authentication, forms, payments, hosted APIs, databases, or other dynamic services",
+      "creating, publishing, editing, deleting, or retagging releases or tags",
+      "installer, package publication, compatibility migration, or alternate artifact distribution",
+      "repository policy, branch protection, Actions permission, secret, environment, or collaborator changes",
+      "changes to Deskal runtime, MCP tools, policy, approvals, trust, leases, providers, browser authority, desktop authority, filesystem authority, network authority, or process authority"
+    ]
+  },
+  "authority_delta": {
+    "filesystem": "Exit documentation and regression-test source only; no Deskal runtime filesystem authority change.",
+    "process": "None at Deskal runtime. Existing CI executes only the established test/build qualification path.",
+    "network": "Read-only live verification of the existing canonical GitHub Pages and repository surfaces only; no Deskal runtime network authority change.",
+    "browser": "None.",
+    "ui_input": "None.",
+    "secrets": "None.",
+    "approval": "None.",
+    "privileged": "None."
+  },
+  "invariants": [
+    "P19 exit adds no product capability, runtime authority, hosted control plane, or repository-administration authority",
+    "every required public-launch row must be PROVEN before P19 can exit",
+    "OUT_OF_SCOPE rows remain explicitly unauthorized rather than silently treated as completed",
+    "an exposed or required UNVERIFIED launch row blocks P19 exit",
+    "SG-000087 through SG-000090 remain CLOSED canonical with their exact evidence preserved",
+    "the canonical public website remains static, zero-telemetry, zero-mandatory-cloud, and linked only to canonical Deskal repository, docs, and Releases surfaces",
+    "runtime, release, tag, installer, compatibility, custom-domain, and dynamic-service boundaries remain unchanged"
+  ],
+  "acceptance": [
+    {
+      "id": "A1",
+      "claim": "Every P19 exit-matrix row is classified PROVEN, OUT_OF_SCOPE, or UNVERIFIED with exact evidence, and no required or exposed launch row remains UNVERIFIED."
+    },
+    {
+      "id": "A2",
+      "claim": "SG-000087 through SG-000090 are all CLOSED canonical and collectively prove website foundation, static hosting, canonical repository metadata/discoverability, and UX/accessibility/metadata hardening."
+    },
+    {
+      "id": "A3",
+      "claim": "Regression tests prove the canonical logo hash, static export, zero client runtime, responsive navigation, accessibility markers, canonical/social metadata, canonical repository and Releases links, and forbidden hosted-service markers remain locked."
+    },
+    {
+      "id": "A4",
+      "claim": "Live read-back proves the canonical GitHub Pages site is HTTPS reachable, Pages remains workflow-built with HTTPS enforced and no CNAME, and repository description/homepage/topics remain exactly canonical without mutating excluded settings."
+    },
+    {
+      "id": "A5",
+      "claim": "Exact-head CI, genuine TypeSafe Jev, Alibaba Open Code Review, manual review of excluded files, zero unresolved blocking review threads, normal merge, and post-merge CI complete before P19 is marked exited."
+    }
+  ],
+  "successor_requirements": {
+    "post_p19": "After P19 exits, any new feature, distribution change, custom domain, dynamic service, release mutation, compatibility migration, or runtime-authority change requires separately authorized successor work from live canonical truth."
+  },
+  "review": {
+    "diffcipline": true,
+    "jev_semantic_review": true,
+    "alibaba_open_code_review": "required exact-range qualification where integrated",
+    "security_review": true,
+    "exact_head_ci": true,
+    "native_windows": false,
+    "release_artifact_qualification": false
+  },
+  "done_when": "DESKAL-P19 is exited canonically with a complete launch-completeness evidence matrix, no required UNVERIFIED row, no authority delta, exact-head qualification, live public-surface verification, normal merge, and green post-merge CI."
+}
