@@ -2,7 +2,7 @@
   "id": "SG-000088",
   "title": "Zero-cost public hosting and verified launch entrypoints",
   "program": "DESKAL-P19",
-  "state": "GRAIN",
+  "state": "CLOSED",
   "risk": "medium",
   "created": "2026-10-06",
   "base": "cf836fc6e0b46333a0eb5ae2189fa8e0bbf34366",
@@ -90,5 +90,25 @@
     "native_windows": false,
     "release_artifact_qualification": false
   },
-  "done_when": "The zero-cost GitHub Pages site is deployed and HTTPS-smoke-verified from the canonical repository, public launch entrypoints are evidence-bounded and point only to canonical repository/docs/releases surfaces, all existing CI remains green, no runtime authority changes, and post-merge verification is complete."
+  "done_when": "The zero-cost GitHub Pages site is deployed and HTTPS-smoke-verified from the canonical repository, public launch entrypoints are evidence-bounded and point only to canonical repository/docs/releases surfaces, all existing CI remains green, no runtime authority changes, and post-merge verification is complete.",
+  "activation_pr": 225,
+  "activation_head": "b0b22d7d8b83bddb1138b01f511de0d0a66f9558",
+  "activation_pre_merge_ci": "37491377635",
+  "activation_merge": "a2b31affb4deeb931b325bf0e60d04609384e447",
+  "activation_post_merge_ci": "37492569373",
+  "implementation_pr": 226,
+  "implementation_base": "a2b31affb4deeb931b325bf0e60d04609384e447",
+  "qualified_head": "f9194a7d82385ddd5ecbcbb8a054c2b17c51c8bd",
+  "pre_merge_ci": "37497532868",
+  "implementation_merge": "efcba086f9e249e70efa9d891098de469ef9581f",
+  "post_merge_ci": "37498630497",
+  "pages_run": "37498630641",
+  "published_url": "https://thehalfmoon.github.io/Deskal/",
+  "canonical_evidence": {
+    "jev": "PASSED: TypeSafe Jev exact-head review covered 24/24 hunks with zero blocking findings; maximum blocker probability 0.15.",
+    "ocr": "PASSED: Alibaba Open Code Review exact-range delegation covered 8 changed files with 7 reviewable and README.md manually reviewed as the sole exclusion; zero findings.",
+    "pages": "PASSED: GitHub Pages build, deploy, and HTTPS verification completed successfully on run 37498630641 with build_type=workflow, HTTPS enforced, no CNAME, and no deployment secret.",
+    "unresolved_review_threads": 0,
+    "authority_boundary": "Static GitHub Pages hosting and repository launch integration only. No Deskal runtime or MCP authority change, custom domain, backend, analytics, telemetry, authentication, payments, secrets, release publication, installer change, or alternate artifact distribution."
+  }
 }
