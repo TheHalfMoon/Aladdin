@@ -1,6 +1,6 @@
 # Deskal Post-P18 Launch Completeness Plan
 
-Status: ACTIVE PROGRAM PLAN
+Status: EXITED PROGRAM PLAN
 Program: DESKAL-P19
 Date: 2026-10-06
 
@@ -76,20 +76,21 @@ compatibility migration, or any Deskal runtime authority.
 
 ## Fifth grain
 
-SG-000091 is the sole active grain. It is the DESKAL-P19 exit grain and adds no
-new product capability. It must produce a final launch-completeness evidence
-matrix across SG-000087 through SG-000090, with every required row proven and
-every intentionally absent surface explicitly classified OUT_OF_SCOPE.
+SG-000091 is CLOSED canonical. It completed the DESKAL-P19 exit and added no
+new product capability. The final launch-completeness evidence matrix across
+SG-000087 through SG-000090 proves every required row and classifies every
+intentionally absent surface OUT_OF_SCOPE.
 
-SG-000091 may add only exit documentation, regression tests, and the minimum
-canonical governance records required to close the program. It does not
+SG-000091 added only exit documentation, regression tests, and the minimum
+canonical governance records required to close the program. It did not
 authorize custom DNS, dynamic services, release or tag mutation, installer or
 package changes, compatibility migration, repository-policy changes, or any
 Deskal runtime authority.
 
 ## Successor work
 
-After SG-000091 closes canonically and DESKAL-P19 exits, any further work must
-be separately authorized from live canonical truth. No custom domain, dynamic
-service, release publication or modification, tag mutation, installer change,
-compatibility migration, or runtime-authority change is authorized by this plan.
+DESKAL-P19 is exited. It authorizes no further work. DESKAL-P20 is separately
+activated by SG-000092 from live canonical truth and is governed by
+`docs/canonical/DESKAL_P20_UNIVERSAL_AGENT_RUNTIME_PLAN.md`. This exited plan
+continues to authorize no custom domain, dynamic service, release/tag mutation,
+installer change, compatibility migration, or runtime-authority change.

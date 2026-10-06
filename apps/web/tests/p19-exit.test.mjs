@@ -46,12 +46,19 @@ test("P19 predecessor grains stay CLOSED with exact canonical evidence", () => {
   }
 });
 
-test("current SG-000091 remains the active P19 exit grain until closeout", () => {
+test("SG-000091 closes with exact P19 exit evidence and no authority delta", () => {
   const spec = json(".specgrain/specs/SG-000091.json");
-  assert.equal(spec.state, "GRAIN");
+  assert.equal(spec.state, "CLOSED");
   assert.equal(spec.program, "DESKAL-P19");
   assert.equal(spec.base, "d58801ec8e9875c65f10d51d6eebd90d1913052e");
   assert.deepEqual(spec.dependencies, ["SG-000090"]);
+  assert.equal(spec.qualified_head, "eab70d3a14f4fbfcf01ca4f87c69c1df8f6cd733");
+  assert.equal(spec.implementation_merge, "e674d4740ab15f39ec524248f8e512e64cb70d06");
+  assert.equal(spec.post_merge_ci, "37541526231");
+  assert.equal(spec.canonical_evidence.pages_post_merge_run, "37541526159");
+  assert.equal(spec.canonical_evidence.exit_rows, 18);
+  assert.equal(spec.canonical_evidence.unverified_rows, 0);
+  assert.equal(spec.canonical_evidence.unresolved_review_threads, 0);
   assert.equal(spec.authority_delta.browser, "None.");
   assert.equal(spec.authority_delta.ui_input, "None.");
   assert.equal(spec.authority_delta.secrets, "None.");
@@ -125,12 +132,24 @@ test("canonical repository metadata matches the live exit snapshot exactly", () 
   assert.deepEqual(metadata.topics, matrix.live_snapshot.repository.topics);
 });
 
-test("P19 successor boundary remains explicit and no P20 grain is pre-activated", () => {
-  const plan = read("docs/canonical/DESKAL_POST_P18_LAUNCH_PLAN.md");
-  assert.match(plan, /SG-000091 is the sole active grain/);
-  assert.match(plan, /After SG-000091 closes canonically and DESKAL-P19 exits/);
-  assert.match(plan, /runtime-authority change is authorized by this plan/);
-  for (let n = 92; n <= 107; n += 1) {
+test("P19 is exited and P20 activates only SG-000092", () => {
+  const p19 = read("docs/canonical/DESKAL_POST_P18_LAUNCH_PLAN.md");
+  const p20 = read("docs/canonical/DESKAL_P20_UNIVERSAL_AGENT_RUNTIME_PLAN.md");
+  const sg91 = json(".specgrain/specs/SG-000091.json");
+  const sg92 = json(".specgrain/specs/SG-000092.json");
+
+  assert.match(p19, /Status: EXITED PROGRAM PLAN/);
+  assert.match(p19, /SG-000091 is CLOSED canonical/);
+  assert.match(p19, /DESKAL-P19 is exited/);
+  assert.equal(sg91.state, "CLOSED");
+
+  assert.match(p20, /Activation grain: SG-000092/);
+  assert.equal(sg92.id, "SG-000092");
+  assert.equal(sg92.program, "DESKAL-P20");
+  assert.equal(sg92.state, "GRAIN");
+  assert.deepEqual(sg92.dependencies, ["SG-000091"]);
+
+  for (let n = 93; n <= 107; n += 1) {
     const id = `SG-${String(n).padStart(6, "0")}.json`;
     assert.throws(() => read(`.specgrain/specs/${id}`), undefined, id);
   }
