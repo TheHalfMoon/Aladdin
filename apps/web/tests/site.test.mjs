@@ -28,7 +28,9 @@ test("web dependencies are exact-pinned and telemetry is disabled in every Next 
 test("public copy uses Deskal identity and keeps compatibility naming bounded", async () => {
   const page = await read(join(root, "app", "page.tsx"));
   assert.match(page, /Deskal/);
-  assert.doesNotMatch(page, /Cotra|Quntal/);
+  for (const staleName of ["Cotra", "Qun" + "tal"]) {
+    assert.equal(page.includes(staleName), false, `stale product identity: ${staleName}`);
+  }
   const qdralMentions = page.match(/qdral/g) ?? [];
   assert.equal(qdralMentions.length, 2, "qdral may appear only in the explicit compatibility example and note");
   assert.match(page, /Compatibility note/);

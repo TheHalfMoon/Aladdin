@@ -85,18 +85,19 @@ if (rootPackage.name !== "deskal") {
 }
 
 const workspaces = [...(rootPackage.workspaces ?? [])].sort();
-const expectedWorkspaces = ["apps/qdral-mcp", "apps/qdral-relay"].sort();
+const expectedWorkspaces = ["apps/qdral-mcp", "apps/qdral-relay", "apps/web"].sort();
 if (JSON.stringify(workspaces) !== JSON.stringify(expectedWorkspaces)) {
-  throw new Error(`unexpected compatibility npm workspaces: ${JSON.stringify(workspaces)}`);
+  throw new Error(`unexpected Deskal npm workspaces: ${JSON.stringify(workspaces)}`);
 }
 
 for (const [path, expected] of [
   ["apps/qdral-mcp/package.json", "@qdral/mcp"],
-  ["apps/qdral-relay/package.json", "@qdral/relay"]
+  ["apps/qdral-relay/package.json", "@qdral/relay"],
+  ["apps/web/package.json", "@deskal/web"]
 ]) {
   const manifest = JSON.parse(readFileSync(path, "utf8"));
   if (manifest.name !== expected) {
-    throw new Error(`${path} compatibility name is ${manifest.name}, expected ${expected}`);
+    throw new Error(`${path} package name is ${manifest.name}, expected ${expected}`);
   }
 }
 
