@@ -1,0 +1,14 @@
+{
+  "repository": "TheHalfMoon/Deskal",
+  "description": "Local-first MCP authority layer for safe, bounded computer use and developer workflows.",
+  "homepage": "https://thehalfmoon.github.io/Deskal/",
+  "topics": [
+    "ai-agents",
+    "computer-use",
+    "desktop-automation",
+    "local-first",
+    "mcp",
+    "mcp-server",
+    "windows"
+  ]
+}

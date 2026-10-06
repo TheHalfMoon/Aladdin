@@ -164,3 +164,31 @@ test("Pages workflow builds the canonical project path and verifies the deployed
   assert.match(workflow, /curl --fail --location/);
   assert.match(workflow, /https:\/\/github\.com\/TheHalfMoon\/Deskal\/releases/);
 });
+
+test("canonical repository metadata is exact, bounded, and aligned with public entrypoints", async () => {
+  const metadata = JSON.parse(await read(join(repo, "docs", "canonical", "REPOSITORY_METADATA.json")));
+  const page = await read(join(root, "app", "page.tsx"));
+  const readme = await read(join(repo, "README.md"));
+
+  assert.deepEqual(Object.keys(metadata).sort(), ["description", "homepage", "repository", "topics"]);
+  assert.equal(metadata.repository, "TheHalfMoon/Deskal");
+  assert.equal(
+    metadata.description,
+    "Local-first MCP authority layer for safe, bounded computer use and developer workflows."
+  );
+  assert.equal(metadata.homepage, "https://thehalfmoon.github.io/Deskal/");
+  assert.deepEqual(metadata.topics, [
+    "ai-agents",
+    "computer-use",
+    "desktop-automation",
+    "local-first",
+    "mcp",
+    "mcp-server",
+    "windows"
+  ]);
+  assert.equal(new Set(metadata.topics).size, metadata.topics.length, "topics must be unique");
+
+  assert.equal(readme.includes(`**Website:** ${metadata.homepage}`), true);
+  assert.equal(page.includes("https://github.com/TheHalfMoon/Deskal"), true);
+  assert.equal(page.includes("/releases/download/"), false);
+});
