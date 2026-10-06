@@ -1,0 +1,87 @@
+{
+  "id": "SG-000090",
+  "title": "Public website UX, accessibility, and performance hardening",
+  "program": "DESKAL-P19",
+  "state": "GRAIN",
+  "risk": "low",
+  "created": "2026-10-06",
+  "base": "bb20c20daa97b992e8e96a975bb0a8021df45487",
+  "dependencies": [
+    "SG-000089"
+  ],
+  "objective": "Raise the already-live Deskal GitHub Pages site to a polished, professional launch-quality UX by hardening responsive navigation, accessibility, metadata, interaction polish, and static performance while preserving the approved brand geometry, evidence-bounded copy, zero-telemetry posture, existing hosting model, and all Deskal runtime authority.",
+  "scope": {
+    "include": [
+      "responsive information architecture and mobile navigation for the existing static marketing site",
+      "keyboard-visible focus, touch-target sizing, semantic landmarks, reduced-motion behavior, and contrast-safe presentation",
+      "canonical page metadata for title, description, canonical URL, Open Graph, and social sharing without remote runtime dependencies",
+      "visual hierarchy, spacing, surface, and interaction polish consistent with the approved black/white website identity and full-color product mark",
+      "static source-level regression tests for approved logo geometry, launch links, accessibility invariants, metadata, no-client-runtime additions, and forbidden hosted dependencies",
+      "build-time verification that the website remains a zero-cost static export deployable by the existing GitHub Pages workflow"
+    ],
+    "exclude": [
+      "changing the canonical Deskal logo geometry or replacing the approved logo asset",
+      "adding analytics, tracking, telemetry, cookies, authentication, forms, payments, hosted APIs, databases, user accounts, or mandatory cloud services",
+      "adding remote fonts, remote images, third-party runtime scripts, or new website package dependencies",
+      "changing GitHub Pages configuration, custom domain, DNS, deployment credentials, repository visibility, merge policy, branch protection, Actions permissions, secrets, environments, or collaborators",
+      "creating, editing, publishing, deleting, or retagging any GitHub Release or tag",
+      "installer changes, package publication, compatibility identifier migration, or alternate artifact distribution",
+      "changes to Deskal runtime, MCP tools, policy, approvals, trust, leases, providers, browser authority, desktop authority, filesystem authority, network authority, or process authority"
+    ]
+  },
+  "authority_delta": {
+    "filesystem": "Static website source, metadata, and website regression tests only; no Deskal runtime filesystem authority change.",
+    "process": "Build/test process for apps/web only; no Deskal runtime process authority change.",
+    "network": "No new runtime network dependency. Existing GitHub Pages deployment and canonical outbound launch links remain unchanged.",
+    "browser": "Public static presentation only; no browser-control authority change.",
+    "ui_input": "Website navigation and links only; no local computer input authority change.",
+    "secrets": "None.",
+    "approval": "None.",
+    "privileged": "None."
+  },
+  "invariants": [
+    "the approved Deskal logo geometry remains byte-identical to the canonical pinned asset",
+    "website header uses the white mark on black while product illustrations may use the existing full-color mark",
+    "the site remains a static export with no client-side authority surface and no mandatory hosted runtime dependency",
+    "public copy remains evidence-bounded and does not imply arbitrary execution, silent elevation, remote self-approval, or cloud authority",
+    "the site introduces no analytics, tracking, forms, authentication, payments, cookies, remote fonts, remote images, or third-party runtime scripts",
+    "GitHub Pages hosting mode, repository metadata, Releases, tags, and all Deskal runtime/MCP authority remain unchanged"
+  ],
+  "acceptance": [
+    {
+      "id": "A1",
+      "claim": "The existing approved logo asset hash and shared geometry contract remain unchanged, with white website and full-color product treatments derived from that one geometry."
+    },
+    {
+      "id": "A2",
+      "claim": "Primary navigation remains usable by keyboard and touch across desktop and mobile breakpoints, focus is visible, semantic navigation/landmarks are preserved, and reduced-motion preferences are honored."
+    },
+    {
+      "id": "A3",
+      "claim": "Canonical title, description, canonical URL, Open Graph, and social metadata are present and point only to the canonical Deskal identity and GitHub Pages surface."
+    },
+    {
+      "id": "A4",
+      "claim": "The visual system is materially polished without new package dependencies, remote assets, analytics, telemetry, tracking, forms, authentication, payments, or client-side hosted services."
+    },
+    {
+      "id": "A5",
+      "claim": "The website remains a static export and its build/test path stays isolated from the privileged runtime dependency graph; source-level regression tests prove the no-runtime-authority boundary."
+    },
+    {
+      "id": "A6",
+      "claim": "Exact-head CI, genuine TypeSafe Jev, Alibaba Open Code Review, manual review of exclusions, zero unresolved blocking review threads, normal merge, Pages deployment verification, and post-merge CI complete before canonical closeout."
+    }
+  ],
+  "review": {
+    "diffcipline": true,
+    "jev_semantic_review": true,
+    "alibaba_open_code_review": "required exact-range qualification where integrated",
+    "security_review": true,
+    "accessibility_review": true,
+    "exact_head_ci": true,
+    "native_windows": false,
+    "release_artifact_qualification": false
+  },
+  "done_when": "The polished static site is merged from an exact qualified head, the approved logo geometry remains unchanged, accessibility/metadata/static-performance regressions pass, GitHub Pages deploys successfully at the canonical URL, excluded repository/release/runtime surfaces remain unchanged, and post-merge CI is green."
+}
