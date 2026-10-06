@@ -36,9 +36,21 @@ The first grain does not authorize production hosting, DNS, analytics,
 authentication, forms, payments, installer replacement, or any runtime
 authority change.
 
+## Second grain
+
+SG-000088 is the sole active grain. It publishes the already-qualified static
+website through zero-cost GitHub Pages and connects the website and repository
+to verified public launch entrypoints.
+
+SG-000088 may use GitHub Pages workflow deployment with the minimum required
+repository permissions and GitHub-provided short-lived Pages/OIDC credentials.
+It does not authorize custom DNS, analytics, tracking, cookies, authentication,
+forms, payments, hosted APIs, databases, release publication, alternate artifact
+distribution, or any Deskal runtime authority change.
+
 ## Successor work
 
-With SG-000087 closed canonically, any remaining launch-completeness work must
-be shaped as a new SpecGrain from the live frontier. Candidate work may include
-documentation entry-point integration, verified release/download presentation,
-or zero-cost hosting, but no successor is pre-authorized by this plan.
+After SG-000088 closes canonically, any remaining launch-completeness work must
+be shaped as a new SpecGrain from the live frontier. No custom domain, dynamic
+service, release publication, installer change, or compatibility migration is
+authorized by the current plan.
