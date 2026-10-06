@@ -2,7 +2,7 @@
   "id": "SG-000089",
   "title": "Canonical public repository metadata and discoverability",
   "program": "DESKAL-P19",
-  "state": "GRAIN",
+  "state": "CLOSED",
   "risk": "low",
   "created": "2026-10-06",
   "base": "878ddef25d7781a4101b6724baee9f1051ffc59a",
@@ -99,5 +99,43 @@
     "native_windows": false,
     "release_artifact_qualification": false
   },
-  "done_when": "The canonical metadata record is merged and qualified, the live GitHub description/homepage/topics exactly match it, the Pages homepage is reachable over HTTPS, excluded repository and release settings are proven unchanged, and post-merge CI is green."
+  "done_when": "The canonical metadata record is merged and qualified, the live GitHub description/homepage/topics exactly match it, the Pages homepage is reachable over HTTPS, excluded repository and release settings are proven unchanged, and post-merge CI is green.",
+  "qualified_head": "2ad84f4d766e756d241f0e6599aca874cacc46b6",
+  "implementation_base": "cfd9a2aa7c60235a477b41497633f93c5223a4bf",
+  "implementation_merge": "ef6dbff299ec0bf070a771c7dfdb6e8a99dce5d6",
+  "pre_merge_ci": "37510698471",
+  "post_merge_ci": "37511767810",
+  "canonical_evidence": {
+    "activation_pr": 228,
+    "activation_base": "878ddef25d7781a4101b6724baee9f1051ffc59a",
+    "activation_head": "d9c85ce4ae070bf0825e3c6ca1b2aa02d59ccdf9",
+    "activation_ci": "37505764659",
+    "activation_review_gates": "37505764741",
+    "activation_merge_sha": "cfd9a2aa7c60235a477b41497633f93c5223a4bf",
+    "activation_post_merge_ci": "37506835828",
+    "implementation_pr": 229,
+    "implementation_base": "cfd9a2aa7c60235a477b41497633f93c5223a4bf",
+    "qualified_head": "2ad84f4d766e756d241f0e6599aca874cacc46b6",
+    "pre_merge_ci": "37510698471",
+    "merge_sha": "ef6dbff299ec0bf070a771c7dfdb6e8a99dce5d6",
+    "post_merge_ci": "37511767810",
+    "pages_post_merge_run": "37511767612",
+    "live_description": "Local-first MCP authority layer for safe, bounded computer use and developer workflows.",
+    "live_homepage": "https://thehalfmoon.github.io/Deskal/",
+    "live_topics": [
+      "ai-agents",
+      "computer-use",
+      "desktop-automation",
+      "local-first",
+      "mcp",
+      "mcp-server",
+      "windows"
+    ],
+    "releases_snapshot_sha256": "1ee465d0629b1139b5b30146a0627a2ec3c30cc0dfbea409f397498a1b0bd5d5",
+    "tags_snapshot_sha256": "9d3b6fc9afc07329502f152106e8c06350cb886cb217b3ba678aa46ed8b5d8af",
+    "jev": "PASSED: activation 7/7 hunks and implementation 2/2 hunks with zero blocking findings.",
+    "ocr": "PASSED: activation 1 reviewable plus 3 manual exclusions; implementation 2/2 reviewable; zero findings.",
+    "unresolved_review_threads": 0,
+    "authority_boundary": "Repository description, homepage, topics, metadata record, and regression verification only. No release, tag, Pages configuration, repository policy, Deskal runtime, or MCP authority change."
+  }
 }

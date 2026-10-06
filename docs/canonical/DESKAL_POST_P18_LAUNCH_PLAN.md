@@ -50,7 +50,7 @@ distribution, or any Deskal runtime authority change.
 
 ## Third grain
 
-SG-000089 is the sole active grain. It makes the canonical GitHub repository a
+SG-000089 is CLOSED canonical. It made the canonical GitHub repository a
 coherent Deskal launch entrypoint by pinning and applying an evidence-bounded
 repository description, the canonical GitHub Pages homepage, and a bounded
 public topic allowlist.
@@ -63,7 +63,7 @@ migration, or any Deskal runtime authority change.
 
 ## Successor work
 
-After SG-000089 closes canonically, any remaining launch-completeness work must
+With SG-000089 closed canonically, any remaining launch-completeness work must
 be shaped as a new SpecGrain from the live frontier. No custom domain, dynamic
 service, release publication or modification, tag mutation, installer change,
 or compatibility migration is authorized by the current plan.

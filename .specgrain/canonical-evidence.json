@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "snapshot_base": "efcba086f9e249e70efa9d891098de469ef9581f",
+  "snapshot_base": "ef6dbff299ec0bf070a771c7dfdb6e8a99dce5d6",
   "state_semantics": {
     "GRAIN": "Authorized or active work packet whose acceptance is not yet canonically proven.",
     "PROVEN": "Acceptance and required qualification are proven, but canonical closeout/governance is not yet complete.",
@@ -1064,6 +1064,25 @@
       "review_basis": "Activation PR #225 qualified and merged normally before implementation. Implementation exact-head TypeSafe Jev reviewed 24/24 hunks with zero blocking findings (maximum blocker probability 0.15; exact-diff SHA-256 d92eb094af1383de986312f493e033a19af017db9bdd6c5f30c3ac3f9bd559a0). Alibaba Open Code Review exact-range delegation covered 8 changed files with 7 reviewable and README.md manually reviewed as the sole exclusion, with zero findings. Exact-head CI 37497532868 completed SUCCESS across all 9 jobs after preserving the release-blocker exact workflow allowlist as the governed quartet. GitHub Pages was enabled with build_type=workflow, no CNAME, HTTPS enforced, and no deployment secret. Pages run 37498630641 completed build, deploy, and HTTPS verification SUCCESS at https://thehalfmoon.github.io/Deskal/. Implementation merged normally as efcba086f9e249e70efa9d891098de469ef9581f and post-merge CI 37498630497 completed SUCCESS across all 9 jobs with zero unresolved review threads.",
       "unresolved_review_threads": 0,
       "authority_boundary": "Zero-cost static GitHub Pages hosting, website source, README launch entrypoints, workflow, tests, and repository Pages configuration only. No Deskal runtime or MCP authority change, custom domain, DNS change, analytics, telemetry, tracking, authentication, forms, payments, hosted API, database, secret-bearing deployment credential, release publication, installer change, or alternate artifact distribution."
+    },
+    "SG-000089": {
+      "implementation_pr": 229,
+      "implementation_base": "cfd9a2aa7c60235a477b41497633f93c5223a4bf",
+      "qualified_head": "2ad84f4d766e756d241f0e6599aca874cacc46b6",
+      "pre_merge_ci": "37510698471",
+      "merge_sha": "ef6dbff299ec0bf070a771c7dfdb6e8a99dce5d6",
+      "post_merge_ci": "37511767810",
+      "activation_pr": 228,
+      "activation_base": "878ddef25d7781a4101b6724baee9f1051ffc59a",
+      "activation_head": "d9c85ce4ae070bf0825e3c6ca1b2aa02d59ccdf9",
+      "activation_ci": "37505764659",
+      "activation_review_gates": "37505764741",
+      "activation_merge_sha": "cfd9a2aa7c60235a477b41497633f93c5223a4bf",
+      "activation_post_merge_ci": "37506835828",
+      "pages_post_merge_run": "37511767612",
+      "review_basis": "Activation exact-head TypeSafe Jev reviewed 7/7 hunks with zero blocking findings and Alibaba Open Code Review covered 1 reviewable file plus 3 manually reviewed Markdown exclusions, with zero findings and zero unresolved threads. Implementation exact-head TypeSafe Jev reviewed 2/2 hunks with zero blocking findings (maximum blocker probability 0.18; exact-diff SHA-256 61c23a19c28f3f96ad74a75e8af8f9d0e85c949d019f4a8796d490efe8e9a52a). Alibaba Open Code Review covered both implementation files with zero findings; the exact canonical values are intentionally hard-coded as a regression oracle. Graft rebuilt 5,151 nodes, 8,364 edges, and 211 cards and found zero indexed dependents outside the implementation diff. Exact-head CI and post-merge CI completed SUCCESS, the Pages post-merge run completed SUCCESS, the live repository description, homepage, and topic allowlist matched the canonical metadata record, the homepage returned HTTPS 200, and excluded repository settings remained unchanged.",
+      "unresolved_review_threads": 0,
+      "authority_boundary": "Canonical GitHub repository description, homepage, topics, machine-readable metadata record, and regression tests only. Releases and tags remained unchanged, Pages remained workflow-built with HTTPS enforced and no CNAME, repository visibility/default branch/merge settings remained unchanged, and no Deskal runtime or MCP authority changed."
     }
   }
 }
