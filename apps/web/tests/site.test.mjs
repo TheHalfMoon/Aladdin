@@ -192,3 +192,37 @@ test("canonical repository metadata is exact, bounded, and aligned with public e
   assert.equal(page.includes("https://github.com/TheHalfMoon/Deskal"), true);
   assert.equal(page.includes("/releases/download/"), false);
 });
+
+
+test("canonical and social metadata stay exact, static, and bounded to the Pages identity", async () => {
+  const layout = await read(join(root, "app", "layout.tsx"));
+
+  assert.match(layout, /const siteUrl = "https:\/\/thehalfmoon\.github\.io\/Deskal\/"/);
+  assert.match(layout, /metadataBase:\s*new URL\(siteUrl\)/);
+  assert.match(layout, /alternates:\s*\{[\s\S]*canonical:\s*siteUrl[\s\S]*\}/);
+  assert.match(layout, /openGraph:\s*\{[\s\S]*url:\s*siteUrl[\s\S]*siteName:\s*"Deskal"/);
+  assert.match(layout, /twitter:\s*\{[\s\S]*card:\s*"summary"[\s\S]*title[\s\S]*description/);
+  assert.equal((layout.match(/https:\/\/thehalfmoon\.github\.io\/Deskal\//g) ?? []).length, 1);
+  assert.doesNotMatch(layout, /images:\s*\[/);
+});
+
+test("responsive primary navigation stays keyboard and touch usable without client runtime", async () => {
+  const page = await read(join(root, "app", "page.tsx"));
+  const css = await read(join(root, "app", "globals.css"));
+
+  assert.match(page, /<nav className="desktop-nav" aria-label="Primary navigation">/);
+  assert.match(page, /<details className="mobile-nav">/);
+  assert.match(page, /<summary aria-label="Toggle primary navigation">/);
+  assert.match(page, /<nav className="mobile-nav-panel" aria-label="Mobile primary navigation">/);
+  assert.match(page, /<div id="content" tabIndex=\{-1\}>/);
+
+  for (const marker of ['"use client"', "onClick=", "onKeyDown=", "useState(", "useEffect("]) {
+    assert.equal(page.includes(marker), false, `static navigation must not add client behavior: ${marker}`);
+  }
+
+  assert.match(css, /a:focus-visible,\s*summary:focus-visible/);
+  assert.match(css, /\.mobile-nav summary\s*\{[\s\S]*min-height:\s*44px/);
+  assert.match(css, /\.mobile-nav-panel a\s*\{[\s\S]*min-height:\s*48px/);
+  assert.match(css, /@media \(max-width: 960px\)[\s\S]*\.mobile-nav\s*\{\s*display:\s*block/);
+  assert.match(css, /@media \(prefers-reduced-motion: reduce\)[\s\S]*scroll-behavior:\s*auto/);
+});

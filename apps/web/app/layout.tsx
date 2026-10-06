@@ -2,16 +2,32 @@ import type { Metadata } from "next";
 import type { CSSProperties, ReactNode } from "react";
 import "./globals.css";
 
+const siteUrl = "https://thehalfmoon.github.io/Deskal/";
+const title = "Deskal — Your computer, your terms";
+const description =
+  "Local-first, policy-checked computer access for MCP-compatible AI agents.";
+const socialDescription =
+  "A governed path from MCP-compatible AI agents to your own computer.";
+
 export const metadata: Metadata = {
-  title: "Deskal — Your computer, your terms",
-  description:
-    "Local-first, policy-checked computer access for MCP-compatible AI agents.",
+  metadataBase: new URL(siteUrl),
+  title,
+  description,
   applicationName: "Deskal",
+  alternates: {
+    canonical: siteUrl
+  },
   openGraph: {
-    title: "Deskal — Your computer, your terms",
-    description:
-      "A governed path from MCP-compatible AI agents to your own computer.",
-    type: "website"
+    title,
+    description: socialDescription,
+    type: "website",
+    url: siteUrl,
+    siteName: "Deskal"
+  },
+  twitter: {
+    card: "summary",
+    title,
+    description: socialDescription
   }
 };
 

@@ -1,4 +1,5 @@
 :root {
+  color-scheme: dark;
   --bg: #050505;
   --surface: #0a0a0b;
   --surface-2: #101013;
@@ -56,10 +57,15 @@ a {
   -webkit-tap-highlight-color: transparent;
 }
 
-a:focus-visible {
+a:focus-visible,
+summary:focus-visible {
   outline: 2px solid #fff;
   outline-offset: 4px;
   border-radius: 6px;
+}
+
+#content:focus {
+  outline: none;
 }
 
 svg {
@@ -82,6 +88,8 @@ svg {
 }
 
 .site-header {
+  position: relative;
+  z-index: 20;
   width: min(calc(100% - 2rem), var(--max));
   min-height: 72px;
   margin: 0 auto;
@@ -121,18 +129,21 @@ svg {
   filter: drop-shadow(0 0 12px rgba(133, 142, 236, 0.28));
 }
 
-.site-header nav {
+.desktop-nav {
   display: flex;
   gap: 1.75rem;
   color: var(--muted);
   font-size: 0.88rem;
 }
 
-.site-header nav a {
+.desktop-nav a {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
   transition: color 160ms ease;
 }
 
-.site-header nav a:hover {
+.desktop-nav a:hover {
   color: #fff;
 }
 
@@ -143,6 +154,101 @@ svg {
   gap: 0.55rem;
   font-size: 0.88rem;
   color: #d9d9dc;
+}
+
+.mobile-nav {
+  display: none;
+  justify-self: end;
+  position: relative;
+}
+
+.mobile-nav summary {
+  min-width: 72px;
+  min-height: 44px;
+  padding: 0 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.65rem;
+  list-style: none;
+  cursor: pointer;
+  color: #e8e8ea;
+  background: rgba(255, 255, 255, 0.035);
+  font-size: 0.82rem;
+  font-weight: 590;
+  user-select: none;
+}
+
+.mobile-nav summary::-webkit-details-marker {
+  display: none;
+}
+
+.mobile-nav-toggle {
+  width: 14px;
+  height: 10px;
+  position: relative;
+  display: inline-block;
+}
+
+.mobile-nav-toggle i {
+  position: absolute;
+  left: 0;
+  width: 14px;
+  height: 1px;
+  background: currentColor;
+  transition: transform 160ms ease, top 160ms ease;
+}
+
+.mobile-nav-toggle i:first-child {
+  top: 2px;
+}
+
+.mobile-nav-toggle i:last-child {
+  top: 8px;
+}
+
+.mobile-nav[open] .mobile-nav-toggle i:first-child {
+  top: 5px;
+  transform: rotate(45deg);
+}
+
+.mobile-nav[open] .mobile-nav-toggle i:last-child {
+  top: 5px;
+  transform: rotate(-45deg);
+}
+
+.mobile-nav-panel {
+  position: absolute;
+  top: calc(100% + 0.65rem);
+  right: 0;
+  z-index: 30;
+  width: min(22rem, calc(100vw - 2rem));
+  overflow: hidden;
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  display: grid;
+  background: rgba(8, 8, 10, 0.98);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.5);
+}
+
+.mobile-nav-panel a {
+  min-height: 48px;
+  padding: 0 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: #dedee2;
+  font-size: 0.9rem;
+}
+
+.mobile-nav-panel a + a {
+  border-top: 1px solid var(--line);
+}
+
+.mobile-nav-panel a:hover {
+  background: rgba(255, 255, 255, 0.045);
 }
 
 .section-shell {
@@ -826,8 +932,13 @@ svg {
     grid-template-columns: 1fr auto;
   }
 
-  .site-header nav {
+  .desktop-nav,
+  .header-cta {
     display: none;
+  }
+
+  .mobile-nav {
+    display: block;
   }
 
   .hero {
@@ -891,15 +1002,6 @@ svg {
 @media (max-width: 640px) {
   .site-header {
     min-height: 64px;
-  }
-
-  .header-cta {
-    font-size: 0;
-  }
-
-  .header-cta svg {
-    width: 18px;
-    height: 18px;
   }
 
   .hero {
