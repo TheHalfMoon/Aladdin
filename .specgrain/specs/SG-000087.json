@@ -1,0 +1,84 @@
+{
+  "id": "SG-000087",
+  "title": "Public website foundation and launch surface",
+  "program": "DESKAL-P19",
+  "state": "GRAIN",
+  "risk": "medium",
+  "created": "2026-10-06",
+  "base": "f06f7b2cca4ff226b8a69cbe1d1c1ad376afd69d",
+  "dependencies": [
+    "SG-000086"
+  ],
+  "objective": "Establish Deskal's first canonical public website foundation with the current Deskal product identity, local-first authority messaging, bounded security claims, responsive production-grade Next.js UI, reusable brand assets, and independent web CI qualification without changing runtime authority or compatibility identifiers.",
+  "scope": {
+    "include": [
+      "a new isolated apps/web Next.js application with responsive public marketing surfaces",
+      "Deskal monochrome and full-color brand mark assets and current product copy",
+      "public explanations of local-first authority, approvals, security boundaries, and MCP compatibility",
+      "web-only pinned dependencies and lockfile",
+      "web typecheck, test, and production-build CI qualification",
+      "visual QA on desktop and mobile viewports"
+    ],
+    "exclude": [
+      "changes to qdral compatibility CLI, daemon, npm packages, environment variables, OAuth scopes, source paths, storage paths, or MCP server name",
+      "changes to local runtime authority, MCP tool exposure, provider execution, approvals, trust, leases, policy, audit, or revocation",
+      "hosted backend services, analytics, tracking, cookies, authentication, payments, or mandatory paid infrastructure",
+      "release artifact replacement or installer changes",
+      "production hosting or DNS changes"
+    ]
+  },
+  "authority_delta": {
+    "filesystem": "None. Static repository website source and generated build output only.",
+    "process": "None.",
+    "network": "None at Deskal runtime. The website contains ordinary outbound documentation/source links only.",
+    "browser": "None.",
+    "ui_input": "None.",
+    "secrets": "None. No secret-bearing environment variables or telemetry.",
+    "approval": "None.",
+    "privileged": "None."
+  },
+  "invariants": [
+    "Deskal is the only current product brand on the public website",
+    "qdral appears only where required by the compatibility contract",
+    "marketing copy must not claim authority or capability beyond canonical evidence",
+    "the website must not add telemetry, tracking, hosted control, or mandatory cloud dependence",
+    "web dependencies are pinned and qualified independently from runtime packages",
+    "runtime and MCP authority remain byte-for-byte outside this grain's intended change surface"
+  ],
+  "acceptance": [
+    {
+      "id": "A1",
+      "claim": "The responsive website presents Deskal identity, product purpose, security boundaries, and developer MCP connection information without stale Cotra/Quntal branding or misleading Qdral product branding."
+    },
+    {
+      "id": "A2",
+      "claim": "The website builds as an optimized production Next.js application, passes strict TypeScript and web tests, and has no required secret, telemetry, analytics, or paid-service dependency."
+    },
+    {
+      "id": "A3",
+      "claim": "Brand assets provide monochrome and full-color Deskal mark variants with accessible text treatment and desktop/mobile visual QA."
+    },
+    {
+      "id": "A4",
+      "claim": "Repository CI includes independent web typecheck, tests, and production build while all existing Rust, Node, governance, supply-chain, and release qualification gates remain unchanged."
+    },
+    {
+      "id": "A5",
+      "claim": "Exact-head CI, genuine TypeSafe Jev, Alibaba Open Code Review, manual review of exclusions, and zero unresolved blocking review threads pass before merge."
+    }
+  ],
+  "successor_requirements": {
+    "hosting": "Production hosting, DNS, analytics, forms, downloads, or backend services require a separately authorized successor if they add external state, credentials, or operational authority.",
+    "launch": "Any public release/download CTA must point only to an existing verified Deskal repository or release surface unless a later grain qualifies a new distribution path."
+  },
+  "review": {
+    "diffcipline": true,
+    "jev_semantic_review": true,
+    "alibaba_open_code_review": "required exact-range qualification where integrated",
+    "security_review": true,
+    "exact_head_ci": true,
+    "native_windows": false,
+    "release_artifact_qualification": false
+  },
+  "done_when": "The public website foundation is merged, exact-head qualified, visually reviewed on desktop and mobile, post-merge CI is green, and canonical evidence records zero runtime authority change."
+}
