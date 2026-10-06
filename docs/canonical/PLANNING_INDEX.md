@@ -1,7 +1,7 @@
 # Deskal Canonical Planning Index
 
 Status: ACTIVE NORMATIVE
-Date: 2026-10-04
+Date: 2026-10-07
 
 This index fixes planning precedence so no implementation agent can treat an
 obsolete Cotra-era or Qdral-era architectural statement as current authority.
@@ -59,8 +59,7 @@ canonically.
 | `docs/canonical/PLANNING_INDEX.md` | This precedence and classification index. |
 | `docs/identity/DESKAL_RENAME.md` | Product identity and compatibility boundary. |
 | `docs/governance/DIFFCIPLINE.md` | Exact-diff execution discipline. |
-| `.specgrain/specs/SG-000091.json` | The single active grain (DESKAL-P19 exit and public launch completeness). |
-| `docs/canonical/DESKAL_POST_P18_LAUNCH_PLAN.md` | Active DESKAL-P19 program plan for post-P18 launch completeness. |
+| `docs/canonical/DESKAL_POST_P18_LAUNCH_PLAN.md` | Closed DESKAL-P19 program record; no grain is active. |
 
 ### ACTIVE_SUPPORTING
 

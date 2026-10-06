@@ -1,6 +1,6 @@
 # Deskal Post-P18 Launch Completeness Plan
 
-Status: ACTIVE PROGRAM PLAN
+Status: EXITED CANONICAL
 Program: DESKAL-P19
 Date: 2026-10-06
 
@@ -76,12 +76,12 @@ compatibility migration, or any Deskal runtime authority.
 
 ## Fifth grain
 
-SG-000091 is the sole active grain. It is the DESKAL-P19 exit grain and adds no
-new product capability. It must produce a final launch-completeness evidence
+SG-000091 is CLOSED canonical. It was the DESKAL-P19 exit grain and added no
+new product capability. It produced a final launch-completeness evidence
 matrix across SG-000087 through SG-000090, with every required row proven and
 every intentionally absent surface explicitly classified OUT_OF_SCOPE.
 
-SG-000091 may add only exit documentation, regression tests, and the minimum
+SG-000091 added only exit documentation, regression tests, and the minimum
 canonical governance records required to close the program. It does not
 authorize custom DNS, dynamic services, release or tag mutation, installer or
 package changes, compatibility migration, repository-policy changes, or any
