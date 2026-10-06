@@ -1,0 +1,95 @@
+{
+  "id": "SG-000092",
+  "title": "P20 architecture, donor, and authority freeze",
+  "program": "DESKAL-P20",
+  "state": "GRAIN",
+  "risk": "high",
+  "created": "2026-10-07",
+  "base": "835200a90fd47425ff3ad40b5b8815dc8ad7871c",
+  "dependencies": [
+    "SG-000091"
+  ],
+  "objective": "Freeze the implementation-ready DESKAL-P20 reuse-first architecture for user-authorized full computer and web control. Pin donor revisions and reuse boundaries, define Safe, Full User, Full Admin, and Persistent Admin authority modes, preserve Deskal as the sole authority kernel, sequence the implementation grains, and prove that no donor code or runtime authority is introduced by this activation grain.",
+  "scope": {
+    "include": [
+      "canonical DESKAL-P20 architecture and implementation order",
+      "pinned donor repository revisions, selected source boundaries, reuse classifications, license and direct-permission evidence requirements, and forbidden donor surfaces",
+      "authority model for Safe, Full User, Full Admin, Persistent Admin, and Remote Full Control sessions",
+      "private sidecar and adapter boundaries for computer, shell, web, elevation, capability-routing, and optional visual-agent hosts",
+      "tool-surface target covering computer control, shell and process sessions, filesystem, browser, web scrape/crawl/search, capability health, and remote execution",
+      "cross-cutting failure, audit, revoke, resource, privacy, packaging, update, rollback, and qualification requirements",
+      "successor grain sequence SG-000093 through SG-000107"
+    ],
+    "exclude": [
+      "copying or importing donor source code",
+      "adding, exposing, or widening any MCP tool or runtime capability",
+      "changing approval, trust, lease, browser, desktop, filesystem, process, network, remote, or privileged execution behavior",
+      "installing or enabling an elevated service or persistent administrator broker",
+      "changing releases, tags, package publication, installer behavior, deployment, repository settings, secrets, environments, or collaborators",
+      "runtime dynamic donor-code fetching or floating donor revisions"
+    ]
+  },
+  "authority_delta": {
+    "filesystem": "None. Canonical planning, SpecGrain, and provenance records only.",
+    "process": "None.",
+    "network": "None.",
+    "browser": "None.",
+    "ui_input": "None.",
+    "secrets": "None.",
+    "approval": "None.",
+    "privileged": "None. The grain defines future user-authorized elevation semantics but grants no elevation authority."
+  },
+  "invariants": [
+    "Deskal remains the only caller-facing authority and MCP tool-surface source of truth",
+    "no donor backend receives an independent public MCP, HTTP, LAN, or remote authority surface",
+    "existing P18 computer-use evidence is reused rather than redesigned or invalidated",
+    "reuse is preferred over reimplementation when an authorized and technically suitable donor implementation exists",
+    "every imported donor file is pinned to an exact revision and recorded with provenance, license or direct-permission basis, destination, modification status, and tests before merge",
+    "no runtime fetch of donor code, latest tag, floating branch, or unpinned executable is permitted",
+    "Full User and Full Admin authority are locally user-granted leases and are never self-granted by a model, donor, remote caller, or relay",
+    "Full Admin uses a legitimate Windows elevation token obtained through user-approved OS elevation; UAC, Windows Hello, secure-desktop, or credential protections are never bypassed",
+    "Persistent Admin is a separate opt-in authority with explicit lifecycle, expiry or persistence policy, revoke, and uninstall semantics",
+    "remote full control requires a separately local-issued remote lease and cannot create, widen, renew, or persist its own authority",
+    "emergency revoke invalidates active full-control, admin, remote, input, browser, shell, and pending mutation authority without waiting for a remote caller",
+    "mutating operations never fabricate success and preserve not_started, dispatched, completed, cancelled, and outcome_unknown semantics"
+  ],
+  "acceptance": [
+    {
+      "id": "A1",
+      "claim": "The P20 architecture covers the complete target workflow from AI client through Deskal authority to computer, shell, web, elevation, capability-routing, visual-agent, remote, installer, revoke, and qualification boundaries with no unresolved subsystem ownership."
+    },
+    {
+      "id": "A2",
+      "claim": "The donor ledger pins exact revisions for Open Computer Use, Desktop Commander, Firecrawl, Agent Reach, UI-TARS Desktop, and gsudo; records selected source boundaries, reuse classification, license or direct-permission requirements, explicit exclusions, and per-import provenance requirements."
+    },
+    {
+      "id": "A3",
+      "claim": "The authority model distinguishes Safe, Full User, Full Admin, Persistent Admin, and Remote Full Control; defines who may grant and revoke each mode; and explicitly denies privilege bypass, model self-grant, remote self-grant, and donor-side authority minting."
+    },
+    {
+      "id": "A4",
+      "claim": "The successor sequence SG-000093 through SG-000107 has explicit dependency order and leaves no implementation, packaging, security, failure, native-Windows, remote, or release-qualification category unowned."
+    },
+    {
+      "id": "A5",
+      "claim": "The activation exact diff contains planning, provenance, and governance only: no production runtime code, donor import, new dependency, tool-surface change, release mutation, or authority widening."
+    },
+    {
+      "id": "A6",
+      "claim": "Exact-head CI, genuine TypeSafe Jev, Alibaba Open Code Review, manual review of excluded files, zero unresolved blocking review threads, normal merge, and post-merge CI complete before implementation begins."
+    }
+  ],
+  "successor_requirements": {
+    "sg_000093": "SG-000093 may activate only after SG-000092 closes canonically. It must implement and qualify the authority/profile/lease model before any donor executor is exposed."
+  },
+  "review": {
+    "diffcipline": true,
+    "jev_semantic_review": true,
+    "alibaba_open_code_review": "required exact-range qualification where integrated",
+    "security_review": true,
+    "exact_head_ci": true,
+    "native_windows": false,
+    "release_artifact_qualification": false
+  },
+  "done_when": "P20 is implementation-ready with exact donor provenance, authority modes, process boundaries, complete successor ownership, and no unresolved architectural gap; the activation diff is qualified and merged without introducing donor code or runtime authority."
+}

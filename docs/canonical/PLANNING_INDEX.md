@@ -59,12 +59,16 @@ canonically.
 | `docs/canonical/PLANNING_INDEX.md` | This precedence and classification index. |
 | `docs/identity/DESKAL_RENAME.md` | Product identity and compatibility boundary. |
 | `docs/governance/DIFFCIPLINE.md` | Exact-diff execution discipline. |
-| `docs/canonical/DESKAL_POST_P18_LAUNCH_PLAN.md` | Closed DESKAL-P19 program record; no grain is active. |
+| `.specgrain/specs/SG-000092.json` | Sole active grain: DESKAL-P20 architecture, donor, and authority freeze. |
+| `docs/canonical/DESKAL_P20_UNIVERSAL_AGENT_RUNTIME_PLAN.md` | Active DESKAL-P20 reuse-first architecture, authority, implementation-order, and qualification plan. |
+| `docs/canonical/DESKAL_P20_DONOR_LEDGER.md` | Active pinned donor/provenance and reuse-boundary ledger for DESKAL-P20. |
 
 ### ACTIVE_SUPPORTING
 
 | Document | Role |
 | --- | --- |
+| `docs/canonical/DESKAL_POST_P18_LAUNCH_PLAN.md` | Exited DESKAL-P19 launch-program record; it authorizes no P20 runtime work. |
+| `docs/p19/sg000091_exit_matrix.json` | Canonical P19 launch-completeness exit matrix: 18 rows, zero UNVERIFIED rows. |
 | `docs/canonical/QDRAL_COMPUTER_USE_PLAN.md` | Closed-program design record for QDRAL-P18. It remains supporting evidence for the delivered computer-use authority boundary but authorizes no new implementation. |
 | `docs/canonical/QDRAL_COMPUTER_USE_STATUS.md`, `..._ACTIVATION_GATE.md`, `..._IMPLEMENTATION_ORDER.md`, `..._GOVERNANCE_NOTE.md`, `..._SCOPE.md`, `..._README.md` | Program sequencing and activation state. |
 | `docs/canonical/QDRAL_COMPUTER_USE_DECISIONS.md`, `..._AUTHORITY_MODEL.md`, `..._EXECUTION_RULE.md`, `..._NO_FALLBACK.md`, `..._LOCAL_FIRST.md`, `..._ZERO_COST.md`, `..._SECURITY_DENIALS.md` | Planned authority boundaries; normative for P18 grains once activated. |
