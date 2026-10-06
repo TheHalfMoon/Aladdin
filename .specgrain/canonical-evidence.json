@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "snapshot_base": "9f8da57b15cbea563dfaa1d648a2d032ade7e77c",
+  "snapshot_base": "b7283e71dfeecc5719174fa79c8f6c2e3b9838fe",
   "state_semantics": {
     "GRAIN": "Authorized or active work packet whose acceptance is not yet canonically proven.",
     "PROVEN": "Acceptance and required qualification are proven, but canonical closeout/governance is not yet complete.",
@@ -1042,6 +1042,17 @@
       "review_basis": "Exact-head genuine TypeSafe Jev 2/2 hunks with zero findings/blocking findings (pin 31f89602797fb7bea007f8a480bf368bf564954e), Alibaba Open Code Review v1.12.9 exact-range delegation over 2 files with 1 reviewable and 1 excluded markdown file manually reviewed, exact-diff manual security review, Windows/Ubuntu Rust Node Governance, Supply chain audit, Release qualification, and Relay container, successful post-merge CI, and zero unresolved review threads. CodeRabbit skipped-review and cubic skipping notices evaluated as non-evidence noise with zero substantive findings.",
       "unresolved_review_threads": 0,
       "authority_boundary": "Tests and documentation only. No production code, no MCP surface, no authority widening of any kind."
+    },
+    "SG-000087": {
+      "implementation_pr": 223,
+      "implementation_base": "044703d9fdb6f43f2f7eba0fca4847afd6b4efbe",
+      "qualified_head": "f7c525c59b6361b699ac0580a5b3e9cf54902395",
+      "pre_merge_ci": "37481050573",
+      "merge_sha": "b7283e71dfeecc5719174fa79c8f6c2e3b9838fe",
+      "post_merge_ci": "37482332934",
+      "review_basis": "Exact-head genuine TypeSafe Jev 14/14 hunks with zero findings and zero blocking findings, Alibaba Open Code Review exact-range delegation over 14 changed files with 11 reviewable and 3 excluded files manually reviewed, desktop and mobile Microsoft Edge visual QA, exact-head Windows and Ubuntu Rust and Node plus Web, Governance, Supply chain audit, Release qualification, and Relay container CI, successful post-merge CI, and zero unresolved review threads. Qodo billing and CodeRabbit skipped-review notices are non-evidence noise.",
+      "unresolved_review_threads": 0,
+      "authority_boundary": "Static public website source, isolated web dependencies and lockfile, root web convenience scripts, and CI only. No runtime or MCP authority, trust, approval, policy, provider, lease, process, browser, privileged, secret, or release-artifact authority change."
     }
   }
 }

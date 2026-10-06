@@ -28,7 +28,7 @@ distribution, and computer-use qualification already being present.
 
 ## First grain
 
-SG-000087 is the sole active grain. It establishes the website foundation,
+SG-000087 is CLOSED canonical. It established the website foundation,
 brand assets, responsive marketing surfaces, developer MCP connection example,
 and independent web CI build.
 
@@ -38,7 +38,7 @@ authority change.
 
 ## Successor work
 
-After SG-000087 closes canonically, any remaining launch-completeness work must
+With SG-000087 closed canonically, any remaining launch-completeness work must
 be shaped as a new SpecGrain from the live frontier. Candidate work may include
 documentation entry-point integration, verified release/download presentation,
 or zero-cost hosting, but no successor is pre-authorized by this plan.
