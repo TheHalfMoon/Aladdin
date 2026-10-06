@@ -1,4 +1,5 @@
 const github = "https://github.com/TheHalfMoon/Deskal";
+const releases = `${github}/releases`;
 const security = `${github}/blob/main/docs/security/THREAT_MODEL.md`;
 const docs = `${github}/tree/main/docs`;
 
@@ -72,10 +73,11 @@ export default function Home() {
           <a href="#product">Product</a>
           <a href="#security">Security</a>
           <a href="#developers">Developers</a>
+          <a href={releases}>Releases</a>
           <a href={github}>GitHub</a>
         </nav>
-        <a className="header-cta" href={github}>
-          View source <Arrow />
+        <a className="header-cta" href={releases}>
+          View releases <Arrow />
         </a>
       </header>
 
@@ -221,7 +223,11 @@ export default function Home() {
           <span className="section-index">DESKAL</span>
           <h2>A more capable agent.<br />On your computer.</h2>
           <p>Open source, local-first, and built around explicit authority.</p>
-          <a className="button button-primary" href={github}>Start with the source <Arrow /></a>
+          <div className="hero-actions final-actions">
+            <a className="button button-primary" href={releases}>View verified releases <Arrow /></a>
+            <a className="button button-secondary" href={github}>Browse the source</a>
+          </div>
+          <p className="release-note">Published artifacts stay on the canonical GitHub Releases surface. Verify checksums and provenance before install.</p>
         </section>
       </div>
 
@@ -235,6 +241,7 @@ export default function Home() {
           <a href="#security">Security</a>
           <a href="#developers">Developers</a>
           <a href={docs}>Docs</a>
+          <a href={releases}>Releases</a>
           <a href={github}>GitHub</a>
         </div>
         <p className="footer-meta">Apache-2.0 · Local-first by design</p>

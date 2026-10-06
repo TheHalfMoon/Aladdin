@@ -107,8 +107,8 @@ svg {
   width: 27px;
   height: 27px;
   background: currentColor;
-  -webkit-mask: url("/brand/deskal-mark-mask.svg") center / contain no-repeat;
-  mask: url("/brand/deskal-mark-mask.svg") center / contain no-repeat;
+  -webkit-mask: var(--deskal-mark-mask) center / contain no-repeat;
+  mask: var(--deskal-mark-mask) center / contain no-repeat;
 }
 
 .brand-mark-white {
@@ -776,8 +776,19 @@ svg {
 }
 
 .final-cta p {
-  margin: 1.5rem 0 2rem;
+  margin: 1.5rem 0 0;
   color: var(--muted);
+}
+
+.final-actions {
+  margin-top: 2rem;
+}
+
+.final-cta .release-note {
+  max-width: 660px;
+  margin-top: 1.25rem;
+  font-size: 0.86rem;
+  line-height: 1.6;
 }
 
 .site-footer {
