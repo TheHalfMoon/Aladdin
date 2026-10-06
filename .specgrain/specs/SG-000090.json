@@ -1,0 +1,89 @@
+{
+  "id": "SG-000090",
+  "title": "Canonical web discovery metadata and sitemap",
+  "program": "DESKAL-P19",
+  "state": "GRAIN",
+  "risk": "low",
+  "created": "2026-10-06",
+  "base": "bb20c20daa97b992e8e96a975bb0a8021df45487",
+  "dependencies": [
+    "SG-000089"
+  ],
+  "objective": "Make the already-published static Deskal website self-describing to browsers and search crawlers through exact canonical URL metadata, Open Graph URL/site identity, and a deterministic sitemap, without adding analytics, tracking, dynamic services, custom DNS, release mutation, installer changes, or any Deskal runtime authority.",
+  "scope": {
+    "include": [
+      "absolute canonical metadata for the canonical GitHub Pages URL",
+      "evidence-bounded Open Graph URL and site-name metadata",
+      "a deterministic static sitemap containing only the canonical Deskal Pages URL",
+      "web regression tests that pin the canonical URL and prevent alternate origins or dynamic discovery surfaces",
+      "static-export build qualification and post-deployment HTTPS verification of the canonical page and sitemap"
+    ],
+    "exclude": [
+      "analytics, telemetry, tracking, cookies, pixels, third-party scripts, or hosted observability",
+      "custom domain or DNS changes",
+      "robots control for the thehalfmoon.github.io domain root, which this project page does not own",
+      "creating, editing, publishing, deleting, or retagging any GitHub Release or tag",
+      "authentication, forms, payments, hosted APIs, databases, or other dynamic services",
+      "installer changes, package publication, artifact distribution changes, or compatibility identifier migration",
+      "changes to Deskal runtime, MCP tools, policy, approvals, trust, leases, providers, browser authority, desktop authority, filesystem authority, network authority, or process authority"
+    ]
+  },
+  "authority_delta": {
+    "filesystem": "Static website metadata source, sitemap source, and web regression tests only; no Deskal runtime filesystem authority change.",
+    "process": "None at Deskal runtime.",
+    "network": "No Deskal runtime network authority. Qualification may read the already-public canonical Pages URL and sitemap over HTTPS.",
+    "browser": "None.",
+    "ui_input": "None.",
+    "secrets": "None.",
+    "approval": "None.",
+    "privileged": "None."
+  },
+  "invariants": [
+    "the canonical public origin remains exactly https://thehalfmoon.github.io/Deskal/",
+    "the sitemap contains no alternate host, dynamic endpoint, release asset, user-specific path, or secret-bearing value",
+    "metadata is static build input and grants no Deskal authority",
+    "no telemetry, analytics, tracking, authentication, payment, form, hosted backend, custom domain, or DNS surface is introduced",
+    "GitHub Releases, tags, repository settings, Pages build mode, and Deskal runtime/MCP source remain unchanged"
+  ],
+  "acceptance": [
+    {
+      "id": "A1",
+      "claim": "The website emits one absolute canonical URL exactly equal to https://thehalfmoon.github.io/Deskal/ and pins the same URL in Open Graph metadata with site name Deskal."
+    },
+    {
+      "id": "A2",
+      "claim": "A deterministic static sitemap is produced with exactly one URL, https://thehalfmoon.github.io/Deskal/, and no timestamps or runtime-dependent values."
+    },
+    {
+      "id": "A3",
+      "claim": "Web regression tests fail on alternate origins, extra sitemap URLs, dynamic discovery behavior, tracking/analytics additions, or direct release-artifact links."
+    },
+    {
+      "id": "A4",
+      "claim": "The isolated web typecheck, tests, and static export build pass with the existing /Deskal project base path and runtime workspaces remain unchanged."
+    },
+    {
+      "id": "A5",
+      "claim": "Post-deployment HTTPS verification confirms the canonical page and /Deskal/sitemap.xml return successfully without changing Pages configuration or DNS."
+    },
+    {
+      "id": "A6",
+      "claim": "Exact-head CI, genuine TypeSafe Jev, Alibaba Open Code Review, manual review of exclusions, zero unresolved blocking review threads, normal merge, and post-merge CI complete before canonical closeout."
+    }
+  ],
+  "successor_requirements": {
+    "release_or_tag_change": "Any release or tag mutation requires separately authorized successor work.",
+    "custom_domain": "Any custom domain or DNS change requires separately authorized successor work.",
+    "dynamic_service": "Any analytics, telemetry, form, auth, payment, API, database, or hosted dynamic service requires separately authorized successor work."
+  },
+  "review": {
+    "diffcipline": true,
+    "jev_semantic_review": true,
+    "alibaba_open_code_review": "required exact-range qualification where integrated",
+    "security_review": true,
+    "exact_head_ci": true,
+    "native_windows": false,
+    "release_artifact_qualification": false
+  },
+  "done_when": "Canonical and Open Graph URL metadata plus a deterministic one-URL sitemap are merged and qualified, the static Pages deployment serves the canonical page and sitemap over HTTPS, excluded surfaces remain unchanged, and post-merge CI is green."
+}
