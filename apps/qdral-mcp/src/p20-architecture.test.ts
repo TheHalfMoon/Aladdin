@@ -177,7 +177,7 @@ test("P20 subsystem ownership and sequence have no gap", () => {
   assert.equal(plan.includes("SG-000108"), false);
 });
 
-test("SG-000092 is the sole active grain and successors are not pre-activated", () => {
+test("SG-000092 is closed and SG-000093 is the sole active grain", () => {
   const specDir = join(repo, ".specgrain", "specs");
   const specs = readdirSync(specDir).filter((name) => /^SG-\d{6}\.json$/.test(name));
   const open: string[] = [];
@@ -187,16 +187,24 @@ test("SG-000092 is the sole active grain and successors are not pre-activated", 
       open.push(spec.id);
     }
   }
-  assert.deepEqual(open, ["SG-000092"]);
+  assert.deepEqual(open, ["SG-000093"]);
 
-  const sg92 = readJson<{ id: string; program: string; state: string; base: string; dependencies: string[] }>(".specgrain/specs/SG-000092.json");
-  assert.equal(sg92.id, "SG-000092");
-  assert.equal(sg92.program, "DESKAL-P20");
-  assert.equal(sg92.state, "GRAIN");
-  assert.equal(sg92.base, "835200a90fd47425ff3ad40b5b8815dc8ad7871c");
-  assert.deepEqual(sg92.dependencies, ["SG-000091"]);
+  const sg92 = readJson<{ state: string; qualified_head: string; implementation_merge: string; post_merge_ci: string; canonical_evidence: { implementation_pr: number; unresolved_review_threads: number } }>(".specgrain/specs/SG-000092.json");
+  assert.equal(sg92.state, "CLOSED");
+  assert.equal(sg92.qualified_head, "35cadb63bbf4373cff36f8fce73bc5f57552576c");
+  assert.equal(sg92.implementation_merge, "03d28ac2e4c96d855dfd23df6257cc31a87b1a7a");
+  assert.equal(sg92.post_merge_ci, "37551232655");
+  assert.equal(sg92.canonical_evidence.implementation_pr, 242);
+  assert.equal(sg92.canonical_evidence.unresolved_review_threads, 0);
 
-  for (let n = 93; n <= 107; n += 1) {
+  const sg93 = readJson<{ id: string; program: string; state: string; base: string; dependencies: string[] }>(".specgrain/specs/SG-000093.json");
+  assert.equal(sg93.id, "SG-000093");
+  assert.equal(sg93.program, "DESKAL-P20");
+  assert.equal(sg93.state, "GRAIN");
+  assert.equal(sg93.base, "03d28ac2e4c96d855dfd23df6257cc31a87b1a7a");
+  assert.deepEqual(sg93.dependencies, ["SG-000092"]);
+
+  for (let n = 94; n <= 107; n += 1) {
     const id = `SG-${String(n).padStart(6, "0")}.json`;
     assert.equal(specs.includes(id), false, id);
   }
@@ -266,8 +274,9 @@ test("canonical P20 documents match the machine-readable freeze", () => {
   assert.match(ledger, /Owner grain: SG-000092/);
   assert.match(ledger, /No donor code merge proceeds unless all boxes are proven/);
 
-  assert.match(current, /SG-000092 - P20 architecture, donor, and authority freeze - is the sole active DESKAL-P20 grain/);
-  assert.match(planning, /\.specgrain\/specs\/SG-000092\.json/);
+  assert.match(current, /SG-000092 - P20 architecture, donor, and authority freeze - is CLOSED canonical/);
+  assert.match(current, /SG-000093 - Full-control authority and profile model - is the sole active DESKAL-P20 grain/);
+  assert.match(planning, /\.specgrain\/specs\/SG-000093\.json/);
   assert.match(planning, /DESKAL_P20_UNIVERSAL_AGENT_RUNTIME_PLAN\.md/);
   assert.match(planning, /DESKAL_P20_DONOR_LEDGER\.md/);
 });

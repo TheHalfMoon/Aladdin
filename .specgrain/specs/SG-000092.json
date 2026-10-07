@@ -2,7 +2,7 @@
   "id": "SG-000092",
   "title": "P20 architecture, donor, and authority freeze",
   "program": "DESKAL-P20",
-  "state": "GRAIN",
+  "state": "CLOSED",
   "risk": "high",
   "created": "2026-10-07",
   "base": "835200a90fd47425ff3ad40b5b8815dc8ad7871c",
@@ -91,5 +91,32 @@
     "native_windows": false,
     "release_artifact_qualification": false
   },
-  "done_when": "P20 is implementation-ready with exact donor provenance, authority modes, process boundaries, complete successor ownership, and no unresolved architectural gap; the activation diff is qualified and merged without introducing donor code or runtime authority."
+  "done_when": "P20 is implementation-ready with exact donor provenance, authority modes, process boundaries, complete successor ownership, and no unresolved architectural gap; the activation diff is qualified and merged without introducing donor code or runtime authority.",
+  "qualified_head": "35cadb63bbf4373cff36f8fce73bc5f57552576c",
+  "implementation_base": "ed82cb4c976d4169fd4f81327be62d37dd5ea0a7",
+  "implementation_merge": "03d28ac2e4c96d855dfd23df6257cc31a87b1a7a",
+  "pre_merge_ci": "37549276588",
+  "pre_merge_review_gates": "37549276655",
+  "post_merge_ci": "37551232655",
+  "canonical_evidence": {
+    "activation_pr": 241,
+    "activation_base": "835200a90fd47425ff3ad40b5b8815dc8ad7871c",
+    "activation_head": "771eaaeba234b1f533fd849440e133ff03ef62ae",
+    "activation_ci": "37547623637",
+    "activation_review_gates": "37547623682",
+    "activation_merge_sha": "ed82cb4c976d4169fd4f81327be62d37dd5ea0a7",
+    "activation_post_merge_ci": "37548262164",
+    "activation_pages_run": "37548261888",
+    "implementation_pr": 242,
+    "implementation_base": "ed82cb4c976d4169fd4f81327be62d37dd5ea0a7",
+    "qualified_head": "35cadb63bbf4373cff36f8fce73bc5f57552576c",
+    "pre_merge_ci": "37549276588",
+    "pre_merge_review_gates": "37549276655",
+    "merge_sha": "03d28ac2e4c96d855dfd23df6257cc31a87b1a7a",
+    "post_merge_ci": "37551232655",
+    "jev": "PASSED: genuine TypeSafe Jev reviewed 2/2 exact-diff hunks with zero findings and zero blocking findings.",
+    "ocr": "PASSED: Alibaba Open Code Review covered 1 reviewable file; the 1 excluded machine-readable evidence file was manually reviewed with zero blocking findings.",
+    "unresolved_review_threads": 0,
+    "authority_boundary": "Architecture, donor, and authority freeze evidence only. No donor runtime import, dependency, MCP tool, privileged service, release/tag mutation, or runtime authority delta."
+  }
 }

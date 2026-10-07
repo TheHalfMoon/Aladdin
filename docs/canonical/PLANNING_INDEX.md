@@ -59,7 +59,7 @@ canonically.
 | `docs/canonical/PLANNING_INDEX.md` | This precedence and classification index. |
 | `docs/identity/DESKAL_RENAME.md` | Product identity and compatibility boundary. |
 | `docs/governance/DIFFCIPLINE.md` | Exact-diff execution discipline. |
-| `.specgrain/specs/SG-000092.json` | Sole active grain: DESKAL-P20 architecture, donor, and authority freeze. |
+| `.specgrain/specs/SG-000093.json` | Sole active grain: DESKAL-P20 full-control authority and profile model. |
 | `docs/canonical/DESKAL_P20_UNIVERSAL_AGENT_RUNTIME_PLAN.md` | Active DESKAL-P20 reuse-first architecture, authority, implementation-order, and qualification plan. |
 | `docs/canonical/DESKAL_P20_DONOR_LEDGER.md` | Active pinned donor/provenance and reuse-boundary ledger for DESKAL-P20. |
 

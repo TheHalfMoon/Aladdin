@@ -1,0 +1,107 @@
+{
+  "id": "SG-000093",
+  "title": "Full-control authority and profile model",
+  "program": "DESKAL-P20",
+  "state": "GRAIN",
+  "risk": "high",
+  "created": "2026-10-07",
+  "base": "03d28ac2e4c96d855dfd23df6257cc31a87b1a7a",
+  "dependencies": [
+    "SG-000092"
+  ],
+  "objective": "Implement and qualify the Deskal-owned authority model that makes user-selected full computer control possible without exposing any donor executor yet: Safe remains the default; Full User uses a locally granted FullControlLease; Full Admin requires a separate AdminLease backed only by legitimate Windows elevation; all full-control authority is identity-bound, revocable, expiring or explicitly session-scoped, auditable, and impossible for an agent, donor, relay, or remote caller to self-grant.",
+  "scope": {
+    "include": [
+      "Safe, Full User, Full Admin, Persistent Admin intent, and Remote Full Control profile vocabulary and transition rules",
+      "FullControlLease and AdminLease typed contracts, stable IDs, issue/expiry/session lifetime, epoch, policy revision, device, Deskal session, Windows user, and logon-session binding",
+      "local-only grant, revoke, status, expiry, policy-invalidation, restart, and emergency-revoke semantics",
+      "capability/profile policy that states which future executor classes each authority mode may use without exposing those executors in this grain",
+      "audit-safe grant, revoke, expiry, invalidation, and denied-self-grant evidence",
+      "fail-closed result semantics for stale, expired, wrong-user, wrong-session, wrong-device, wrong-policy, revoked, unavailable-elevation, and remote-self-grant paths",
+      "native Windows qualification for user/logon-session identity binding where the implementation relies on Windows identity"
+    ],
+    "exclude": [
+      "importing Open Computer Use, Desktop Commander, Firecrawl, Agent Reach, UI-TARS, gsudo, or other donor runtime code",
+      "desktop screenshot, UIA actuation, mouse, keyboard, shell, process-session, expanded filesystem, browser-profile, web-scrape, crawl, search, or visual-agent executor exposure",
+      "installing or starting an elevated broker or Windows service",
+      "acquiring, caching, duplicating, or impersonating an elevated token",
+      "Persistent Admin service lifecycle",
+      "remote full-control execution",
+      "UAC bypass, Windows Hello bypass, secure-desktop automation, credential-provider bypass, SYSTEM, or TrustedInstaller authority",
+      "new caller-facing MCP tools that grant or mint full-control or admin authority"
+    ]
+  },
+  "authority_delta": {
+    "filesystem": "None. Existing bounded filesystem authority remains unchanged.",
+    "process": "None. Existing process authority remains unchanged.",
+    "network": "None.",
+    "browser": "None.",
+    "ui_input": "None.",
+    "secrets": "None.",
+    "approval": "Adds Deskal-internal, local-user-controlled FullControlLease/AdminLease grant, revoke, expiry, and profile state. Agent, MCP, relay, donor, and remote callers cannot issue, widen, renew, or persist these leases.",
+    "privileged": "Adds AdminLease intent and validation shape only. No elevated token acquisition, broker, service, privileged execution, UAC bypass, or administrator operation is introduced by SG-000093."
+  },
+  "invariants": [
+    "Safe is the default authority mode after install, restart, invalid state, or absent local grant.",
+    "FullControlLease is bound to the exact local Windows user, logon session, device identity, Deskal session, selected profile, policy revision, lease epoch, issue time, and expiry or explicit session lifetime.",
+    "AdminLease cannot be valid without a legitimate OS-issued elevated administrator token binding; SG-000093 does not acquire or host that token.",
+    "Persistent Admin remains disabled and unavailable until its dedicated successor grain closes canonically.",
+    "Remote Full Control remains unavailable for execution until its dedicated successor grain; a remote caller cannot create, widen, renew, persist, or convert any local full-control lease.",
+    "No model output, MCP argument, donor process, relay message, browser page, shell command, or remote principal can mint an authority lease.",
+    "Emergency revoke and policy/identity epoch changes invalidate affected leases before new mutation dispatch.",
+    "A stale, expired, revoked, wrong-user, wrong-session, wrong-device, wrong-policy, or unsupported lease fails closed and cannot silently fall back to broader authority.",
+    "SG-000093 does not expose donor executors or widen the current filesystem, process, browser, network, UI-input, remote, or privileged execution surface.",
+    "Mutations retain not_started, dispatched, completed, cancelled, and outcome_unknown semantics and are never auto-retried merely because a lease changed."
+  ],
+  "acceptance": [
+    {
+      "id": "A1",
+      "claim": "The canonical authority-mode and profile vocabulary contains exactly Safe, Full User, Full Admin, Persistent Admin, and Remote Full Control, with Safe the sole default."
+    },
+    {
+      "id": "A2",
+      "claim": "FullControlLease is typed and cryptographically/unforgeably identified, is bound to local user/logon session/device/Deskal session/profile/policy/epoch/time, and fails closed on every binding mismatch."
+    },
+    {
+      "id": "A3",
+      "claim": "Only the authenticated local user control path can grant or revoke Full User/Admin intent; agent, MCP, donor, relay, and remote paths have no lease-minting or lease-widening operation."
+    },
+    {
+      "id": "A4",
+      "claim": "AdminLease requires proof of a legitimate elevated Windows authority binding but SG-000093 has no elevation broker, token acquisition, cached elevation, privileged service, or admin executor."
+    },
+    {
+      "id": "A5",
+      "claim": "Emergency revoke, ordinary revoke, expiry, policy revision, identity/session change, and restart semantics deterministically invalidate the appropriate leases and block undispatched mutations."
+    },
+    {
+      "id": "A6",
+      "claim": "Profile rules are explicit for future desktop, shell/process, filesystem, browser, web, visual-agent, admin, and remote executor classes, but no successor executor becomes callable in this grain."
+    },
+    {
+      "id": "A7",
+      "claim": "Persistent Admin remains unavailable and Remote Full Control remains execution-disabled; neither can be inferred from prior Full User or Full Admin use."
+    },
+    {
+      "id": "A8",
+      "claim": "Unit, integration, adversarial self-grant, stale-binding, revoke, and native Windows identity/session tests pass on the exact head with no secret/token material written to ordinary logs or evidence."
+    },
+    {
+      "id": "A9",
+      "claim": "The exact implementation diff imports no donor runtime code, adds no new privileged service, and does not widen existing MCP tool exposure."
+    }
+  ],
+  "successor_requirements": {
+    "sg_000094": "SG-000094 may activate only after SG-000093 closes canonically. It may import/adapt the pinned Open Computer Use Windows host only behind private Deskal IPC and may expose observation/capture host mechanics, but desktop input remains for SG-000095."
+  },
+  "review": {
+    "diffcipline": true,
+    "jev_semantic_review": true,
+    "alibaba_open_code_review": "required exact-range qualification where integrated",
+    "security_review": true,
+    "exact_head_ci": true,
+    "native_windows": true,
+    "release_artifact_qualification": false
+  },
+  "done_when": "The user-selectable full-control authority model is implemented and qualified inside Deskal with Safe default, exact lease/profile binding, local-only grants, deterministic revoke/expiry/emergency-stop behavior, no self-grant path, no donor executor exposure, and no privileged broker yet."
+}
