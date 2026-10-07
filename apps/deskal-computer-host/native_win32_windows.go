@@ -17,6 +17,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"syscall"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
@@ -99,6 +100,10 @@ type bitmapInfo struct { Header bitmapInfoHeader; Colors [1]rgbQuad }
 
 func sleepMs(ms int) { windows.SleepEx(uint32(ms), false) }
 
+func coInitializeEx(mode uintptr) {
+	_, _, _ = procCoInitializeEx.Call(0, mode)
+}
+
 func clsidFromString(value string) (windows.GUID, error) {
 	return windows.GUIDFromString(value)
 }
@@ -135,13 +140,23 @@ func oleRelease(self unsafe.Pointer) {
 
 func vtableCall(self unsafe.Pointer, slot int, args ...uintptr) (uintptr, uintptr, error) {
 	if self == nil { return 0, 0, errors.New("nil COM pointer") }
-	vtable := *(*uintptr)(self)
-	fn := *(*uintptr)(unsafe.Pointer(vtable + uintptr(slot)*unsafe.Sizeof(uintptr(0))))
-	all := make([]uintptr, 0, len(args)+1)
-	all = append(all, uintptr(self))
-	all = append(all, args...)
-	r1, r2, callErr := windows.SyscallN(append([]uintptr{fn}, all...)...)
-	return r1, r2, callErr
+	vtable := *(**[1024]uintptr)(self)
+	proc := vtable[slot]
+	selfArg := uintptr(self)
+	switch len(args) {
+	case 0:
+		ret, _, err := syscall.Syscall(proc, 1, selfArg, 0, 0)
+		return ret, 0, err
+	case 1:
+		return syscall.Syscall(proc, 2, selfArg, args[0], 0)
+	case 2:
+		return syscall.Syscall(proc, 3, selfArg, args[0], args[1])
+	case 3:
+		r1, r2, err := syscall.Syscall6(proc, 4, selfArg, args[0], args[1], args[2], 0, 0)
+		return r1, r2, err
+	default:
+		return syscall.SyscallN(proc, append([]uintptr{selfArg}, args...)...)
+	}
 }
 
 func utf16String(ptr *uint16, max int) string {
