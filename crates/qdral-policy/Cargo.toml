@@ -19,3 +19,11 @@ qdral-provider-uia = { path = "../qdral-provider-uia" }
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.52", features = [
+  "Win32_Foundation",
+  "Win32_Security",
+  "Win32_Security_Authorization",
+  "Win32_System_Threading",
+] }
