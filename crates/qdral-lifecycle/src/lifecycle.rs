@@ -431,12 +431,24 @@ mod imp {
             .verify()?
             .active;
         let (_, tunnel) = runnable_config(layout, &current.version)?;
+        let session = crate::full_control::begin_runtime_session(layout)?;
         let event = StopEvent::create(&runtime::stop_event_name(&layout.root))?;
         runtime::disinherit_standard_handles();
         let job = Job::kill_on_close()?;
-        let plan = tunnel
-            .launch_plan(&crate::ipc::host_environment())
-            .map_err(|message| LifecycleError::state(format!("tunnel launch plan: {message}")))?;
+        let mut host_env = crate::ipc::host_environment();
+        host_env.insert(
+            crate::full_control::RUNTIME_SESSION_ENV.into(),
+            session.session_id.clone(),
+        );
+        let plan = match tunnel.launch_plan(&host_env) {
+            Ok(plan) => plan,
+            Err(message) => {
+                crate::full_control::end_runtime_session(layout, &session.session_id);
+                return Err(LifecycleError::state(format!(
+                    "tunnel launch plan: {message}"
+                )));
+            }
+        };
         let mut child = Command::new(&plan.program)
             .args(&plan.args)
             .env_clear()
@@ -510,6 +522,7 @@ mod imp {
             .flatten()
             .and_then(|status| status.code());
         remove(&layout.health_url_file());
+        crate::full_control::end_runtime_session(layout, &session.session_id);
         if signalled == 0 {
             write_json_atomic(
                 &layout.stop_result(),

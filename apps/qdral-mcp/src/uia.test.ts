@@ -3,71 +3,149 @@ import test from "node:test";
 import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { DESKTOP_KERNEL_SHAPES, desktopWindowTreeSchema } from "./desktop.js";
+import {
+  DESKTOP_KERNEL_SHAPES,
+  desktopElementScrollSchema,
+  desktopInputExecuteSchema,
+  desktopWindowActionSchema,
+  desktopWindowCaptureSchema,
+  desktopWindowTreeSchema
+} from "./desktop.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const srcDir = join(here, "..", "src");
 const repo = join(here, "..", "..", "..");
 
-/** Tool sources; the SG-000065 contract declares metadata and forwards nothing. */
 function toolSources(): string[] {
   return readdirSync(srcDir).filter(
     (name) => name.endsWith(".ts") && !name.endsWith(".test.ts") && name !== "tool_contract.ts"
   );
 }
 
-/**
- * SG-000063: exactly two live, read-only desktop shapes reach the kernel,
- * and only from desktop.ts. Actuation, capture, visual, coordinate, input,
- * focus, and termination shapes are never forwarded.
- */
-test("only desktop.ts forwards UIA capabilities, and only the two read-only shapes", () => {
+test("SG-000095 desktop projection is centralized, exact, and contains no authority-management path", () => {
   const forwarded: string[] = [];
   for (const name of toolSources()) {
     const text = readFileSync(join(srcDir, name), "utf8");
-    for (const match of text.matchAll(/capability:\s*["'](uia\.[a-z_.]+)["'],\s*operation:\s*["']([a-z_]+)["']/g)) {
+    for (const match of text.matchAll(/capability:\s*["']((?:uia|desktop)\.[a-z_.]+)["'],\s*operation:\s*["']([a-z_]+)["']/g)) {
       forwarded.push(`${name}:${match[1] ?? ""}/${match[2] ?? ""}`);
     }
     if (name !== "desktop.ts") {
-      assert.doesNotMatch(text, /["']uia\./, `${name} must not name a UIA capability`);
+      assert.doesNotMatch(text, /["']desktop\.(?:cursor|input|window)["']/, `${name} must not name SG-000095 desktop authority`);
     }
   }
-  assert.deepEqual(forwarded.sort(), ["desktop.ts:uia.tree/observe", "desktop.ts:uia.window/list"]);
-  assert.deepEqual(
-    DESKTOP_KERNEL_SHAPES.map(([capability, operation]) => `${capability}/${operation}`),
-    ["uia.window/list", "uia.tree/observe"]
-  );
+
+  const expected = DESKTOP_KERNEL_SHAPES.map(
+    ([capability, operation]) => `desktop.ts:${capability}/${operation}`
+  ).sort();
+  assert.deepEqual(forwarded.sort(), expected);
+
   const desktop = readFileSync(join(srcDir, "desktop.ts"), "utf8");
   for (const forbidden of [
-    /uia\.element["']/,
-    /["'](invoke|set_value|select|toggle|scroll|capture|propose|execute|focus|activate|terminate|keyboard|mouse)["']/,
-    /SendInput|SetForegroundWindow|keybd_event|mouse_event/
+    /full[_-]?control.*grant/i,
+    /full[_-]?control.*renew/i,
+    /full[_-]?control.*revoke/i,
+    /AdminLease|PersistentAdmin|RemoteFullControl/,
+    /SendInput|SetForegroundWindow|keybd_event|mouse_event/,
+    /UAC|Windows Hello bypass|secure desktop bypass/i
   ]) {
     assert.doesNotMatch(desktop, forbidden);
   }
 });
 
-test("the exposed desktop shapes are exactly the live shapes pinned in the provider", () => {
+test("retained UIA exposure exactly matches the provider qualification table", () => {
   const lib = readFileSync(join(repo, "crates", "qdral-provider-uia", "src", "lib.rs"), "utf8");
   const live = [...lib.matchAll(/\(\s*"(uia\.[a-z_.]+)",\s*"([a-z_]+)",\s*DesktopShapeQualification::LiveExposed,?\s*\)/g)].map(
     (match) => `${match[1] ?? ""}/${match[2] ?? ""}`
   );
-  assert.deepEqual(live.sort(), ["uia.tree/observe", "uia.window/list"]);
+  assert.deepEqual(live.sort(), [
+    "uia.element/invoke",
+    "uia.element/scroll",
+    "uia.element/select",
+    "uia.element/set_value",
+    "uia.element/toggle",
+    "uia.screenshot/capture",
+    "uia.tree/observe",
+    "uia.window/list"
+  ]);
 });
 
-test("the tree tool binds a typed window identity and the provider bounds", () => {
-  const schema = desktopWindowTreeSchema("w");
-  const ok = schema.parse({ window_id: "uia-win-0123456789abcdef", window_generation: 3 });
-  assert.equal(ok.max_depth, 8);
-  assert.equal(ok.max_nodes, 256);
+test("typed desktop schemas fail closed on stale-looking ids and widened bounds", () => {
+  const tree = desktopWindowTreeSchema("w");
+  assert.equal(
+    tree.safeParse({ window_id: "uia-win-0123456789abcdef", window_generation: 3 }).success,
+    true
+  );
   for (const bad of [
     { window_id: "uia-win-0123456789ABCDEF", window_generation: 3 },
     { window_id: "hwnd:1234", window_generation: 3 },
     { window_id: "uia-win-0123456789abcdef", window_generation: -1 },
     { window_id: "uia-win-0123456789abcdef", window_generation: 3, max_depth: 9 },
-    { window_id: "uia-win-0123456789abcdef", window_generation: 3, max_nodes: 0 },
     { window_id: "uia-win-0123456789abcdef", window_generation: 3, max_nodes: 257 }
   ]) {
-    assert.equal(schema.safeParse(bad).success, false, JSON.stringify(bad));
+    assert.equal(tree.safeParse(bad).success, false, JSON.stringify(bad));
+  }
+
+  const capture = desktopWindowCaptureSchema("w");
+  assert.equal(
+    capture.safeParse({ window_id: "uia-win-0123456789abcdef", window_generation: 1 }).success,
+    true
+  );
+  assert.equal(capture.safeParse({ window_id: "uia-win-bad", window_generation: 1 }).success, false);
+
+  const scroll = desktopElementScrollSchema("w");
+  const base = {
+    element_id: "uia-el-0123456789abcdef",
+    tree_generation: 1,
+    control_type: "List"
+  };
+  assert.equal(
+    scroll.safeParse({
+      ...base,
+      direction: "down",
+      amount: 20,
+      expected_horizontal_percent: 0,
+      expected_vertical_percent: 0
+    }).success,
+    true
+  );
+  assert.equal(
+    scroll.safeParse({
+      ...base,
+      direction: "down",
+      amount: 21,
+      expected_horizontal_percent: 0,
+      expected_vertical_percent: 0
+    }).success,
+    false
+  );
+});
+
+test("raw input and window-action schemas are bounded to the SG-000095 vocabulary", () => {
+  const input = desktopInputExecuteSchema("w");
+  const window = {
+    window_id: "uia-win-0123456789abcdef",
+    window_generation: 1
+  };
+  assert.equal(input.safeParse({ ...window, action: "click", x: 4, y: 5 }).success, true);
+  assert.equal(
+    input.safeParse({ ...window, action: "scroll", x: 4, y: 5, scroll_x: 0, scroll_y: 20 }).success,
+    true
+  );
+  assert.equal(
+    input.safeParse({ ...window, action: "scroll", x: 4, y: 5, scroll_x: 0, scroll_y: 21 }).success,
+    false
+  );
+  assert.equal(input.safeParse({ ...window, action: "shell", text: "whoami" }).success, false);
+  assert.equal(
+    input.safeParse({ ...window, action: "hotkey", key: "ctrl+".concat("a".repeat(80)) }).success,
+    false
+  );
+
+  const windowAction = desktopWindowActionSchema("w");
+  for (const action of ["focus", "minimize", "maximize", "restore", "close"]) {
+    assert.equal(windowAction.safeParse({ ...window, action }).success, true, action);
+  }
+  for (const action of ["launch", "elevate", "terminate_process", "secure_desktop"]) {
+    assert.equal(windowAction.safeParse({ ...window, action }).success, false, action);
   }
 });

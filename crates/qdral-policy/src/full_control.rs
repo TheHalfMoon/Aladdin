@@ -50,6 +50,14 @@ pub struct LocalGrantProof {
     secret: [u8; 32],
 }
 
+impl LocalGrantProof {
+    pub(crate) fn from_secret(secret: [u8; 32]) -> Result<Self, PolicyError> {
+        let proof = Self { secret };
+        validate_local_grant_proof(&proof)?;
+        Ok(proof)
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum UntrustedGrantOrigin {
@@ -133,8 +141,8 @@ pub fn mode_selectable(proof: &LocalGrantProof, mode: AuthorityMode) -> Result<(
     }
 }
 
-pub fn executor_enabled_now(_mode: AuthorityMode, _executor: ExecutorClass) -> bool {
-    false
+pub fn executor_enabled_now(mode: AuthorityMode, executor: ExecutorClass) -> bool {
+    matches!(executor, ExecutorClass::DesktopInput) && mode == AuthorityMode::FullUser
 }
 
 pub fn broader_fallback_allowed() -> bool {
@@ -876,7 +884,9 @@ mod tests {
                 ExecutorClass::Admin,
                 ExecutorClass::Remote,
             ] {
-                assert!(!executor_enabled_now(mode, executor));
+                let enabled =
+                    mode == AuthorityMode::FullUser && executor == ExecutorClass::DesktopInput;
+                assert_eq!(executor_enabled_now(mode, executor), enabled);
             }
         }
         assert!(!broader_fallback_allowed());

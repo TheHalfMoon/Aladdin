@@ -1,5 +1,6 @@
 pub mod executable_registry;
 pub mod full_control;
+pub mod full_control_store;
 pub mod protected_state;
 pub mod remote_session;
 #[path = "sg000039.rs"]
@@ -62,6 +63,33 @@ impl PolicyEngine {
     }
 
     pub fn authorize(&self, request: &RequestEnvelope) -> Result<PolicyDecision, PolicyError> {
+        if is_full_user_desktop_shape(&request.capability, &request.operation) {
+            if request.version != INTERNAL_PROTOCOL_VERSION {
+                return Err(policy_error(
+                    FailureCode::InvalidRequest,
+                    "unsupported internal protocol version",
+                ));
+            }
+            if request.target.is_some() {
+                return Err(policy_error(
+                    FailureCode::InvalidRequest,
+                    "Full User desktop shapes do not accept a target field",
+                ));
+            }
+            let workspace = self
+                .legacy
+                .workspace(&request.workspace_id)
+                .ok_or_else(|| {
+                    policy_error(
+                        FailureCode::WorkspaceDenied,
+                        "requested workspace is not configured",
+                    )
+                })?;
+            return Ok(PolicyDecision {
+                workspace: workspace.clone(),
+                policy_revision: POLICY_REVISION,
+            });
+        }
         if is_fs_mutation_shape(&request.capability, &request.operation) {
             if request.version != INTERNAL_PROTOCOL_VERSION {
                 return Err(policy_error(
@@ -165,6 +193,17 @@ impl PolicyEngine {
     }
 }
 
+/// SG-000095 local-only Full User desktop shapes. Authorization here only
+/// admits the request to qdrald; the dispatch path still requires a fresh
+/// per-action approval plus an exact active FullControlLease immediately
+/// before private-host actuation.
+pub fn is_full_user_desktop_shape(capability: &str, operation: &str) -> bool {
+    matches!(
+        (capability, operation),
+        ("desktop.cursor", "get") | ("desktop.input", "execute") | ("desktop.window", "action")
+    )
+}
+
 /// SG-000061 bounded filesystem shapes. The legacy generic `fs.delete`
 /// shape stays denied; `fs.remove` is the reviewed single-entry removal.
 pub fn is_fs_mutation_shape(capability: &str, operation: &str) -> bool {
@@ -243,6 +282,9 @@ fn validate_fs_mutation(request: &RequestEnvelope) -> Result<(), PolicyError> {
 pub fn approval_class_for(capability: &str, operation: &str) -> ApprovalClass {
     if (capability, operation) == ("fs.remove", "remove") {
         return ApprovalClass::Strong;
+    }
+    if is_full_user_desktop_shape(capability, operation) {
+        return ApprovalClass::Soft;
     }
     if is_fs_mutation_shape(capability, operation) {
         return ApprovalClass::Soft;

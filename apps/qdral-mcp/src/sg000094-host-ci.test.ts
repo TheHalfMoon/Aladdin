@@ -99,8 +99,21 @@ test("SG-000094 production host source contains no desktop mutation or public li
     assert.equal(existsSync(join(hostDir, forbidden)), false, `forbidden donor file imported: ${forbidden}`);
   }
 
+  // This is historical SG-000094 evidence. SG-000095 lawfully adds three
+  // separately-qualified mutation files; exclude only those successor files
+  // while keeping every SG-000094 production file under this assertion.
+  const sg95SuccessorFiles = new Set([
+    "native_actions_windows.go",
+    "native_input_windows.go",
+    "native_window_actions_windows.go"
+  ]);
   const production = readdirSync(hostDir)
-    .filter((name) => name.endsWith(".go") && !name.endsWith("_test.go"))
+    .filter(
+      (name) =>
+        name.endsWith(".go") &&
+        !name.endsWith("_test.go") &&
+        !sg95SuccessorFiles.has(name)
+    )
     .map((name) => readFileSync(join(hostDir, name), "utf8"))
     .join("\n");
 

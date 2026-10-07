@@ -250,6 +250,7 @@ fn is_safe_qdral_env(name: &str) -> bool {
             | "QDRAL_WORKSPACE_ID"
             | "QDRAL_DEFAULT_WORKSPACE"
             | "QDRAL_DAEMON"
+            | "QDRAL_DESKAL_SESSION_ID"
     )
 }
 

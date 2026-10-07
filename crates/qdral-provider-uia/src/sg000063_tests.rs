@@ -1,9 +1,9 @@
-//! SG-000063 structured desktop MCP exposure tests.
+//! Structured desktop qualification regression tests.
 //!
-//! The qualification table is pinned here: only live, read-only,
-//! non-actuating shapes are exposed, and every shape the native adapter does
-//! not implement fails closed as unavailable. On Windows the live tests
-//! observe a real probe window that the test creates in a child process.
+//! SG-000063 established the read-only baseline. SG-000095 is the governed
+//! successor that exposes exact semantic actions and target-window capture
+//! through ComputerHostAdapter under Full User authority. The legacy
+//! NativeAdapter remains non-actuating and fail-closed.
 
 use super::*;
 
@@ -11,7 +11,7 @@ const WORKSPACE: &str = "uia-sg63-workspace";
 const POLICY: &str = "sg-000063-v1";
 
 #[test]
-fn only_live_read_only_shapes_are_exposed() {
+fn sg95_successor_exposes_only_the_qualified_retained_uia_shapes() {
     let exposed: Vec<(&str, &str)> = DESKTOP_SHAPE_QUALIFICATIONS
         .iter()
         .filter(|(_, _, qualification)| *qualification == DesktopShapeQualification::LiveExposed)
@@ -19,34 +19,29 @@ fn only_live_read_only_shapes_are_exposed() {
         .collect();
     assert_eq!(
         exposed,
-        vec![("uia.window", "list"), ("uia.tree", "observe")]
+        vec![
+            ("uia.window", "list"),
+            ("uia.tree", "observe"),
+            ("uia.element", "invoke"),
+            ("uia.element", "set_value"),
+            ("uia.element", "select"),
+            ("uia.element", "toggle"),
+            ("uia.element", "scroll"),
+            ("uia.screenshot", "capture"),
+        ]
     );
     for (capability, operation, qualification) in DESKTOP_SHAPE_QUALIFICATIONS {
-        let observation = is_allowed_uia_shape(capability, operation);
-        match qualification {
-            DesktopShapeQualification::LiveExposed | DesktopShapeQualification::LiveInternal => {
-                assert!(
-                    observation,
-                    "{capability}/{operation} must be observation-only"
-                );
-            }
-            DesktopShapeQualification::NotLive => {
-                assert!(
-                    !observation,
-                    "{capability}/{operation} must not be observation"
-                );
-                assert!(!is_mcp_exposed_desktop_shape(capability, operation));
-            }
-        }
         assert_eq!(
             is_mcp_exposed_desktop_shape(capability, operation),
             *qualification == DesktopShapeQualification::LiveExposed
         );
     }
     for (capability, operation) in [
+        ("uia.visual", "propose"),
+        ("uia.coordinates", "propose"),
+        ("uia.input", "execute"),
         ("uia.input", "keyboard"),
         ("uia.input", "mouse"),
-        ("uia.input", "send"),
         ("uia.window", "focus"),
         ("uia.window", "activate"),
         ("uia.process", "terminate"),
@@ -59,8 +54,8 @@ fn only_live_read_only_shapes_are_exposed() {
 }
 
 #[test]
-fn every_retained_actuation_and_input_shape_is_qualified_not_live() {
-    let retained = [
+fn sg95_successor_decisions_are_explicit_for_every_retained_action_shape() {
+    let exposed = [
         (
             "uia.element",
             "invoke",
@@ -91,6 +86,20 @@ fn every_retained_actuation_and_input_shape_is_qualified_not_live() {
             "capture",
             is_capture_shape("uia.screenshot", "capture"),
         ),
+    ];
+    for (capability, operation, retained_shape) in exposed {
+        assert!(
+            retained_shape,
+            "{capability}/{operation} is a retained shape"
+        );
+        let decision = DESKTOP_SHAPE_QUALIFICATIONS
+            .iter()
+            .find(|(c, o, _)| *c == capability && *o == operation)
+            .map(|(_, _, qualification)| *qualification);
+        assert_eq!(decision, Some(DesktopShapeQualification::LiveExposed));
+    }
+
+    for (capability, operation, retained_shape) in [
         (
             "uia.visual",
             "propose",
@@ -106,8 +115,7 @@ fn every_retained_actuation_and_input_shape_is_qualified_not_live() {
             "execute",
             is_input_execute_shape("uia.input", "execute"),
         ),
-    ];
-    for (capability, operation, retained_shape) in retained {
+    ] {
         assert!(
             retained_shape,
             "{capability}/{operation} is a retained shape"

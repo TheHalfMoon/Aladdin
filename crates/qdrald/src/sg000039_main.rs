@@ -119,6 +119,14 @@ fn handle_envelope(
         now_ms: &clock,
     };
     if let Some(remote) = &remote {
+        if uia::is_full_user_desktop_shape(&request.capability, &request.operation) {
+            let _ = audit.record(&request, POLICY_REVISION, "REMOTE_DENIED");
+            return ResponseEnvelope::failure(
+                request.request_id,
+                FailureCode::CapabilityDenied,
+                "SG-000095 Full User desktop authority is local-only; Remote Full Control remains unavailable",
+            );
+        }
         let trust_store = trust::TrustStore::load_or_create(trust::default_trust_path());
         if let Err(error) =
             remote_lease::gate_remote(&ctx, approval, &trust_store, &request, remote)
@@ -373,6 +381,16 @@ fn dispatch_trust(
             let epoch = approval
                 .emergency_revoke(&prompt)
                 .map_err(|error| ProviderError::new(error.code, error.message))?;
+            let full_control_epoch =
+                qdral_policy::full_control_store::revoke_default_if_present().map_err(|error| {
+                    ProviderError::new(
+                        FailureCode::InternalError,
+                        format!(
+                            "emergency revoke advanced the approval epoch but Full User desktop authority could not be revoked: {}",
+                            error.message
+                        ),
+                    )
+                })?;
             let leases_revoked = remote_lease::revoke_all(
                 &qdral_policy::remote_session::default_lease_store_path(),
             )
@@ -388,6 +406,7 @@ fn dispatch_trust(
             Ok(Some(json!({
                 "workspace_id": request.workspace_id,
                 "revoke_epoch": epoch,
+                "full_control_authority_epoch": full_control_epoch,
                 "remote_leases_revoked": leases_revoked,
                 "policy_revision": POLICY_REVISION,
             })))
