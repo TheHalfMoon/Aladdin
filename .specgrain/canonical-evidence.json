@@ -1123,6 +1123,27 @@
       "review_basis": "Exact-head CI 37549276588 passed 9/9 jobs; Review Gates 37549276655 passed; genuine TypeSafe Jev reviewed 2/2 hunks with zero findings/blockers; Alibaba Open Code Review covered 1 reviewable file and the 1 excluded machine-readable evidence file was manually reviewed with zero blocking findings; zero unresolved review threads.",
       "unresolved_review_threads": 0,
       "authority_boundary": "Architecture, donor, and authority freeze evidence only. No runtime authority delta."
+    },
+    "SG-000093": {
+      "implementation_pr": 245,
+      "implementation_base": "c930bf57651e83654a42a46d88c5ddbff895cab2",
+      "qualified_head": "2adb0dce463a49eba0f7bfec7698c468a08ec743",
+      "qualified_tree": "be69a7fa2629afcfb46e350fe09c78dfce873914",
+      "pre_merge_ci": "37561792512",
+      "pre_merge_review_gates": "37561793066",
+      "merge_sha": "64b6510b6a6e80d9dd0672121a82e199f643878f",
+      "post_merge_ci": "37562846785",
+      "activation_pr": 243,
+      "activation_base": "03d28ac2e4c96d855dfd23df6257cc31a87b1a7a",
+      "activation_head": "09c1ba4e5f4edf03a4efb8437308dd2f1f45d9fb",
+      "activation_ci": "37551987183",
+      "activation_review_gates": "37551987160",
+      "activation_merge_sha": "c930bf57651e83654a42a46d88c5ddbff895cab2",
+      "activation_post_merge_ci": "37552732652",
+      "activation_pages_run": "37552732697",
+      "review_basis": "Activation PR #243 qualified and merged normally before implementation. Implementation PR #245 exact head 2adb0dce463a49eba0f7bfec7698c468a08ec743 passed CI 37561792512 across all 9 jobs and Review Gates 37561793066; genuine TypeSafe Jev reviewed 3/3 hunks with zero findings/blockers; Alibaba Open Code Review covered 2 reviewable files and the 1 excluded Markdown file was manually reviewed with zero blocking findings; the head commit was GitHub Verified signed with DCO trailers and exact tree be69a7fa2629afcfb46e350fe09c78dfce873914; zero unresolved review threads; normal merge 64b6510b6a6e80d9dd0672121a82e199f643878f; post-merge CI 37562846785 passed 9/9.",
+      "unresolved_review_threads": 0,
+      "authority_boundary": "Deskal-owned authority/profile/lease model only. No donor executor, caller-facing MCP widening, privileged broker/service, remote full-control execution, or bypass path."
     }
   }
 }
