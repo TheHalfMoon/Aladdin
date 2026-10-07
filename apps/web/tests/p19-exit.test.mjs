@@ -124,13 +124,14 @@ test("canonical repository metadata matches the live exit snapshot exactly", () 
   assert.deepEqual(metadata.topics, matrix.live_snapshot.repository.topics);
 });
 
-test("P19 is exited and P20 advances from closed SG-000093 to active SG-000094", () => {
+test("P19 is exited and P20 advances through closed SG-000094 to active SG-000095", () => {
   const p19 = read("docs/canonical/DESKAL_POST_P18_LAUNCH_PLAN.md");
   const p20 = read("docs/canonical/DESKAL_P20_UNIVERSAL_AGENT_RUNTIME_PLAN.md");
   const sg91 = json(".specgrain/specs/SG-000091.json");
   const sg92 = json(".specgrain/specs/SG-000092.json");
   const sg93 = json(".specgrain/specs/SG-000093.json");
   const sg94 = json(".specgrain/specs/SG-000094.json");
+  const sg95 = json(".specgrain/specs/SG-000095.json");
 
   assert.match(p19, /Status: EXITED CANONICAL/);
   assert.match(p19, /SG-000091 is CLOSED canonical/);
@@ -142,17 +143,21 @@ test("P19 is exited and P20 advances from closed SG-000093 to active SG-000094",
   assert.equal(sg93.id, "SG-000093");
   assert.equal(sg93.program, "DESKAL-P20");
   assert.equal(sg93.state, "CLOSED");
-  assert.equal(sg93.qualified_head, "ef6b3858ebf112ff3ed2d0644391277a30017afa");
-  assert.equal(sg93.implementation_merge, "47820b6b9cb7f1378dc674e6bafcd04c2d682a7c");
-  assert.equal(sg93.post_merge_ci, "37565034457");
 
   assert.equal(sg94.id, "SG-000094");
   assert.equal(sg94.program, "DESKAL-P20");
-  assert.equal(sg94.state, "GRAIN");
-  assert.equal(sg94.base, "47820b6b9cb7f1378dc674e6bafcd04c2d682a7c");
-  assert.deepEqual(sg94.dependencies, ["SG-000093"]);
+  assert.equal(sg94.state, "CLOSED");
+  assert.equal(sg94.qualified_head, "b0459d356c8397e6cf91126bcdc209f11e41ef11");
+  assert.equal(sg94.implementation_merge, "5a86440021d70c8abb021c2042adc6ee1108471e");
+  assert.equal(sg94.post_merge_ci, "37651396449");
 
-  for (let n = 95; n <= 107; n += 1) {
+  assert.equal(sg95.id, "SG-000095");
+  assert.equal(sg95.program, "DESKAL-P20");
+  assert.equal(sg95.state, "GRAIN");
+  assert.equal(sg95.base, "5a86440021d70c8abb021c2042adc6ee1108471e");
+  assert.deepEqual(sg95.dependencies, ["SG-000094"]);
+
+  for (let n = 96; n <= 107; n += 1) {
     const id = `SG-${String(n).padStart(6, "0")}.json`;
     assert.throws(() => read(`.specgrain/specs/${id}`), undefined, id);
   }
