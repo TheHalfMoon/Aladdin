@@ -513,13 +513,15 @@ fn binding_digest(
     elevation_proof_id: Option<&str>,
 ) -> String {
     let mut hasher = Sha256::new();
+    let logon_session_id = logon_session_id.to_string();
+    let authority_epoch = authority_epoch.to_string();
     for part in [
         windows_user_sid,
-        &logon_session_id.to_string(),
+        logon_session_id.as_str(),
         device_id,
         deskal_session_id,
         policy_revision,
-        &authority_epoch.to_string(),
+        authority_epoch.as_str(),
         elevation_proof_id.unwrap_or(""),
     ] {
         hasher.update((part.len() as u64).to_le_bytes());
