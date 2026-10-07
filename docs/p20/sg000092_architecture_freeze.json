@@ -1,0 +1,306 @@
+{
+  "schema": "deskal-p20-architecture-freeze/1",
+  "grain": "SG-000092",
+  "program": "DESKAL-P20",
+  "canonical_base": "ed82cb4c976d4169fd4f81327be62d37dd5ea0a7",
+  "activation": {
+    "pr": 241,
+    "base": "835200a90fd47425ff3ad40b5b8815dc8ad7871c",
+    "qualified_head": "771eaaeba234b1f533fd849440e133ff03ef62ae",
+    "pre_merge_ci": "37547623637",
+    "review_gates": "37547623682",
+    "merge_sha": "ed82cb4c976d4169fd4f81327be62d37dd5ea0a7",
+    "post_merge_ci": "37548262164",
+    "pages_run": "37548261888",
+    "jev": {
+      "expected_hunks": 8,
+      "reviewed_hunks": 8,
+      "findings": 0,
+      "blocking_findings": 0
+    },
+    "ocr": {
+      "reviewable_files": 2,
+      "excluded_files": 4,
+      "manual_exclusions_reviewed": 4,
+      "blocking_findings": 0
+    },
+    "unresolved_review_threads": 0
+  },
+  "authority_delta": "none",
+  "caller_facing_authority": "Deskal only",
+  "authority_modes": [
+    {
+      "id": "safe",
+      "default": true,
+      "grantor": "existing Deskal policy",
+      "privilege": "current bounded authority",
+      "self_grant": false
+    },
+    {
+      "id": "full_user",
+      "default": false,
+      "grantor": "local user",
+      "privilege": "current Windows user token",
+      "self_grant": false
+    },
+    {
+      "id": "full_admin",
+      "default": false,
+      "grantor": "local user plus normal Windows elevation",
+      "privilege": "OS-issued elevated administrator token",
+      "self_grant": false
+    },
+    {
+      "id": "persistent_admin",
+      "default": false,
+      "grantor": "dedicated local opt-in",
+      "privilege": "separately qualified privileged broker lifecycle",
+      "self_grant": false
+    },
+    {
+      "id": "remote_full_control",
+      "default": false,
+      "grantor": "locally issued remote full-control lease",
+      "privilege": "bounded by exact local profile and principal/device/session binding",
+      "self_grant": false
+    }
+  ],
+  "privilege_denials": [
+    "UAC bypass",
+    "Windows Hello bypass",
+    "secure-desktop automation",
+    "credential-provider bypass",
+    "model self-grant",
+    "donor self-grant",
+    "remote self-grant",
+    "hidden persistence",
+    "SYSTEM authority in initial P20 surface",
+    "TrustedInstaller authority in initial P20 surface"
+  ],
+  "execution_preference": [
+    "semantic_uia_or_native",
+    "browser_dom_or_accessibility",
+    "visual_grounding",
+    "coordinate_or_raw_foreground_input"
+  ],
+  "result_states": [
+    "not_started",
+    "dispatched",
+    "completed",
+    "cancelled",
+    "outcome_unknown"
+  ],
+  "private_hosts": [
+    {
+      "id": "computer",
+      "donor_id": "open_computer_use",
+      "owner_grains": [
+        "SG-000094",
+        "SG-000095"
+      ],
+      "caller_facing": false
+    },
+    {
+      "id": "shell",
+      "donor_id": "desktop_commander",
+      "owner_grains": [
+        "SG-000096",
+        "SG-000097"
+      ],
+      "caller_facing": false
+    },
+    {
+      "id": "web",
+      "donor_id": "firecrawl",
+      "owner_grains": [
+        "SG-000101",
+        "SG-000102"
+      ],
+      "caller_facing": false
+    },
+    {
+      "id": "elevation",
+      "donor_id": "gsudo",
+      "owner_grains": [
+        "SG-000098",
+        "SG-000099"
+      ],
+      "caller_facing": false
+    },
+    {
+      "id": "capability_router",
+      "donor_id": "agent_reach",
+      "owner_grains": [
+        "SG-000103"
+      ],
+      "caller_facing": false
+    },
+    {
+      "id": "visual_agent",
+      "donor_id": "ui_tars",
+      "owner_grains": [
+        "SG-000100",
+        "SG-000104"
+      ],
+      "caller_facing": false
+    }
+  ],
+  "donors": [
+    {
+      "id": "open_computer_use",
+      "repository": "opensymph/open-computer-use",
+      "revision": "5b433b98019c18201a15d11e8c3cb0010879a3d8",
+      "license": "MIT",
+      "owner_grains": [
+        "SG-000094",
+        "SG-000095"
+      ],
+      "runtime_imported": false,
+      "permission_gate": "root license and selected-file dependency obligations must be revalidated at import"
+    },
+    {
+      "id": "desktop_commander",
+      "repository": "wonderwhy-er/DesktopCommanderMCP",
+      "revision": "bc1e944e30302e0022d49f418d55563dd74a162c",
+      "license": "MIT",
+      "owner_grains": [
+        "SG-000096",
+        "SG-000097",
+        "SG-000105"
+      ],
+      "runtime_imported": false,
+      "permission_gate": "root license and selected-file dependency obligations must be revalidated at import"
+    },
+    {
+      "id": "firecrawl",
+      "repository": "firecrawl/firecrawl",
+      "revision": "7120d16926544483513782b5393ae9850691d52a",
+      "license": "AGPL-3.0 public root plus asserted separate direct permission for Firecrawl-owned source",
+      "owner_grains": [
+        "SG-000101",
+        "SG-000102"
+      ],
+      "runtime_imported": false,
+      "permission_gate": "durable direct-permission evidence must cover intended copy, modification, combination, redistribution, and commercial distribution before distributable import; third-party dependencies remain independently governed"
+    },
+    {
+      "id": "agent_reach",
+      "repository": "Panniantong/Agent-Reach",
+      "revision": "a19a171fa980a0785849596492e0af4db800c82f",
+      "license": "MIT",
+      "owner_grains": [
+        "SG-000103"
+      ],
+      "runtime_imported": false,
+      "permission_gate": "root license and selected-file dependency obligations must be revalidated at import"
+    },
+    {
+      "id": "ui_tars",
+      "repository": "bytedance/UI-TARS-desktop",
+      "revision": "2ff41a9e515828c5bd5b276e493d73aa0bdf4a3a",
+      "license": "Apache-2.0 root; selected packages require per-package verification",
+      "owner_grains": [
+        "SG-000100",
+        "SG-000104"
+      ],
+      "runtime_imported": false,
+      "permission_gate": "per-file/package license, NOTICE, and dependency obligations must be verified before import"
+    },
+    {
+      "id": "gsudo",
+      "repository": "gerardog/gsudo",
+      "revision": "a4eda9b263d72a3e174f73b6b6b3ecfc5bc6656b",
+      "license": "MIT",
+      "owner_grains": [
+        "SG-000098",
+        "SG-000099"
+      ],
+      "runtime_imported": false,
+      "permission_gate": "root license and selected-file dependency obligations must be revalidated at import"
+    }
+  ],
+  "grain_sequence": [
+    {
+      "id": "SG-000092",
+      "role": "architecture_donor_authority_freeze"
+    },
+    {
+      "id": "SG-000093",
+      "role": "full_control_authority_and_profile_model"
+    },
+    {
+      "id": "SG-000094",
+      "role": "windows_computer_host_import"
+    },
+    {
+      "id": "SG-000095",
+      "role": "desktop_input_and_full_computer_control"
+    },
+    {
+      "id": "SG-000096",
+      "role": "shell_and_process_sessions"
+    },
+    {
+      "id": "SG-000097",
+      "role": "full_filesystem_and_workstation_parity"
+    },
+    {
+      "id": "SG-000098",
+      "role": "full_admin_elevation_broker"
+    },
+    {
+      "id": "SG-000099",
+      "role": "persistent_admin_lifecycle"
+    },
+    {
+      "id": "SG-000100",
+      "role": "browser_profile_expansion"
+    },
+    {
+      "id": "SG-000101",
+      "role": "local_web_scrape_and_extraction_runtime"
+    },
+    {
+      "id": "SG-000102",
+      "role": "crawl_map_documents_and_bounded_web_jobs"
+    },
+    {
+      "id": "SG-000103",
+      "role": "capability_router_and_doctor"
+    },
+    {
+      "id": "SG-000104",
+      "role": "visual_grounding_and_model_adapters"
+    },
+    {
+      "id": "SG-000105",
+      "role": "remote_full_control"
+    },
+    {
+      "id": "SG-000106",
+      "role": "unified_installer_sidecars_update_rollback_emergency_stop"
+    },
+    {
+      "id": "SG-000107",
+      "role": "p20_adversarial_qualification_and_release_exit"
+    }
+  ],
+  "import_state": {
+    "donor_files_imported": [],
+    "runtime_dependencies_added": [],
+    "mcp_tools_added": [],
+    "privileged_services_added": [],
+    "releases_or_tags_mutated": false
+  },
+  "invariants": [
+    "Deskal is the sole caller-facing authority surface.",
+    "No donor code is imported by SG-000092.",
+    "No runtime dependency or MCP tool is added by SG-000092.",
+    "Only SG-000092 is active; SG-000093 through SG-000107 remain absent until sequential activation.",
+    "Full User, Full Admin, Persistent Admin, and Remote Full Control are user-granted or locally issued and never model/donor/remote self-granted.",
+    "Full Admin requires a legitimate OS-issued elevated Windows token.",
+    "Emergency revoke is mandatory before executor exposure.",
+    "Mutations never fabricate success and are not automatically retried after dispatch.",
+    "Every future donor import is exact-revision pinned with provenance, permission/license, dependency, destination, modification, and test evidence."
+  ]
+}
