@@ -31,8 +31,9 @@ const (
 	scrollSlotScroll    = 3
 )
 
-// Semantic lookup must use the same depth/node ceilings as UIA observation.
-// Adversarial accessibility trees must not drive unbounded recursive traversal.
+// Semantic lookup must bound both recursion and raw sibling enumeration.
+// Unlike the read-only tree helper, it cannot precollect unbounded children
+// before applying the node ceiling to an adversarial accessibility provider.
 func findElementByRuntimeID(root uiaElement, walker unsafe.Pointer, key string, depth int, remaining *int) (uiaElement, bool) {
 	if depth > maxTreeDepth || *remaining <= 0 || !root.valid() {
 		return uiaElement{}, false
@@ -45,16 +46,41 @@ func findElementByRuntimeID(root uiaElement, walker unsafe.Pointer, key string, 
 	if depth == maxTreeDepth || *remaining == 0 {
 		return uiaElement{}, false
 	}
-	children := walkerChildren(walker, root)
-	for index, child := range children {
-		found, ok := findElementByRuntimeID(child, walker, key, depth+1, remaining)
-		child.release()
-		if ok || *remaining == 0 {
-			for _, unvisited := range children[index+1:] {
-				unvisited.release()
+
+	var current unsafe.Pointer
+	if hr, _, _ := vtableCall(walker, walkerSlotGetFirstChildElement,
+		uintptr(root.ptr), uintptr(unsafe.Pointer(&current))); int32(hr) < 0 {
+		if current != nil {
+			oleRelease(current)
+		}
+		return uiaElement{}, false
+	}
+	for current != nil && *remaining > 0 {
+		var next unsafe.Pointer
+		hr, _, _ := vtableCall(walker, walkerSlotGetNextSiblingElement,
+			uintptr(current), uintptr(unsafe.Pointer(&next)))
+		var isContent int32
+		contentHR, _, _ := vtableCall(current, elemSlotCurrentIsContentElement,
+			uintptr(unsafe.Pointer(&isContent)))
+		var found uiaElement
+		var ok bool
+		if int32(contentHR) >= 0 && isContent != 0 {
+			found, ok = findElementByRuntimeID(uiaElement{current}, walker, key, depth+1, remaining)
+		} else {
+			// Hidden/provider-only siblings must consume traversal budget too.
+			*remaining = *remaining - 1
+		}
+		oleRelease(current)
+		if ok || int32(hr) < 0 || *remaining == 0 {
+			if next != nil {
+				oleRelease(next)
 			}
 			return found, ok
 		}
+		current = next
+	}
+	if current != nil {
+		oleRelease(current)
 	}
 	return uiaElement{}, false
 }

@@ -60,7 +60,11 @@ test("SG-000095 native mutation source stays private, bounded, and excludes dono
   assert.match(semantic, /depth > maxTreeDepth/);
   assert.match(semantic, /\*remaining <= 0/);
   assert.match(semantic, /remaining := maxTreeNodes/);
-  assert.match(semantic, /findElementByRuntimeID\(child, walker, key, depth\+1, remaining\)/);
+  assert.match(semantic, /walkerSlotGetNextSiblingElement/);
+  assert.match(semantic, /findElementByRuntimeID\(uiaElement\{current\}, walker, key, depth\+1, remaining\)/);
+  assert.doesNotMatch(semantic, /walkerChildren\(walker, root\)/);
+  assert.match(semantic, /Hidden\/provider-only siblings must consume traversal budget too/);
+  assert.match(semantic, /oleRelease\(next\)/);
 
   for (const forbidden of [
     /ListenAndServe\s*\(/,
