@@ -6,16 +6,25 @@
 //! owner process, Windows user/logon session, local device key, policy
 //! revision, authority epoch, and finite expiry.
 
-use crate::layout::{read_json, write_json_atomic, Layout};
+#[cfg(windows)]
+use crate::layout::write_json_atomic;
+use crate::layout::{read_json, Layout};
 use crate::LifecycleError;
+#[cfg(windows)]
 use qdral_approval::{ApprovalBroker, ApprovalPrompt, LocalApprovalBroker};
-use qdral_policy::full_control::{AuthorityMode, FullControlLease};
+#[cfg(windows)]
+use qdral_policy::full_control::AuthorityMode;
+use qdral_policy::full_control::FullControlLease;
 use qdral_policy::full_control_store;
+#[cfg(any(windows, test))]
 use qdral_policy::POLICY_REVISION;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+#[cfg(any(windows, test))]
 use sha2::{Digest, Sha256};
-use std::path::{Path, PathBuf};
+#[cfg(windows)]
+use std::path::Path;
+use std::path::PathBuf;
 
 pub const RUNTIME_SESSION_SCHEMA: &str = "deskal-runtime-session/1";
 pub const RUNTIME_SESSION_ENV: &str = "QDRAL_DESKAL_SESSION_ID";
@@ -43,6 +52,7 @@ fn policy_error(error: qdral_policy::PolicyError) -> LifecycleError {
     ))
 }
 
+#[cfg(windows)]
 fn approval_error(error: qdral_approval::ApprovalError) -> LifecycleError {
     LifecycleError::state(format!(
         "full-control presence approval failed: {}",
@@ -50,6 +60,7 @@ fn approval_error(error: qdral_approval::ApprovalError) -> LifecycleError {
     ))
 }
 
+#[cfg(any(windows, test))]
 fn lower_hex(bytes: &[u8]) -> String {
     let mut out = String::with_capacity(bytes.len() * 2);
     for byte in bytes {
@@ -59,6 +70,7 @@ fn lower_hex(bytes: &[u8]) -> String {
     out
 }
 
+#[cfg(any(windows, test))]
 fn session_id(pid: u32, creation_time: u64, image: &str) -> String {
     let mut hasher = Sha256::new();
     hasher.update(b"deskal/sg000095/runtime-session/v1");
@@ -73,6 +85,7 @@ fn session_id(pid: u32, creation_time: u64, image: &str) -> String {
     )
 }
 
+#[cfg(any(windows, test))]
 fn record_shape_valid(record: &RuntimeSessionRecord) -> bool {
     if record.schema != RUNTIME_SESSION_SCHEMA
         || record.owner_pid == 0
@@ -93,6 +106,7 @@ fn record_shape_valid(record: &RuntimeSessionRecord) -> bool {
             .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
 }
 
+#[cfg(windows)]
 fn invalidate_existing_authority(layout: &Layout) -> Result<Option<u64>, LifecycleError> {
     let key_path = full_control_store::authority_key_path(&layout.root);
     if !key_path.exists() {
@@ -184,6 +198,7 @@ pub fn end_runtime_session(layout: &Layout, session_id: &str) {
     }
 }
 
+#[cfg(any(windows, test))]
 fn grant_digest(
     workspace_id: &str,
     session: &RuntimeSessionRecord,

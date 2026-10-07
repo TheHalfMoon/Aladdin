@@ -1,36 +1,36 @@
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { spawnSync } from "node:child_process";
 import test from "node:test";
 
 const repo = resolve(import.meta.dirname, "..", "..", "..");
 const hostDir = join(repo, "apps", "deskal-computer-host");
 
-function go(args: string[]) {
-  return spawnSync("go", args, {
-    cwd: hostDir,
-    encoding: "utf8",
-    env: { ...process.env, GOTOOLCHAIN: "go1.25.0" },
-    timeout: 240_000
-  });
-}
-
-test("SG-000095 native Windows desktop input qualification runs the disposable-window suite", { timeout: 300_000 }, (t) => {
-  if (process.platform !== "win32") {
-    t.skip("SG-000095 native input qualification runs only on Node / windows-latest");
-    return;
+test("SG-000095 disposable-window suite runs in the single native Go qualification", () => {
+  // SG-000094 owns the only go test ./... invocation. Starting a second
+  // concurrent process from a separate Node test file makes two independent
+  // Windows UI automation test runners compete for the same foreground and
+  // human-input tick. We mechanically prove SG-000095 is included in the
+  // existing full Go qualification instead of launching another runner.
+  const native = readFileSync(
+    join(hostDir, "native_input_qualification_windows_test.go"),
+    "utf8"
+  );
+  const qualifier = readFileSync(
+    join(repo, "apps", "qdral-mcp", "src", "sg000094-host-ci.test.ts"),
+    "utf8"
+  );
+  for (const name of [
+    "TestSG95NativeSemanticValueAndInputAgainstDisposableApp",
+    "TestSG95NativeWindowLifecycleOnDisposableApp",
+    "TestSG95NativeFreshnessAndBoundsFailClosed"
+  ]) {
+    assert.match(native, new RegExp("func " + name + "\\("), name);
   }
-  const version = go(["version"]);
-  if ((version.error as NodeJS.ErrnoException | undefined)?.code === "ENOENT") {
-    t.skip("local Go is unavailable; exact native qualification runs in Node / windows-latest");
-    return;
-  }
-  assert.equal(version.status, 0, version.stderr);
-  assert.match(version.stdout, /go1\.25\.0\b/);
-
-  const result = go(["test", "-count=1", "-run", "^TestSG95", "./..."]);
-  assert.equal(result.status, 0, result.stdout + result.stderr);
+  assert.ok(
+    qualifier.includes('const unit = go(["test", "./..."]);'),
+    "SG-000094 must execute the full SG-000095 Go suite exactly once"
+  );
 });
 
 test("SG-000095 native mutation source stays private, bounded, and excludes donor widening", () => {

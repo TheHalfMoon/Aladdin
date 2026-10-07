@@ -47,7 +47,8 @@ mod native_desktop;
 
 mod computer_host;
 pub use computer_host::{
-    ComputerHostAdapter, DesktopActionResult, DesktopInputAction, DesktopWindowAction,
+    ComputerHostAdapter, DesktopActionResult, DesktopCursorPosition, DesktopInputAction,
+    DesktopWindowAction,
 };
 
 pub const UIA_SCHEMA: &str = "qdral-uia-observation-v1";

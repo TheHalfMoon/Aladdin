@@ -17,7 +17,6 @@ use std::path::{Path, PathBuf};
 
 /// One live cursor snapshot from the private Windows Computer Host.
 #[derive(Debug, Clone, PartialEq, Eq)]
-#[cfg(windows)]
 pub struct DesktopCursorPosition {
     pub x: i32,
     pub y: i32,
@@ -1068,6 +1067,39 @@ impl ComputerHostAdapter {
     pub fn executable(&self) -> &Path {
         &self.path
     }
+
+    // The Windows-only methods remain type-visible on other hosts but never
+    // acquire desktop, input, or authority capabilities.
+    pub fn cursor_position(&self) -> Result<DesktopCursorPosition, UiaError> {
+        Err(UiaError::new(
+            FailureCode::ProviderUnavailable,
+            "Windows Computer Host is available only on Windows",
+        ))
+    }
+
+    pub fn execute_raw_input(
+        &self,
+        _hwnd: u64,
+        _action: &DesktopInputAction,
+        _expected_last_input_tick: u32,
+    ) -> Result<DesktopActionResult, UiaError> {
+        Err(UiaError::new(
+            FailureCode::ProviderUnavailable,
+            "Windows Computer Host is available only on Windows",
+        ))
+    }
+
+    pub fn execute_window_action(
+        &self,
+        _hwnd: u64,
+        _action: DesktopWindowAction,
+        _expected_last_input_tick: u32,
+    ) -> Result<DesktopActionResult, UiaError> {
+        Err(UiaError::new(
+            FailureCode::ProviderUnavailable,
+            "Windows Computer Host is available only on Windows",
+        ))
+    }
 }
 
 #[cfg(not(windows))]
@@ -1097,6 +1129,19 @@ impl UiaAdapter for ComputerHostAdapter {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(not(windows))]
+    #[test]
+    fn windows_desktop_control_fails_closed_on_other_platforms() {
+        let adapter = ComputerHostAdapter::from_path("not-a-windows-host").unwrap();
+        assert!(adapter.cursor_position().is_err());
+        assert!(adapter
+            .execute_raw_input(1, &DesktopInputAction::Move { x: 1, y: 1 }, 0)
+            .is_err());
+        assert!(adapter
+            .execute_window_action(1, DesktopWindowAction::Focus, 0)
+            .is_err());
+    }
 
     #[test]
     fn base64_decoder_is_bounded_and_strict() {
