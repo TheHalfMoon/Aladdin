@@ -15,8 +15,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     env:
-      TARGET_BRANCH: program/sg-000093-full-control-authority-signed
-      EXPECTED_HEAD: c930bf57651e83654a42a46d88c5ddbff895cab2
+      TARGET_BRANCH: program/sg-000093-identity-repair-signed
+      EXPECTED_HEAD: 64b6510b6a6e80d9dd0672121a82e199f643878f
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
@@ -40,7 +40,8 @@ jobs:
           token = os.environ["GH_TOKEN"]
           paths = [
               "crates/qdral-policy/src/full_control.rs",
-              "crates/qdral-policy/src/sg000040.rs",
+              "crates/qdral-policy/Cargo.toml",
+              "Cargo.lock",
               "docs/security/SG-000093_FULL_CONTROL_AUTHORITY_MODEL.md",
           ]
 
@@ -79,9 +80,9 @@ jobs:
                       },
                       "expectedHeadOid": expected,
                       "message": {
-                          "headline": "feat: add SG-000093 full-control authority model",
+                          "headline": "fix: complete SG-000093 identity qualification",
                           "body": (
-                              "Recreates the exact qualified SG-000093 staging tree from PR #244.\n\n"
+                              "Applies the forward SG-000093 identity/lease repair over canonical merge 64b6510b.\n\n"
                               "Co-authored-by: Abdulaziz M. Shehri <alshehriofficial@gmail.com>\n"
                               "Signed-off-by: github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>\n"
                               "Signed-off-by: Abdulaziz M. Shehri <alshehriofficial@gmail.com>"
