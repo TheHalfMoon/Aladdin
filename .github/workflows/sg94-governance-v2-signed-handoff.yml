@@ -1,0 +1,131 @@
+name: SG94 Governance V2 Signed Handoff
+
+on:
+  push:
+    branches:
+      - program/sg94-v2-sign-handoff-orchestrator
+    paths:
+      - .github/workflows/sg94-governance-v2-signed-handoff.yml
+
+permissions:
+  contents: write
+
+jobs:
+  create-signed-commit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      SOURCE_SHA: 8f2519124552b81a4a495d88659b1994f03a228f
+      TARGET_BRANCH: program/close-sg93-activate-sg94-v2-signed
+      EXPECTED_HEAD: 47820b6b9cb7f1378dc674e6bafcd04c2d682a7c
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          persist-credentials: false
+
+      - name: Create GitHub-signed SG-000094 governance commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: python
+        run: |
+          import base64
+          import json
+          import os
+          import pathlib
+          import sys
+          import urllib.request
+
+          repo = "TheHalfMoon/Deskal"
+          target = os.environ["TARGET_BRANCH"]
+          expected = os.environ["EXPECTED_HEAD"]
+          token = os.environ["GH_TOKEN"]
+          paths = [
+              ".specgrain/canonical-evidence.json",
+              ".specgrain/specs/SG-000093.json",
+              ".specgrain/specs/SG-000094.json",
+              "apps/qdral-mcp/src/p20-architecture.test.ts",
+              "apps/web/tests/p19-exit.test.mjs",
+              "docs/canonical/CURRENT.md",
+              "docs/canonical/PLANNING_INDEX.md",
+              "docs/p20/sg000094_windows_host_import.json",
+          ]
+
+          additions = []
+          for path in paths:
+              raw = pathlib.Path(path).read_bytes()
+              additions.append({
+                  "path": path,
+                  "contents": base64.b64encode(raw).decode("ascii"),
+              })
+
+          query = """
+          mutation($input: CreateCommitOnBranchInput!) {
+            createCommitOnBranch(input: $input) {
+              commit {
+                oid
+                url
+                tree { oid }
+                signature {
+                  isValid
+                  state
+                  wasSignedByGitHub
+                  signer { login }
+                }
+              }
+              ref { name }
+            }
+          }
+          """
+          body = {
+              "query": query,
+              "variables": {
+                  "input": {
+                      "branch": {
+                          "repositoryNameWithOwner": repo,
+                          "branchName": target,
+                      },
+                      "expectedHeadOid": expected,
+                      "message": {
+                          "headline": "governance: close SG-000093 and activate SG-000094",
+                          "body": (
+                              "Recreates the exact qualified v2 governance staging tree from PR #250.\n\n"
+                              "Signed-off-by: github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>\n"
+                              "Signed-off-by: Abdulaziz M. Shehri <alshehriofficial@gmail.com>"
+                          ),
+                      },
+                      "fileChanges": {"additions": additions},
+                  }
+              },
+          }
+
+          request = urllib.request.Request(
+              "https://api.github.com/graphql",
+              data=json.dumps(body).encode("utf-8"),
+              headers={
+                  "Authorization": f"Bearer {token}",
+                  "Content-Type": "application/json",
+                  "User-Agent": "Deskal-SG94-V2-Governance-Signed-Handoff",
+              },
+              method="POST",
+          )
+
+          with urllib.request.urlopen(request, timeout=30) as response:
+              payload = json.load(response)
+
+          if payload.get("errors"):
+              print(json.dumps(payload["errors"], indent=2))
+              sys.exit(1)
+
+          commit = payload["data"]["createCommitOnBranch"]["commit"]
+          signature = commit.get("signature") or {}
+          print(f"commit={commit['oid']}")
+          print(f"tree={commit['tree']['oid']}")
+          print(f"url={commit['url']}")
+          print(f"signature_state={signature.get('state')}")
+          print(f"signature_valid={signature.get('isValid')}")
+          print(f"signed_by_github={signature.get('wasSignedByGitHub')}")
+          print(f"signer={(signature.get('signer') or {}).get('login')}")
+
+          if not signature.get("isValid") or not signature.get("wasSignedByGitHub"):
+              sys.exit("GitHub-signed verification failed")
