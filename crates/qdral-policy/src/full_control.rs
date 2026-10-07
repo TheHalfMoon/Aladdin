@@ -626,10 +626,7 @@ pub fn current_windows_identity() -> Result<NativeWindowsIdentity, PolicyError> 
     }
 
     fn last_error(context: &str) -> PolicyError {
-        unavailable(format!(
-            "{context}: {}",
-            std::io::Error::last_os_error()
-        ))
+        unavailable(format!("{context}: {}", std::io::Error::last_os_error()))
     }
 
     fn token_info(token: &Token, class: i32) -> Result<Vec<usize>, PolicyError> {
