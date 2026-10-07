@@ -676,10 +676,8 @@ mod tests {
         assert!(AuthorityMode::Safe.is_default());
         assert!(mode_selectable(&local_proof(), AuthorityMode::FullUser).is_ok());
         assert!(mode_selectable(&local_proof(), AuthorityMode::FullAdmin).is_ok());
-        assert!(mode_selectable(&local_proof(), AuthorityMode::PersistentAdmin)
-        .is_err());
-        assert!(mode_selectable(&local_proof(), AuthorityMode::RemoteFullControl)
-        .is_err());
+        assert!(mode_selectable(&local_proof(), AuthorityMode::PersistentAdmin).is_err());
+        assert!(mode_selectable(&local_proof(), AuthorityMode::RemoteFullControl).is_err());
         assert!(
             future_profile_ceiling(AuthorityMode::FullUser).contains(&ExecutorClass::DesktopInput)
         );
@@ -747,8 +745,7 @@ mod tests {
 
         // Successful issuance requires LocalGrantProof. Its only field is
         // private to this module, so an external caller cannot construct it.
-        let lease =
-            issue_full_control(&local_proof(), request(AuthorityMode::FullUser)).unwrap();
+        let lease = issue_full_control(&local_proof(), request(AuthorityMode::FullUser)).unwrap();
         assert_eq!(lease.mode, AuthorityMode::FullUser);
     }
 
@@ -763,7 +760,7 @@ mod tests {
             &local_proof(),
             AdminLeaseRequest {
                 lease_id: lease_id("admin-", 'c'),
-                    elevation_proof_id: proof.clone(),
+                elevation_proof_id: proof.clone(),
                 elevation_state: ElevationState::ElevatedAdministrator,
                 issued_at_ms: NOW + 1_000,
                 duration_ms: 30 * 60 * 1_000,
@@ -789,12 +786,13 @@ mod tests {
             Some("win-elev-dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd");
         assert!(check_admin_lease(&admin, &full, &wrong_proof).is_err());
 
-        let full_user = issue_full_control(&local_proof(), request(AuthorityMode::FullUser)).unwrap();
+        let full_user =
+            issue_full_control(&local_proof(), request(AuthorityMode::FullUser)).unwrap();
         assert!(issue_admin_lease(
             &local_proof(),
             AdminLeaseRequest {
                 lease_id: lease_id("admin-", 'e'),
-                    elevation_proof_id: proof.clone(),
+                elevation_proof_id: proof.clone(),
                 elevation_state: ElevationState::ElevatedAdministrator,
                 issued_at_ms: NOW + 1_000,
                 duration_ms: 30 * 60 * 1_000,
@@ -807,7 +805,8 @@ mod tests {
 
     #[test]
     fn revoke_and_epoch_change_invalidate_before_new_dispatch() {
-        let mut lease = issue_full_control(&local_proof(), request(AuthorityMode::FullUser)).unwrap();
+        let mut lease =
+            issue_full_control(&local_proof(), request(AuthorityMode::FullUser)).unwrap();
         let mut epoch = AuthorityEpoch::new(lease.authority_epoch).unwrap();
         let mut ctx = context(SID, DEVICE, DESKAL_SESSION, POLICY);
         assert!(check_full_control(&lease, &ctx).is_ok());
@@ -837,7 +836,7 @@ mod tests {
             &local_proof(),
             AdminLeaseRequest {
                 lease_id: lease_id("admin-", 'd'),
-                    elevation_proof_id: proof.clone(),
+                elevation_proof_id: proof.clone(),
                 elevation_state: ElevationState::ElevatedAdministrator,
                 issued_at_ms: NOW + 1,
                 duration_ms: 60_000,
