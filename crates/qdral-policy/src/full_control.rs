@@ -287,7 +287,6 @@ pub struct AdminLease {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AdminLeaseRequest {
     pub lease_id: String,
-    pub origin: GrantOrigin,
     pub elevation_proof_id: String,
     pub elevation_state: ElevationState,
     pub issued_at_ms: u64,
