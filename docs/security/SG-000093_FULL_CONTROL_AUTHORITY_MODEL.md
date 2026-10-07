@@ -1,6 +1,6 @@
 # SG-000093 Full-Control Authority and Profile Model
 
-Status: IMPLEMENTATION STAGING
+Status: IMPLEMENTATION QUALIFICATION
 Program: DESKAL-P20
 Grain: SG-000093
 Canonical activation base: `c930bf57651e83654a42a46d88c5ddbff895cab2`
@@ -23,13 +23,15 @@ The exact mode vocabulary is:
 
 `Safe` is the sole default.
 
+Lease IDs are not caller supplied. `FullControlLease` and `AdminLease` IDs are domain-separated SHA-256 derivations over a private 256-bit `LocalGrantProof` secret plus their exact authority bindings, so changing the proof or any bound identity/session field changes the identifier.
+
 Only the authenticated local user control path can select or issue `Full User` or `Full Admin` authority.
 
 `Persistent Admin` remains unavailable until SG-000099.
 
 `Remote Full Control` remains unavailable until SG-000105.
 
-No agent, MCP caller, donor runtime, relay, or remote principal can mint, widen, renew, persist, or convert authority. SG-000093 requires an opaque `LocalGrantProof` for every successful lease issuance. Its constructor state is private to the authority module, so an MCP, agent, donor, relay, remote caller, or external crate cannot self-assert the local-user grant origin.
+No agent, MCP caller, donor runtime, relay, or remote principal can mint, widen, renew, persist, or convert authority. SG-000093 requires an opaque `LocalGrantProof` for every successful lease issuance. Its private 256-bit secret is neither serializable nor loggable through the public model, and an MCP, agent, donor, relay, remote caller, or external crate cannot self-assert the local-user grant origin.
 
 ## FullControlLease
 
@@ -49,6 +51,8 @@ Any mismatch fails closed.
 Restart or Deskal-session replacement invalidates the old lease because the session identity no longer matches.
 
 A policy revision change invalidates the old lease.
+
+On Windows, `current_windows_identity` reads the current process token through Win32 APIs, converts `TokenUser` to the canonical SID string, and uses `TokenStatistics.AuthenticationId` as the native logon-session LUID. The Windows CI test issues a lease from these real host values and proves exact-match admission plus SID/logon mismatch denial.
 
 Emergency revoke advances the authority epoch so all prior leases fail before a new mutation can dispatch.
 
@@ -140,4 +144,4 @@ SG-000094 may begin only after SG-000093 closes canonically.
 
 SG-000094 may import or adapt the pinned Open Computer Use Windows host behind private Deskal IPC. Desktop input remains owned by SG-000095.
 
-No donor import is authorized by SG-000093.
+No donor import is authorized by SG-000093. The only added platform binding is the already-present `windows-sys` dependency used for native Windows SID/logon-session qualification.
