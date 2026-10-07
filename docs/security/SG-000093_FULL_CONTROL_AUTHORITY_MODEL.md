@@ -1,8 +1,8 @@
 # SG-000093 Full-Control Authority and Profile Model
 
-Status: IMPLEMENTATION STAGING  
-Program: DESKAL-P20  
-Grain: SG-000093  
+Status: IMPLEMENTATION STAGING
+Program: DESKAL-P20
+Grain: SG-000093
 Canonical activation base: `c930bf57651e83654a42a46d88c5ddbff895cab2`
 
 ## Purpose
