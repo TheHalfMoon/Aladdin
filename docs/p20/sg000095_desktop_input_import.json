@@ -1,0 +1,116 @@
+{
+  "schema": "deskal-p20-sg000095-desktop-input-import/1",
+  "grain": "SG-000095",
+  "program": "DESKAL-P20",
+  "activation_base": "5a86440021d70c8abb021c2042adc6ee1108471e",
+  "donor": {
+    "repository": "opensymph/open-computer-use",
+    "commit": "5b433b98019c18201a15d11e8c3cb0010879a3d8",
+    "commit_verified": true,
+    "license": "MIT",
+    "license_blob_sha": "3b3840d939919f58113a626bb990a90f3b949aab"
+  },
+  "selected": [
+    {
+      "source": "apps/OpenComputerUseWindows/native_actions.go",
+      "blob": "25c2482d9d0e6b82c890ecf07956643b88bbf97f",
+      "reuse": "COPY_ADAPT",
+      "destination": "apps/deskal-computer-host/native_actions_windows.go",
+      "purpose": "semantic UIA/background action mechanics plus bounded target action dispatch",
+      "modification_boundary": "remove donor authority flags/public tool assumptions; bind actions to Deskal typed identities, FullControlLease, approvals, freshness, protected-surface policy, result states, and private-host protocol"
+    },
+    {
+      "source": "apps/OpenComputerUseWindows/desktop_windows.go",
+      "blob": "59466d669c1bfea13a15dfc371d9eceb471f21bd",
+      "reuse": "COPY_ADAPT",
+      "destination": "apps/deskal-computer-host/native_input_windows.go",
+      "purpose": "cursor position and SendInput mouse/keyboard/drag/scroll primitives only",
+      "modification_boundary": "copy only cursor and input primitives; reject whole-desktop capture, recorder/ffmpeg, detached-process, and hard-termination sections"
+    },
+    {
+      "source": "apps/OpenComputerUseWindows/input_helpers.go",
+      "blob": "a41a65cabfda87ced036fe8ad05b25cd17729dc6",
+      "reuse": "COPY_ADAPT",
+      "destination": "apps/deskal-computer-host/input_helpers.go",
+      "purpose": "modifier, key, Unicode typing, hold, and batching normalization",
+      "modification_boundary": "retain deterministic parsing helpers while adapting request shapes to Deskal private protocol and bounded limits"
+    },
+    {
+      "source": "apps/OpenComputerUseWindows/desktop.go",
+      "blob": "39512b3d0ca5e18b07e5f1c31c658198b74dfe84",
+      "reuse": "REFERENCE",
+      "destination": "none",
+      "purpose": "reference action vocabulary/parsing only where Deskal lacks an owned equivalent",
+      "modification_boundary": "do not copy screenshot, record, pidfile, ffmpeg, or CLI/public command surface"
+    }
+  ],
+  "reused_deskal_authority": [
+    "crates/qdral-policy/src/full_control.rs",
+    "crates/qdral-provider-uia/src/lib.rs",
+    "crates/qdral-provider-uia/src/computer_host.rs",
+    "apps/deskal-computer-host"
+  ],
+  "private_protocol": {
+    "base_operations": [
+      "hello",
+      "ping",
+      "list_windows",
+      "observe_window",
+      "capture_window",
+      "shutdown"
+    ],
+    "authorized_successor_operations": [
+      "cursor_position",
+      "semantic_action",
+      "input_move",
+      "input_click",
+      "input_drag",
+      "input_scroll",
+      "input_type_text",
+      "input_key",
+      "input_hotkey"
+    ],
+    "caller_facing": false,
+    "listeners": [],
+    "network_egress": false,
+    "requires_full_control_lease": true,
+    "allowed_modes": [
+      "full_user",
+      "full_admin"
+    ],
+    "safe_mode_input": false,
+    "privileged": false
+  },
+  "explicitly_rejected": [
+    "whole-desktop/virtual-screen capture from desktop_windows.go",
+    "arbitrary monitor/region capture widening",
+    "record/ffmpeg screen recording and polish/demo paths",
+    "record pidfiles and detached recorder process lifecycle",
+    "donor MCP/public tool server exposure",
+    "donor environment flags as authority",
+    "arbitrary process launch",
+    "UAC/Windows Hello/secure-desktop bypass",
+    "SYSTEM or TrustedInstaller authority"
+  ],
+  "dependencies": {
+    "go": "existing SG-000094 toolchain",
+    "modules": [
+      {
+        "module": "golang.org/x/sys",
+        "version": "v0.47.0"
+      }
+    ],
+    "new_modules_at_activation": []
+  },
+  "packaging": {
+    "included_in_release": false,
+    "owner_for_unified_packaging": "SG-000106"
+  },
+  "activation_state": {
+    "donor_runtime_imported": false,
+    "mcp_tools_added": [],
+    "host_operations_added": [],
+    "authority_executable": false,
+    "note": "This governance activation manifest selects the exact implementation boundary only. Runtime input authority remains unavailable until the SG-000095 implementation qualifies and merges."
+  }
+}

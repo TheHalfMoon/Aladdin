@@ -1164,6 +1164,23 @@
       "review_basis": "Activation PR #243 qualified and merged normally. Initial implementation PR #245 exact head 2adb0dce463a49eba0f7bfec7698c468a08ec743 passed CI 37561792512 (9/9) and Review Gates 37561793066; genuine TypeSafe Jev reviewed 3/3 hunks with zero findings/blockers; Alibaba Open Code Review covered 2 reviewable files and 1 manually reviewed Markdown exclusion; the head was GitHub Verified signed and merged normally as 64b6510b6a6e80d9dd0672121a82e199f643878f; post-merge CI 37562846785 passed 9/9. Forward-repair PR #247 then completed identity qualification from that exact canonical base: GitHub-Verified signed head ef6b3858ebf112ff3ed2d0644391277a30017afa; CI 37563415448 SUCCESS; Review Gates 37563415689 SUCCESS; genuine TypeSafe Jev 23/23 hunks with zero findings/blockers; Alibaba Open Code Review 2 reviewable files plus Cargo.lock and the security Markdown note manually reviewed as the 2 exclusions; zero unresolved review threads; normal merge 47820b6b9cb7f1378dc674e6bafcd04c2d682a7c; post-merge CI 37565034457 passed 9/9.",
       "unresolved_review_threads": 0,
       "authority_boundary": "Deskal-owned authority/profile/lease model and native Windows identity qualification only. No donor executor, caller-facing MCP widening, privileged broker/service, remote full-control execution, or bypass path."
+    },
+    "SG-000094": {
+      "implementation_pr": 254,
+      "implementation_base": "ca060c69ad6bcdbc38c15609620888c0bc0911f4",
+      "qualified_head": "b0459d356c8397e6cf91126bcdc209f11e41ef11",
+      "qualified_tree": "37e086ca4196bd4674cbe6bb87815cc1c32590b5",
+      "pre_merge_ci": "37649968407",
+      "pre_merge_review_gates": "37649967468",
+      "merge_sha": "5a86440021d70c8abb021c2042adc6ee1108471e",
+      "post_merge_ci": "37651396449",
+      "staging_pr": 253,
+      "staging_head": "de59f60d1277f3839396eb8bf075c26c6a3579ab",
+      "staging_ci": "37647737524",
+      "staging_review_gates": "37647731845",
+      "review_basis": "Staging PR #253 qualified tree 37e086ca4196bd4674cbe6bb87815cc1c32590b5 with CI 37647737524 (9/9) and Review Gates 37647731845. The exact tree was recreated from canonical base ca060c69ad6bcdbc38c15609620888c0bc0911f4 as GitHub-Verified signed+DCO head b0459d356c8397e6cf91126bcdc209f11e41ef11; exact-head CI 37649968407 passed all 9 jobs, Review Gates 37649967468 passed, genuine TypeSafe Jev reviewed 21/21 hunks across 19 files with zero findings/blockers, Alibaba Open Code Review v1.12.9 reviewed 11 reviewable files and all 8 exclusions were manually reviewed with zero blocking findings, zero unresolved review threads, normal merge 5a86440021d70c8abb021c2042adc6ee1108471e, and post-merge CI 37651396449 passed all 9 jobs.",
+      "unresolved_review_threads": 0,
+      "authority_boundary": "Private Deskal-supervised Windows observation/capture host only: exact-window capture, bounded UIA observation, Win32 window/process facts, sacrificial worker isolation, and typed ComputerHostAdapter integration. No desktop input, caller-facing MCP widening, launch/focus mutation, network, privileged, remote, release, installer, or tag authority."
     }
   }
 }
