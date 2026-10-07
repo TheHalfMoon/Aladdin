@@ -31,14 +31,16 @@
 
 use qdral_approval::{ApprovalBroker, ApprovalPrompt, ConsumeExpectation};
 use qdral_contracts::{FailureCode, RequestEnvelope};
-use qdral_policy::{Workspace, POLICY_REVISION};
+use qdral_policy::{full_control_store, Workspace, POLICY_REVISION};
 use qdral_provider_fs::ProviderError;
 use qdral_provider_uia::{
     capture_approval_digest, coordinate_derivation_digest, execute_approval_digest,
     invoke_approval_digest, scroll_approval_digest, select_approval_digest, toggle_approval_digest,
-    value_approval_digest, visual_proposal_digest, NativeAdapter, UiaRegistry, VisualRegion,
+    value_approval_digest, visual_proposal_digest, ComputerHostAdapter, DesktopInputAction,
+    DesktopWindowAction, NativeAdapter, UiaRegistry, VisualRegion, CAPTURE_SCOPE_TARGET_WINDOW,
 };
-use serde_json::Value;
+use serde_json::{json, Value};
+use sha2::{Digest, Sha256};
 use std::sync::{Mutex, OnceLock};
 
 fn registry() -> &'static Mutex<UiaRegistry> {
@@ -52,6 +54,431 @@ fn locked_registry() -> Result<std::sync::MutexGuard<'static, UiaRegistry>, Prov
         .map_err(|_| ProviderError::new(FailureCode::InternalError, "uia registry is unavailable"))
 }
 
+fn computer_host() -> Result<&'static ComputerHostAdapter, ProviderError> {
+    static HOST: OnceLock<ComputerHostAdapter> = OnceLock::new();
+    if let Some(host) = HOST.get() {
+        return Ok(host);
+    }
+    let host = ComputerHostAdapter::from_env()
+        .map_err(|error| ProviderError::new(error.code, error.message))?;
+    let _ = HOST.set(host);
+    HOST.get().ok_or_else(|| {
+        ProviderError::new(
+            FailureCode::ProviderUnavailable,
+            "Windows Computer Host could not be retained",
+        )
+    })
+}
+
+fn require_full_user_desktop() -> Result<(), ProviderError> {
+    full_control_store::check_current_desktop_input()
+        .map(|_| ())
+        .map_err(|error| ProviderError::new(error.code, error.message))
+}
+
+pub fn is_full_user_desktop_shape(capability: &str, operation: &str) -> bool {
+    qdral_policy::is_full_user_desktop_shape(capability, operation)
+        || qdral_provider_uia::is_invoke_shape(capability, operation)
+        || qdral_provider_uia::is_value_shape(capability, operation)
+        || qdral_provider_uia::is_select_shape(capability, operation)
+        || qdral_provider_uia::is_toggle_shape(capability, operation)
+        || qdral_provider_uia::is_scroll_shape(capability, operation)
+        || qdral_provider_uia::is_capture_shape(capability, operation)
+        || qdral_provider_uia::is_visual_propose_shape(capability, operation)
+        || qdral_provider_uia::is_coordinate_propose_shape(capability, operation)
+        || qdral_provider_uia::is_input_execute_shape(capability, operation)
+}
+
+fn desktop_request_digest(workspace: &Workspace, request: &RequestEnvelope) -> String {
+    let material = format!(
+        "deskal-sg95-full-user-v1|{}|{}|{}|{}|{}",
+        workspace.id, POLICY_REVISION, request.capability, request.operation, request.arguments
+    );
+    let digest = Sha256::digest(material.as_bytes());
+    digest.iter().map(|byte| format!("{byte:02x}")).collect()
+}
+
+fn full_user_cursor(request: &RequestEnvelope) -> Result<Value, ProviderError> {
+    if request.target.is_some() {
+        return Err(ProviderError::new(
+            FailureCode::InvalidRequest,
+            "desktop cursor does not accept a target field",
+        ));
+    }
+    reject_uia_arguments(request, &[])?;
+    require_full_user_desktop()?;
+    let cursor = computer_host()?
+        .cursor_position()
+        .map_err(|error| ProviderError::new(error.code, error.message))?;
+    Ok(json!({
+        "schema": "deskal-desktop-cursor/1",
+        "x": cursor.x,
+        "y": cursor.y,
+        "screen_width": cursor.screen_width,
+        "screen_height": cursor.screen_height,
+        "state": "completed",
+        "policy_revision": POLICY_REVISION
+    }))
+}
+
+fn desktop_input_action(
+    request: &RequestEnvelope,
+    action: &str,
+) -> Result<DesktopInputAction, ProviderError> {
+    match action {
+        "move" => {
+            reject_uia_arguments(
+                request,
+                &[
+                    "window_id",
+                    "expected_window_generation",
+                    "action",
+                    "x",
+                    "y",
+                ],
+            )?;
+            Ok(DesktopInputAction::Move {
+                x: required_i32(request, "x")?,
+                y: required_i32(request, "y")?,
+            })
+        }
+        "click" | "double_click" | "right_click" => {
+            reject_uia_arguments(
+                request,
+                &[
+                    "window_id",
+                    "expected_window_generation",
+                    "action",
+                    "x",
+                    "y",
+                ],
+            )?;
+            Ok(DesktopInputAction::Click {
+                x: required_i32(request, "x")?,
+                y: required_i32(request, "y")?,
+                button: if action == "right_click" {
+                    "right"
+                } else {
+                    "left"
+                }
+                .into(),
+                count: if action == "double_click" { 2 } else { 1 },
+            })
+        }
+        "drag" => {
+            reject_uia_arguments(
+                request,
+                &[
+                    "window_id",
+                    "expected_window_generation",
+                    "action",
+                    "x",
+                    "y",
+                    "to_x",
+                    "to_y",
+                ],
+            )?;
+            Ok(DesktopInputAction::Drag {
+                x: required_i32(request, "x")?,
+                y: required_i32(request, "y")?,
+                to_x: required_i32(request, "to_x")?,
+                to_y: required_i32(request, "to_y")?,
+            })
+        }
+        "scroll" => {
+            reject_uia_arguments(
+                request,
+                &[
+                    "window_id",
+                    "expected_window_generation",
+                    "action",
+                    "x",
+                    "y",
+                    "scroll_x",
+                    "scroll_y",
+                ],
+            )?;
+            let scroll_x = required_i32_signed(request, "scroll_x")?;
+            let scroll_y = required_i32_signed(request, "scroll_y")?;
+            if scroll_x == 0 && scroll_y == 0 {
+                return Err(ProviderError::new(
+                    FailureCode::InvalidRequest,
+                    "desktop scroll requires a non-zero bounded direction",
+                ));
+            }
+            if !(-20..=20).contains(&scroll_x) || !(-20..=20).contains(&scroll_y) {
+                return Err(ProviderError::new(
+                    FailureCode::InvalidRequest,
+                    "desktop scroll ticks must stay between -20 and 20",
+                ));
+            }
+            Ok(DesktopInputAction::Scroll {
+                x: required_i32(request, "x")?,
+                y: required_i32(request, "y")?,
+                scroll_x,
+                scroll_y,
+            })
+        }
+        "type_text" => {
+            reject_uia_arguments(
+                request,
+                &["window_id", "expected_window_generation", "action", "text"],
+            )?;
+            let text = required_string(request, "text")?;
+            if text.is_empty() || text.as_bytes().len() > 4096 || text.contains('\0') {
+                return Err(ProviderError::new(
+                    FailureCode::InvalidRequest,
+                    "desktop text must be non-empty valid text of at most 4096 UTF-8 bytes",
+                ));
+            }
+            Ok(DesktopInputAction::TypeText { text })
+        }
+        "key" | "hotkey" => {
+            reject_uia_arguments(
+                request,
+                &["window_id", "expected_window_generation", "action", "key"],
+            )?;
+            let key = required_string(request, "key")?;
+            if key.is_empty() || key.as_bytes().len() > 64 {
+                return Err(ProviderError::new(
+                    FailureCode::InvalidRequest,
+                    "desktop key binding is empty or too large",
+                ));
+            }
+            if action == "hotkey" {
+                Ok(DesktopInputAction::Hotkey { key })
+            } else {
+                Ok(DesktopInputAction::Key { key })
+            }
+        }
+        _ => Err(ProviderError::new(
+            FailureCode::CapabilityDenied,
+            "desktop input action is not mapped",
+        )),
+    }
+}
+
+fn full_user_input_with_approval(
+    workspace: &Workspace,
+    approval: &impl ApprovalBroker,
+    request: &RequestEnvelope,
+) -> Result<Value, ProviderError> {
+    if request.target.is_some() {
+        return Err(ProviderError::new(
+            FailureCode::InvalidRequest,
+            "desktop input does not accept a target field",
+        ));
+    }
+    let window_id = required_string(request, "window_id")?;
+    if !qdral_provider_uia::is_well_formed_window_id(&window_id) {
+        return Err(ProviderError::new(
+            FailureCode::InvalidRequest,
+            "desktop input window_id is malformed",
+        ));
+    }
+    let expected_window_generation = required_u64(request, "expected_window_generation")?;
+    let action_name = required_string(request, "action")?;
+    let action = desktop_input_action(request, &action_name)?;
+
+    require_full_user_desktop()?;
+    let binding = {
+        let guard = locked_registry()?;
+        guard
+            .capture_binding(
+                &window_id,
+                expected_window_generation,
+                CAPTURE_SCOPE_TARGET_WINDOW,
+                &workspace.id,
+                POLICY_REVISION,
+            )
+            .map_err(|error| ProviderError::new(error.code, error.message))?
+    };
+
+    let digest = desktop_request_digest(workspace, request);
+    let prompt = ApprovalPrompt::new(
+        workspace.id.clone(),
+        POLICY_REVISION,
+        "execute Full User desktop input",
+        window_id.clone(),
+        format!(
+            "process={} window={} window_generation={} action={} arguments_digest={}",
+            binding.process_id, binding.window_id, binding.window_generation, action_name, digest,
+        ),
+        digest.clone(),
+    );
+    let token = approval
+        .request_token(&prompt)
+        .map_err(|error| ProviderError::new(error.code, error.message))?;
+    approval
+        .consume(
+            &token,
+            &ConsumeExpectation::new(digest, workspace.id.clone(), POLICY_REVISION),
+            qdral_approval::now_ms(),
+        )
+        .map_err(|error| ProviderError::new(error.code, error.message))?;
+
+    let host = computer_host()?;
+    let cursor = host
+        .cursor_position()
+        .map_err(|error| ProviderError::new(error.code, error.message))?;
+    require_full_user_desktop()?;
+    let rebound = {
+        let guard = locked_registry()?;
+        guard
+            .capture_binding(
+                &window_id,
+                expected_window_generation,
+                CAPTURE_SCOPE_TARGET_WINDOW,
+                &workspace.id,
+                POLICY_REVISION,
+            )
+            .map_err(|error| ProviderError::new(error.code, error.message))?
+    };
+    if rebound.process_id != binding.process_id
+        || rebound.process_generation != binding.process_generation
+        || rebound.window_id != binding.window_id
+        || rebound.window_generation != binding.window_generation
+        || rebound.hwnd != binding.hwnd
+    {
+        return Err(ProviderError::new(
+            FailureCode::TargetStale,
+            "desktop input target changed after approval",
+        ));
+    }
+    let outcome = host
+        .execute_raw_input(rebound.hwnd, &action, cursor.last_input_tick)
+        .map_err(|error| ProviderError::new(error.code, error.message))?;
+    Ok(json!({
+        "schema": "deskal-desktop-input/1",
+        "state": outcome.state,
+        "action": outcome.action,
+        "message": outcome.message,
+        "window_id": rebound.window_id,
+        "process_id": rebound.process_id,
+        "window_generation": rebound.window_generation,
+        "approval_record": token.record_id,
+        "policy_revision": POLICY_REVISION
+    }))
+}
+
+fn full_user_window_action_with_approval(
+    workspace: &Workspace,
+    approval: &impl ApprovalBroker,
+    request: &RequestEnvelope,
+) -> Result<Value, ProviderError> {
+    if request.target.is_some() {
+        return Err(ProviderError::new(
+            FailureCode::InvalidRequest,
+            "desktop window action does not accept a target field",
+        ));
+    }
+    reject_uia_arguments(
+        request,
+        &["window_id", "expected_window_generation", "action"],
+    )?;
+    let window_id = required_string(request, "window_id")?;
+    if !qdral_provider_uia::is_well_formed_window_id(&window_id) {
+        return Err(ProviderError::new(
+            FailureCode::InvalidRequest,
+            "desktop window action window_id is malformed",
+        ));
+    }
+    let expected_window_generation = required_u64(request, "expected_window_generation")?;
+    let action_name = required_string(request, "action")?;
+    let action = match action_name.as_str() {
+        "focus" => DesktopWindowAction::Focus,
+        "minimize" => DesktopWindowAction::Minimize,
+        "maximize" => DesktopWindowAction::Maximize,
+        "restore" => DesktopWindowAction::Restore,
+        "close" => DesktopWindowAction::Close,
+        _ => {
+            return Err(ProviderError::new(
+                FailureCode::CapabilityDenied,
+                "desktop window action is not mapped",
+            ))
+        }
+    };
+
+    require_full_user_desktop()?;
+    let binding = {
+        let guard = locked_registry()?;
+        guard
+            .capture_binding(
+                &window_id,
+                expected_window_generation,
+                CAPTURE_SCOPE_TARGET_WINDOW,
+                &workspace.id,
+                POLICY_REVISION,
+            )
+            .map_err(|error| ProviderError::new(error.code, error.message))?
+    };
+    let digest = desktop_request_digest(workspace, request);
+    let prompt = ApprovalPrompt::new(
+        workspace.id.clone(),
+        POLICY_REVISION,
+        "execute Full User window lifecycle action",
+        window_id.clone(),
+        format!(
+            "process={} window={} window_generation={} action={} arguments_digest={}",
+            binding.process_id, binding.window_id, binding.window_generation, action_name, digest,
+        ),
+        digest.clone(),
+    );
+    let token = approval
+        .request_token(&prompt)
+        .map_err(|error| ProviderError::new(error.code, error.message))?;
+    approval
+        .consume(
+            &token,
+            &ConsumeExpectation::new(digest, workspace.id.clone(), POLICY_REVISION),
+            qdral_approval::now_ms(),
+        )
+        .map_err(|error| ProviderError::new(error.code, error.message))?;
+
+    let host = computer_host()?;
+    let cursor = host
+        .cursor_position()
+        .map_err(|error| ProviderError::new(error.code, error.message))?;
+    require_full_user_desktop()?;
+    let rebound = {
+        let guard = locked_registry()?;
+        guard
+            .capture_binding(
+                &window_id,
+                expected_window_generation,
+                CAPTURE_SCOPE_TARGET_WINDOW,
+                &workspace.id,
+                POLICY_REVISION,
+            )
+            .map_err(|error| ProviderError::new(error.code, error.message))?
+    };
+    if rebound.process_id != binding.process_id
+        || rebound.process_generation != binding.process_generation
+        || rebound.window_id != binding.window_id
+        || rebound.window_generation != binding.window_generation
+        || rebound.hwnd != binding.hwnd
+    {
+        return Err(ProviderError::new(
+            FailureCode::TargetStale,
+            "desktop window target changed after approval",
+        ));
+    }
+    let outcome = host
+        .execute_window_action(rebound.hwnd, action, cursor.last_input_tick)
+        .map_err(|error| ProviderError::new(error.code, error.message))?;
+    Ok(json!({
+        "schema": "deskal-desktop-window-action/1",
+        "state": outcome.state,
+        "action": outcome.action,
+        "message": outcome.message,
+        "window_id": rebound.window_id,
+        "process_id": rebound.process_id,
+        "window_generation": rebound.window_generation,
+        "approval_record": token.record_id,
+        "policy_revision": POLICY_REVISION
+    }))
+}
+
 /// Dispatch the SG-000036 UIA shapes. Returns `Ok(None)` for non-UIA shapes
 /// so the caller falls through to the browser, trust, Git, and legacy
 /// dispatchers.
@@ -60,6 +487,16 @@ pub fn dispatch_uia(
     approval: &impl ApprovalBroker,
     request: &RequestEnvelope,
 ) -> Result<Option<Value>, ProviderError> {
+    match (request.capability.as_str(), request.operation.as_str()) {
+        ("desktop.cursor", "get") => return full_user_cursor(request).map(Some),
+        ("desktop.input", "execute") => {
+            return full_user_input_with_approval(workspace, approval, request).map(Some)
+        }
+        ("desktop.window", "action") => {
+            return full_user_window_action_with_approval(workspace, approval, request).map(Some)
+        }
+        _ => {}
+    }
     if qdral_provider_uia::is_input_execute_shape(&request.capability, &request.operation) {
         return execute_with_approval(workspace, approval, request).map(Some);
     }
@@ -96,7 +533,6 @@ pub fn dispatch_uia(
             "uia observation shapes do not accept a target field",
         ));
     }
-    let adapter = NativeAdapter::new();
     match (request.capability.as_str(), request.operation.as_str()) {
         ("uia.process", "observe") => {
             let process_id = required_string(request, "process_id")?;
@@ -110,10 +546,19 @@ pub fn dispatch_uia(
         ("uia.window", "list") => {
             reject_uia_arguments(request, &[])?;
             let mut guard = locked_registry()?;
-            guard
-                .list_windows(&adapter, &workspace.id, POLICY_REVISION)
-                .map(Some)
-                .map_err(|error| ProviderError::new(error.code, error.message))
+            if std::env::var_os("DESKAL_COMPUTER_HOST_BIN").is_some() {
+                let adapter = computer_host()?;
+                guard
+                    .list_windows(adapter, &workspace.id, POLICY_REVISION)
+                    .map(Some)
+                    .map_err(|error| ProviderError::new(error.code, error.message))
+            } else {
+                let adapter = NativeAdapter::new();
+                guard
+                    .list_windows(&adapter, &workspace.id, POLICY_REVISION)
+                    .map(Some)
+                    .map_err(|error| ProviderError::new(error.code, error.message))
+            }
         }
         ("uia.window", "observe") => {
             let window_id = required_string(request, "window_id")?;
@@ -130,18 +575,35 @@ pub fn dispatch_uia(
             let max_depth = optional_u64(request, "max_depth")?;
             let max_nodes = optional_u64(request, "max_nodes")?;
             let mut guard = locked_registry()?;
-            guard
-                .observe_tree(
-                    &adapter,
-                    &window_id,
-                    expected,
-                    max_depth,
-                    max_nodes,
-                    &workspace.id,
-                    POLICY_REVISION,
-                )
-                .map(Some)
-                .map_err(|error| ProviderError::new(error.code, error.message))
+            if std::env::var_os("DESKAL_COMPUTER_HOST_BIN").is_some() {
+                let adapter = computer_host()?;
+                guard
+                    .observe_tree(
+                        adapter,
+                        &window_id,
+                        expected,
+                        max_depth,
+                        max_nodes,
+                        &workspace.id,
+                        POLICY_REVISION,
+                    )
+                    .map(Some)
+                    .map_err(|error| ProviderError::new(error.code, error.message))
+            } else {
+                let adapter = NativeAdapter::new();
+                guard
+                    .observe_tree(
+                        &adapter,
+                        &window_id,
+                        expected,
+                        max_depth,
+                        max_nodes,
+                        &workspace.id,
+                        POLICY_REVISION,
+                    )
+                    .map(Some)
+                    .map_err(|error| ProviderError::new(error.code, error.message))
+            }
         }
         ("uia.element", "observe") => {
             let element_id = required_string(request, "element_id")?;
@@ -234,11 +696,12 @@ fn invoke_with_approval(
             qdral_approval::now_ms(),
         )
         .map_err(|error| ProviderError::new(error.code, error.message))?;
-    let adapter = NativeAdapter::new();
+    require_full_user_desktop()?;
+    let adapter = computer_host()?;
     let mut guard = locked_registry()?;
     let evidence = guard
         .invoke_element(
-            &adapter,
+            adapter,
             &element_id,
             expected_tree_generation,
             &expected_control_type,
@@ -345,11 +808,12 @@ fn set_value_with_approval(
             qdral_approval::now_ms(),
         )
         .map_err(|error| ProviderError::new(error.code, error.message))?;
-    let adapter = NativeAdapter::new();
+    require_full_user_desktop()?;
+    let adapter = computer_host()?;
     let mut guard = locked_registry()?;
     let evidence = guard
         .set_value_element(
-            &adapter,
+            adapter,
             &element_id,
             expected_tree_generation,
             &expected_control_type,
@@ -449,11 +913,12 @@ fn select_with_approval(
             qdral_approval::now_ms(),
         )
         .map_err(|error| ProviderError::new(error.code, error.message))?;
-    let adapter = NativeAdapter::new();
+    require_full_user_desktop()?;
+    let adapter = computer_host()?;
     let mut guard = locked_registry()?;
     let evidence = guard
         .select_element(
-            &adapter,
+            adapter,
             &element_id,
             expected_tree_generation,
             &expected_control_type,
@@ -798,11 +1263,12 @@ fn capture_with_approval(
             qdral_approval::now_ms(),
         )
         .map_err(|error| ProviderError::new(error.code, error.message))?;
-    let adapter = NativeAdapter::new();
+    require_full_user_desktop()?;
+    let adapter = computer_host()?;
     let mut guard = locked_registry()?;
     let evidence = guard
         .capture_window(
-            &adapter,
+            adapter,
             &window_id,
             expected_window_generation,
             &scope,
@@ -867,10 +1333,10 @@ fn scroll_with_approval(
         ));
     }
     let amount = required_u64(request, "amount")?;
-    if !(1..=qdral_provider_uia::MAX_SCROLL_AMOUNT).contains(&amount) {
+    if !(1..=20).contains(&amount) {
         return Err(ProviderError::new(
             FailureCode::InvalidRequest,
-            "uia scroll amount must be between 1 and 100 inclusive",
+            "uia scroll amount must be between 1 and 20 inclusive under SG-000095 Full User control",
         ));
     }
     let expected_horizontal_percent = required_u64(request, "expected_horizontal_percent")?;
@@ -933,11 +1399,12 @@ fn scroll_with_approval(
             qdral_approval::now_ms(),
         )
         .map_err(|error| ProviderError::new(error.code, error.message))?;
-    let adapter = NativeAdapter::new();
+    require_full_user_desktop()?;
+    let adapter = computer_host()?;
     let mut guard = locked_registry()?;
     let evidence = guard
         .scroll_element(
-            &adapter,
+            adapter,
             &element_id,
             expected_tree_generation,
             &expected_control_type,
@@ -1040,11 +1507,12 @@ fn toggle_with_approval(
             qdral_approval::now_ms(),
         )
         .map_err(|error| ProviderError::new(error.code, error.message))?;
-    let adapter = NativeAdapter::new();
+    require_full_user_desktop()?;
+    let adapter = computer_host()?;
     let mut guard = locked_registry()?;
     let evidence = guard
         .toggle_element(
-            &adapter,
+            adapter,
             &element_id,
             expected_tree_generation,
             &expected_control_type,
@@ -1084,6 +1552,44 @@ fn required_u64(request: &RequestEnvelope, name: &str) -> Result<u64, ProviderEr
                 format!("uia shape requires arguments.{name} as an unsigned integer"),
             )
         })
+}
+
+fn required_i32(request: &RequestEnvelope, name: &str) -> Result<i32, ProviderError> {
+    let value = request
+        .arguments
+        .get(name)
+        .and_then(Value::as_u64)
+        .ok_or_else(|| {
+            ProviderError::new(
+                FailureCode::InvalidRequest,
+                format!("desktop shape requires arguments.{name} as a non-negative integer"),
+            )
+        })?;
+    i32::try_from(value).map_err(|_| {
+        ProviderError::new(
+            FailureCode::InvalidRequest,
+            format!("desktop shape arguments.{name} is out of range"),
+        )
+    })
+}
+
+fn required_i32_signed(request: &RequestEnvelope, name: &str) -> Result<i32, ProviderError> {
+    let value = request
+        .arguments
+        .get(name)
+        .and_then(Value::as_i64)
+        .ok_or_else(|| {
+            ProviderError::new(
+                FailureCode::InvalidRequest,
+                format!("desktop shape requires arguments.{name} as an integer"),
+            )
+        })?;
+    i32::try_from(value).map_err(|_| {
+        ProviderError::new(
+            FailureCode::InvalidRequest,
+            format!("desktop shape arguments.{name} is out of range"),
+        )
+    })
 }
 
 fn required_bool(request: &RequestEnvelope, name: &str) -> Result<bool, ProviderError> {

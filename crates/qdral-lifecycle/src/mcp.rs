@@ -53,16 +53,35 @@ pub fn resolve_stdio_launch(
 /// child exit code. This function does not return normally with output;
 /// callers must exit the process with the returned code.
 pub fn run_stdio_session(launch: &HostLaunch, config: &Config) -> i32 {
+    let layout = match Layout::for_current_user() {
+        Ok(layout) => layout,
+        Err(error) => {
+            eprintln!("qdral mcp stdio: {}", error.message);
+            return 2;
+        }
+    };
+    let session = match crate::full_control::begin_runtime_session(&layout) {
+        Ok(session) => session,
+        Err(error) => {
+            eprintln!("qdral mcp stdio: {}", error.message);
+            return 2;
+        }
+    };
     let mut env = crate::ipc::child_environment(config);
     env.insert(
         "QDRAL_DAEMON".into(),
         launch.qdrald.to_string_lossy().into_owned(),
+    );
+    env.insert(
+        crate::full_control::RUNTIME_SESSION_ENV.into(),
+        session.session_id.clone(),
     );
     let status = Command::new(&launch.node)
         .arg(&launch.script)
         .env_clear()
         .envs(env)
         .status();
+    crate::full_control::end_runtime_session(&layout, &session.session_id);
     match status {
         Ok(status) => status.code().unwrap_or(1),
         Err(error) => {
@@ -177,10 +196,28 @@ pub fn resolve_serve_launch(
 /// Runs the loopback listener with inherited standard I/O and returns the
 /// child exit code. The bound URL is reported on standard error only.
 pub fn run_serve_session(launch: &ServeLaunch, config: &Config) -> i32 {
+    let layout = match Layout::for_current_user() {
+        Ok(layout) => layout,
+        Err(error) => {
+            eprintln!("qdral mcp serve: {}", error.message);
+            return 2;
+        }
+    };
+    let session = match crate::full_control::begin_runtime_session(&layout) {
+        Ok(session) => session,
+        Err(error) => {
+            eprintln!("qdral mcp serve: {}", error.message);
+            return 2;
+        }
+    };
     let mut env = crate::ipc::child_environment(config);
     env.insert(
         "QDRAL_DAEMON".into(),
         launch.qdrald.to_string_lossy().into_owned(),
+    );
+    env.insert(
+        crate::full_control::RUNTIME_SESSION_ENV.into(),
+        session.session_id.clone(),
     );
     env.insert("QDRAL_LOOPBACK_TOKEN".into(), launch.token.clone());
     if let Some(port) = launch.port {
@@ -191,6 +228,7 @@ pub fn run_serve_session(launch: &ServeLaunch, config: &Config) -> i32 {
         .env_clear()
         .envs(env)
         .status();
+    crate::full_control::end_runtime_session(&layout, &session.session_id);
     match status {
         Ok(status) => status.code().unwrap_or(1),
         Err(error) => {

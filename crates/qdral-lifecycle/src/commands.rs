@@ -499,6 +499,81 @@ pub fn emergency_revoke(args: &mut Args) -> Result<Output, LifecycleError> {
     })
 }
 
+pub fn full_control(args: &mut Args) -> Result<Output, LifecycleError> {
+    let action = args.positional("full-control action (grant, revoke, status)")?;
+    let layout = Layout::for_current_user()?;
+    match action.as_str() {
+        "grant" => {
+            let minutes = match args.value("--minutes")? {
+                Some(value) => value
+                    .parse::<u64>()
+                    .map_err(|_| LifecycleError::usage("--minutes must be from 1 to 720"))?,
+                None => 30,
+            };
+            args.finish()?;
+            let config = Config::load(&layout)?;
+            config.check_workspaces_with_policy()?;
+            let workspace = config.default_workspace().unwrap_or("default").to_string();
+            eprintln!(
+                "Confirm with Windows Hello when prompted. Full User desktop control is bound to this exact live Deskal runtime session and expires automatically."
+            );
+            let lease =
+                qdral_lifecycle::full_control::grant_full_user(&layout, &workspace, minutes)?;
+            Ok(Output {
+                exit_code: 0,
+                human: format!(
+                    "Full User desktop control granted for {minutes} minute(s); lease {} expires at {}. Full Admin, remote full control, elevation, recording, shell, filesystem, browser, and network authority were not enabled.\n",
+                    lease.lease_id, lease.expires_at_ms
+                ),
+                json: json!({"ok": true, "lease": lease}),
+            })
+        }
+        "revoke" => {
+            args.finish()?;
+            let epoch = qdral_lifecycle::full_control::revoke_full_user(&layout)?;
+            Ok(Output {
+                exit_code: 0,
+                human: match epoch {
+                    Some(epoch) => format!(
+                        "Full User desktop control revoked. Authority epoch is now {epoch}.\n"
+                    ),
+                    None => "Full User desktop control is already Safe; no authority key exists.\n"
+                        .into(),
+                },
+                json: json!({"ok": true, "revoked": epoch.is_some(), "authority_epoch": epoch}),
+            })
+        }
+        "status" => {
+            args.finish()?;
+            let status = qdral_lifecycle::full_control::status(&layout)?;
+            let human = if status["active"].as_bool() == Some(true) {
+                format!(
+                    "Full User desktop control is active for session {} until {} (authority epoch {}).\n",
+                    status["session_id"].as_str().unwrap_or("?"),
+                    status["expires_at_ms"],
+                    status["authority_epoch"]
+                )
+            } else {
+                format!(
+                    "Desktop control is Safe/inactive (authority epoch {}): {}.\n",
+                    status["authority_epoch"],
+                    status["reason"]
+                        .as_str()
+                        .unwrap_or("no valid Full User lease")
+                )
+            };
+            Ok(Output {
+                exit_code: 0,
+                human,
+                json: json!({"ok": true, "full_control": status}),
+            })
+        }
+        other => Err(LifecycleError::usage(format!(
+            "unknown full-control action {other:?}; run qdral help"
+        ))),
+    }
+}
+
 pub fn update(args: &mut Args) -> Result<Output, LifecycleError> {
     let source = PathBuf::from(
         args.value("--source")?

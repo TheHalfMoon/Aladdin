@@ -16,10 +16,10 @@
       "Reuse existing UiaRegistry/UiaAdapter process, window, element, frame, proposal, coordinate, input, capture-generation, protected-surface, redaction, stale-target, approval, and result-state semantics rather than creating parallel identities.",
       "Reuse existing Deskal semantic UIA invoke, set-value, select, toggle, scroll, screenshot, visual/coordinate, and execute-input governance where already implemented.",
       "COPY_ADAPT pinned native_actions.go only where it adds missing Windows semantic/background action mechanics.",
-      "COPY_ADAPT only cursor-position and SendInput mouse/keyboard/drag/scroll/Unicode/key/hotkey primitives from desktop_windows.go; reject whole-desktop capture and recording code.",
+      "COPY_ADAPT only the pinned SendInput mouse/keyboard/drag/scroll/Unicode/key/hotkey primitives from native_win32.go plus cursor-position/generalized drag helpers from desktop_windows.go; reject whole-desktop capture and recording code.",
       "COPY_ADAPT input_helpers.go key/modifier/text normalization and use desktop.go only as a reference for action vocabulary/parsing where Deskal lacks an owned equivalent.",
       "Add only the private-host operations required for cursor position, semantic action, move, click/double/right, drag, scroll, Unicode text, key, and hotkey execution.",
-      "Require an exact valid locally granted FullControlLease in Full User or Full Admin mode for DesktopInput dispatch, in addition to existing per-action approval, typed-target, policy, freshness, protected-surface, and interruption checks.",
+      "Require an exact valid locally granted FullControlLease in Full User mode for DesktopInput dispatch, in addition to existing per-action approval, typed-target, policy, freshness, protected-surface, and interruption checks; Full Admin execution remains successor-only.",
       "Qualify native Windows input against disposable test windows with exact pre-dispatch revalidation, human-interruption handling, deterministic result states, and no automatic retry after dispatch."
     ],
     "exclude": [
@@ -43,7 +43,7 @@
   "invariants": [
     "Safe remains the sole default authority mode and cannot execute SG-000095 desktop input.",
     "Only the authenticated local-user grant path may mint or renew FullControlLease; agent, MCP, donor, relay, browser, model, and remote callers cannot self-grant or widen it.",
-    "DesktopInput dispatch requires a valid Full User or Full Admin FullControlLease bound to the exact user SID, logon session, device, Deskal session, selected profile, policy revision, authority epoch, and time.",
+    "DesktopInput dispatch requires a valid Full User FullControlLease bound to the exact user SID, logon session, device, Deskal session, selected profile, policy revision, authority epoch, and time; Full Admin execution remains unavailable in this grain.",
     "An SG-000095 desktop action must also pass the existing typed target, generation/freshness, protected-surface, approval, and policy checks immediately before dispatch.",
     "Semantic UIA/native actions are preferred over raw foreground SendInput when both can satisfy the requested action; raw foreground input is an explicit bounded fallback under the same lease and freshness authority.",
     "Foreground mouse/keyboard operations never target UAC/consent, CredentialUIBroker, LogonUI, secure desktop, foreign sessions, Deskal approval surfaces, or stale/reused process/window identities.",
@@ -59,7 +59,7 @@
     },
     {
       "id": "A2",
-      "claim": "Safe cannot dispatch desktop input; exact Full User or Full Admin FullControlLease validation is required immediately before every DesktopInput dispatch, and self-grant/remote-grant/lease-secret injection paths are absent."
+      "claim": "Safe cannot dispatch desktop input; exact Full User FullControlLease validation is required immediately before every DesktopInput dispatch, Full Admin execution remains successor-only, and self-grant/remote-grant/lease-secret injection paths are absent."
     },
     {
       "id": "A3",

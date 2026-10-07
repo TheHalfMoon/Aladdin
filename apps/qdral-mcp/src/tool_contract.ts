@@ -31,6 +31,8 @@ export type EffectClass =
   | "execute"
   | "network"
   | "desktop_observe"
+  | "desktop_capture"
+  | "desktop_control"
   | "clipboard";
 
 export type ApprovalClass = "none" | "SOFT" | "STRONG";
@@ -182,6 +184,42 @@ export const TOOL_CONTRACT: Readonly<Record<string, ToolContractEntry>> = {
     capability: "process.spawn", operation: "spawn", effect: "execute", approval: "SOFT", remote: EXECUTE,
     outputBound: "requested stdout of at most 16 MiB and stderr of at most 4 MiB",
     annotations: change("Run registered program", { destructive: true, idempotent: false, openWorld: true })
+  },
+  desktop_cursor_get: {
+    capability: "desktop.cursor", operation: "get", effect: "desktop_observe", approval: "none", remote: "local_only",
+    outputBound: "fixed-size cursor position and screen geometry", annotations: read("Read desktop cursor")
+  },
+  desktop_element_invoke: {
+    capability: "uia.element", operation: "invoke", effect: "desktop_control", approval: "SOFT", remote: "local_only",
+    outputBound: "bounded semantic action evidence", annotations: change("Invoke desktop element", { destructive: true, idempotent: false })
+  },
+  desktop_element_scroll: {
+    capability: "uia.element", operation: "scroll", effect: "desktop_control", approval: "SOFT", remote: "local_only",
+    outputBound: "bounded semantic action evidence; at most 20 scroll ticks", annotations: change("Scroll desktop element", { destructive: true, idempotent: false })
+  },
+  desktop_element_select: {
+    capability: "uia.element", operation: "select", effect: "desktop_control", approval: "SOFT", remote: "local_only",
+    outputBound: "bounded semantic action evidence", annotations: change("Select desktop element", { destructive: true, idempotent: false })
+  },
+  desktop_element_set_value: {
+    capability: "uia.element", operation: "set_value", effect: "desktop_control", approval: "SOFT", remote: "local_only",
+    outputBound: "bounded semantic action evidence; value at most 1024 characters", annotations: change("Set desktop element value", { destructive: true, idempotent: false })
+  },
+  desktop_element_toggle: {
+    capability: "uia.element", operation: "toggle", effect: "desktop_control", approval: "SOFT", remote: "local_only",
+    outputBound: "bounded semantic action evidence", annotations: change("Toggle desktop element", { destructive: true, idempotent: false })
+  },
+  desktop_input_execute: {
+    capability: "desktop.input", operation: "execute", effect: "desktop_control", approval: "SOFT", remote: "local_only",
+    outputBound: "fixed-size execution result for one bounded input action", annotations: change("Execute desktop input", { destructive: true, idempotent: false })
+  },
+  desktop_window_action: {
+    capability: "desktop.window", operation: "action", effect: "desktop_control", approval: "SOFT", remote: "local_only",
+    outputBound: "fixed-size result for one exact-window lifecycle action", annotations: change("Control desktop window", { destructive: true, idempotent: false })
+  },
+  desktop_window_capture: {
+    capability: "uia.screenshot", operation: "capture", effect: "desktop_capture", approval: "SOFT", remote: "local_only",
+    outputBound: "one exact-window bounded capture; oversized payloads fail closed", annotations: read("Capture desktop window")
   },
   desktop_window_list: {
     capability: "uia.window", operation: "list", effect: "desktop_observe", approval: "none", remote: "local_only",

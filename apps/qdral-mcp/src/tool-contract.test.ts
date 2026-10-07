@@ -24,7 +24,22 @@ const CORE = [
   "git_fetch_preview", "git_log", "git_push", "git_push_preview", "git_stage", "git_status", "git_unstage",
   "process_spawn", "system_status", "workspace_get"
 ];
-const LOCAL_ONLY = ["clipboard_read", "clipboard_write", "desktop_window_list", "desktop_window_tree", "web_fetch"];
+const LOCAL_ONLY = [
+  "clipboard_read",
+  "clipboard_write",
+  "desktop_cursor_get",
+  "desktop_element_invoke",
+  "desktop_element_scroll",
+  "desktop_element_select",
+  "desktop_element_set_value",
+  "desktop_element_toggle",
+  "desktop_input_execute",
+  "desktop_window_action",
+  "desktop_window_capture",
+  "desktop_window_list",
+  "desktop_window_tree",
+  "web_fetch"
+];
 
 function fakeKernel(): KernelClient {
   return {
@@ -121,16 +136,16 @@ test("annotations, effect classes, and approval classes are mutually consistent"
   const strong: string[] = [];
   for (const [name, entry] of Object.entries(TOOL_CONTRACT)) {
     const a = entry.annotations;
-    if (["read", "preview", "desktop_observe"].includes(entry.effect)) {
+    if (["read", "preview", "desktop_observe", "desktop_capture"].includes(entry.effect)) {
       assert.equal(a.readOnlyHint, true, `${name} observes only`);
     }
-    if (["write", "destructive", "execute"].includes(entry.effect)) {
+    if (["write", "destructive", "execute", "desktop_control"].includes(entry.effect)) {
       assert.equal(a.readOnlyHint, false, `${name} changes state`);
     }
     if (a.readOnlyHint) {
       assert.equal(a.destructiveHint, false, `${name} cannot be read-only and destructive`);
     }
-    if (entry.effect === "destructive" || entry.effect === "execute") {
+    if (entry.effect === "destructive" || entry.effect === "execute" || entry.effect === "desktop_control") {
       assert.equal(a.destructiveHint, true, `${name} must declare destructive effects`);
     }
     if (entry.effect === "network" || entry.effect === "execute") {

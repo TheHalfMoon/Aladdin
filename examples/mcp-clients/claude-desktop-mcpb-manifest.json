@@ -4,8 +4,8 @@
   "name": "qdral",
   "display_name": "Deskal",
   "version": "0.2.0",
-  "description": "Local-first MCP gateway with 31 bounded tools and local approval for computer changes.",
-  "long_description": "Deskal exposes 31 bounded tools (workspace files and bounded file changes, local Git, registered argv-only processes, read-only desktop window observation, approved single clipboard reads and writes, approved public HTTPS fetches) through a local policy kernel with per-action approval. This extension launches the installed Deskal entrypoint over stdio. It requires Deskal 0.2.0 installed and at least one configured workspace. No tunnel is required.",
+  "description": "Local-first MCP gateway with 40 bounded tools and local approval for computer changes.",
+  "long_description": "Deskal exposes 40 bounded tools for trusted workspace files, local Git, registered argv-only processes, structured desktop observation and Full User desktop control, clipboard access, and approved public HTTPS fetches through a local policy kernel. Full User desktop authority is granted only through a local STRONG-presence flow and is never grantable by MCP or remote callers. This extension launches the installed Deskal entrypoint over stdio; no tunnel is required.",
   "author": {
     "name": "TheHalfMoon",
     "url": "https://github.com/TheHalfMoon/Deskal"
@@ -37,86 +37,6 @@
   },
   "tools": [
     {
-      "name": "system_status",
-      "description": "Read Deskal daemon status."
-    },
-    {
-      "name": "workspace_get",
-      "description": "Read the configured trusted workspace metadata."
-    },
-    {
-      "name": "fs_stat",
-      "description": "Read metadata for a relative path inside a trusted workspace."
-    },
-    {
-      "name": "fs_list",
-      "description": "List one directory inside a trusted workspace without following symlinks."
-    },
-    {
-      "name": "fs_read",
-      "description": "Read one bounded UTF-8 text file inside a trusted workspace."
-    },
-    {
-      "name": "fs_search",
-      "description": "Search bounded UTF-8 text files inside a trusted workspace."
-    },
-    {
-      "name": "fs_write_preview",
-      "description": "Preview an exact UTF-8 file write without mutating the computer."
-    },
-    {
-      "name": "fs_write",
-      "description": "Write exact UTF-8 content inside a trusted workspace after local approval."
-    },
-    {
-      "name": "process_spawn",
-      "description": "Execute one argv-only process after fresh local approval."
-    },
-    {
-      "name": "git_status",
-      "description": "Read Git working-tree and branch status."
-    },
-    {
-      "name": "git_diff",
-      "description": "Read a bounded Git diff."
-    },
-    {
-      "name": "git_log",
-      "description": "Read bounded Git commit history."
-    },
-    {
-      "name": "git_branch_create",
-      "description": "Create and switch to one new local Git branch after approval."
-    },
-    {
-      "name": "git_stage",
-      "description": "Stage listed files after approval."
-    },
-    {
-      "name": "git_unstage",
-      "description": "Unstage listed files after approval."
-    },
-    {
-      "name": "git_commit",
-      "description": "Create one local Git commit after approval."
-    },
-    {
-      "name": "git_fetch_preview",
-      "description": "Preview one bounded Git HTTPS fetch without mutation."
-    },
-    {
-      "name": "git_fetch",
-      "description": "Fetch one validated branch after approval."
-    },
-    {
-      "name": "git_push_preview",
-      "description": "Preview one bounded Git HTTPS push without mutation."
-    },
-    {
-      "name": "git_push",
-      "description": "Push one validated branch after approval."
-    },
-    {
       "name": "clipboard_read",
       "description": "Read the clipboard text once after local approval; secrets are refused."
     },
@@ -125,8 +45,40 @@
       "description": "Place text on the clipboard once after local approval; never pastes."
     },
     {
-      "name": "web_fetch",
-      "description": "Fetch one public HTTPS URL with GET after local approval of the destination."
+      "name": "desktop_cursor_get",
+      "description": "Read cursor position under active local Full User desktop authority."
+    },
+    {
+      "name": "desktop_element_invoke",
+      "description": "Invoke one eligible UI Automation element after Full User lease and approval checks."
+    },
+    {
+      "name": "desktop_element_scroll",
+      "description": "Scroll one eligible UI Automation element after Full User lease and approval checks."
+    },
+    {
+      "name": "desktop_element_select",
+      "description": "Select one eligible UI Automation element after Full User lease and approval checks."
+    },
+    {
+      "name": "desktop_element_set_value",
+      "description": "Set one eligible non-password UI Automation value after Full User lease and approval checks."
+    },
+    {
+      "name": "desktop_element_toggle",
+      "description": "Toggle one eligible UI Automation element after Full User lease and approval checks."
+    },
+    {
+      "name": "desktop_input_execute",
+      "description": "Execute one bounded real mouse or keyboard action after Full User lease and approval checks."
+    },
+    {
+      "name": "desktop_window_action",
+      "description": "Focus, minimize, maximize, restore, or close one exact typed window after Full User lease and approval checks."
+    },
+    {
+      "name": "desktop_window_capture",
+      "description": "Capture one exact typed window after Full User lease and approval checks."
     },
     {
       "name": "desktop_window_list",
@@ -145,6 +97,10 @@
       "description": "Find files by a bounded name glob in a trusted workspace without following links."
     },
     {
+      "name": "fs_list",
+      "description": "List one directory inside a trusted workspace without following symlinks."
+    },
+    {
       "name": "fs_mkdir",
       "description": "Create a directory in a trusted workspace after local approval."
     },
@@ -153,12 +109,92 @@
       "description": "Move or rename one entry within a trusted workspace after local approval, never overwriting."
     },
     {
+      "name": "fs_read",
+      "description": "Read one bounded UTF-8 text file inside a trusted workspace."
+    },
+    {
       "name": "fs_read_range",
       "description": "Read a bounded line range of one UTF-8 text file in a trusted workspace."
     },
     {
       "name": "fs_remove",
       "description": "Remove one file or empty directory after Windows Hello; no recursive delete."
+    },
+    {
+      "name": "fs_search",
+      "description": "Search bounded UTF-8 text files inside a trusted workspace."
+    },
+    {
+      "name": "fs_stat",
+      "description": "Read metadata for a relative path inside a trusted workspace."
+    },
+    {
+      "name": "fs_write",
+      "description": "Write exact UTF-8 content inside a trusted workspace after local approval."
+    },
+    {
+      "name": "fs_write_preview",
+      "description": "Preview an exact UTF-8 file write without mutating the computer."
+    },
+    {
+      "name": "git_branch_create",
+      "description": "Create and switch to one new local Git branch after approval."
+    },
+    {
+      "name": "git_commit",
+      "description": "Create one local Git commit after approval."
+    },
+    {
+      "name": "git_diff",
+      "description": "Read a bounded Git diff."
+    },
+    {
+      "name": "git_fetch",
+      "description": "Fetch one validated branch after approval."
+    },
+    {
+      "name": "git_fetch_preview",
+      "description": "Preview one bounded Git HTTPS fetch without mutation."
+    },
+    {
+      "name": "git_log",
+      "description": "Read bounded Git commit history."
+    },
+    {
+      "name": "git_push",
+      "description": "Push one validated branch after approval."
+    },
+    {
+      "name": "git_push_preview",
+      "description": "Preview one bounded Git HTTPS push without mutation."
+    },
+    {
+      "name": "git_stage",
+      "description": "Stage listed files after approval."
+    },
+    {
+      "name": "git_status",
+      "description": "Read Git working-tree and branch status."
+    },
+    {
+      "name": "git_unstage",
+      "description": "Unstage listed files after approval."
+    },
+    {
+      "name": "process_spawn",
+      "description": "Execute one argv-only process after fresh local approval."
+    },
+    {
+      "name": "system_status",
+      "description": "Read Deskal daemon status."
+    },
+    {
+      "name": "web_fetch",
+      "description": "Fetch one public HTTPS URL with GET after local approval of the destination."
+    },
+    {
+      "name": "workspace_get",
+      "description": "Read the configured trusted workspace metadata."
     }
   ],
   "compatibility": {
