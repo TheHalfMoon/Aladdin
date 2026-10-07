@@ -417,7 +417,9 @@ mod platform {
             let response = self.request("list_windows", None, None, None)?;
             let mut processes = BTreeMap::<u32, HostProcess>::new();
             for window in response.windows {
-                processes.entry(window.process.pid).or_insert(window.process);
+                processes
+                    .entry(window.process.pid)
+                    .or_insert(window.process);
             }
             Ok(processes
                 .into_values()
