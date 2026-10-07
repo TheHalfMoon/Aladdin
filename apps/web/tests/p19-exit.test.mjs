@@ -124,12 +124,13 @@ test("canonical repository metadata matches the live exit snapshot exactly", () 
   assert.deepEqual(metadata.topics, matrix.live_snapshot.repository.topics);
 });
 
-test("P19 is exited and P20 advances from closed SG-000092 to active SG-000093", () => {
+test("P19 is exited and P20 advances from closed SG-000093 to active SG-000094", () => {
   const p19 = read("docs/canonical/DESKAL_POST_P18_LAUNCH_PLAN.md");
   const p20 = read("docs/canonical/DESKAL_P20_UNIVERSAL_AGENT_RUNTIME_PLAN.md");
   const sg91 = json(".specgrain/specs/SG-000091.json");
   const sg92 = json(".specgrain/specs/SG-000092.json");
   const sg93 = json(".specgrain/specs/SG-000093.json");
+  const sg94 = json(".specgrain/specs/SG-000094.json");
 
   assert.match(p19, /Status: EXITED CANONICAL/);
   assert.match(p19, /SG-000091 is CLOSED canonical/);
@@ -137,16 +138,21 @@ test("P19 is exited and P20 advances from closed SG-000092 to active SG-000093",
 
   assert.match(p20, /Activation grain: SG-000092/);
   assert.equal(sg92.state, "CLOSED");
-  assert.equal(sg92.implementation_merge, "03d28ac2e4c96d855dfd23df6257cc31a87b1a7a");
-  assert.equal(sg92.post_merge_ci, "37551232655");
 
   assert.equal(sg93.id, "SG-000093");
   assert.equal(sg93.program, "DESKAL-P20");
-  assert.equal(sg93.state, "GRAIN");
-  assert.equal(sg93.base, "03d28ac2e4c96d855dfd23df6257cc31a87b1a7a");
-  assert.deepEqual(sg93.dependencies, ["SG-000092"]);
+  assert.equal(sg93.state, "CLOSED");
+  assert.equal(sg93.qualified_head, "2adb0dce463a49eba0f7bfec7698c468a08ec743");
+  assert.equal(sg93.implementation_merge, "64b6510b6a6e80d9dd0672121a82e199f643878f");
+  assert.equal(sg93.post_merge_ci, "37562846785");
 
-  for (let n = 94; n <= 107; n += 1) {
+  assert.equal(sg94.id, "SG-000094");
+  assert.equal(sg94.program, "DESKAL-P20");
+  assert.equal(sg94.state, "GRAIN");
+  assert.equal(sg94.base, "64b6510b6a6e80d9dd0672121a82e199f643878f");
+  assert.deepEqual(sg94.dependencies, ["SG-000093"]);
+
+  for (let n = 95; n <= 107; n += 1) {
     const id = `SG-${String(n).padStart(6, "0")}.json`;
     assert.throws(() => read(`.specgrain/specs/${id}`), undefined, id);
   }
