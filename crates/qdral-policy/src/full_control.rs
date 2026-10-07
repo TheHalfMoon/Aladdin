@@ -44,7 +44,7 @@ impl AuthorityMode {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum GrantOrigin {
+pub(crate) enum GrantOrigin {
     LocalUserControl,
     McpCaller,
     Agent,
@@ -97,7 +97,7 @@ const FULL_ADMIN_CEILING: &[ExecutorClass] = &[
     ExecutorClass::Admin,
 ];
 
-pub fn profile_ceiling(mode: AuthorityMode) -> &'static [ExecutorClass] {
+pub fn future_profile_ceiling(mode: AuthorityMode) -> &'static [ExecutorClass] {
     match mode {
         AuthorityMode::FullUser => FULL_USER_CEILING,
         AuthorityMode::FullAdmin => FULL_ADMIN_CEILING,
@@ -107,7 +107,7 @@ pub fn profile_ceiling(mode: AuthorityMode) -> &'static [ExecutorClass] {
     }
 }
 
-pub fn mode_selectable(origin: GrantOrigin, mode: AuthorityMode) -> Result<(), PolicyError> {
+pub(crate) fn mode_selectable(origin: GrantOrigin, mode: AuthorityMode) -> Result<(), PolicyError> {
     if origin != GrantOrigin::LocalUserControl {
         return Err(denied(
             "full-control authority can only be selected by the authenticated local user control path",
@@ -122,6 +122,10 @@ pub fn mode_selectable(origin: GrantOrigin, mode: AuthorityMode) -> Result<(), P
             "remote full control is unavailable until its dedicated P20 successor closes canonically",
         )),
     }
+}
+
+pub fn executor_enabled_now(_mode: AuthorityMode, _executor: ExecutorClass) -> bool {
+    false
 }
 
 pub fn broader_fallback_allowed() -> bool {
@@ -146,7 +150,7 @@ pub struct FullControlLease {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct FullControlLeaseRequest {
+pub(crate) struct FullControlLeaseRequest {
     pub lease_id: String,
     pub origin: GrantOrigin,
     pub mode: AuthorityMode,
@@ -173,7 +177,7 @@ pub struct AuthorityContext<'a> {
     pub elevation_proof_id: Option<&'a str>,
 }
 
-pub fn issue_full_control(
+pub(crate) fn issue_full_control(
     request: FullControlLeaseRequest,
 ) -> Result<FullControlLease, PolicyError> {
     mode_selectable(request.origin, request.mode)?;
@@ -265,7 +269,7 @@ pub struct AdminLease {
     pub deskal_session_id: String,
     pub policy_revision: String,
     pub authority_epoch: u64,
-    pub elevation_proof_id: String,
+    pub elevation_proof_digest: String,
     pub elevation_state: ElevationState,
     pub issued_at_ms: u64,
     pub expires_at_ms: u64,
@@ -273,7 +277,7 @@ pub struct AdminLease {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct AdminLeaseRequest {
+pub(crate) struct AdminLeaseRequest {
     pub lease_id: String,
     pub origin: GrantOrigin,
     pub elevation_proof_id: String,
@@ -282,7 +286,7 @@ pub struct AdminLeaseRequest {
     pub duration_ms: u64,
 }
 
-pub fn issue_admin_lease(
+pub(crate) fn issue_admin_lease(
     request: AdminLeaseRequest,
     full_control: &FullControlLease,
     context: &AuthorityContext<'_>,
@@ -342,7 +346,7 @@ pub fn issue_admin_lease(
         deskal_session_id: full_control.deskal_session_id.clone(),
         policy_revision: full_control.policy_revision.clone(),
         authority_epoch: full_control.authority_epoch,
-        elevation_proof_id: request.elevation_proof_id,
+        elevation_proof_digest: proof_digest(&request.elevation_proof_id),
         elevation_state: request.elevation_state,
         issued_at_ms: request.issued_at_ms,
         expires_at_ms,
@@ -383,8 +387,13 @@ pub fn check_admin_lease(
     }
     if admin.elevation_state != ElevationState::ElevatedAdministrator
         || context.elevation_state != ElevationState::ElevatedAdministrator
-        || context.elevation_proof_id != Some(admin.elevation_proof_id.as_str())
     {
+        return Err(denied("admin lease Windows elevation binding mismatch"));
+    }
+    let Some(presented_proof) = context.elevation_proof_id else {
+        return Err(denied("admin lease Windows elevation proof is unavailable"));
+    };
+    if proof_digest(presented_proof) != admin.elevation_proof_digest {
         return Err(denied("admin lease Windows elevation binding mismatch"));
     }
     Ok(())
@@ -501,11 +510,23 @@ pub fn admin_audit_event(kind: AuditKind, lease: &AdminLease, at_ms: u64) -> Aut
             &lease.deskal_session_id,
             &lease.policy_revision,
             lease.authority_epoch,
-            Some(&lease.elevation_proof_id),
+            Some(&lease.elevation_proof_digest),
         ),
         authority_epoch: lease.authority_epoch,
         at_ms,
     }
+}
+
+fn proof_digest(proof: &str) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update((proof.len() as u64).to_le_bytes());
+    hasher.update(proof.as_bytes());
+    let digest = hasher.finalize();
+    let mut out = String::with_capacity(64);
+    for byte in digest {
+        let _ = write!(out, "{byte:02x}");
+    }
+    out
 }
 
 fn binding_digest(
@@ -657,11 +678,26 @@ mod tests {
             AuthorityMode::RemoteFullControl
         )
         .is_err());
-        assert!(profile_ceiling(AuthorityMode::FullUser).contains(&ExecutorClass::DesktopInput));
+        assert!(future_profile_ceiling(AuthorityMode::FullUser).contains(&ExecutorClass::DesktopInput));
         assert!(!profile_ceiling(AuthorityMode::FullUser).contains(&ExecutorClass::Admin));
-        assert!(profile_ceiling(AuthorityMode::FullAdmin).contains(&ExecutorClass::Admin));
-        assert!(profile_ceiling(AuthorityMode::PersistentAdmin).is_empty());
-        assert!(profile_ceiling(AuthorityMode::RemoteFullControl).is_empty());
+        assert!(future_profile_ceiling(AuthorityMode::FullAdmin).contains(&ExecutorClass::Admin));
+        assert!(future_profile_ceiling(AuthorityMode::PersistentAdmin).is_empty());
+        assert!(future_profile_ceiling(AuthorityMode::RemoteFullControl).is_empty());
+        for mode in AuthorityMode::ALL {
+            for executor in [
+                ExecutorClass::DesktopObservation,
+                ExecutorClass::DesktopInput,
+                ExecutorClass::ShellProcess,
+                ExecutorClass::Filesystem,
+                ExecutorClass::Browser,
+                ExecutorClass::Web,
+                ExecutorClass::VisualAgent,
+                ExecutorClass::Admin,
+                ExecutorClass::Remote,
+            ] {
+                assert!(!executor_enabled_now(mode, executor));
+            }
+        }
         assert!(!broader_fallback_allowed());
     }
 
@@ -751,7 +787,7 @@ mod tests {
             AdminLeaseRequest {
                 lease_id: lease_id("admin-", 'e'),
                 origin: GrantOrigin::LocalUserControl,
-                elevation_proof_id: proof,
+                elevation_proof_id: proof.clone(),
                 elevation_state: ElevationState::ElevatedAdministrator,
                 issued_at_ms: NOW + 1_000,
                 duration_ms: 30 * 60 * 1_000,
@@ -803,6 +839,10 @@ mod tests {
             &elevated,
         )
         .unwrap();
+        let serialized_lease = serde_json::to_string(&admin).unwrap();
+        assert!(!serialized_lease.contains(&proof));
+        assert_eq!(admin.elevation_proof_digest.len(), 64);
+
         let admin_event = admin_audit_event(AuditKind::Granted, &admin, NOW + 2);
         let json = serde_json::to_string(&admin_event).unwrap();
         assert!(!json.contains(&proof));
