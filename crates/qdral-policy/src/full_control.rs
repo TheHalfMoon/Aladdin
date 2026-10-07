@@ -1034,14 +1034,14 @@ mod tests {
 
     #[test]
     fn lease_ids_are_secret_and_binding_derived_not_caller_supplied() {
-        let request = request(AuthorityMode::FullUser);
-        let first = issue_full_control(&local_proof(), request.clone()).unwrap();
-        let second = issue_full_control(&other_local_proof(), request.clone()).unwrap();
+        let base_request = request(AuthorityMode::FullUser);
+        let first = issue_full_control(&local_proof(), base_request.clone()).unwrap();
+        let second = issue_full_control(&other_local_proof(), base_request.clone()).unwrap();
         assert!(first.lease_id.starts_with("fc-"));
         assert_eq!(first.lease_id.len(), 67);
         assert_ne!(first.lease_id, second.lease_id);
 
-        let mut changed = request;
+        let mut changed = base_request;
         changed.device_id = "device-local-2".into();
         let changed = issue_full_control(&local_proof(), changed).unwrap();
         assert_ne!(first.lease_id, changed.lease_id);
