@@ -101,9 +101,9 @@ pub fn profile_ceiling(mode: AuthorityMode) -> &'static [ExecutorClass] {
     match mode {
         AuthorityMode::FullUser => FULL_USER_CEILING,
         AuthorityMode::FullAdmin => FULL_ADMIN_CEILING,
-        AuthorityMode::Safe
-        | AuthorityMode::PersistentAdmin
-        | AuthorityMode::RemoteFullControl => &[],
+        AuthorityMode::Safe | AuthorityMode::PersistentAdmin | AuthorityMode::RemoteFullControl => {
+            &[]
+        }
     }
 }
 
@@ -177,7 +177,10 @@ pub fn issue_full_control(
     request: FullControlLeaseRequest,
 ) -> Result<FullControlLease, PolicyError> {
     mode_selectable(request.origin, request.mode)?;
-    if !matches!(request.mode, AuthorityMode::FullUser | AuthorityMode::FullAdmin) {
+    if !matches!(
+        request.mode,
+        AuthorityMode::FullUser | AuthorityMode::FullAdmin
+    ) {
         return Err(invalid(
             "safe mode does not require a lease and successor-only modes cannot be issued here",
         ));
@@ -313,7 +316,9 @@ pub fn issue_admin_lease(
     if request.issued_at_ms < full_control.issued_at_ms
         || request.issued_at_ms >= full_control.expires_at_ms
     {
-        return Err(invalid("admin lease issue time is outside the full-control lease"));
+        return Err(invalid(
+            "admin lease issue time is outside the full-control lease",
+        ));
     }
     if !(MIN_FULL_CONTROL_LEASE_MS..=MAX_FULL_CONTROL_LEASE_MS).contains(&request.duration_ms) {
         return Err(invalid("admin lease duration is out of bounds"));
@@ -352,13 +357,17 @@ pub fn check_admin_lease(
 ) -> Result<(), PolicyError> {
     check_full_control(full_control, context)?;
     if full_control.mode != AuthorityMode::FullAdmin {
-        return Err(denied("admin authority requires an active Full Admin lease"));
+        return Err(denied(
+            "admin authority requires an active Full Admin lease",
+        ));
     }
     if admin.schema != ADMIN_LEASE_SCHEMA || admin.revoked {
         return Err(denied("admin lease inactive"));
     }
     if admin.full_control_lease_id != full_control.lease_id {
-        return Err(denied("admin lease is bound to a different full-control lease"));
+        return Err(denied(
+            "admin lease is bound to a different full-control lease",
+        ));
     }
     if context.now_ms < admin.issued_at_ms || context.now_ms >= admin.expires_at_ms {
         return Err(denied("admin lease inactive at the current time"));
@@ -480,11 +489,7 @@ pub fn full_control_audit_event(
     }
 }
 
-pub fn admin_audit_event(
-    kind: AuditKind,
-    lease: &AdminLease,
-    at_ms: u64,
-) -> AuthorityAuditEvent {
+pub fn admin_audit_event(kind: AuditKind, lease: &AdminLease, at_ms: u64) -> AuthorityAuditEvent {
     AuthorityAuditEvent {
         kind,
         lease_id: lease.lease_id.clone(),
@@ -553,12 +558,7 @@ fn validate_field(name: &str, value: &str) -> Result<(), PolicyError> {
     Ok(())
 }
 
-fn validate_id(
-    value: &str,
-    prefix: &str,
-    hex_chars: usize,
-    name: &str,
-) -> Result<(), PolicyError> {
+fn validate_id(value: &str, prefix: &str, hex_chars: usize, name: &str) -> Result<(), PolicyError> {
     if value.len() != prefix.len() + hex_chars || !value.starts_with(prefix) {
         return Err(invalid(format!("{name} malformed")));
     }
@@ -638,20 +638,15 @@ mod tests {
     fn authority_modes_and_profile_ceilings_are_exact() {
         assert_eq!(AuthorityMode::ALL.len(), 5);
         assert_eq!(
-            AuthorityMode::ALL.iter().filter(|mode| mode.is_default()).count(),
+            AuthorityMode::ALL
+                .iter()
+                .filter(|mode| mode.is_default())
+                .count(),
             1
         );
         assert!(AuthorityMode::Safe.is_default());
-        assert!(mode_selectable(
-            GrantOrigin::LocalUserControl,
-            AuthorityMode::FullUser
-        )
-        .is_ok());
-        assert!(mode_selectable(
-            GrantOrigin::LocalUserControl,
-            AuthorityMode::FullAdmin
-        )
-        .is_ok());
+        assert!(mode_selectable(GrantOrigin::LocalUserControl, AuthorityMode::FullUser).is_ok());
+        assert!(mode_selectable(GrantOrigin::LocalUserControl, AuthorityMode::FullAdmin).is_ok());
         assert!(mode_selectable(
             GrantOrigin::LocalUserControl,
             AuthorityMode::PersistentAdmin
@@ -662,8 +657,7 @@ mod tests {
             AuthorityMode::RemoteFullControl
         )
         .is_err());
-        assert!(profile_ceiling(AuthorityMode::FullUser)
-            .contains(&ExecutorClass::DesktopInput));
+        assert!(profile_ceiling(AuthorityMode::FullUser).contains(&ExecutorClass::DesktopInput));
         assert!(!profile_ceiling(AuthorityMode::FullUser).contains(&ExecutorClass::Admin));
         assert!(profile_ceiling(AuthorityMode::FullAdmin).contains(&ExecutorClass::Admin));
         assert!(profile_ceiling(AuthorityMode::PersistentAdmin).is_empty());
@@ -748,7 +742,8 @@ mod tests {
         }
 
         let mut wrong_proof = elevated;
-        wrong_proof.elevation_proof_id = Some("win-elev-dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd");
+        wrong_proof.elevation_proof_id =
+            Some("win-elev-dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd");
         assert!(check_admin_lease(&admin, &full, &wrong_proof).is_err());
 
         let full_user = issue_full_control(request(AuthorityMode::FullUser)).unwrap();
