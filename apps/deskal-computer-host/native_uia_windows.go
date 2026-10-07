@@ -620,6 +620,17 @@ func uiaElementValue(e uiaElement, textLimit *int) string {
 
 
 
+func limitTextPS(text string, textLimit *int) string {
+	if textLimit == nil {
+		return text
+	}
+	runes := []rune(text)
+	if len(runes) > *textLimit {
+		return string(runes[:*textLimit]) + "..."
+	}
+	return text
+}
+
 const (
 	uiaPropIsEnabled = 30010
 	uiaPropIsPassword = 30019
