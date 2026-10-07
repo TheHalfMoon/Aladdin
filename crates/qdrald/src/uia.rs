@@ -225,7 +225,7 @@ fn desktop_input_action(
                 &["window_id", "expected_window_generation", "action", "text"],
             )?;
             let text = required_string(request, "text")?;
-            if text.is_empty() || text.as_bytes().len() > 4096 || text.contains('\0') {
+            if text.is_empty() || text.len() > 4096 || text.contains('\0') {
                 return Err(ProviderError::new(
                     FailureCode::InvalidRequest,
                     "desktop text must be non-empty valid text of at most 4096 UTF-8 bytes",
@@ -239,7 +239,7 @@ fn desktop_input_action(
                 &["window_id", "expected_window_generation", "action", "key"],
             )?;
             let key = required_string(request, "key")?;
-            if key.is_empty() || key.as_bytes().len() > 64 {
+            if key.is_empty() || key.len() > 64 {
                 return Err(ProviderError::new(
                     FailureCode::InvalidRequest,
                     "desktop key binding is empty or too large",

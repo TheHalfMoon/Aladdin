@@ -17,6 +17,7 @@ use std::path::{Path, PathBuf};
 
 /// One live cursor snapshot from the private Windows Computer Host.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg(windows)]
 pub struct DesktopCursorPosition {
     pub x: i32,
     pub y: i32,
@@ -79,6 +80,7 @@ pub enum DesktopWindowAction {
     Close,
 }
 
+#[cfg(windows)]
 impl DesktopWindowAction {
     fn as_host_str(self) -> &'static str {
         match self {

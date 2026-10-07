@@ -38,7 +38,10 @@ func sg95ValueNode(elements []elementFact) (elementFact, bool) {
 func sg95RequireCompleted(t *testing.T, response hostResponse, action string) {
 	t.Helper()
 	if !response.OK || response.Action == nil || response.Action.State != "completed" {
-		t.Fatalf("%s did not complete: %+v", action, response)
+		if response.Error != nil {
+            t.Fatalf("%s did not complete: %s: %s", action, response.Error.Code, response.Error.Message)
+        }
+        t.Fatalf("%s did not complete: %+v", action, response)
 	}
 }
 

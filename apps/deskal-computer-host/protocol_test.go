@@ -7,7 +7,7 @@ import (
 )
 
 func TestProtocolOperationSurfaceIsExact(t *testing.T) {
-	want := []string{"capture_window", "hello", "list_windows", "observe_window", "ping", "shutdown"}
+	want := []string{"capture_window", "cursor_position", "hello", "input_click", "input_drag", "input_hotkey", "input_key", "input_move", "input_scroll", "input_type_text", "list_windows", "observe_window", "ping", "semantic_action", "shutdown", "window_action"}
 	if len(allowedOperations) != len(want) {
 		t.Fatalf("operation count=%d want=%d", len(allowedOperations), len(want))
 	}
