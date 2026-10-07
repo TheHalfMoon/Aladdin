@@ -42,15 +42,28 @@ impl AuthorityMode {
     }
 }
 
+/// Opaque proof that authority issuance came from Deskal's authenticated
+/// local-user control path. The private field intentionally prevents MCP,
+/// agent, donor, relay, and remote callers from constructing this proof.
+#[derive(Debug)]
+pub struct LocalGrantProof {
+    _private: (),
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub(crate) enum GrantOrigin {
-    LocalUserControl,
+pub enum UntrustedGrantOrigin {
     McpCaller,
     Agent,
     Donor,
     Relay,
     RemotePrincipal,
+}
+
+pub fn reject_untrusted_grant(_origin: UntrustedGrantOrigin) -> Result<(), PolicyError> {
+    Err(denied(
+        "agent, MCP, donor, relay, and remote authority self-grant is denied",
+    ))
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -107,12 +120,7 @@ pub fn future_profile_ceiling(mode: AuthorityMode) -> &'static [ExecutorClass] {
     }
 }
 
-pub(crate) fn mode_selectable(origin: GrantOrigin, mode: AuthorityMode) -> Result<(), PolicyError> {
-    if origin != GrantOrigin::LocalUserControl {
-        return Err(denied(
-            "full-control authority can only be selected by the authenticated local user control path",
-        ));
-    }
+pub fn mode_selectable(_proof: &LocalGrantProof, mode: AuthorityMode) -> Result<(), PolicyError> {
     match mode {
         AuthorityMode::Safe | AuthorityMode::FullUser | AuthorityMode::FullAdmin => Ok(()),
         AuthorityMode::PersistentAdmin => Err(denied(
@@ -150,9 +158,8 @@ pub struct FullControlLease {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct FullControlLeaseRequest {
+pub struct FullControlLeaseRequest {
     pub lease_id: String,
-    pub origin: GrantOrigin,
     pub mode: AuthorityMode,
     pub windows_user_sid: String,
     pub logon_session_id: u64,
@@ -177,10 +184,11 @@ pub struct AuthorityContext<'a> {
     pub elevation_proof_id: Option<&'a str>,
 }
 
-pub(crate) fn issue_full_control(
+pub fn issue_full_control(
+    proof: &LocalGrantProof,
     request: FullControlLeaseRequest,
 ) -> Result<FullControlLease, PolicyError> {
-    mode_selectable(request.origin, request.mode)?;
+    mode_selectable(proof, request.mode)?;
     if !matches!(
         request.mode,
         AuthorityMode::FullUser | AuthorityMode::FullAdmin
@@ -277,7 +285,7 @@ pub struct AdminLease {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct AdminLeaseRequest {
+pub struct AdminLeaseRequest {
     pub lease_id: String,
     pub origin: GrantOrigin,
     pub elevation_proof_id: String,
@@ -286,16 +294,13 @@ pub(crate) struct AdminLeaseRequest {
     pub duration_ms: u64,
 }
 
-pub(crate) fn issue_admin_lease(
+pub fn issue_admin_lease(
+    proof: &LocalGrantProof,
     request: AdminLeaseRequest,
     full_control: &FullControlLease,
     context: &AuthorityContext<'_>,
 ) -> Result<AdminLease, PolicyError> {
-    if request.origin != GrantOrigin::LocalUserControl {
-        return Err(denied(
-            "admin authority can only be issued by the authenticated local user control path",
-        ));
-    }
+    mode_selectable(proof, AuthorityMode::FullAdmin)?;
     check_full_control(full_control, context)?;
     if full_control.mode != AuthorityMode::FullAdmin {
         return Err(denied("admin lease requires Full Admin intent"));
@@ -616,6 +621,10 @@ mod tests {
     const DESKAL_SESSION: &str = "deskal-session-1";
     const POLICY: &str = "sg-000093-v1";
 
+    fn local_proof() -> LocalGrantProof {
+        LocalGrantProof { _private: () }
+    }
+
     fn lease_id(prefix: &str, ch: char) -> String {
         format!("{prefix}{}", ch.to_string().repeat(64))
     }
@@ -623,7 +632,6 @@ mod tests {
     fn request(mode: AuthorityMode) -> FullControlLeaseRequest {
         FullControlLeaseRequest {
             lease_id: lease_id("fc-", 'a'),
-            origin: GrantOrigin::LocalUserControl,
             mode,
             windows_user_sid: SID.into(),
             logon_session_id: 42,
@@ -666,17 +674,11 @@ mod tests {
             1
         );
         assert!(AuthorityMode::Safe.is_default());
-        assert!(mode_selectable(GrantOrigin::LocalUserControl, AuthorityMode::FullUser).is_ok());
-        assert!(mode_selectable(GrantOrigin::LocalUserControl, AuthorityMode::FullAdmin).is_ok());
-        assert!(mode_selectable(
-            GrantOrigin::LocalUserControl,
-            AuthorityMode::PersistentAdmin
-        )
+        assert!(mode_selectable(&local_proof(), AuthorityMode::FullUser).is_ok());
+        assert!(mode_selectable(&local_proof(), AuthorityMode::FullAdmin).is_ok());
+        assert!(mode_selectable(&local_proof(), AuthorityMode::PersistentAdmin)
         .is_err());
-        assert!(mode_selectable(
-            GrantOrigin::LocalUserControl,
-            AuthorityMode::RemoteFullControl
-        )
+        assert!(mode_selectable(&local_proof(), AuthorityMode::RemoteFullControl)
         .is_err());
         assert!(
             future_profile_ceiling(AuthorityMode::FullUser).contains(&ExecutorClass::DesktopInput)
@@ -705,7 +707,7 @@ mod tests {
 
     #[test]
     fn exact_local_full_control_lease_checks_and_drift_fails_closed() {
-        let lease = issue_full_control(request(AuthorityMode::FullUser)).unwrap();
+        let lease = issue_full_control(&local_proof(), request(AuthorityMode::FullUser)).unwrap();
         let base = context(SID, DEVICE, DESKAL_SESSION, POLICY);
         assert!(check_full_control(&lease, &base).is_ok());
 
@@ -734,31 +736,34 @@ mod tests {
     #[test]
     fn agent_donor_relay_mcp_and_remote_origins_cannot_mint_authority() {
         for origin in [
-            GrantOrigin::McpCaller,
-            GrantOrigin::Agent,
-            GrantOrigin::Donor,
-            GrantOrigin::Relay,
-            GrantOrigin::RemotePrincipal,
+            UntrustedGrantOrigin::McpCaller,
+            UntrustedGrantOrigin::Agent,
+            UntrustedGrantOrigin::Donor,
+            UntrustedGrantOrigin::Relay,
+            UntrustedGrantOrigin::RemotePrincipal,
         ] {
-            let mut req = request(AuthorityMode::FullUser);
-            req.origin = origin;
-            assert!(issue_full_control(req).is_err());
-            assert!(mode_selectable(origin, AuthorityMode::FullAdmin).is_err());
+            assert!(reject_untrusted_grant(origin).is_err());
         }
+
+        // Successful issuance requires LocalGrantProof. Its only field is
+        // private to this module, so an external caller cannot construct it.
+        let lease =
+            issue_full_control(&local_proof(), request(AuthorityMode::FullUser)).unwrap();
+        assert_eq!(lease.mode, AuthorityMode::FullUser);
     }
 
     #[test]
     fn admin_lease_requires_exact_legitimate_windows_elevation_binding() {
-        let full = issue_full_control(request(AuthorityMode::FullAdmin)).unwrap();
+        let full = issue_full_control(&local_proof(), request(AuthorityMode::FullAdmin)).unwrap();
         let proof = lease_id("win-elev-", 'b');
         let mut elevated = context(SID, DEVICE, DESKAL_SESSION, POLICY);
         elevated.elevation_state = ElevationState::ElevatedAdministrator;
         elevated.elevation_proof_id = Some(&proof);
         let admin = issue_admin_lease(
+            &local_proof(),
             AdminLeaseRequest {
                 lease_id: lease_id("admin-", 'c'),
-                origin: GrantOrigin::LocalUserControl,
-                elevation_proof_id: proof.clone(),
+                    elevation_proof_id: proof.clone(),
                 elevation_state: ElevationState::ElevatedAdministrator,
                 issued_at_ms: NOW + 1_000,
                 duration_ms: 30 * 60 * 1_000,
@@ -784,12 +789,12 @@ mod tests {
             Some("win-elev-dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd");
         assert!(check_admin_lease(&admin, &full, &wrong_proof).is_err());
 
-        let full_user = issue_full_control(request(AuthorityMode::FullUser)).unwrap();
+        let full_user = issue_full_control(&local_proof(), request(AuthorityMode::FullUser)).unwrap();
         assert!(issue_admin_lease(
+            &local_proof(),
             AdminLeaseRequest {
                 lease_id: lease_id("admin-", 'e'),
-                origin: GrantOrigin::LocalUserControl,
-                elevation_proof_id: proof.clone(),
+                    elevation_proof_id: proof.clone(),
                 elevation_state: ElevationState::ElevatedAdministrator,
                 issued_at_ms: NOW + 1_000,
                 duration_ms: 30 * 60 * 1_000,
@@ -802,7 +807,7 @@ mod tests {
 
     #[test]
     fn revoke_and_epoch_change_invalidate_before_new_dispatch() {
-        let mut lease = issue_full_control(request(AuthorityMode::FullUser)).unwrap();
+        let mut lease = issue_full_control(&local_proof(), request(AuthorityMode::FullUser)).unwrap();
         let mut epoch = AuthorityEpoch::new(lease.authority_epoch).unwrap();
         let mut ctx = context(SID, DEVICE, DESKAL_SESSION, POLICY);
         assert!(check_full_control(&lease, &ctx).is_ok());
@@ -816,7 +821,7 @@ mod tests {
 
     #[test]
     fn audit_projection_hashes_identity_and_elevation_binding_material() {
-        let full = issue_full_control(request(AuthorityMode::FullAdmin)).unwrap();
+        let full = issue_full_control(&local_proof(), request(AuthorityMode::FullAdmin)).unwrap();
         let event = full_control_audit_event(AuditKind::Granted, &full, NOW + 1);
         let json = serde_json::to_string(&event).unwrap();
         assert!(!json.contains(SID));
@@ -829,10 +834,10 @@ mod tests {
         elevated.elevation_state = ElevationState::ElevatedAdministrator;
         elevated.elevation_proof_id = Some(&proof);
         let admin = issue_admin_lease(
+            &local_proof(),
             AdminLeaseRequest {
                 lease_id: lease_id("admin-", 'd'),
-                origin: GrantOrigin::LocalUserControl,
-                elevation_proof_id: proof.clone(),
+                    elevation_proof_id: proof.clone(),
                 elevation_state: ElevationState::ElevatedAdministrator,
                 issued_at_ms: NOW + 1,
                 duration_ms: 60_000,
