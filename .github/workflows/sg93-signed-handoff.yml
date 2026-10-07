@@ -1,0 +1,126 @@
+name: SG93 Signed Handoff
+
+on:
+  push:
+    branches:
+      - program/implement-sg-000093-full-control-authority
+    paths:
+      - .github/workflows/sg93-signed-handoff.yml
+
+permissions:
+  contents: write
+
+jobs:
+  create-signed-commit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      TARGET_BRANCH: program/sg-000093-full-control-authority-signed
+      EXPECTED_HEAD: c930bf57651e83654a42a46d88c5ddbff895cab2
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+
+      - name: Create GitHub-signed SG-000093 commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: python
+        run: |
+          import base64
+          import json
+          import os
+          import pathlib
+          import sys
+          import urllib.request
+
+          repo = "TheHalfMoon/Deskal"
+          target = os.environ["TARGET_BRANCH"]
+          expected = os.environ["EXPECTED_HEAD"]
+          token = os.environ["GH_TOKEN"]
+          paths = [
+              "crates/qdral-policy/src/full_control.rs",
+              "crates/qdral-policy/src/sg000040.rs",
+              "docs/security/SG-000093_FULL_CONTROL_AUTHORITY_MODEL.md",
+          ]
+
+          additions = []
+          for path in paths:
+              raw = pathlib.Path(path).read_bytes()
+              additions.append({
+                  "path": path,
+                  "contents": base64.b64encode(raw).decode("ascii"),
+              })
+
+          query = """
+          mutation($input: CreateCommitOnBranchInput!) {
+            createCommitOnBranch(input: $input) {
+              commit {
+                oid
+                url
+                signature {
+                  isValid
+                  state
+                  wasSignedByGitHub
+                  signer { login }
+                }
+              }
+              ref { name }
+            }
+          }
+          """
+          body = {
+              "query": query,
+              "variables": {
+                  "input": {
+                      "branch": {
+                          "repositoryNameWithOwner": repo,
+                          "branchName": target,
+                      },
+                      "expectedHeadOid": expected,
+                      "message": {
+                          "headline": "feat: add SG-000093 full-control authority model",
+                          "body": (
+                              "Recreates the exact qualified SG-000093 staging tree from PR #244.\n\n"
+                              "Co-authored-by: Abdulaziz M. Shehri <alshehriofficial@gmail.com>\n"
+                              "Signed-off-by: github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>\n"
+                              "Signed-off-by: Abdulaziz M. Shehri <alshehriofficial@gmail.com>"
+                          ),
+                      },
+                      "fileChanges": {
+                          "additions": additions,
+                      },
+                  }
+              },
+          }
+
+          request = urllib.request.Request(
+              "https://api.github.com/graphql",
+              data=json.dumps(body).encode("utf-8"),
+              headers={
+                  "Authorization": f"Bearer {token}",
+                  "Content-Type": "application/json",
+                  "User-Agent": "Deskal-SG93-Signed-Handoff",
+              },
+              method="POST",
+          )
+
+          with urllib.request.urlopen(request, timeout=30) as response:
+              payload = json.load(response)
+
+          if payload.get("errors"):
+              print(json.dumps(payload["errors"], indent=2))
+              sys.exit(1)
+
+          commit = payload["data"]["createCommitOnBranch"]["commit"]
+          signature = commit.get("signature") or {}
+          print(f"commit={commit['oid']}")
+          print(f"url={commit['url']}")
+          print(f"signature_state={signature.get('state')}")
+          print(f"signature_valid={signature.get('isValid')}")
+          print(f"signed_by_github={signature.get('wasSignedByGitHub')}")
+          print(f"signer={(signature.get('signer') or {}).get('login')}")
+
+          if not signature.get("isValid") or not signature.get("wasSignedByGitHub"):
+              print("GitHub-signed verification failed")
+              sys.exit(2)
