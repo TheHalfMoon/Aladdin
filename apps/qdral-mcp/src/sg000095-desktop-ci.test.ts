@@ -54,6 +54,14 @@ test("SG-000095 native mutation source stays private, bounded, and excludes dono
   assert.match(source, /semantic/i);
   assert.match(source, /window_close/);
 
+  // Semantic UIA resolution may touch hostile provider trees; enforce the
+  // same finite traversal ceilings as the observation path before dispatch.
+  const semantic = readFileSync(join(hostDir, "native_actions_windows.go"), "utf8");
+  assert.match(semantic, /depth > maxTreeDepth/);
+  assert.match(semantic, /\*remaining <= 0/);
+  assert.match(semantic, /remaining := maxTreeNodes/);
+  assert.match(semantic, /findElementByRuntimeID\(child, walker, key, depth\+1, remaining\)/);
+
   for (const forbidden of [
     /ListenAndServe\s*\(/,
     /\bnet\.Listen\s*\(/,

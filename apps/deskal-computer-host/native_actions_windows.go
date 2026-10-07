@@ -31,20 +31,29 @@ const (
 	scrollSlotScroll    = 3
 )
 
-func findElementByRuntimeID(root uiaElement, walker unsafe.Pointer, key string) (uiaElement, bool) {
-	if root.valid() && root.runtimeIdKey() == key {
+// Semantic lookup must use the same depth/node ceilings as UIA observation.
+// Adversarial accessibility trees must not drive unbounded recursive traversal.
+func findElementByRuntimeID(root uiaElement, walker unsafe.Pointer, key string, depth int, remaining *int) (uiaElement, bool) {
+	if depth > maxTreeDepth || *remaining <= 0 || !root.valid() {
+		return uiaElement{}, false
+	}
+	*remaining = *remaining - 1
+	if root.runtimeIdKey() == key {
 		_, _, _ = vtableCall(root.ptr, 1) // AddRef for the returned owner.
 		return root, true
 	}
+	if depth == maxTreeDepth || *remaining == 0 {
+		return uiaElement{}, false
+	}
 	children := walkerChildren(walker, root)
 	for index, child := range children {
-		found, ok := findElementByRuntimeID(child, walker, key)
+		found, ok := findElementByRuntimeID(child, walker, key, depth+1, remaining)
 		child.release()
-		if ok {
-			for _, remaining := range children[index+1:] {
-				remaining.release()
+		if ok || *remaining == 0 {
+			for _, unvisited := range children[index+1:] {
+				unvisited.release()
 			}
-			return found, true
+			return found, ok
 		}
 	}
 	return uiaElement{}, false
@@ -184,7 +193,8 @@ func nativeSemanticAction(req hostRequest) hostResponse {
 		}
 		defer oleRelease(walker)
 
-		element, found := findElementByRuntimeID(root, walker, req.ElementRuntimeID)
+		remaining := maxTreeNodes
+		element, found := findElementByRuntimeID(root, walker, req.ElementRuntimeID, 0, &remaining)
 		if !found {
 			operationErr = errors.New("exact UIA runtime id is stale or no longer present")
 			return
