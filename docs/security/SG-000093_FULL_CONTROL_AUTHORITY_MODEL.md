@@ -29,7 +29,7 @@ Only the authenticated local user control path can select or issue `Full User` o
 
 `Remote Full Control` remains unavailable until SG-000105.
 
-No agent, MCP caller, donor runtime, relay, or remote principal can mint, widen, renew, persist, or convert authority.
+No agent, MCP caller, donor runtime, relay, or remote principal can mint, widen, renew, persist, or convert authority. SG-000093 keeps lease-issuance request types and issuance functions crate-private so the public policy API cannot self-assert the local-user grant origin.
 
 ## FullControlLease
 
@@ -75,11 +75,11 @@ Explicitly rejected:
 - secure-desktop automation;
 - credential-provider bypass.
 
-The admin lease cannot outlive its parent full-control lease and must match the same user, logon session, device, Deskal session, policy revision, and authority epoch.
+The admin lease cannot outlive its parent full-control lease and must match the same user, logon session, device, Deskal session, policy revision, and authority epoch. The serializable AdminLease stores only a SHA-256 digest of the transient Windows elevation-proof identifier; the raw proof identifier is not persisted in the lease.
 
 ## Future executor ceilings
 
-The mode model freezes the maximum future executor classes without exposing them in this grain.
+The mode model freezes the maximum future executor classes without exposing them in this grain. These are future ceilings only: `executor_enabled_now` returns false for every mode/executor pair in SG-000093.
 
 `Full User` may eventually authorize:
 
@@ -132,7 +132,7 @@ Authority audit projection stores:
 - authority epoch;
 - event time.
 
-It does not store the raw Windows SID, raw device/session binding values, elevated token handles, credential material, or the raw elevation-proof id.
+It does not store the raw Windows SID, raw device/session binding values, elevated token handles, credential material, or the raw elevation-proof id. The AdminLease itself likewise stores only the elevation-proof digest.
 
 ## Successor boundary
 
