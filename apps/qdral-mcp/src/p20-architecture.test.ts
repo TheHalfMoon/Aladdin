@@ -177,7 +177,7 @@ test("P20 subsystem ownership and sequence have no gap", () => {
   assert.equal(plan.includes("SG-000108"), false);
 });
 
-test("SG-000094 is closed and SG-000095 is the sole active grain", () => {
+test("SG-000094 and SG-000095 are closed, with no successor yet activated", () => {
   const specDir = join(repo, ".specgrain", "specs");
   const specs = readdirSync(specDir).filter((name) => /^SG-\d{6}\.json$/.test(name));
   const open: string[] = [];
@@ -187,7 +187,7 @@ test("SG-000094 is closed and SG-000095 is the sole active grain", () => {
       open.push(spec.id);
     }
   }
-  assert.deepEqual(open, ["SG-000095"]);
+  assert.deepEqual(open, []);
 
   const sg94 = readJson<{
     state: string;
@@ -204,14 +204,33 @@ test("SG-000094 is closed and SG-000095 is the sole active grain", () => {
   assert.equal(sg94.canonical_evidence.qualified_tree, "37e086ca4196bd4674cbe6bb87815cc1c32590b5");
   assert.equal(sg94.canonical_evidence.unresolved_review_threads, 0);
 
-  const sg95 = readJson<{ id: string; program: string; state: string; base: string; dependencies: string[] }>(
-    ".specgrain/specs/SG-000095.json"
-  );
+  const sg95 = readJson<{
+    id: string;
+    program: string;
+    state: string;
+    base: string;
+    dependencies: string[];
+    qualified_head: string;
+    qualified_tree: string;
+    implementation_merge: string;
+    pre_merge_ci: string;
+    pre_merge_review_gates: string;
+    post_merge_ci: string;
+    canonical_evidence: { signed_dco_commits: number; unresolved_review_threads: number };
+  }>(".specgrain/specs/SG-000095.json");
   assert.equal(sg95.id, "SG-000095");
   assert.equal(sg95.program, "DESKAL-P20");
-  assert.equal(sg95.state, "GRAIN");
+  assert.equal(sg95.state, "CLOSED");
   assert.equal(sg95.base, "5a86440021d70c8abb021c2042adc6ee1108471e");
   assert.deepEqual(sg95.dependencies, ["SG-000094"]);
+  assert.equal(sg95.qualified_head, "1ba3dadf98fbd47bc2f809abb9b68a7cd83ca973");
+  assert.equal(sg95.qualified_tree, "a383cc7cbff4e252a5c331734d646bab7c196166");
+  assert.equal(sg95.implementation_merge, "be21813d29e4faf4887a9b23f67b2158ce247832");
+  assert.equal(sg95.pre_merge_ci, "37699286110");
+  assert.equal(sg95.pre_merge_review_gates, "37699282497");
+  assert.equal(sg95.post_merge_ci, "37700649594");
+  assert.equal(sg95.canonical_evidence.signed_dco_commits, 3);
+  assert.equal(sg95.canonical_evidence.unresolved_review_threads, 0);
 
   for (let n = 96; n <= 107; n += 1) {
     const id = `SG-${String(n).padStart(6, "0")}.json`;
@@ -485,7 +504,7 @@ test("canonical P20 documents match the machine-readable freeze", () => {
   assert.match(ledger, /No donor code merge proceeds unless all boxes are proven/);
 
   assert.match(current, /SG-000094 - Windows Computer Host import - is CLOSED canonical/);
-  assert.match(current, /SG-000095 - Desktop input and full computer-control surface - is the sole active DESKAL-P20 grain/);
+  assert.match(current, /SG-000095 - Desktop input and full computer-control surface - is CLOSED canonical/);
   assert.match(planning, /\.specgrain\/specs\/SG-000095\.json/);
   assert.match(planning, /sg000095_desktop_input_import\.json/);
   assert.match(planning, /sg000094_windows_host_import\.json/);

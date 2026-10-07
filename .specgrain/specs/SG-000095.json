@@ -2,7 +2,7 @@
   "id": "SG-000095",
   "title": "Desktop input and full computer-control surface",
   "program": "DESKAL-P20",
-  "state": "GRAIN",
+  "state": "CLOSED",
   "risk": "high",
   "created": "2026-10-07",
   "base": "5a86440021d70c8abb021c2042adc6ee1108471e",
@@ -102,6 +102,31 @@
     "native_windows": true,
     "donor_provenance": true,
     "release_artifact_qualification": false
+  },
+  "closed_at": "2026-10-08",
+  "implementation_base": "941dfd504e75b578c091e8819ef949bcce8029ad",
+  "implementation_pr": 258,
+  "qualified_head": "1ba3dadf98fbd47bc2f809abb9b68a7cd83ca973",
+  "qualified_tree": "a383cc7cbff4e252a5c331734d646bab7c196166",
+  "implementation_merge": "be21813d29e4faf4887a9b23f67b2158ce247832",
+  "pre_merge_ci": "37699286110",
+  "pre_merge_review_gates": "37699282497",
+  "post_merge_ci": "37700649594",
+  "canonical_evidence": {
+    "original_staging_pr": 257,
+    "original_staging_head": "19f3f1db50e55f55286480f4552fb79669286657",
+    "replacement_signed_base": "23643f35de037760e8b406b45a5997a15e179586",
+    "signed_security_repairs": [
+      "0cfd11573dc17fb4816c91bff32e7d82b53b664c",
+      "1ba3dadf98fbd47bc2f809abb9b68a7cd83ca973"
+    ],
+    "signed_dco_commits": 3,
+    "jev": "PASSED: genuine TypeSafe Jev reviewed 122/122 exact-diff hunks with zero findings and zero blocking findings.",
+    "ocr": "PASSED: Alibaba Open Code Review v1.12.9 exact-range delegation selected 30 reviewable files and 14 excluded files; all exclusions received manual code/contract review. Delegation is not an OCR LLM semantic review.",
+    "native_windows": "PASS: native disposable-window SendInput, semantic UIA, lifecycle, stale-target and human-input drift tests; Windows Node CI passed 188 tests with zero failures.",
+    "security_review": "PASS: local Full User presence-granted authority, protected HMAC key and epoch, runtime SID/logon/owner binding, per-action SOFT approval, typed window freshness, bounded and no-retry native worker, bounded UIA recursion and raw sibling enumeration, no donor-grant exposure, no remote/Full Admin/privileged execution.",
+    "unresolved_review_threads": 0,
+    "release_boundary": "No release payload, installer, tag, Whole Desktop capture, recording, remote Full User, Full Admin elevation broker, Persistent Admin, UAC bypass, Windows Hello bypass, SYSTEM, or TrustedInstaller authority was added."
   },
   "done_when": "Full User desktop control is qualified end-to-end through Deskal-owned policy and typed identities: semantic actions and bounded real mouse/keyboard/cursor input work on native Windows with freshness, protected-surface, approval, revoke/expiry, interruption, and fail-closed result semantics intact; Safe remains default; no privileged, remote, recording, network, or release authority is added."
 }

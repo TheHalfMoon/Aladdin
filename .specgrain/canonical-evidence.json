@@ -1181,6 +1181,22 @@
       "review_basis": "Staging PR #253 qualified tree 37e086ca4196bd4674cbe6bb87815cc1c32590b5 with CI 37647737524 (9/9) and Review Gates 37647731845. The exact tree was recreated from canonical base ca060c69ad6bcdbc38c15609620888c0bc0911f4 as GitHub-Verified signed+DCO head b0459d356c8397e6cf91126bcdc209f11e41ef11; exact-head CI 37649968407 passed all 9 jobs, Review Gates 37649967468 passed, genuine TypeSafe Jev reviewed 21/21 hunks across 19 files with zero findings/blockers, Alibaba Open Code Review v1.12.9 reviewed 11 reviewable files and all 8 exclusions were manually reviewed with zero blocking findings, zero unresolved review threads, normal merge 5a86440021d70c8abb021c2042adc6ee1108471e, and post-merge CI 37651396449 passed all 9 jobs.",
       "unresolved_review_threads": 0,
       "authority_boundary": "Private Deskal-supervised Windows observation/capture host only: exact-window capture, bounded UIA observation, Win32 window/process facts, sacrificial worker isolation, and typed ComputerHostAdapter integration. No desktop input, caller-facing MCP widening, launch/focus mutation, network, privileged, remote, release, installer, or tag authority."
+    },
+    "SG-000095": {
+      "implementation_pr": 258,
+      "implementation_base": "941dfd504e75b578c091e8819ef949bcce8029ad",
+      "qualified_head": "1ba3dadf98fbd47bc2f809abb9b68a7cd83ca973",
+      "qualified_tree": "a383cc7cbff4e252a5c331734d646bab7c196166",
+      "pre_merge_ci": "37699286110",
+      "pre_merge_review_gates": "37699282497",
+      "merge_sha": "be21813d29e4faf4887a9b23f67b2158ce247832",
+      "post_merge_ci": "37700649594",
+      "staging_pr": 257,
+      "staging_head": "19f3f1db50e55f55286480f4552fb79669286657",
+      "signed_dco_commits": 3,
+      "review_basis": "PR #257 preserved the original staging source. New signed+DCO PR #258 reproduced that exact tree from canonical base 941dfd504e75b578c091e8819ef949bcce8029ad and added signed security hardening commits 0cfd11573dc17fb4816c91bff32e7d82b53b664c and 1ba3dadf98fbd47bc2f809abb9b68a7cd83ca973 to bound semantic UIA recursion and raw sibling enumeration with explicit COM lifetime cleanup. Exact-head CI 37699286110 passed all nine jobs, including Windows disposable-window native input qualification and 188 Windows Node tests. Review Gates 37699282497 passed genuine TypeSafe Jev 122/122 hunks with zero findings/blockers and Alibaba Open Code Review v1.12.9 delegation over 30 reviewable and 14 manually reviewed excluded files. All three commits were verified signed+DCO. Zero unresolved review threads. Normal merge be21813d29e4faf4887a9b23f67b2158ce247832 preserved qualified tree a383cc7cbff4e252a5c331734d646bab7c196166. Post-merge CI 37700649594 passed all nine jobs.",
+      "unresolved_review_threads": 0,
+      "authority_boundary": "Local Windows Full User input, screenshot, semantic UIA and window lifecycle under STRONG human-granted expiring FullControlLease, per-action SOFT approval, exact typed target/freshness, user logon identity and human-interruption checks only. Safe stays default. No privileged, remote, recording, full-desktop capture, arbitrary shell/process, filesystem or browser/network widening, release, installer or tag authority."
     }
   }
 }
