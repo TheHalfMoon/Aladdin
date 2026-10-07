@@ -1,0 +1,122 @@
+{
+  "schema": "deskal-p20-sg000094-host-import/1",
+  "grain": "SG-000094",
+  "donor": {
+    "repository": "opensymph/open-computer-use",
+    "commit": "5b433b98019c18201a15d11e8c3cb0010879a3d8",
+    "commit_verified": true,
+    "license": "MIT",
+    "license_path": "LICENSE",
+    "license_blob_sha": "3b3840d939919f58113a626bb990a90f3b949aab"
+  },
+  "selected": [
+    {
+      "source": "apps/OpenComputerUseWindows/native_capture.go",
+      "blob_sha": "62bc7247300675806c699f269b98faa71ef5d2a6",
+      "reuse": "COPY_ADAPT",
+      "destination": "apps/deskal-computer-host/native_capture_windows.go",
+      "boundary": "exact-window WGC/PrintWindow/GDI capture only; remove desktop/display commands and caller-selected capture modes"
+    },
+    {
+      "source": "apps/OpenComputerUseWindows/native_uia.go",
+      "blob_sha": "74c0e98b04f612484580eb9dfd2dbfd840659ca7",
+      "reuse": "COPY_ADAPT",
+      "destination": "apps/deskal-computer-host/native_uia_windows.go",
+      "boundary": "UIA observation/tree/window facts only; remove SetFocus and every mutation/action path"
+    },
+    {
+      "source": "apps/OpenComputerUseWindows/native_win32.go",
+      "blob_sha": "e94ce44c7e76ce45035dfe584c883cab16babdf0",
+      "reuse": "COPY_ADAPT",
+      "destination": "apps/deskal-computer-host/native_win32_windows.go",
+      "boundary": "window/process/COM/capture helpers only; remove SendInput, PostMessage actuation, foreground/focus, launch, key/mouse mutation"
+    },
+    {
+      "source": "apps/OpenComputerUseWindows/native_op_client.go",
+      "blob_sha": "7deef025452b7e994ae60fa89551fe907e11d22d",
+      "reuse": "COPY_ADAPT",
+      "destination": "apps/deskal-computer-host/worker_windows.go",
+      "boundary": "sacrificial operation worker; bounded retries; change upstream in-process fallback to typed fail-closed unavailable"
+    },
+    {
+      "source": "apps/OpenComputerUseWindows/native_backend.go",
+      "blob_sha": "8af3b00559e5ec1f5b1e900743bda24ea75932b6",
+      "reuse": "PORT",
+      "destination": "apps/deskal-computer-host/observe_windows.go",
+      "boundary": "observation-only dispatcher; no launch, activate, get_app_state auto-launch, or action dispatch"
+    },
+    {
+      "source": "apps/OpenComputerUseWindows/main.go",
+      "blob_sha": "9ac3d67599dc777391a7f6176f99fa248b725339",
+      "reuse": "REFERENCE",
+      "destination": "apps/deskal-computer-host/protocol.go",
+      "boundary": "reference only for process/protocol lifecycle; do not copy MCP server, public CLI tool catalog, action schemas, or input authority"
+    }
+  ],
+  "deferred_to_sg_000095": [
+    {
+      "source": "apps/OpenComputerUseWindows/native_actions.go",
+      "blob_sha": "25c2482d9d0e6b82c890ecf07956643b88bbf97f"
+    },
+    {
+      "source": "apps/OpenComputerUseWindows/desktop_windows.go",
+      "blob_sha": "59466d669c1bfea13a15dfc371d9eceb471f21bd"
+    },
+    {
+      "source": "apps/OpenComputerUseWindows/input_helpers.go",
+      "blob_sha": "a41a65cabfda87ced036fe8ad05b25cd17729dc6"
+    },
+    {
+      "source": "apps/OpenComputerUseWindows/desktop.go",
+      "blob_sha": "39512b3d0ca5e18b07e5f1c31c658198b74dfe84"
+    }
+  ],
+  "dependencies": {
+    "go": "1.25.x pinned by CI action/toolchain selection",
+    "modules": [
+      {
+        "module": "golang.org/x/sys",
+        "version": "v0.47.0"
+      }
+    ],
+    "explicitly_not_selected": [
+      "golang.org/x/image"
+    ]
+  },
+  "private_protocol": {
+    "transport": "deskal-supervised stdin/stdout only",
+    "operations": [
+      "hello",
+      "ping",
+      "list_windows",
+      "observe_window",
+      "capture_window",
+      "shutdown"
+    ],
+    "caller_facing": false,
+    "listeners": [],
+    "network_egress": false,
+    "desktop_input": false,
+    "app_launch": false,
+    "focus_mutation": false,
+    "privileged": false
+  },
+  "reuse_desktop_authority": {
+    "registry": "crates/qdral-provider-uia::UiaRegistry",
+    "adapter_contract": "crates/qdral-provider-uia::UiaAdapter",
+    "retained_authority": [
+      "typed process/window/element/frame identities",
+      "stale/reuse checks",
+      "protected-surface exclusion",
+      "secret/password redaction",
+      "capture generation",
+      "approval policy",
+      "bounds"
+    ],
+    "host_role": "OS facts and exact-window pixels only"
+  },
+  "packaging": {
+    "included_in_release": false,
+    "owner_for_unified_packaging": "SG-000106"
+  }
+}
