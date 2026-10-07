@@ -13,6 +13,7 @@ package main
 
 import (
 	"crypto/sha256"
+	"encoding/binary"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -177,6 +178,17 @@ func sessionIDForPID(pid uint32) (uint32, bool) {
 	return session, ok != 0
 }
 
+func isInteractiveStationName(name string) bool {
+	return strings.EqualFold(name, "WinSta0")
+}
+
+func validateInteractiveStationName(name string) error {
+	if !isInteractiveStationName(name) {
+		return errors.New("host is not attached to WinSta0")
+	}
+	return nil
+}
+
 func requireInteractiveStation() error {
 	station, _, _ := procGetProcessWindowStation.Call()
 	if station == 0 { return errors.New("interactive window station is unavailable") }
@@ -186,10 +198,7 @@ func requireInteractiveStation() error {
 		station, uoiName, uintptr(unsafe.Pointer(&name[0])),
 		uintptr(len(name)*2), uintptr(unsafe.Pointer(&needed)))
 	if ok == 0 { return errors.New("window station name is unreadable") }
-	if !strings.EqualFold(windows.UTF16ToString(name), "WinSta0") {
-		return errors.New("host is not attached to WinSta0")
-	}
-	return nil
+	return validateInteractiveStationName(windows.UTF16ToString(name))
 }
 
 func isProtectedExecutable(name string) bool {
@@ -271,6 +280,12 @@ func getWindowRect(hwnd windows.HWND) (windowRect, bool) {
 	return rect, ok != 0 && rect.Right > rect.Left && rect.Bottom > rect.Top
 }
 
+func windowNonce(process processFact, class string) uint64 {
+	material := fmt.Sprintf("%d|%d|%s", process.PID, process.StartGeneration, class)
+	digest := sha256.Sum256([]byte(material))
+	return binary.LittleEndian.Uint64(digest[:8])
+}
+
 func enumerateWindows() ([]windowFact, error) {
 	if err := requireInteractiveStation(); err != nil { return nil, err }
 	ownSession, ok := currentSessionID()
@@ -288,9 +303,7 @@ func enumerateWindows() ([]windowFact, error) {
 		process, ok := processFactByPID(pid)
 		if !ok || process.SessionID != ownSession { return 1 }
 		class := className(hwnd)
-		nonceInput := fmt.Sprintf("%d|%d|%s", pid, process.StartGeneration, class)
-		nonceHash := sha256.Sum256([]byte(nonceInput))
-		nonce := *(*uint64)(unsafe.Pointer(&nonceHash[0]))
+		nonce := windowNonce(process, class)
 		facts = append(facts, windowFact{
 			Process: process, HWND: uint64(raw), Title: title, Class: class,
 			Visible: true, WindowNonce: nonce,
@@ -314,6 +327,25 @@ func validateWindow(hwnd windows.HWND) (processFact, windowRect, error) {
 	if !ok || process.SessionID != ownSession { return processFact{}, windowRect{}, errors.New("window is outside the interactive session") }
 	rect, ok := getWindowRect(hwnd)
 	if !ok { return processFact{}, windowRect{}, errors.New("window geometry is unreadable") }
+	return process, rect, nil
+}
+
+func validateBoundWindow(req hostRequest) (processFact, windowRect, error) {
+	hwnd := windows.HWND(uintptr(req.HWND))
+	process, rect, err := validateWindow(hwnd)
+	if err != nil {
+		return processFact{}, windowRect{}, err
+	}
+	if req.ExpectedPID == nil || req.ExpectedStartGeneration == nil || req.ExpectedWindowNonce == nil {
+		return processFact{}, windowRect{}, errors.New("window binding is incomplete")
+	}
+	class := className(hwnd)
+	nonce := windowNonce(process, class)
+	if process.PID != *req.ExpectedPID ||
+		process.StartGeneration != *req.ExpectedStartGeneration ||
+		nonce != *req.ExpectedWindowNonce {
+		return processFact{}, windowRect{}, errors.New("window binding is stale")
+	}
 	return process, rect, nil
 }
 

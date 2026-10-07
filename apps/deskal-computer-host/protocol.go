@@ -34,6 +34,9 @@ type hostRequest struct {
 	Protocol string `json:"protocol"`
 	Op string `json:"op"`
 	HWND uint64 `json:"hwnd,omitempty"`
+	ExpectedPID *uint32 `json:"expected_pid,omitempty"`
+	ExpectedStartGeneration *uint64 `json:"expected_start_generation,omitempty"`
+	ExpectedWindowNonce *uint64 `json:"expected_window_nonce,omitempty"`
 	MaxNodes int `json:"max_nodes,omitempty"`
 	MaxDepth int `json:"max_depth,omitempty"`
 }
@@ -112,8 +115,13 @@ func validateRequest(req hostRequest) *hostError {
 	if _, ok := allowedOperations[req.Op]; !ok {
 		return &hostError{Code: "capability_denied", Message: "operation is not exposed by the observation-only host"}
 	}
-	if (req.Op == "observe_window" || req.Op == "capture_window") && req.HWND == 0 {
-		return &hostError{Code: "invalid_request", Message: "window handle is required"}
+	if req.Op == "observe_window" || req.Op == "capture_window" {
+		if req.HWND == 0 {
+			return &hostError{Code: "invalid_request", Message: "window handle is required"}
+		}
+		if req.ExpectedPID == nil || req.ExpectedStartGeneration == nil || req.ExpectedWindowNonce == nil {
+			return &hostError{Code: "invalid_request", Message: "exact window binding is required"}
+		}
 	}
 	if req.MaxNodes < 0 || req.MaxDepth < 0 {
 		return &hostError{Code: "invalid_request", Message: "tree bounds must be non-negative"}

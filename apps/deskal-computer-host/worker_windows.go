@@ -58,18 +58,9 @@ func runSacrificialWorker(req hostRequest) hostResponse {
 			last = "native worker exited unsuccessfully"
 			continue
 		}
-		line := bytes.TrimSpace(stdout.Bytes())
-		if len(line) == 0 || len(line) > maxResponseBytes {
-			last = "native worker returned an empty or oversized response"
-			continue
-		}
-		var resp hostResponse
-		if err := json.Unmarshal(line, &resp); err != nil {
-			last = "native worker returned corrupt JSON"
-			continue
-		}
-		if resp.ID != req.ID || resp.Protocol != protocolGeneration || resp.Host != hostIdentity {
-			last = "native worker response binding mismatch"
+		resp, decodeErr := decodeWorkerResponse(req, stdout.Bytes())
+		if decodeErr != nil {
+			last = decodeErr.Error()
 			continue
 		}
 		return resp
@@ -78,6 +69,24 @@ func runSacrificialWorker(req hostRequest) hostResponse {
 		last = "native worker unavailable"
 	}
 	return failure(req.ID, "provider_unavailable", last)
+}
+
+func decodeWorkerResponse(req hostRequest, raw []byte) (hostResponse, error) {
+	line := bytes.TrimSpace(raw)
+	if len(line) == 0 || len(line) > maxResponseBytes {
+		return hostResponse{}, errors.New("native worker returned an empty or oversized response")
+	}
+	if bytes.IndexByte(line, 0) >= 0 {
+		return hostResponse{}, errors.New("native worker returned a NUL-contaminated response")
+	}
+	var resp hostResponse
+	if err := json.Unmarshal(line, &resp); err != nil {
+		return hostResponse{}, errors.New("native worker returned corrupt JSON")
+	}
+	if resp.ID != req.ID || resp.Protocol != protocolGeneration || resp.Host != hostIdentity {
+		return hostResponse{}, errors.New("native worker response binding mismatch")
+	}
+	return resp, nil
 }
 
 func workerMain(input io.Reader, output io.Writer) error {

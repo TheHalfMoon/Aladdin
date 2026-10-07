@@ -33,6 +33,22 @@ func TestProtocolRejectsUnknownAndMalformedRequests(t *testing.T) {
 	if err := validateRequest(hostRequest{Protocol: protocolGeneration, Op: "capture_window"}); err == nil {
 		t.Fatal("capture without HWND accepted")
 	}
+	if err := validateRequest(hostRequest{Protocol: protocolGeneration, Op: "observe_window", HWND: 1}); err == nil {
+		t.Fatal("observation without exact target binding accepted")
+	}
+	pid := uint32(10)
+	start := uint64(20)
+	nonce := uint64(30)
+	if err := validateRequest(hostRequest{
+		Protocol: protocolGeneration,
+		Op: "observe_window",
+		HWND: 1,
+		ExpectedPID: &pid,
+		ExpectedStartGeneration: &start,
+		ExpectedWindowNonce: &nonce,
+	}); err != nil {
+		t.Fatalf("complete exact target binding rejected: %+v", err)
+	}
 }
 
 func TestResponseSchemaContainsNoSecretOrAuthorityFields(t *testing.T) {

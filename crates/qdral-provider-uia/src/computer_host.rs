@@ -31,6 +31,12 @@ struct HostRequest<'a> {
     #[serde(skip_serializing_if = "Option::is_none")]
     hwnd: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    expected_pid: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    expected_start_generation: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    expected_window_nonce: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     max_nodes: Option<usize>,
     #[serde(skip_serializing_if = "Option::is_none")]
     max_depth: Option<usize>,
@@ -63,6 +69,14 @@ struct HostWindow {
     title: String,
     class: String,
     visible: bool,
+    window_nonce: u64,
+}
+
+#[cfg(windows)]
+#[derive(Debug, Clone, Copy)]
+struct HostTargetBinding {
+    pid: u32,
+    start_generation: u64,
     window_nonce: u64,
 }
 
@@ -271,7 +285,7 @@ mod platform {
                 stdout: BufReader::new(stdout),
                 next_id: 1,
             };
-            let hello = session.request("hello", None, None, None)?;
+            let hello = session.request("hello", None, None, None, None)?;
             if !hello.ok || hello.protocol != HOST_PROTOCOL || hello.host != HOST_IDENTITY {
                 return Err(UiaError::new(
                     FailureCode::ProviderUnavailable,
@@ -285,6 +299,7 @@ mod platform {
             &mut self,
             op: &str,
             hwnd: Option<u64>,
+            binding: Option<HostTargetBinding>,
             max_nodes: Option<usize>,
             max_depth: Option<usize>,
         ) -> Result<HostResponse, UiaError> {
@@ -300,6 +315,9 @@ mod platform {
                 protocol: HOST_PROTOCOL,
                 op,
                 hwnd,
+                expected_pid: binding.map(|value| value.pid),
+                expected_start_generation: binding.map(|value| value.start_generation),
+                expected_window_nonce: binding.map(|value| value.window_nonce),
                 max_nodes,
                 max_depth,
             };
@@ -376,7 +394,7 @@ mod platform {
 
     impl Drop for HostSession {
         fn drop(&mut self) {
-            let _ = self.request("shutdown", None, None, None);
+            let _ = self.request("shutdown", None, None, None, None);
             let _ = self.child.kill();
             let _ = self.child.wait();
         }
@@ -385,6 +403,7 @@ mod platform {
     pub struct ComputerHostAdapter {
         path: PathBuf,
         session: Mutex<HostSession>,
+        bindings: Mutex<BTreeMap<u64, HostTargetBinding>>,
     }
 
     impl ComputerHostAdapter {
@@ -394,6 +413,7 @@ mod platform {
             Ok(Self {
                 path,
                 session: Mutex::new(session),
+                bindings: Mutex::new(BTreeMap::new()),
             })
         }
 
@@ -413,13 +433,14 @@ mod platform {
 
         #[cfg(test)]
         pub(crate) fn ping_for_test(&self) -> Result<(), UiaError> {
-            self.request("ping", None, None, None).map(|_| ())
+            self.request("ping", None, None, None, None).map(|_| ())
         }
 
         fn request(
             &self,
             op: &str,
             hwnd: Option<u64>,
+            binding: Option<HostTargetBinding>,
             max_nodes: Option<usize>,
             max_depth: Option<usize>,
         ) -> Result<HostResponse, UiaError> {
@@ -429,15 +450,64 @@ mod platform {
                     "Windows Computer Host session lock is poisoned",
                 )
             })?;
-            session.request(op, hwnd, max_nodes, max_depth)
+            session.request(op, hwnd, binding, max_nodes, max_depth)
+        }
+
+        fn list_window_facts(&self) -> Result<Vec<HostWindow>, UiaError> {
+            let response = self.request("list_windows", None, None, None, None)?;
+            let mut bindings = self.bindings.lock().map_err(|_| {
+                UiaError::new(
+                    FailureCode::ProviderUnavailable,
+                    "Windows Computer Host binding cache is poisoned",
+                )
+            })?;
+            bindings.clear();
+            for window in &response.windows {
+                bindings.insert(
+                    window.hwnd,
+                    HostTargetBinding {
+                        pid: window.process.pid,
+                        start_generation: window.process.start_generation,
+                        window_nonce: window.window_nonce,
+                    },
+                );
+            }
+            Ok(response.windows)
+        }
+
+        fn bound_request(
+            &self,
+            op: &str,
+            hwnd: u64,
+            max_nodes: Option<usize>,
+            max_depth: Option<usize>,
+        ) -> Result<HostResponse, UiaError> {
+            let binding = self
+                .bindings
+                .lock()
+                .map_err(|_| {
+                    UiaError::new(
+                        FailureCode::ProviderUnavailable,
+                        "Windows Computer Host binding cache is poisoned",
+                    )
+                })?
+                .get(&hwnd)
+                .copied()
+                .ok_or_else(|| {
+                    UiaError::new(
+                        FailureCode::TargetStale,
+                        "Windows Computer Host has no live binding for the requested window; list windows again",
+                    )
+                })?;
+            self.request(op, Some(hwnd), Some(binding), max_nodes, max_depth)
         }
     }
 
     impl UiaAdapter for ComputerHostAdapter {
         fn list_processes(&self) -> Result<Vec<NativeProcess>, UiaError> {
-            let response = self.request("list_windows", None, None, None)?;
+            let windows = self.list_window_facts()?;
             let mut processes = BTreeMap::<u32, HostProcess>::new();
-            for window in response.windows {
+            for window in windows {
                 processes
                     .entry(window.process.pid)
                     .or_insert(window.process);
@@ -461,9 +531,8 @@ mod platform {
         }
 
         fn list_windows(&self, pid: u32) -> Result<Vec<NativeWindow>, UiaError> {
-            let response = self.request("list_windows", None, None, None)?;
-            Ok(response
-                .windows
+            let windows = self.list_window_facts()?;
+            Ok(windows
                 .into_iter()
                 .filter(|window| window.process.pid == pid)
                 .map(|window| NativeWindow {
@@ -477,9 +546,9 @@ mod platform {
         }
 
         fn read_tree(&self, hwnd: u64) -> Result<Vec<NativeElement>, UiaError> {
-            let response = self.request(
+            let response = self.bound_request(
                 "observe_window",
-                Some(hwnd),
+                hwnd,
                 Some(crate::MAX_TREE_NODES),
                 Some(crate::MAX_TREE_DEPTH),
             )?;
@@ -487,7 +556,7 @@ mod platform {
         }
 
         fn capture_window(&self, hwnd: u64) -> Result<CapturedImage, UiaError> {
-            let response = self.request("capture_window", Some(hwnd), None, None)?;
+            let response = self.bound_request("capture_window", hwnd, None, None)?;
             let capture = response.capture.ok_or_else(|| {
                 UiaError::new(
                     FailureCode::ProviderUnavailable,

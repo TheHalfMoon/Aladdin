@@ -48,8 +48,7 @@ func nativeListWindows(req hostRequest) hostResponse {
 }
 
 func nativeObserveWindow(req hostRequest) hostResponse {
-	hwnd := windows.HWND(uintptr(req.HWND))
-	if _, _, err := validateWindow(hwnd); err != nil {
+	if _, _, err := validateBoundWindow(req); err != nil {
 		return errorResponse(req.ID, err)
 	}
 	elements, err := observeWindowUIA(req.HWND, req.MaxNodes, req.MaxDepth)
@@ -63,7 +62,7 @@ func nativeObserveWindow(req hostRequest) hostResponse {
 
 func nativeCaptureWindow(req hostRequest) hostResponse {
 	hwnd := windows.HWND(uintptr(req.HWND))
-	if _, _, err := validateWindow(hwnd); err != nil {
+	if _, _, err := validateBoundWindow(req); err != nil {
 		return errorResponse(req.ID, err)
 	}
 	pixels, width, height, err := captureExactWindow(hwnd)
