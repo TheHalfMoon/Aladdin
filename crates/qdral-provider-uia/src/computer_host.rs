@@ -428,7 +428,11 @@ mod platform {
                     session_id: process.session_id,
                     session_verified: process.session_verified,
                     start_generation: process.start_generation,
-                    generation_source: Box::leak(process.generation_source.into_boxed_str()),
+                    generation_source: if process.generation_source == "win32-creation-time" {
+                        "win32-creation-time"
+                    } else {
+                        "computer-host"
+                    },
                 })
                 .collect())
         }
