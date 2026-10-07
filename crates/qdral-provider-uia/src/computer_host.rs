@@ -5,9 +5,9 @@
 // not the default NativeAdapter and adds no caller-facing MCP surface. It only
 // translates host OS facts/pixels into the existing UiaAdapter contract.
 
-use crate::{NativeElement, NativeProcess, NativeWindow, UiaAdapter, UiaError};
 #[cfg(windows)]
 use crate::CapturedImage;
+use crate::{NativeElement, NativeProcess, NativeWindow, UiaAdapter, UiaError};
 use qdral_contracts::FailureCode;
 use serde::Deserialize;
 #[cfg(windows)]
