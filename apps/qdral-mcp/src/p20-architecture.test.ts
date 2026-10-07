@@ -218,7 +218,7 @@ test("SG-000094 donor selection is exact and keeps input paths deferred", () => 
     donor: { repository: string; commit: string; commit_verified: boolean; license: string; license_blob_sha: string };
     selected: Array<{ source: string; reuse: string; destination: string }>;
     deferred_to_sg_000095: Array<{ source: string }>;
-    dependencies: { go: string; modules: Array<{ module: string; version: string }>; explicitly_not_selected: string[] };
+    dependencies: { go: string; modules: Array<{ module: string; version: string; license: string; license_blob_sha: string; notice_path: string }>; explicitly_not_selected: string[] };
     private_protocol: { operations: string[]; caller_facing: boolean; listeners: string[]; network_egress: boolean; desktop_input: boolean; app_launch: boolean; focus_mutation: boolean; privileged: boolean };
     packaging: { included_in_release: boolean; owner_for_unified_packaging: string };
   }>("docs/p20/sg000094_windows_host_import.json");
@@ -251,7 +251,13 @@ test("SG-000094 donor selection is exact and keeps input paths deferred", () => 
       "apps/OpenComputerUseWindows/desktop.go"
     ]
   );
-  assert.deepEqual(manifest.dependencies.modules, [{ module: "golang.org/x/sys", version: "v0.47.0" }]);
+  assert.deepEqual(manifest.dependencies.modules, [{
+    module: "golang.org/x/sys",
+    version: "v0.47.0",
+    license: "BSD-3-Clause",
+    license_blob_sha: "2a7cf70da6e498df9c11ab6a5eaa2ddd7af34da4",
+    notice_path: "docs/p20/notices/golang-x-sys-BSD-3-Clause.txt"
+  }]);
   assert.deepEqual(manifest.dependencies.explicitly_not_selected, ["golang.org/x/image"]);
   assert.deepEqual(manifest.private_protocol.operations, [
     "hello",

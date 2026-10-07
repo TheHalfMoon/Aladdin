@@ -1,0 +1,97 @@
+{
+  "schema": "deskal-p20-sg000094-provenance/1",
+  "grain": "SG-000094",
+  "donor": {
+    "repository": "opensymph/open-computer-use",
+    "commit": "5b433b98019c18201a15d11e8c3cb0010879a3d8",
+    "license": "MIT",
+    "license_path": "LICENSE",
+    "license_blob_sha": "3b3840d939919f58113a626bb990a90f3b949aab",
+    "notice_path": "docs/p20/notices/opensymph-open-computer-use-MIT.txt"
+  },
+  "imports": [
+    {
+      "source": "apps/OpenComputerUseWindows/native_capture.go",
+      "source_blob_sha": "62bc7247300675806c699f269b98faa71ef5d2a6",
+      "destination": "apps/deskal-computer-host/native_capture_windows.go",
+      "reuse": "COPY_ADAPT",
+      "modified": true,
+      "modification_summary": "Retains exact-HWND WGC capture plus bounded same-window PrintWindow/GDI fallback; removes desktop/display capture, public commands, and caller-selected modes.",
+      "authority_delta": "Observation pixels only; no input, focus, launch, network, or privilege authority.",
+      "qualification": ["native exact-window capture", "resize/move freshness", "capture bounds", "static mutation-surface exclusion"]
+    },
+    {
+      "source": "apps/OpenComputerUseWindows/native_uia.go",
+      "source_blob_sha": "74c0e98b04f612484580eb9dfd2dbfd840659ca7",
+      "destination": "apps/deskal-computer-host/native_uia_windows.go",
+      "reuse": "COPY_ADAPT",
+      "modified": true,
+      "modification_summary": "Retains bounded read-only UI Automation tree/state observation; removes SetFocus and all mutation/action paths; password values remain unread.",
+      "authority_delta": "Read-only UI facts only.",
+      "qualification": ["bounded live UIA tree", "password-value non-projection", "static mutation-surface exclusion"]
+    },
+    {
+      "source": "apps/OpenComputerUseWindows/native_win32.go",
+      "source_blob_sha": "e94ce44c7e76ce45035dfe584c883cab16babdf0",
+      "destination": "apps/deskal-computer-host/native_win32_windows.go",
+      "reuse": "COPY_ADAPT",
+      "modified": true,
+      "modification_summary": "Retains window/process identity, session, COM, geometry, and same-window capture helpers; removes input, PostMessage actuation, focus, activation, and launch; adds protected-process and exact PID/start-generation/window-nonce binding checks.",
+      "authority_delta": "Read-only process/window facts and capture helpers only.",
+      "qualification": ["interactive-session discovery", "protected executable exclusion", "stale binding rejection", "non-interactive station fail-closed"]
+    },
+    {
+      "source": "apps/OpenComputerUseWindows/native_op_client.go",
+      "source_blob_sha": "7deef025452b7e994ae60fa89551fe907e11d22d",
+      "destination": "apps/deskal-computer-host/worker_windows.go",
+      "reuse": "COPY_ADAPT",
+      "modified": true,
+      "modification_summary": "Uses one-shot sacrificial workers with bounded timeout/retry, scrubbed environment, response binding validation, and fail-closed errors; removes upstream in-process fallback.",
+      "authority_delta": "Process isolation only; no caller-visible process-launch authority.",
+      "qualification": ["worker response corruption/NUL rejection", "repeated worker failure fail-closed", "bounded timeout code path"]
+    },
+    {
+      "source": "apps/OpenComputerUseWindows/native_backend.go",
+      "source_blob_sha": "8af3b00559e5ec1f5b1e900743bda24ea75932b6",
+      "destination": "apps/deskal-computer-host/observe_windows.go",
+      "reuse": "PORT",
+      "modified": true,
+      "modification_summary": "Ports only list_windows, observe_window, and capture_window dispatch; launch, activation, auto-launch, and action dispatch are absent.",
+      "authority_delta": "Observation/capture dispatch only.",
+      "qualification": ["exact six-operation protocol", "static mutation-surface exclusion"]
+    },
+    {
+      "source": "apps/OpenComputerUseWindows/main.go",
+      "source_blob_sha": "9ac3d67599dc777391a7f6176f99fa248b725339",
+      "destination": "apps/deskal-computer-host/protocol.go",
+      "reuse": "REFERENCE",
+      "modified": false,
+      "modification_summary": "Lifecycle reference only; no donor MCP server, public CLI catalog, action schema, or input authority is copied.",
+      "authority_delta": "None.",
+      "qualification": ["private stdio-only protocol", "exact handshake identity"]
+    }
+  ],
+  "dependencies": [
+    {
+      "module": "golang.org/x/sys",
+      "version": "v0.47.0",
+      "license": "BSD-3-Clause",
+      "license_path": "LICENSE",
+      "license_blob_sha": "2a7cf70da6e498df9c11ab6a5eaa2ddd7af34da4",
+      "notice_path": "docs/p20/notices/golang-x-sys-BSD-3-Clause.txt",
+      "obligation": "Retain the copyright notice, conditions, and disclaimer for source redistribution and reproduce them in documentation/materials for binary redistribution.",
+      "runtime_network": false
+    }
+  ],
+  "notice_impact": {
+    "sg_000094_release_payload": false,
+    "source_tree_notices_added": true,
+    "sg_000106_requirement": "If the Windows Computer Host enters a release payload, include the Open Computer Use MIT notice and golang.org/x/sys BSD-3-Clause notice in generated third-party notices/SBOM."
+  },
+  "deferred_to_sg_000095": [
+    "apps/OpenComputerUseWindows/native_actions.go",
+    "apps/OpenComputerUseWindows/desktop_windows.go",
+    "apps/OpenComputerUseWindows/input_helpers.go",
+    "apps/OpenComputerUseWindows/desktop.go"
+  ]
+}

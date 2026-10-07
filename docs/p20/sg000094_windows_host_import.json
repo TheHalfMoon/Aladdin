@@ -9,6 +9,11 @@
     "license_path": "LICENSE",
     "license_blob_sha": "3b3840d939919f58113a626bb990a90f3b949aab"
   },
+  "provenance_record": "docs/p20/sg000094_windows_host_provenance.json",
+  "notice_records": [
+    "docs/p20/notices/opensymph-open-computer-use-MIT.txt",
+    "docs/p20/notices/golang-x-sys-BSD-3-Clause.txt"
+  ],
   "selected": [
     {
       "source": "apps/OpenComputerUseWindows/native_capture.go",
@@ -76,7 +81,10 @@
     "modules": [
       {
         "module": "golang.org/x/sys",
-        "version": "v0.47.0"
+        "version": "v0.47.0",
+        "license": "BSD-3-Clause",
+        "license_blob_sha": "2a7cf70da6e498df9c11ab6a5eaa2ddd7af34da4",
+        "notice_path": "docs/p20/notices/golang-x-sys-BSD-3-Clause.txt"
       }
     ],
     "explicitly_not_selected": [

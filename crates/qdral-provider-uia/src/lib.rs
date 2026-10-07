@@ -45,6 +45,9 @@ use std::collections::HashMap;
 #[cfg(windows)]
 mod native_desktop;
 
+mod computer_host;
+pub use computer_host::ComputerHostAdapter;
+
 pub const UIA_SCHEMA: &str = "qdral-uia-observation-v1";
 pub const INVOKE_SCHEMA: &str = "qdral-uia-invoke-v1";
 pub const VALUE_SCHEMA: &str = "qdral-uia-value-v1";
