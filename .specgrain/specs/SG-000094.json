@@ -1,0 +1,108 @@
+{
+  "id": "SG-000094",
+  "title": "Windows Computer Host import",
+  "program": "DESKAL-P20",
+  "state": "GRAIN",
+  "risk": "high",
+  "created": "2026-10-07",
+  "base": "64b6510b6a6e80d9dd0672121a82e199f643878f",
+  "dependencies": [
+    "SG-000093"
+  ],
+  "objective": "Import and adapt the pinned Open Computer Use Windows observation/capture mechanics into a Deskal-owned low-authority Windows Computer Host behind private local IPC, while reusing Deskal's existing typed process/window/element registry and policy. Qualify app/window discovery, bounded accessibility observation, exact-window capture, crash isolation, and deterministic host supervision without exposing desktop input or any new caller-facing MCP authority.",
+  "scope": {
+    "include": [
+      "Deskal-owned Windows Computer Host process launched and supervised only by Deskal over private stdin/stdout framing with no MCP, HTTP, LAN, remote-debugging, or other independent listener",
+      "COPY_ADAPT of pinned Open Computer Use exact-window WGC/PrintWindow/GDI capture mechanics",
+      "COPY_ADAPT of pinned Open Computer Use Windows UI Automation observation/tree mechanics with all mutation/action paths removed",
+      "COPY_ADAPT of pinned Open Computer Use Win32 window/process discovery and COM/capture helpers with input, focus, launch, and message-mutation paths removed",
+      "COPY_ADAPT of pinned Open Computer Use sacrificial operation-worker isolation, changed to fail closed after bounded worker failure rather than falling back to unsafe in-process native execution",
+      "PORT of observation-only backend dispatch for hello, ping, list_windows, observe_window, capture_window, and shutdown",
+      "ComputerHostAdapter integration compatible with the existing UiaAdapter boundary so UiaRegistry remains authoritative for typed identities, redaction, protected-surface exclusion, bounds, capture generations, approval, and stale checks",
+      "Windows-only Go build/test qualification with exact dependency pins and no release-payload inclusion yet",
+      "provenance/notice records for every copied or substantially adapted donor file"
+    ],
+    "exclude": [
+      "native_actions.go, desktop_windows.go, input_helpers.go, desktop.go input commands, SendInput, PostMessage actuation, key parsing, click, drag, scroll, type, key, focus, launch, activate_window, set_value, and every other desktop mutation path",
+      "caller-facing MCP tool additions or widening of desktop_window_list/desktop_window_tree",
+      "monitor-wide or desktop-wide capture, arbitrary regions, recording, ffmpeg, visual cursor, or screen-polish features",
+      "browser control, shell/process sessions, filesystem widening, web scraping/crawling, visual model loops, privileged broker, elevation, persistent admin, or remote full control",
+      "release packaging, installer mutation, release/tag mutation, or auto-start lifecycle",
+      "UAC bypass, Windows Hello bypass, secure-desktop automation, credential-provider bypass, SYSTEM, or TrustedInstaller authority"
+    ]
+  },
+  "authority_delta": {
+    "filesystem": "None.",
+    "process": "Adds one Deskal-supervised low-authority local child host and bounded sacrificial operation workers; no arbitrary process launch authority is caller-accessible.",
+    "network": "None. The host has no network listener and requires no network egress.",
+    "browser": "None.",
+    "ui_input": "None. All input/action donor code remains absent in SG-000094.",
+    "secrets": "None. The host receives a scrubbed environment and no Deskal secret material.",
+    "approval": "None. Existing UiaRegistry policy/approval rules remain authoritative.",
+    "privileged": "None. The host runs at the caller's ordinary interactive-user authority only."
+  },
+  "invariants": [
+    "UiaRegistry remains the sole allocator and validator of caller-visible process, window, element, frame, proposal, coordinate, and input identities; the host returns OS facts and pixels only.",
+    "The Windows Computer Host exposes no independent MCP/HTTP/LAN listener and cannot become a principal or grant authority.",
+    "Only observation/capture operations are compiled into or dispatched by the SG-000094 host surface; input, focus, launch, window lifecycle mutation, and UIA mutation are absent.",
+    "Exact-window capture never silently widens to monitor, desktop, adjacent-window, or caller-selected-region scope.",
+    "Protected Deskal approval surfaces, CredentialUIBroker, consent/UAC, LogonUI, secure desktop, foreign sessions, stale/reused HWNDs, and unreadable process identities fail closed.",
+    "Native observation/capture runs in bounded sacrificial workers so one corrupt or crashing native operation cannot poison the long-lived supervisor; exhausting retries returns typed unavailable and never falls back to in-process native execution.",
+    "The host inherits no credentials or general user environment; only an explicit allowlist needed for Windows runtime operation is passed.",
+    "No upstream runtime dependency or hosted service is required; exact copied/adapted source is vendored under Deskal provenance.",
+    "Go dependencies are exact and minimal; SG-000094 selects golang.org/x/sys v0.47.0 and does not introduce golang.org/x/image.",
+    "SG-000094 does not enter the release payload; unified packaging and sidecar lifecycle remain owned by SG-000106."
+  ],
+  "acceptance": [
+    {
+      "id": "A1",
+      "claim": "The implementation provenance names donor opensymph/open-computer-use at exact commit 5b433b98019c18201a15d11e8c3cb0010879a3d8, MIT license blob 3b3840d939919f58113a626bb990a90f3b949aab, every imported source path/blob, Deskal destination, reuse class, modification status, dependency obligation, and notice impact."
+    },
+    {
+      "id": "A2",
+      "claim": "A Deskal-owned Windows Computer Host starts only under a Deskal supervisor, communicates only over private local stdio framing, performs a protocol-generation/host-identity handshake, has a scrubbed environment, no listener, deterministic shutdown, and descendant/worker cleanup."
+    },
+    {
+      "id": "A3",
+      "claim": "The host implements only hello, ping, list_windows, observe_window, capture_window, and shutdown; static and runtime tests prove click/type/key/drag/scroll/focus/launch/set_value/SendInput/PostMessage mutation paths are absent and unreachable."
+    },
+    {
+      "id": "A4",
+      "claim": "ComputerHostAdapter supplies NativeProcess, NativeWindow, NativeElement, and exact-window CapturedImage facts through the existing UiaAdapter contract while UiaRegistry retains all identity allocation, bounds, protected-surface, redaction, stale, generation, approval, and frame authority."
+    },
+    {
+      "id": "A5",
+      "claim": "Native Windows tests prove interactive-session window discovery, bounded UIA observation, exact-window capture, stale HWND/process replacement rejection, protected/security-surface denial, resize/move capture freshness, and fail-closed non-interactive-session behavior."
+    },
+    {
+      "id": "A6",
+      "claim": "Capture is exact-window only and bounded by configured pixels/bytes/time; WGC is preferred with bounded PrintWindow/GDI same-window fallbacks, and no monitor/desktop/region widening exists."
+    },
+    {
+      "id": "A7",
+      "claim": "Native operations execute in bounded sacrificial workers; crash, timeout, NUL/corrupt response, or repeated worker failure cannot corrupt the supervisor and ends in a typed fail-closed result without in-process fallback."
+    },
+    {
+      "id": "A8",
+      "claim": "Windows CI builds/tests the Go host with pinned Go toolchain/dependencies and existing Rust/Node regressions remain green; no release artifact, installer, tag, or runtime MCP tool set changes."
+    },
+    {
+      "id": "A9",
+      "claim": "The exact SG-000094 diff contains none of native_actions.go, desktop_windows.go, input_helpers.go, desktop input command code, privileged code, or donor MCP/public service code."
+    }
+  ],
+  "successor_requirements": {
+    "sg_000095": "SG-000095 may activate only after SG-000094 closes canonically. It may import/adapt the pinned desktop-input and semantic-action donor paths and expose qualified Full User desktop-control actions through Deskal policy, while reusing the SG-000094 host, observation freshness, and typed identities."
+  },
+  "review": {
+    "diffcipline": true,
+    "jev_semantic_review": true,
+    "alibaba_open_code_review": "required exact-range qualification where integrated",
+    "security_review": true,
+    "exact_head_ci": true,
+    "native_windows": true,
+    "donor_provenance": true,
+    "release_artifact_qualification": false
+  },
+  "done_when": "The pinned Open Computer Use Windows observation/capture implementation is Deskal-owned behind private supervised IPC, exact-window observation/capture is qualified on native Windows through the existing typed UiaRegistry boundary, native crashes are isolated fail-closed, all input/mutation donor paths remain absent, and no caller-facing or privileged authority is widened."
+}
