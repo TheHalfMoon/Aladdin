@@ -29,7 +29,7 @@ Only the authenticated local user control path can select or issue `Full User` o
 
 `Remote Full Control` remains unavailable until SG-000105.
 
-No agent, MCP caller, donor runtime, relay, or remote principal can mint, widen, renew, persist, or convert authority. SG-000093 keeps lease-issuance request types and issuance functions crate-private so the public policy API cannot self-assert the local-user grant origin.
+No agent, MCP caller, donor runtime, relay, or remote principal can mint, widen, renew, persist, or convert authority. SG-000093 requires an opaque `LocalGrantProof` for every successful lease issuance. Its constructor state is private to the authority module, so an MCP, agent, donor, relay, remote caller, or external crate cannot self-assert the local-user grant origin.
 
 ## FullControlLease
 
