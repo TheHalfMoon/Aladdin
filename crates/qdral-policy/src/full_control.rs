@@ -43,11 +43,11 @@ impl AuthorityMode {
 }
 
 /// Opaque proof that authority issuance came from Deskal's authenticated
-/// local-user control path. The private field intentionally prevents MCP,
-/// agent, donor, relay, and remote callers from constructing this proof.
-#[derive(Debug)]
+/// local-user control path. The private 256-bit secret is also the keying
+/// material for domain-separated lease identifiers. External callers cannot
+/// construct or inspect this proof.
 pub struct LocalGrantProof {
-    _private: (),
+    secret: [u8; 32],
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -120,7 +120,8 @@ pub fn future_profile_ceiling(mode: AuthorityMode) -> &'static [ExecutorClass] {
     }
 }
 
-pub fn mode_selectable(_proof: &LocalGrantProof, mode: AuthorityMode) -> Result<(), PolicyError> {
+pub fn mode_selectable(proof: &LocalGrantProof, mode: AuthorityMode) -> Result<(), PolicyError> {
+    validate_local_grant_proof(proof)?;
     match mode {
         AuthorityMode::Safe | AuthorityMode::FullUser | AuthorityMode::FullAdmin => Ok(()),
         AuthorityMode::PersistentAdmin => Err(denied(
@@ -159,7 +160,6 @@ pub struct FullControlLease {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FullControlLeaseRequest {
-    pub lease_id: String,
     pub mode: AuthorityMode,
     pub windows_user_sid: String,
     pub logon_session_id: u64,
@@ -197,7 +197,6 @@ pub fn issue_full_control(
             "safe mode does not require a lease and successor-only modes cannot be issued here",
         ));
     }
-    validate_id(&request.lease_id, "fc-", 64, "full-control lease id")?;
     validate_sid(&request.windows_user_sid)?;
     validate_field("device id", &request.device_id)?;
     validate_field("Deskal session id", &request.deskal_session_id)?;
@@ -215,9 +214,10 @@ pub fn issue_full_control(
         .issued_at_ms
         .checked_add(request.duration_ms)
         .ok_or_else(|| invalid("full-control lease expiry overflow"))?;
+    let lease_id = derive_full_control_lease_id(proof, &request, expires_at_ms);
     Ok(FullControlLease {
         schema: FULL_CONTROL_LEASE_SCHEMA.to_owned(),
-        lease_id: request.lease_id,
+        lease_id,
         mode: request.mode,
         windows_user_sid: request.windows_user_sid,
         logon_session_id: request.logon_session_id,
@@ -286,7 +286,6 @@ pub struct AdminLease {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AdminLeaseRequest {
-    pub lease_id: String,
     pub elevation_proof_id: String,
     pub elevation_state: ElevationState,
     pub issued_at_ms: u64,
@@ -304,7 +303,6 @@ pub fn issue_admin_lease(
     if full_control.mode != AuthorityMode::FullAdmin {
         return Err(denied("admin lease requires Full Admin intent"));
     }
-    validate_id(&request.lease_id, "admin-", 64, "admin lease id")?;
     validate_id(
         &request.elevation_proof_id,
         "win-elev-",
@@ -340,9 +338,17 @@ pub fn issue_admin_lease(
             "admin lease cannot outlive the Full Admin full-control lease",
         ));
     }
+    let elevation_proof_digest = proof_digest(&request.elevation_proof_id);
+    let lease_id = derive_admin_lease_id(
+        proof,
+        full_control,
+        &elevation_proof_digest,
+        request.issued_at_ms,
+        expires_at_ms,
+    );
     Ok(AdminLease {
         schema: ADMIN_LEASE_SCHEMA.to_owned(),
-        lease_id: request.lease_id,
+        lease_id,
         full_control_lease_id: full_control.lease_id.clone(),
         windows_user_sid: full_control.windows_user_sid.clone(),
         logon_session_id: full_control.logon_session_id,
@@ -350,7 +356,7 @@ pub fn issue_admin_lease(
         deskal_session_id: full_control.deskal_session_id.clone(),
         policy_revision: full_control.policy_revision.clone(),
         authority_epoch: full_control.authority_epoch,
-        elevation_proof_digest: proof_digest(&request.elevation_proof_id),
+        elevation_proof_digest,
         elevation_state: request.elevation_state,
         issued_at_ms: request.issued_at_ms,
         expires_at_ms,
@@ -523,14 +529,181 @@ pub fn admin_audit_event(kind: AuditKind, lease: &AdminLease, at_ms: u64) -> Aut
 
 fn proof_digest(proof: &str) -> String {
     let mut hasher = Sha256::new();
-    hasher.update((proof.len() as u64).to_le_bytes());
-    hasher.update(proof.as_bytes());
-    let digest = hasher.finalize();
-    let mut out = String::with_capacity(64);
-    for byte in digest {
+    hash_part(&mut hasher, proof.as_bytes());
+    hex_digest(hasher.finalize().as_slice())
+}
+
+fn validate_local_grant_proof(proof: &LocalGrantProof) -> Result<(), PolicyError> {
+    if proof.secret.iter().all(|byte| *byte == 0) {
+        return Err(invalid("local grant proof secret is invalid"));
+    }
+    Ok(())
+}
+
+fn authority_mode_tag(mode: AuthorityMode) -> &'static str {
+    match mode {
+        AuthorityMode::Safe => "safe",
+        AuthorityMode::FullUser => "full_user",
+        AuthorityMode::FullAdmin => "full_admin",
+        AuthorityMode::PersistentAdmin => "persistent_admin",
+        AuthorityMode::RemoteFullControl => "remote_full_control",
+    }
+}
+
+fn hash_part(hasher: &mut Sha256, bytes: &[u8]) {
+    hasher.update((bytes.len() as u64).to_le_bytes());
+    hasher.update(bytes);
+}
+
+fn hex_digest(bytes: &[u8]) -> String {
+    let mut out = String::with_capacity(bytes.len() * 2);
+    for byte in bytes {
         let _ = write!(out, "{byte:02x}");
     }
     out
+}
+
+fn derive_full_control_lease_id(
+    proof: &LocalGrantProof,
+    request: &FullControlLeaseRequest,
+    expires_at_ms: u64,
+) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(b"deskal/sg000093/full-control-lease/v1");
+    hasher.update(proof.secret);
+    hash_part(&mut hasher, authority_mode_tag(request.mode).as_bytes());
+    hash_part(&mut hasher, request.windows_user_sid.as_bytes());
+    hasher.update(request.logon_session_id.to_le_bytes());
+    hash_part(&mut hasher, request.device_id.as_bytes());
+    hash_part(&mut hasher, request.deskal_session_id.as_bytes());
+    hash_part(&mut hasher, request.policy_revision.as_bytes());
+    hasher.update(request.authority_epoch.to_le_bytes());
+    hasher.update(request.issued_at_ms.to_le_bytes());
+    hasher.update(expires_at_ms.to_le_bytes());
+    format!("fc-{}", hex_digest(hasher.finalize().as_slice()))
+}
+
+fn derive_admin_lease_id(
+    proof: &LocalGrantProof,
+    full_control: &FullControlLease,
+    elevation_proof_digest: &str,
+    issued_at_ms: u64,
+    expires_at_ms: u64,
+) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(b"deskal/sg000093/admin-lease/v1");
+    hasher.update(proof.secret);
+    hash_part(&mut hasher, full_control.lease_id.as_bytes());
+    hash_part(&mut hasher, elevation_proof_digest.as_bytes());
+    hasher.update(full_control.authority_epoch.to_le_bytes());
+    hasher.update(issued_at_ms.to_le_bytes());
+    hasher.update(expires_at_ms.to_le_bytes());
+    format!("admin-{}", hex_digest(hasher.finalize().as_slice()))
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NativeWindowsIdentity {
+    pub windows_user_sid: String,
+    pub logon_session_id: u64,
+}
+
+#[cfg(windows)]
+pub fn current_windows_identity() -> Result<NativeWindowsIdentity, PolicyError> {
+    use std::ptr;
+    use windows_sys::Win32::Foundation::{CloseHandle, LocalFree, HANDLE};
+    use windows_sys::Win32::Security::Authorization::ConvertSidToStringSidW;
+    use windows_sys::Win32::Security::{
+        GetTokenInformation, TokenStatistics, TokenUser, TOKEN_QUERY, TOKEN_STATISTICS, TOKEN_USER,
+    };
+    use windows_sys::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
+
+    struct Token(HANDLE);
+
+    impl Drop for Token {
+        fn drop(&mut self) {
+            unsafe { CloseHandle(self.0) };
+        }
+    }
+
+    fn last_error(context: &str) -> PolicyError {
+        unavailable(format!(
+            "{context}: {}",
+            std::io::Error::last_os_error()
+        ))
+    }
+
+    fn token_info(token: &Token, class: i32) -> Result<Vec<usize>, PolicyError> {
+        let mut needed = 0u32;
+        unsafe { GetTokenInformation(token.0, class, ptr::null_mut(), 0, &mut needed) };
+        if needed == 0 {
+            return Err(last_error("GetTokenInformation size"));
+        }
+        let word = std::mem::size_of::<usize>();
+        let words = (needed as usize).div_ceil(word);
+        let mut buffer = vec![0usize; words];
+        if unsafe {
+            GetTokenInformation(
+                token.0,
+                class,
+                buffer.as_mut_ptr().cast(),
+                needed,
+                &mut needed,
+            )
+        } == 0
+        {
+            return Err(last_error("GetTokenInformation"));
+        }
+        Ok(buffer)
+    }
+
+    fn from_wide_ptr(ptr: *const u16) -> String {
+        let mut len = 0usize;
+        unsafe {
+            while *ptr.add(len) != 0 {
+                len += 1;
+            }
+            String::from_utf16_lossy(std::slice::from_raw_parts(ptr, len))
+        }
+    }
+
+    let mut token_handle: HANDLE = 0;
+    if unsafe { OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut token_handle) } == 0 {
+        return Err(last_error("OpenProcessToken"));
+    }
+    let token = Token(token_handle);
+
+    let user_buffer = token_info(&token, TokenUser)?;
+    let user = unsafe { &*(user_buffer.as_ptr() as *const TOKEN_USER) };
+    let mut sid_text: *mut u16 = ptr::null_mut();
+    if unsafe { ConvertSidToStringSidW(user.User.Sid, &mut sid_text) } == 0 {
+        return Err(last_error("ConvertSidToStringSidW"));
+    }
+    let windows_user_sid = from_wide_ptr(sid_text);
+    unsafe { LocalFree(sid_text as _) };
+    validate_sid(&windows_user_sid)?;
+
+    let statistics_buffer = token_info(&token, TokenStatistics)?;
+    let statistics = unsafe { &*(statistics_buffer.as_ptr() as *const TOKEN_STATISTICS) };
+    let authentication_id = statistics.AuthenticationId;
+    let logon_session_id =
+        ((authentication_id.HighPart as u32 as u64) << 32) | authentication_id.LowPart as u64;
+    if logon_session_id == 0 {
+        return Err(unavailable(
+            "Windows token authentication LUID is unavailable",
+        ));
+    }
+
+    Ok(NativeWindowsIdentity {
+        windows_user_sid,
+        logon_session_id,
+    })
+}
+
+#[cfg(not(windows))]
+pub fn current_windows_identity() -> Result<NativeWindowsIdentity, PolicyError> {
+    Err(unavailable(
+        "native Windows identity binding is unavailable on this platform",
+    ))
 }
 
 fn binding_digest(
@@ -610,6 +783,13 @@ fn denied(message: impl Into<String>) -> PolicyError {
     }
 }
 
+fn unavailable(message: impl Into<String>) -> PolicyError {
+    PolicyError {
+        code: FailureCode::ProviderUnavailable,
+        message: message.into(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -621,7 +801,11 @@ mod tests {
     const POLICY: &str = "sg-000093-v1";
 
     fn local_proof() -> LocalGrantProof {
-        LocalGrantProof { _private: () }
+        LocalGrantProof { secret: [0xA5; 32] }
+    }
+
+    fn other_local_proof() -> LocalGrantProof {
+        LocalGrantProof { secret: [0x5A; 32] }
     }
 
     fn lease_id(prefix: &str, ch: char) -> String {
@@ -630,7 +814,6 @@ mod tests {
 
     fn request(mode: AuthorityMode) -> FullControlLeaseRequest {
         FullControlLeaseRequest {
-            lease_id: lease_id("fc-", 'a'),
             mode,
             windows_user_sid: SID.into(),
             logon_session_id: 42,
@@ -758,7 +941,6 @@ mod tests {
         let admin = issue_admin_lease(
             &local_proof(),
             AdminLeaseRequest {
-                lease_id: lease_id("admin-", 'c'),
                 elevation_proof_id: proof.clone(),
                 elevation_state: ElevationState::ElevatedAdministrator,
                 issued_at_ms: NOW + 1_000,
@@ -790,7 +972,6 @@ mod tests {
         assert!(issue_admin_lease(
             &local_proof(),
             AdminLeaseRequest {
-                lease_id: lease_id("admin-", 'e'),
                 elevation_proof_id: proof.clone(),
                 elevation_state: ElevationState::ElevatedAdministrator,
                 issued_at_ms: NOW + 1_000,
@@ -834,7 +1015,6 @@ mod tests {
         let admin = issue_admin_lease(
             &local_proof(),
             AdminLeaseRequest {
-                lease_id: lease_id("admin-", 'd'),
                 elevation_proof_id: proof.clone(),
                 elevation_state: ElevationState::ElevatedAdministrator,
                 issued_at_ms: NOW + 1,
@@ -853,6 +1033,78 @@ mod tests {
         assert!(!json.contains(&proof));
         assert!(!json.contains(SID));
         assert_eq!(admin_event.binding_digest.len(), 64);
+    }
+
+    #[test]
+    fn lease_ids_are_secret_and_binding_derived_not_caller_supplied() {
+        let request = request(AuthorityMode::FullUser);
+        let first = issue_full_control(&local_proof(), request.clone()).unwrap();
+        let second = issue_full_control(&other_local_proof(), request.clone()).unwrap();
+        assert!(first.lease_id.starts_with("fc-"));
+        assert_eq!(first.lease_id.len(), 67);
+        assert_ne!(first.lease_id, second.lease_id);
+
+        let mut changed = request;
+        changed.device_id = "device-local-2".into();
+        let changed = issue_full_control(&local_proof(), changed).unwrap();
+        assert_ne!(first.lease_id, changed.lease_id);
+
+        let mut zero = LocalGrantProof { secret: [0; 32] };
+        assert!(issue_full_control(&zero, request(AuthorityMode::FullUser)).is_err());
+        zero.secret[0] = 1;
+        assert!(issue_full_control(&zero, request(AuthorityMode::FullUser)).is_ok());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn native_windows_sid_and_logon_luid_bind_full_control() {
+        let native = current_windows_identity().expect("native Windows identity");
+        assert!(native.windows_user_sid.starts_with("S-1-"));
+        assert_ne!(native.logon_session_id, 0);
+
+        let lease = issue_full_control(
+            &local_proof(),
+            FullControlLeaseRequest {
+                mode: AuthorityMode::FullUser,
+                windows_user_sid: native.windows_user_sid.clone(),
+                logon_session_id: native.logon_session_id,
+                device_id: DEVICE.into(),
+                deskal_session_id: DESKAL_SESSION.into(),
+                policy_revision: POLICY.into(),
+                authority_epoch: 11,
+                issued_at_ms: NOW,
+                duration_ms: 60_000,
+            },
+        )
+        .unwrap();
+
+        let exact = AuthorityContext {
+            windows_user_sid: &native.windows_user_sid,
+            logon_session_id: native.logon_session_id,
+            device_id: DEVICE,
+            deskal_session_id: DESKAL_SESSION,
+            policy_revision: POLICY,
+            authority_epoch: 11,
+            now_ms: NOW + 1,
+            elevation_state: ElevationState::Standard,
+            elevation_proof_id: None,
+        };
+        assert!(check_full_control(&lease, &exact).is_ok());
+
+        let mut wrong_logon = exact;
+        wrong_logon.logon_session_id = native.logon_session_id.wrapping_add(1);
+        assert!(check_full_control(&lease, &wrong_logon).is_err());
+
+        let mut wrong_sid = exact;
+        wrong_sid.windows_user_sid = "S-1-0-0";
+        assert!(check_full_control(&lease, &wrong_sid).is_err());
+    }
+
+    #[cfg(not(windows))]
+    #[test]
+    fn native_windows_identity_fails_closed_off_windows() {
+        let error = current_windows_identity().unwrap_err();
+        assert_eq!(error.code, FailureCode::ProviderUnavailable);
     }
 
     #[test]
