@@ -678,8 +678,10 @@ mod tests {
             AuthorityMode::RemoteFullControl
         )
         .is_err());
-        assert!(future_profile_ceiling(AuthorityMode::FullUser).contains(&ExecutorClass::DesktopInput));
-        assert!(!profile_ceiling(AuthorityMode::FullUser).contains(&ExecutorClass::Admin));
+        assert!(
+            future_profile_ceiling(AuthorityMode::FullUser).contains(&ExecutorClass::DesktopInput)
+        );
+        assert!(!future_profile_ceiling(AuthorityMode::FullUser).contains(&ExecutorClass::Admin));
         assert!(future_profile_ceiling(AuthorityMode::FullAdmin).contains(&ExecutorClass::Admin));
         assert!(future_profile_ceiling(AuthorityMode::PersistentAdmin).is_empty());
         assert!(future_profile_ceiling(AuthorityMode::RemoteFullControl).is_empty());
