@@ -177,7 +177,7 @@ test("P20 subsystem ownership and sequence have no gap", () => {
   assert.equal(plan.includes("SG-000108"), false);
 });
 
-test("SG-000093 is closed and SG-000094 is the sole active grain", () => {
+test("SG-000094 is closed and SG-000095 is the sole active grain", () => {
   const specDir = join(repo, ".specgrain", "specs");
   const specs = readdirSync(specDir).filter((name) => /^SG-\d{6}\.json$/.test(name));
   const open: string[] = [];
@@ -187,24 +187,33 @@ test("SG-000093 is closed and SG-000094 is the sole active grain", () => {
       open.push(spec.id);
     }
   }
-  assert.deepEqual(open, ["SG-000094"]);
+  assert.deepEqual(open, ["SG-000095"]);
 
-  const sg93 = readJson<{ state: string; qualified_head: string; implementation_merge: string; post_merge_ci: string; canonical_evidence: { implementation_pr: number; unresolved_review_threads: number } }>(".specgrain/specs/SG-000093.json");
-  assert.equal(sg93.state, "CLOSED");
-  assert.equal(sg93.qualified_head, "ef6b3858ebf112ff3ed2d0644391277a30017afa");
-  assert.equal(sg93.implementation_merge, "47820b6b9cb7f1378dc674e6bafcd04c2d682a7c");
-  assert.equal(sg93.post_merge_ci, "37565034457");
-  assert.equal(sg93.canonical_evidence.implementation_pr, 247);
-  assert.equal(sg93.canonical_evidence.unresolved_review_threads, 0);
+  const sg94 = readJson<{
+    state: string;
+    qualified_head: string;
+    implementation_merge: string;
+    post_merge_ci: string;
+    canonical_evidence: { implementation_pr: number; qualified_tree: string; unresolved_review_threads: number };
+  }>(".specgrain/specs/SG-000094.json");
+  assert.equal(sg94.state, "CLOSED");
+  assert.equal(sg94.qualified_head, "b0459d356c8397e6cf91126bcdc209f11e41ef11");
+  assert.equal(sg94.implementation_merge, "5a86440021d70c8abb021c2042adc6ee1108471e");
+  assert.equal(sg94.post_merge_ci, "37651396449");
+  assert.equal(sg94.canonical_evidence.implementation_pr, 254);
+  assert.equal(sg94.canonical_evidence.qualified_tree, "37e086ca4196bd4674cbe6bb87815cc1c32590b5");
+  assert.equal(sg94.canonical_evidence.unresolved_review_threads, 0);
 
-  const sg94 = readJson<{ id: string; program: string; state: string; base: string; dependencies: string[] }>(".specgrain/specs/SG-000094.json");
-  assert.equal(sg94.id, "SG-000094");
-  assert.equal(sg94.program, "DESKAL-P20");
-  assert.equal(sg94.state, "GRAIN");
-  assert.equal(sg94.base, "47820b6b9cb7f1378dc674e6bafcd04c2d682a7c");
-  assert.deepEqual(sg94.dependencies, ["SG-000093"]);
+  const sg95 = readJson<{ id: string; program: string; state: string; base: string; dependencies: string[] }>(
+    ".specgrain/specs/SG-000095.json"
+  );
+  assert.equal(sg95.id, "SG-000095");
+  assert.equal(sg95.program, "DESKAL-P20");
+  assert.equal(sg95.state, "GRAIN");
+  assert.equal(sg95.base, "5a86440021d70c8abb021c2042adc6ee1108471e");
+  assert.deepEqual(sg95.dependencies, ["SG-000094"]);
 
-  for (let n = 95; n <= 107; n += 1) {
+  for (let n = 96; n <= 107; n += 1) {
     const id = `SG-${String(n).padStart(6, "0")}.json`;
     assert.equal(specs.includes(id), false, id);
   }
@@ -278,6 +287,79 @@ test("SG-000094 donor selection is exact and keeps input paths deferred", () => 
   assert.equal(manifest.packaging.owner_for_unified_packaging, "SG-000106");
 });
 
+test("SG-000095 donor selection is exact, reuse-first, and rejects recording/privilege widening", () => {
+  const manifest = readJson<{
+    schema: string;
+    grain: string;
+    activation_base: string;
+    donor: { repository: string; commit: string; license: string; license_blob_sha: string };
+    selected: Array<{ source: string; blob: string; reuse: string; destination: string }>;
+    private_protocol: {
+      base_operations: string[];
+      authorized_successor_operations: string[];
+      caller_facing: boolean;
+      listeners: string[];
+      network_egress: boolean;
+      requires_full_control_lease: boolean;
+      allowed_modes: string[];
+      safe_mode_input: boolean;
+      privileged: boolean;
+    };
+    explicitly_rejected: string[];
+    dependencies: { modules: Array<{ module: string; version: string }>; new_modules_at_activation: string[] };
+    packaging: { included_in_release: boolean; owner_for_unified_packaging: string };
+    activation_state: { donor_runtime_imported: boolean; mcp_tools_added: string[]; host_operations_added: string[]; authority_executable: boolean };
+  }>("docs/p20/sg000095_desktop_input_import.json");
+
+  assert.equal(manifest.schema, "deskal-p20-sg000095-desktop-input-import/1");
+  assert.equal(manifest.grain, "SG-000095");
+  assert.equal(manifest.activation_base, "5a86440021d70c8abb021c2042adc6ee1108471e");
+  assert.equal(manifest.donor.repository, "opensymph/open-computer-use");
+  assert.equal(manifest.donor.commit, "5b433b98019c18201a15d11e8c3cb0010879a3d8");
+  assert.equal(manifest.donor.license, "MIT");
+  assert.equal(manifest.donor.license_blob_sha, "3b3840d939919f58113a626bb990a90f3b949aab");
+  assert.deepEqual(
+    manifest.selected.map((entry) => [entry.source, entry.blob, entry.reuse]),
+    [
+      ["apps/OpenComputerUseWindows/native_actions.go", "25c2482d9d0e6b82c890ecf07956643b88bbf97f", "COPY_ADAPT"],
+      ["apps/OpenComputerUseWindows/desktop_windows.go", "59466d669c1bfea13a15dfc371d9eceb471f21bd", "COPY_ADAPT"],
+      ["apps/OpenComputerUseWindows/input_helpers.go", "a41a65cabfda87ced036fe8ad05b25cd17729dc6", "COPY_ADAPT"],
+      ["apps/OpenComputerUseWindows/desktop.go", "39512b3d0ca5e18b07e5f1c31c658198b74dfe84", "REFERENCE"]
+    ]
+  );
+  assert.deepEqual(manifest.private_protocol.base_operations, [
+    "hello", "ping", "list_windows", "observe_window", "capture_window", "shutdown"
+  ]);
+  assert.deepEqual(manifest.private_protocol.authorized_successor_operations, [
+    "cursor_position",
+    "semantic_action",
+    "input_move",
+    "input_click",
+    "input_drag",
+    "input_scroll",
+    "input_type_text",
+    "input_key",
+    "input_hotkey"
+  ]);
+  assert.equal(manifest.private_protocol.caller_facing, false);
+  assert.deepEqual(manifest.private_protocol.listeners, []);
+  assert.equal(manifest.private_protocol.network_egress, false);
+  assert.equal(manifest.private_protocol.requires_full_control_lease, true);
+  assert.deepEqual(manifest.private_protocol.allowed_modes, ["full_user", "full_admin"]);
+  assert.equal(manifest.private_protocol.safe_mode_input, false);
+  assert.equal(manifest.private_protocol.privileged, false);
+  assert.ok(manifest.explicitly_rejected.some((entry) => /record\/ffmpeg/i.test(entry)));
+  assert.ok(manifest.explicitly_rejected.some((entry) => /UAC\/Windows Hello\/secure-desktop bypass/i.test(entry)));
+  assert.deepEqual(manifest.dependencies.modules, [{ module: "golang.org/x/sys", version: "v0.47.0" }]);
+  assert.deepEqual(manifest.dependencies.new_modules_at_activation, []);
+  assert.equal(manifest.packaging.included_in_release, false);
+  assert.equal(manifest.packaging.owner_for_unified_packaging, "SG-000106");
+  assert.equal(manifest.activation_state.donor_runtime_imported, false);
+  assert.deepEqual(manifest.activation_state.mcp_tools_added, []);
+  assert.deepEqual(manifest.activation_state.host_operations_added, []);
+  assert.equal(manifest.activation_state.authority_executable, false);
+});
+
 test("the frozen execution and result vocabularies stay exact", () => {
   assert.deepEqual(freeze.execution_preference, [
     "semantic_uia_or_native",
@@ -342,9 +424,10 @@ test("canonical P20 documents match the machine-readable freeze", () => {
   assert.match(ledger, /Owner grain: SG-000092/);
   assert.match(ledger, /No donor code merge proceeds unless all boxes are proven/);
 
-  assert.match(current, /SG-000093 - Full-control authority and profile model - is CLOSED canonical/);
-  assert.match(current, /SG-000094 - Windows Computer Host import - is the sole active DESKAL-P20 grain/);
-  assert.match(planning, /\.specgrain\/specs\/SG-000094\.json/);
+  assert.match(current, /SG-000094 - Windows Computer Host import - is CLOSED canonical/);
+  assert.match(current, /SG-000095 - Desktop input and full computer-control surface - is the sole active DESKAL-P20 grain/);
+  assert.match(planning, /\.specgrain\/specs\/SG-000095\.json/);
+  assert.match(planning, /sg000095_desktop_input_import\.json/);
   assert.match(planning, /sg000094_windows_host_import\.json/);
   assert.match(planning, /DESKAL_P20_UNIVERSAL_AGENT_RUNTIME_PLAN\.md/);
   assert.match(planning, /DESKAL_P20_DONOR_LEDGER\.md/);

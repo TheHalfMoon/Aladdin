@@ -1,0 +1,107 @@
+{
+  "id": "SG-000095",
+  "title": "Desktop input and full computer-control surface",
+  "program": "DESKAL-P20",
+  "state": "GRAIN",
+  "risk": "high",
+  "created": "2026-10-07",
+  "base": "5a86440021d70c8abb021c2042adc6ee1108471e",
+  "dependencies": [
+    "SG-000094"
+  ],
+  "objective": "Complete the Full User desktop-control surface by reusing the SG-000094 private Windows Computer Host, existing UiaRegistry typed identities/freshness/approval semantics, and existing structured UIA action contracts, while importing only the pinned Open Computer Use input mechanics that are actually missing. Expose qualified semantic UIA actions plus bounded real mouse/keyboard/cursor control under a valid locally granted FullControlLease without introducing elevation, remote full control, recording, donor MCP authority, or release packaging.",
+  "scope": {
+    "include": [
+      "Reuse the SG-000094 Deskal-supervised private stdio Computer Host and sacrificial worker boundary; the host remains non-caller-facing and listener-free.",
+      "Reuse existing UiaRegistry/UiaAdapter process, window, element, frame, proposal, coordinate, input, capture-generation, protected-surface, redaction, stale-target, approval, and result-state semantics rather than creating parallel identities.",
+      "Reuse existing Deskal semantic UIA invoke, set-value, select, toggle, scroll, screenshot, visual/coordinate, and execute-input governance where already implemented.",
+      "COPY_ADAPT pinned native_actions.go only where it adds missing Windows semantic/background action mechanics.",
+      "COPY_ADAPT only cursor-position and SendInput mouse/keyboard/drag/scroll/Unicode/key/hotkey primitives from desktop_windows.go; reject whole-desktop capture and recording code.",
+      "COPY_ADAPT input_helpers.go key/modifier/text normalization and use desktop.go only as a reference for action vocabulary/parsing where Deskal lacks an owned equivalent.",
+      "Add only the private-host operations required for cursor position, semantic action, move, click/double/right, drag, scroll, Unicode text, key, and hotkey execution.",
+      "Require an exact valid locally granted FullControlLease in Full User or Full Admin mode for DesktopInput dispatch, in addition to existing per-action approval, typed-target, policy, freshness, protected-surface, and interruption checks.",
+      "Qualify native Windows input against disposable test windows with exact pre-dispatch revalidation, human-interruption handling, deterministic result states, and no automatic retry after dispatch."
+    ],
+    "exclude": [
+      "Full Admin elevation broker execution, AdminLease use for ordinary desktop input, Persistent Admin, Remote Full Control, UAC bypass, Windows Hello bypass, secure-desktop automation, credential-provider bypass, SYSTEM, or TrustedInstaller authority.",
+      "Donor MCP/public service exposure, independent HTTP/LAN listeners, remote-debugging listeners, or donor self-grant/configuration flags as authority.",
+      "Whole-desktop or monitor-wide screenshot import, arbitrary-region capture widening, ffmpeg recording, screen-polish/demo recording, detached recorder lifecycle, or video capture.",
+      "Shell/process sessions, filesystem widening, browser-control widening, web scraping/crawling, privileged services, arbitrary process launch, installer mutation, release packaging, release/tag mutation, or auto-start lifecycle.",
+      "Silent retargeting, stale-frame reuse, stale HWND reuse, synthetic success, automatic post-dispatch retry, or fallback from a failed governed action into a broader ungoverned action."
+    ]
+  },
+  "authority_delta": {
+    "filesystem": "None.",
+    "process": "No arbitrary process authority. Reuses the existing private Computer Host and bounded sacrificial workers only.",
+    "network": "None. No listener and no network egress is required.",
+    "browser": "None.",
+    "ui_input": "Adds ordinary interactive-user desktop input only under an exact valid locally granted FullControlLease whose mode permits DesktopInput. Safe remains the default and has no desktop-input authority.",
+    "secrets": "None. No lease secret, grant proof, credential, token, or approval secret is passed to donor code or logged.",
+    "approval": "FullControlLease is an additional authority gate, not a replacement for existing action approval, stale-target, protected-surface, policy-revision, generation, and human-interruption checks.",
+    "privileged": "None. Actions run only at the ordinary interactive Windows user authority; no elevation or privileged broker is introduced."
+  },
+  "invariants": [
+    "Safe remains the sole default authority mode and cannot execute SG-000095 desktop input.",
+    "Only the authenticated local-user grant path may mint or renew FullControlLease; agent, MCP, donor, relay, browser, model, and remote callers cannot self-grant or widen it.",
+    "DesktopInput dispatch requires a valid Full User or Full Admin FullControlLease bound to the exact user SID, logon session, device, Deskal session, selected profile, policy revision, authority epoch, and time.",
+    "An SG-000095 desktop action must also pass the existing typed target, generation/freshness, protected-surface, approval, and policy checks immediately before dispatch.",
+    "Semantic UIA/native actions are preferred over raw foreground SendInput when both can satisfy the requested action; raw foreground input is an explicit bounded fallback under the same lease and freshness authority.",
+    "Foreground mouse/keyboard operations never target UAC/consent, CredentialUIBroker, LogonUI, secure desktop, foreign sessions, Deskal approval surfaces, or stale/reused process/window identities.",
+    "Human input or target/focus drift detected before dispatch cancels without actuation; uncertainty after dispatch is reported as outcome_unknown and is never auto-retried.",
+    "The private Computer Host exposes no independent MCP/HTTP/LAN listener, receives no grant secret, and cannot mint, widen, renew, or persist authority.",
+    "Whole-desktop capture and recording/ffmpeg code from the donor are not imported by SG-000095; existing exact-window screenshot authority remains the capture boundary.",
+    "SG-000095 does not enter the release payload; unified packaging and sidecar lifecycle remain owned by SG-000106."
+  ],
+  "acceptance": [
+    {
+      "id": "A1",
+      "claim": "The SG-000095 donor manifest pins opensymph/open-computer-use at exact commit 5b433b98019c18201a15d11e8c3cb0010879a3d8 and records exact source blobs, reuse class, destination, modification boundary, rejected donor subfeatures, dependency/license obligation, and notice impact."
+    },
+    {
+      "id": "A2",
+      "claim": "Safe cannot dispatch desktop input; exact Full User or Full Admin FullControlLease validation is required immediately before every DesktopInput dispatch, and self-grant/remote-grant/lease-secret injection paths are absent."
+    },
+    {
+      "id": "A3",
+      "claim": "Qualified semantic UIA actions reuse existing typed identities and approvals and are preferred over raw foreground input; stale process/window/element/tree/frame/proposal/coordinate generations fail closed without retargeting."
+    },
+    {
+      "id": "A4",
+      "claim": "The private host supports bounded cursor position, move, left/double/right click, drag, scroll, Unicode type, key, and hotkey behavior plus semantic-action dispatch, with exact request schemas and no donor MCP/public listener."
+    },
+    {
+      "id": "A5",
+      "claim": "Native Windows tests exercise the real mouse/keyboard path only against disposable test windows and prove target/focus freshness, protected/security-surface denial, revoke/expiry/epoch denial, wrong-session denial, and deterministic cleanup."
+    },
+    {
+      "id": "A6",
+      "claim": "Human interruption and pre-dispatch target drift cancel without actuation; once an action is dispatched, cancellation or uncertainty uses the frozen not_started/dispatched/completed/cancelled/outcome_unknown result vocabulary and is never automatically retried."
+    },
+    {
+      "id": "A7",
+      "claim": "Whole-desktop capture, arbitrary regions, recording/ffmpeg, shell/process widening, filesystem widening, browser widening, network listeners/egress, launch authority, privileged broker execution, Persistent Admin, and Remote Full Control remain absent."
+    },
+    {
+      "id": "A8",
+      "claim": "Existing SG-000094 observation/capture native qualification and all Rust/Node/Web/Governance/Supply-chain/Release/Relay regressions stay green on the exact implementation head."
+    },
+    {
+      "id": "A9",
+      "claim": "Every copied/adapted donor path retains required MIT/BSD notice obligations, no runtime fetch from the donor is required, and SG-000095 adds no release/installer/tag mutation."
+    }
+  ],
+  "successor_requirements": {
+    "sg_000096": "SG-000096 may activate only after SG-000095 closes canonically. It may import/adapt the pinned Desktop Commander shell/process session mechanics under Safe-versus-Full User policy without inheriting desktop-input authority as an implicit grant."
+  },
+  "review": {
+    "diffcipline": true,
+    "jev_semantic_review": true,
+    "alibaba_open_code_review": "required exact-range qualification where integrated",
+    "security_review": true,
+    "exact_head_ci": true,
+    "native_windows": true,
+    "donor_provenance": true,
+    "release_artifact_qualification": false
+  },
+  "done_when": "Full User desktop control is qualified end-to-end through Deskal-owned policy and typed identities: semantic actions and bounded real mouse/keyboard/cursor input work on native Windows with freshness, protected-surface, approval, revoke/expiry, interruption, and fail-closed result semantics intact; Safe remains default; no privileged, remote, recording, network, or release authority is added."
+}
