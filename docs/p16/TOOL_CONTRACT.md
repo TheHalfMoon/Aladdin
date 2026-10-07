@@ -12,7 +12,7 @@ Discovery filtering is never authorization: qdrald, the remote-session lease, an
 | Profile | Served by | Tools |
 | --- | --- | --- |
 | `core` | relay (remote) | 26 |
-| `desktop_structured` | stdio and loopback HTTP (local) | 31 |
+| `desktop_structured` | stdio and loopback HTTP (local) | 40 |
 
 The `developer` and `coordinate_fallback` profiles named in the plan are not mapped and deny. Unknown profiles deny.
 
@@ -39,6 +39,15 @@ O = openWorldHint (reaches network peers or runs a registered executable).
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `clipboard_read` | `clipboard/read` | clipboard | SOFT | local-only | yes | no | yes | no | one text sample of at most 64 KiB |
 | `clipboard_write` | `clipboard/write` | clipboard | SOFT | local-only | no | yes | yes | no | evidence only; places at most 64 KiB |
+| `desktop_cursor_get` | `desktop.cursor/get` | desktop_observe | none | local-only | yes | no | yes | no | fixed-size cursor position and screen geometry |
+| `desktop_element_invoke` | `uia.element/invoke` | desktop_control | SOFT | local-only | no | yes | no | no | bounded semantic action evidence |
+| `desktop_element_scroll` | `uia.element/scroll` | desktop_control | SOFT | local-only | no | yes | no | no | bounded semantic action evidence; at most 20 scroll ticks |
+| `desktop_element_select` | `uia.element/select` | desktop_control | SOFT | local-only | no | yes | no | no | bounded semantic action evidence |
+| `desktop_element_set_value` | `uia.element/set_value` | desktop_control | SOFT | local-only | no | yes | no | no | bounded semantic action evidence; value at most 1024 characters |
+| `desktop_element_toggle` | `uia.element/toggle` | desktop_control | SOFT | local-only | no | yes | no | no | bounded semantic action evidence |
+| `desktop_input_execute` | `desktop.input/execute` | desktop_control | SOFT | local-only | no | yes | no | no | fixed-size execution result for one bounded input action |
+| `desktop_window_action` | `desktop.window/action` | desktop_control | SOFT | local-only | no | yes | no | no | fixed-size result for one exact-window lifecycle action |
+| `desktop_window_capture` | `uia.screenshot/capture` | desktop_capture | SOFT | local-only | yes | no | yes | no | one exact-window bounded capture; oversized payloads fail closed |
 | `desktop_window_list` | `uia.window/list` | desktop_observe | none | local-only | yes | no | yes | no | at most 64 windows within 64 KiB |
 | `desktop_window_tree` | `uia.tree/observe` | desktop_observe | none | local-only | yes | no | yes | no | depth 8 and at most 256 elements within 64 KiB |
 | `fs_edit` | `fs.edit/edit` | write | SOFT | qdral.write | no | yes | no | no | evidence only; files of at most 2 MiB |

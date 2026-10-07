@@ -59,8 +59,16 @@ Local MCP (no tunnel required):
 
 Approvals:
   qdral approvals [--limit <n>]           Show recent approval decisions.
-  qdral emergency-revoke                  Invalidate all pending approvals and every
-      remote session lease (Windows Hello).
+  qdral emergency-revoke                  Invalidate all pending approvals, Full User
+      desktop control, and every remote session lease (Windows Hello).
+
+Full User desktop control (local only):
+  qdral full-control grant [--minutes <1-720>]
+      Grant this exact live Deskal runtime session Full User desktop input for a
+      finite duration. Requires Windows Hello. Agents, MCP, donors, relay, and remote
+      callers cannot mint, widen, or renew this lease.
+  qdral full-control revoke               Revoke Full User desktop input immediately.
+  qdral full-control status               Show Safe/Full User state and expiry.
 
 Protected executables (process_spawn never runs shells or interpreters):
   qdral exec add <id> <path.exe> [--subcommands a,b] [--deny-args x,y] [--max-args N]
@@ -229,7 +237,15 @@ fn run(args: &mut Args) -> Result<Output, LifecycleError> {
     // whole duration so they never interleave across processes.
     let mutating = matches!(
         args.command.as_str(),
-        "install" | "uninstall" | "update" | "rollback" | "start" | "stop" | "workspace" | "tunnel"
+        "install"
+            | "uninstall"
+            | "update"
+            | "rollback"
+            | "start"
+            | "stop"
+            | "workspace"
+            | "tunnel"
+            | "full-control"
     );
     let _lock = if mutating {
         Some(qdral_lifecycle::lifecycle::lock(
@@ -258,6 +274,7 @@ fn run(args: &mut Args) -> Result<Output, LifecycleError> {
         "doctor" => commands::doctor(args),
         "approvals" => commands::approvals(args),
         "emergency-revoke" => commands::emergency_revoke(args),
+        "full-control" => commands::full_control(args),
         "exec" => commands::exec(args),
         "remote" => commands::remote(args),
         "update" => commands::update(args),

@@ -41,7 +41,13 @@ func runSacrificialWorker(req hostRequest) hostResponse {
 		return failure(req.ID, "invalid_request", "request serialization failed")
 	}
 	var last string
-	for attempt := 0; attempt < workerAttempts; attempt++ {
+	attempts := workerAttempts
+	if isMutationOperation(req.Op) {
+		// A crashed/timed-out mutating worker may have dispatched input before
+		// losing its response. Never retry and risk duplicate physical input.
+		attempts = 1
+	}
+	for attempt := 0; attempt < attempts; attempt++ {
 		ctx, cancel := context.WithTimeout(context.Background(), workerTimeoutMS*time.Millisecond)
 		cmd := exec.CommandContext(ctx, os.Args[0], "--worker")
 		cmd.Env = scrubbedWorkerEnv()
@@ -67,6 +73,9 @@ func runSacrificialWorker(req hostRequest) hostResponse {
 	}
 	if last == "" {
 		last = "native worker unavailable"
+	}
+	if isMutationOperation(req.Op) {
+		return failure(req.ID, "outcome_unknown", last)
 	}
 	return failure(req.ID, "provider_unavailable", last)
 }
@@ -106,6 +115,14 @@ func workerMain(input io.Reader, output io.Writer) error {
 		resp = nativeObserveWindow(req)
 	case "capture_window":
 		resp = nativeCaptureWindow(req)
+	case "cursor_position":
+		resp = nativeCursorPosition(req)
+	case "semantic_action":
+		resp = nativeSemanticAction(req)
+	case "window_action":
+		resp = nativeWindowAction(req)
+	case "input_move", "input_click", "input_drag", "input_scroll", "input_type_text", "input_key", "input_hotkey":
+		resp = nativeRawInput(req)
 	default:
 		resp = failure(req.ID, "capability_denied", "supervisor-only operation is not executable in a native worker")
 	}

@@ -920,6 +920,15 @@ test("scope to tool matrix covers exactly the canonical catalog with default den
   assert.deepEqual([...LOCAL_ONLY_TOOL_NAMES].sort(), [
     "clipboard_read",
     "clipboard_write",
+    "desktop_cursor_get",
+    "desktop_element_invoke",
+    "desktop_element_scroll",
+    "desktop_element_select",
+    "desktop_element_set_value",
+    "desktop_element_toggle",
+    "desktop_input_execute",
+    "desktop_window_action",
+    "desktop_window_capture",
     "desktop_window_list",
     "desktop_window_tree",
     "web_fetch"

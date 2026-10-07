@@ -6,6 +6,7 @@
 pub mod config;
 pub mod console;
 pub mod doctor;
+pub mod full_control;
 pub mod health;
 pub mod install;
 pub mod ipc;

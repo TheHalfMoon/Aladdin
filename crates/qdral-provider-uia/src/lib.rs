@@ -46,7 +46,10 @@ use std::collections::HashMap;
 mod native_desktop;
 
 mod computer_host;
-pub use computer_host::ComputerHostAdapter;
+pub use computer_host::{
+    ComputerHostAdapter, DesktopActionResult, DesktopCursorPosition, DesktopInputAction,
+    DesktopWindowAction,
+};
 
 pub const UIA_SCHEMA: &str = "qdral-uia-observation-v1";
 pub const INVOKE_SCHEMA: &str = "qdral-uia-invoke-v1";
@@ -106,23 +109,23 @@ pub fn is_allowed_uia_shape(capability: &str, operation: &str) -> bool {
     )
 }
 
-/// SG-000063 live qualification of one desktop shape against the native
-/// adapter.
+/// Current live qualification of one retained desktop shape. SG-000095
+/// supersedes the SG-000063 read-only qualification only for the exact
+/// semantic-action and target-window capture shapes listed below.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DesktopShapeQualification {
-    /// Live on the native adapter and exposed as a read-only MCP tool.
+    /// Live through the selected adapter and exposed by a governed MCP tool.
     LiveExposed,
-    /// Live on the native adapter as a registry read, reachable only through
-    /// the exposed tools' results, and not exposed as its own MCP tool.
+    /// Live as registry state used by exposed tools, without its own MCP tool.
     LiveInternal,
-    /// The native adapter does not implement this shape; it fails closed as
-    /// unavailable and is never exposed.
+    /// Retained internally but intentionally not exposed by the current MCP surface.
     NotLive,
 }
 
-/// The test-pinned per-shape decision for every retained desktop shape. A
-/// shape is exposed on the MCP surface only when the live native adapter
-/// implements it and it never actuates, focuses, captures, or injects input.
+/// Test-pinned current decision for every retained UIA desktop shape.
+/// SG-000095 exposes semantic UIA actions and exact-window capture only through
+/// the ComputerHostAdapter under Full User authority; the legacy visual /
+/// coordinate / click-lease chain remains unexposed.
 pub const DESKTOP_SHAPE_QUALIFICATIONS: &[(&str, &str, DesktopShapeQualification)] = &[
     ("uia.window", "list", DesktopShapeQualification::LiveExposed),
     (
@@ -145,19 +148,35 @@ pub const DESKTOP_SHAPE_QUALIFICATIONS: &[(&str, &str, DesktopShapeQualification
         "observe",
         DesktopShapeQualification::LiveInternal,
     ),
-    ("uia.element", "invoke", DesktopShapeQualification::NotLive),
+    (
+        "uia.element",
+        "invoke",
+        DesktopShapeQualification::LiveExposed,
+    ),
     (
         "uia.element",
         "set_value",
-        DesktopShapeQualification::NotLive,
+        DesktopShapeQualification::LiveExposed,
     ),
-    ("uia.element", "select", DesktopShapeQualification::NotLive),
-    ("uia.element", "toggle", DesktopShapeQualification::NotLive),
-    ("uia.element", "scroll", DesktopShapeQualification::NotLive),
+    (
+        "uia.element",
+        "select",
+        DesktopShapeQualification::LiveExposed,
+    ),
+    (
+        "uia.element",
+        "toggle",
+        DesktopShapeQualification::LiveExposed,
+    ),
+    (
+        "uia.element",
+        "scroll",
+        DesktopShapeQualification::LiveExposed,
+    ),
     (
         "uia.screenshot",
         "capture",
-        DesktopShapeQualification::NotLive,
+        DesktopShapeQualification::LiveExposed,
     ),
     ("uia.visual", "propose", DesktopShapeQualification::NotLive),
     (
@@ -168,8 +187,9 @@ pub const DESKTOP_SHAPE_QUALIFICATIONS: &[(&str, &str, DesktopShapeQualification
     ("uia.input", "execute", DesktopShapeQualification::NotLive),
 ];
 
-/// The desktop shapes the MCP surface may forward: live, read-only, and
-/// non-actuating. Every other desktop shape stays off the MCP surface.
+/// Whether one retained UIA shape is currently projected by MCP. This is only
+/// discovery metadata; qdrald still enforces Full User lease, approval,
+/// freshness, protected-surface, interruption, and remote-context denial.
 pub fn is_mcp_exposed_desktop_shape(capability: &str, operation: &str) -> bool {
     DESKTOP_SHAPE_QUALIFICATIONS
         .iter()
@@ -586,6 +606,9 @@ pub fn is_capture_scope(scope: &str) -> bool {
 /// Maximum capture payload in bytes. Oversized captures fail closed with
 /// no silent downscaling that changes evidence semantics.
 pub const MAX_CAPTURE_BYTES: usize = 8 * 1024 * 1024;
+/// Base64 expands by 4/3. Keep the public capture response below the private
+/// host's 16 MiB frame while leaving the 64 KiB observation bound unchanged.
+pub const MAX_CAPTURE_RESPONSE_BYTES: usize = 12 * 1024 * 1024;
 
 /// Maximum capture dimensions in pixels. Geometry outside these bounds
 /// fails closed.
@@ -749,6 +772,32 @@ pub fn capture_payload_digest(bytes: &[u8]) -> String {
         .iter()
         .map(|byte| format!("{byte:02x}"))
         .collect::<String>()
+}
+
+fn base64_encode(bytes: &[u8]) -> String {
+    const TABLE: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    if bytes.is_empty() {
+        return String::new();
+    }
+    let mut out = String::with_capacity(bytes.len().div_ceil(3) * 4);
+    for chunk in bytes.chunks(3) {
+        let a = chunk[0];
+        let b = *chunk.get(1).unwrap_or(&0);
+        let c = *chunk.get(2).unwrap_or(&0);
+        out.push(TABLE[(a >> 2) as usize] as char);
+        out.push(TABLE[(((a & 0x03) << 4) | (b >> 4)) as usize] as char);
+        if chunk.len() > 1 {
+            out.push(TABLE[(((b & 0x0f) << 2) | (c >> 6)) as usize] as char);
+        } else {
+            out.push('=');
+        }
+        if chunk.len() > 2 {
+            out.push(TABLE[(c & 0x3f) as usize] as char);
+        } else {
+            out.push('=');
+        }
+    }
+    out
 }
 
 /// A process as reported by an adapter. Adapters never allocate authority;
@@ -2988,15 +3037,20 @@ impl UiaRegistry {
             "capture_generation": capture_generation,
             "scope": CAPTURE_SCOPE_TARGET_WINDOW,
             "pixel_format": CAPTURE_PIXEL_FORMAT,
+            "encoding": "base64",
             "width": image.width,
             "height": image.height,
             "payload_digest": payload_digest,
-            "pixels": image.bytes,
+            "pixels_b64": base64_encode(&image.bytes),
             "truncated": false,
             "workspace_id": workspace_id,
             "policy_revision": policy_revision,
         });
-        enforce_response_bytes(&result)
+        enforce_response_bytes_with_limit(
+            &result,
+            MAX_CAPTURE_RESPONSE_BYTES,
+            "screenshot capture exceeded the bounded response size",
+        )
     }
 
     /// Describe one server-allocated capture frame without returning raw
@@ -4818,17 +4872,26 @@ fn render_element(record: &ElementRecord) -> Value {
     })
 }
 
-fn enforce_response_bytes(result: &Value) -> Result<Value, UiaError> {
+fn enforce_response_bytes_with_limit(
+    result: &Value,
+    max_bytes: usize,
+    message: &str,
+) -> Result<Value, UiaError> {
     let bytes = serde_json::to_vec(result)
         .map(|bytes| bytes.len())
         .unwrap_or(0);
-    if bytes > MAX_RESPONSE_BYTES {
-        return Err(UiaError::new(
-            FailureCode::OutputLimit,
-            "uia observation exceeded the bounded response size",
-        ));
+    if bytes > max_bytes {
+        return Err(UiaError::new(FailureCode::OutputLimit, message));
     }
     Ok(result.clone())
+}
+
+fn enforce_response_bytes(result: &Value) -> Result<Value, UiaError> {
+    enforce_response_bytes_with_limit(
+        result,
+        MAX_RESPONSE_BYTES,
+        "uia observation exceeded the bounded response size",
+    )
 }
 
 fn truncate_owned(raw: &str, limit: usize) -> (String, bool) {

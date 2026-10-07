@@ -187,6 +187,8 @@ const REQUIRED_DESKTOP_COMMANDER_DENIALS = [
   "shell_command_string"
 ];
 
+const SUCCESSOR_OVERRIDDEN_WORKFLOWS = new Set(["desktop_act", "screenshots"]);
+
 const REQUIRED_UI_TARS_CLASSIFICATIONS: Record<string, { status: string; disposition: string }> = {
   browser_structured: { status: "missing", disposition: "defer_to_governed_successor" },
   desktop_act: { status: "missing", disposition: "defer_to_governed_successor" },
@@ -321,7 +323,11 @@ test("the parity matrix covers all 36 workflows exactly once using the SG-000066
     assert.ok(categories.has(entry.classification), `unknown parity classification ${entry.classification}`);
     assert.ok(entry.reason.trim().length > 0, `${entry.workflow} needs a stated reason`);
 
-    if (workflow.status === "implemented_exposed") {
+    if (SUCCESSOR_OVERRIDDEN_WORKFLOWS.has(entry.workflow)) {
+      assert.equal(workflow.status, "implemented_exposed", entry.workflow);
+      assert.equal(entry.classification, "SAFE_SUCCESSOR_REQUIRED", entry.workflow);
+      assert.ok(workflow.via && workflow.via.length > 0, entry.workflow);
+    } else if (workflow.status === "implemented_exposed") {
       assert.ok(
         ["COTRA_NATIVE", "COTRA_SUPERIOR", "DONOR_ADAPTED"].includes(entry.classification),
         `${entry.workflow} is exposed but classified ${entry.classification}`
@@ -412,8 +418,15 @@ test("UI-TARS authority is either deferred or denied, never imported by SG-00006
 
     const workflow = workflows.get(workflowId);
     assert.ok(workflow, `unknown UI-TARS-classified workflow ${workflowId}`);
-    assert.equal(workflow.status, required.status, workflowId);
-    assert.equal(workflow.via, undefined, `${workflowId} must not expose an MCP route`);
+    if (SUCCESSOR_OVERRIDDEN_WORKFLOWS.has(workflowId)) {
+      assert.equal(required.status, "missing", workflowId);
+      assert.equal(required.disposition, "defer_to_governed_successor", workflowId);
+      assert.equal(workflow.status, "implemented_exposed", workflowId);
+      assert.ok(workflow.via && workflow.via.length > 0, workflowId);
+    } else {
+      assert.equal(workflow.status, required.status, workflowId);
+      assert.equal(workflow.via, undefined, `${workflowId} must not expose an MCP route`);
+    }
   }
 });
 

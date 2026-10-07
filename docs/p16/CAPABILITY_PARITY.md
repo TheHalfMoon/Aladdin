@@ -11,7 +11,7 @@ owning grain exposes it under explicit profiles), `missing` (owning grain implem
 
 ## Workflows
 
-Totals: implemented_exposed: 21, implemented_hidden: 0, missing: 4, intentionally_denied: 11.
+Totals: implemented_exposed: 23, implemented_hidden: 0, missing: 2, intentionally_denied: 11.
 
 | Workflow | Status | Tools, owner, or reason |
 | --- | --- | --- |
@@ -34,8 +34,8 @@ Totals: implemented_exposed: 21, implemented_hidden: 0, missing: 4, intentionall
 | `git_remote` | implemented_exposed | `git_fetch_preview`, `git_fetch`, `git_push_preview`, `git_push` |
 | `browser_structured` | missing | outside_v0_2_target (needs a live isolated browser engine qualified shape by shape; the closed policy model is not exposed (docs/p16/BROWSER_QUALIFICATION.md)) |
 | `desktop_observe` | implemented_exposed | `desktop_window_list`, `desktop_window_tree` (read-only window listing and bounded UI Automation trees in the caller's interactive session (SG-000063)) |
-| `desktop_act` | missing | outside_v0_2_target (structured actuation needs a live native actuation adapter qualified shape by shape; raw synthetic input stays denied (docs/p16/DESKTOP_QUALIFICATION.md)) |
-| `screenshots` | missing | outside_v0_2_target (the native adapter implements no window capture; the closed capture shape is not exposed (docs/p16/DESKTOP_QUALIFICATION.md)) |
+| `desktop_act` | implemented_exposed | `desktop_element_invoke`, `desktop_element_set_value`, `desktop_element_select`, `desktop_element_toggle`, `desktop_element_scroll`, `desktop_input_execute`, `desktop_window_action` (SG-000095 Full User desktop control: semantic UIA is preferred, raw input is bounded and approval/lease/freshness/human-interruption gated, and no remote/admin widening is introduced.) |
+| `screenshots` | implemented_exposed | `desktop_window_capture` (SG-000095 exact-window capture through the private Computer Host; no whole-desktop, monitor, region, recording, or ffmpeg widening.) |
 | `clipboard_read_write` | implemented_exposed | `clipboard_read`, `clipboard_write` (single approved reads and placements; no surveillance, no paste (SG-000064)) |
 | `destination_scoped_web_fetch` | implemented_exposed | `web_fetch` (approved public HTTPS GET with address-set binding and same-origin redirects (SG-000064)) |
 | `list_processes` | implemented_exposed | `desktop_window_list` (processes that own visible windows in the caller's session, with image name and typed creation-time identity; no full process table and no termination (SG-000063)) |
@@ -54,7 +54,7 @@ Totals: implemented_exposed: 21, implemented_hidden: 0, missing: 4, intentionall
 
 ## Capability shapes
 
-Totals: implemented_exposed: 31, implemented_hidden: 3, missing: 0, intentionally_denied: 34.
+Totals: implemented_exposed: 40, implemented_hidden: 3, missing: 0, intentionally_denied: 28.
 
 | Shape | Status | MCP tool, owner, or reason |
 | --- | --- | --- |
@@ -101,12 +101,12 @@ Totals: implemented_exposed: 31, implemented_hidden: 3, missing: 0, intentionall
 | `uia.window/observe` | implemented_hidden | outside_v0_2_target |
 | `uia.tree/observe` | implemented_exposed | `desktop_window_tree` |
 | `uia.element/observe` | implemented_hidden | outside_v0_2_target |
-| `uia.element/invoke` | intentionally_denied | not exposed: the native adapter does not implement this shape on the live desktop and fails closed as unavailable (SG-000063 qualification) |
-| `uia.element/set_value` | intentionally_denied | not exposed: the native adapter does not implement this shape on the live desktop and fails closed as unavailable (SG-000063 qualification) |
-| `uia.element/select` | intentionally_denied | not exposed: the native adapter does not implement this shape on the live desktop and fails closed as unavailable (SG-000063 qualification) |
-| `uia.element/toggle` | intentionally_denied | not exposed: the native adapter does not implement this shape on the live desktop and fails closed as unavailable (SG-000063 qualification) |
-| `uia.element/scroll` | intentionally_denied | not exposed: the native adapter does not implement this shape on the live desktop and fails closed as unavailable (SG-000063 qualification) |
-| `uia.screenshot/capture` | intentionally_denied | not exposed: the native adapter does not implement this shape on the live desktop and fails closed as unavailable (SG-000063 qualification) |
+| `uia.element/invoke` | implemented_exposed | `desktop_element_invoke` |
+| `uia.element/set_value` | implemented_exposed | `desktop_element_set_value` |
+| `uia.element/select` | implemented_exposed | `desktop_element_select` |
+| `uia.element/toggle` | implemented_exposed | `desktop_element_toggle` |
+| `uia.element/scroll` | implemented_exposed | `desktop_element_scroll` |
+| `uia.screenshot/capture` | implemented_exposed | `desktop_window_capture` |
 | `uia.visual/propose` | intentionally_denied | not exposed: the native adapter does not implement this shape on the live desktop and fails closed as unavailable (SG-000063 qualification) |
 | `uia.coordinates/propose` | intentionally_denied | not exposed: the native adapter does not implement this shape on the live desktop and fails closed as unavailable (SG-000063 qualification) |
 | `uia.input/execute` | intentionally_denied | not exposed: the native adapter does not implement this shape on the live desktop and fails closed as unavailable (SG-000063 qualification) |
@@ -126,3 +126,6 @@ Totals: implemented_exposed: 31, implemented_hidden: 3, missing: 0, intentionall
 | `executable.registry.add/add` | intentionally_denied | executable registration is a local STRONG human decision; an agent must never widen what it can run |
 | `executable.registry.remove/remove` | intentionally_denied | registry management is local-only |
 | `executable.registry.list/get` | intentionally_denied | registry management is local-only; registered identifiers are shown read-only in system_status |
+| `desktop.cursor/get` | implemented_exposed | `desktop_cursor_get` |
+| `desktop.input/execute` | implemented_exposed | `desktop_input_execute` |
+| `desktop.window/action` | implemented_exposed | `desktop_window_action` |

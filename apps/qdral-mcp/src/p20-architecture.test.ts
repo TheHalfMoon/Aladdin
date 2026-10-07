@@ -309,6 +309,23 @@ test("SG-000095 donor selection is exact, reuse-first, and rejects recording/pri
     dependencies: { modules: Array<{ module: string; version: string }>; new_modules_at_activation: string[] };
     packaging: { included_in_release: boolean; owner_for_unified_packaging: string };
     activation_state: { donor_runtime_imported: boolean; mcp_tools_added: string[]; host_operations_added: string[]; authority_executable: boolean };
+    implementation_state: {
+      implementation_base: string;
+      donor_runtime_imported: boolean;
+      imported_runtime_files: string[];
+      host_operations_added: string[];
+      mcp_tools_added: string[];
+      local_full_user_authority_store: boolean;
+      local_grant_requires_strong_presence: boolean;
+      remote_dispatch_denied: boolean;
+      full_admin_execution: boolean;
+      persistent_admin: boolean;
+      remote_full_control: boolean;
+      privileged: boolean;
+      network_listener: boolean;
+      packaged: boolean;
+      native_windows_qualification: string;
+    };
   }>("docs/p20/sg000095_desktop_input_import.json");
 
   assert.equal(manifest.schema, "deskal-p20-sg000095-desktop-input-import/1");
@@ -322,6 +339,7 @@ test("SG-000095 donor selection is exact, reuse-first, and rejects recording/pri
     manifest.selected.map((entry) => [entry.source, entry.blob, entry.reuse]),
     [
       ["apps/OpenComputerUseWindows/native_actions.go", "25c2482d9d0e6b82c890ecf07956643b88bbf97f", "COPY_ADAPT"],
+      ["apps/OpenComputerUseWindows/native_win32.go", "e94ce44c7e76ce45035dfe584c883cab16babdf0", "COPY_ADAPT"],
       ["apps/OpenComputerUseWindows/desktop_windows.go", "59466d669c1bfea13a15dfc371d9eceb471f21bd", "COPY_ADAPT"],
       ["apps/OpenComputerUseWindows/input_helpers.go", "a41a65cabfda87ced036fe8ad05b25cd17729dc6", "COPY_ADAPT"],
       ["apps/OpenComputerUseWindows/desktop.go", "39512b3d0ca5e18b07e5f1c31c658198b74dfe84", "REFERENCE"]
@@ -333,6 +351,7 @@ test("SG-000095 donor selection is exact, reuse-first, and rejects recording/pri
   assert.deepEqual(manifest.private_protocol.authorized_successor_operations, [
     "cursor_position",
     "semantic_action",
+    "window_action",
     "input_move",
     "input_click",
     "input_drag",
@@ -345,7 +364,7 @@ test("SG-000095 donor selection is exact, reuse-first, and rejects recording/pri
   assert.deepEqual(manifest.private_protocol.listeners, []);
   assert.equal(manifest.private_protocol.network_egress, false);
   assert.equal(manifest.private_protocol.requires_full_control_lease, true);
-  assert.deepEqual(manifest.private_protocol.allowed_modes, ["full_user", "full_admin"]);
+  assert.deepEqual(manifest.private_protocol.allowed_modes, ["full_user"]);
   assert.equal(manifest.private_protocol.safe_mode_input, false);
   assert.equal(manifest.private_protocol.privileged, false);
   assert.ok(manifest.explicitly_rejected.some((entry) => /record\/ffmpeg/i.test(entry)));
@@ -358,6 +377,47 @@ test("SG-000095 donor selection is exact, reuse-first, and rejects recording/pri
   assert.deepEqual(manifest.activation_state.mcp_tools_added, []);
   assert.deepEqual(manifest.activation_state.host_operations_added, []);
   assert.equal(manifest.activation_state.authority_executable, false);
+
+  assert.equal(manifest.implementation_state.implementation_base, "941dfd504e75b578c091e8819ef949bcce8029ad");
+  assert.equal(manifest.implementation_state.donor_runtime_imported, true);
+  assert.deepEqual(manifest.implementation_state.imported_runtime_files, [
+    "apps/deskal-computer-host/native_actions_windows.go",
+    "apps/deskal-computer-host/native_input_windows.go",
+    "apps/deskal-computer-host/native_window_actions_windows.go"
+  ]);
+  assert.deepEqual(manifest.implementation_state.host_operations_added, [
+    "cursor_position",
+    "semantic_action",
+    "window_action",
+    "input_move",
+    "input_click",
+    "input_drag",
+    "input_scroll",
+    "input_type_text",
+    "input_key",
+    "input_hotkey"
+  ]);
+  assert.deepEqual(manifest.implementation_state.mcp_tools_added, [
+    "desktop_cursor_get",
+    "desktop_element_invoke",
+    "desktop_element_scroll",
+    "desktop_element_select",
+    "desktop_element_set_value",
+    "desktop_element_toggle",
+    "desktop_input_execute",
+    "desktop_window_action",
+    "desktop_window_capture"
+  ]);
+  assert.equal(manifest.implementation_state.local_full_user_authority_store, true);
+  assert.equal(manifest.implementation_state.local_grant_requires_strong_presence, true);
+  assert.equal(manifest.implementation_state.remote_dispatch_denied, true);
+  assert.equal(manifest.implementation_state.full_admin_execution, false);
+  assert.equal(manifest.implementation_state.persistent_admin, false);
+  assert.equal(manifest.implementation_state.remote_full_control, false);
+  assert.equal(manifest.implementation_state.privileged, false);
+  assert.equal(manifest.implementation_state.network_listener, false);
+  assert.equal(manifest.implementation_state.packaged, false);
+  assert.equal(manifest.implementation_state.native_windows_qualification, "required_on_exact_staging_head");
 });
 
 test("the frozen execution and result vocabularies stay exact", () => {

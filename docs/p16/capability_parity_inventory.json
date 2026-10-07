@@ -274,38 +274,44 @@
     {
       "capability": "uia.element",
       "operation": "invoke",
-      "status": "intentionally_denied",
-      "reason": "not exposed: the native adapter does not implement this shape on the live desktop and fails closed as unavailable (SG-000063 qualification)"
+      "status": "implemented_exposed",
+      "mcp_tool": "desktop_element_invoke",
+      "note": "SG-000095 Full User semantic invoke; exact typed element, approval, freshness, protected-surface, and lease gates remain authoritative."
     },
     {
       "capability": "uia.element",
       "operation": "set_value",
-      "status": "intentionally_denied",
-      "reason": "not exposed: the native adapter does not implement this shape on the live desktop and fails closed as unavailable (SG-000063 qualification)"
+      "status": "implemented_exposed",
+      "mcp_tool": "desktop_element_set_value",
+      "note": "SG-000095 Full User semantic value write; password/security targets stay denied and the exact value digest is approval-bound."
     },
     {
       "capability": "uia.element",
       "operation": "select",
-      "status": "intentionally_denied",
-      "reason": "not exposed: the native adapter does not implement this shape on the live desktop and fails closed as unavailable (SG-000063 qualification)"
+      "status": "implemented_exposed",
+      "mcp_tool": "desktop_element_select",
+      "note": "SG-000095 Full User semantic selection with exact expected state and tree-generation binding."
     },
     {
       "capability": "uia.element",
       "operation": "toggle",
-      "status": "intentionally_denied",
-      "reason": "not exposed: the native adapter does not implement this shape on the live desktop and fails closed as unavailable (SG-000063 qualification)"
+      "status": "implemented_exposed",
+      "mcp_tool": "desktop_element_toggle",
+      "note": "SG-000095 Full User semantic toggle with exact expected state and tree-generation binding."
     },
     {
       "capability": "uia.element",
       "operation": "scroll",
-      "status": "intentionally_denied",
-      "reason": "not exposed: the native adapter does not implement this shape on the live desktop and fails closed as unavailable (SG-000063 qualification)"
+      "status": "implemented_exposed",
+      "mcp_tool": "desktop_element_scroll",
+      "note": "SG-000095 Full User semantic UIA scroll; bounded to at most 20 ticks with no raw wheel fallback."
     },
     {
       "capability": "uia.screenshot",
       "operation": "capture",
-      "status": "intentionally_denied",
-      "reason": "not exposed: the native adapter does not implement this shape on the live desktop and fails closed as unavailable (SG-000063 qualification)"
+      "status": "implemented_exposed",
+      "mcp_tool": "desktop_window_capture",
+      "note": "SG-000095 exact target-window capture under Full User authority and SOFT approval; protected surfaces and wider monitor/desktop scope remain denied."
     },
     {
       "capability": "uia.visual",
@@ -423,6 +429,27 @@
       "operation": "get",
       "status": "intentionally_denied",
       "reason": "registry management is local-only; registered identifiers are shown read-only in system_status"
+    },
+    {
+      "capability": "desktop.cursor",
+      "operation": "get",
+      "status": "implemented_exposed",
+      "mcp_tool": "desktop_cursor_get",
+      "note": "SG-000095 local-only cursor observation; requires an active Full User lease and exposes no grant or remote authority."
+    },
+    {
+      "capability": "desktop.input",
+      "operation": "execute",
+      "status": "implemented_exposed",
+      "mcp_tool": "desktop_input_execute",
+      "note": "SG-000095 bounded real mouse/keyboard input against one exact typed window; Full User lease, SOFT approval, human-input tick, freshness, and no-retry semantics are enforced immediately before dispatch."
+    },
+    {
+      "capability": "desktop.window",
+      "operation": "action",
+      "status": "implemented_exposed",
+      "mcp_tool": "desktop_window_action",
+      "note": "SG-000095 exact-window focus/minimize/maximize/restore/close under Full User authority and SOFT approval; protected and stale targets fail closed."
     }
   ],
   "workflows": [
@@ -580,15 +607,25 @@
     },
     {
       "id": "desktop_act",
-      "status": "missing",
-      "owner_grain": "outside_v0_2_target",
-      "note": "structured actuation needs a live native actuation adapter qualified shape by shape; raw synthetic input stays denied (docs/p16/DESKTOP_QUALIFICATION.md)"
+      "status": "implemented_exposed",
+      "note": "SG-000095 Full User desktop control: semantic UIA is preferred, raw input is bounded and approval/lease/freshness/human-interruption gated, and no remote/admin widening is introduced.",
+      "via": [
+        "desktop_element_invoke",
+        "desktop_element_set_value",
+        "desktop_element_select",
+        "desktop_element_toggle",
+        "desktop_element_scroll",
+        "desktop_input_execute",
+        "desktop_window_action"
+      ]
     },
     {
       "id": "screenshots",
-      "status": "missing",
-      "owner_grain": "outside_v0_2_target",
-      "note": "the native adapter implements no window capture; the closed capture shape is not exposed (docs/p16/DESKTOP_QUALIFICATION.md)"
+      "status": "implemented_exposed",
+      "note": "SG-000095 exact-window capture through the private Computer Host; no whole-desktop, monitor, region, recording, or ffmpeg widening.",
+      "via": [
+        "desktop_window_capture"
+      ]
     },
     {
       "id": "clipboard_read_write",

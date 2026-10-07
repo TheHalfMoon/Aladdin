@@ -208,9 +208,14 @@ fn happy_path_capture_mints_server_allocated_frame() {
     assert_eq!(result["truncated"], false);
     let frame_id = result["frame_id"].as_str().expect("frame id");
     assert!(is_well_formed_frame_id(frame_id));
-    let pixels = result["pixels"].as_array().expect("pixels");
-    assert_eq!(pixels.len(), 8 * 6 * 4);
-    let expected_digest = capture_payload_digest(&deterministic_image(100).bytes);
+    assert_eq!(result["encoding"], "base64");
+    let expected_image = deterministic_image(100);
+    assert_eq!(
+        result["pixels_b64"].as_str().expect("base64 pixels"),
+        base64_encode(&expected_image.bytes)
+    );
+    assert!(result.get("pixels").is_none());
+    let expected_digest = capture_payload_digest(&expected_image.bytes);
     assert_eq!(result["payload_digest"], expected_digest);
     assert_eq!(result["capture_generation"], 1);
     assert_eq!(registry.frame_count(), 1);

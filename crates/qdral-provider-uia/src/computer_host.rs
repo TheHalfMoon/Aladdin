@@ -15,6 +15,83 @@ use serde::Deserialize;
 use serde::Serialize;
 use std::path::{Path, PathBuf};
 
+/// One live cursor snapshot from the private Windows Computer Host.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DesktopCursorPosition {
+    pub x: i32,
+    pub y: i32,
+    pub screen_width: i32,
+    pub screen_height: i32,
+    pub last_input_tick: u32,
+}
+
+/// The bounded Full User foreground-input vocabulary. Coordinates are
+/// relative to the exact typed target window.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DesktopInputAction {
+    Move {
+        x: i32,
+        y: i32,
+    },
+    Click {
+        x: i32,
+        y: i32,
+        button: String,
+        count: u8,
+    },
+    Drag {
+        x: i32,
+        y: i32,
+        to_x: i32,
+        to_y: i32,
+    },
+    Scroll {
+        x: i32,
+        y: i32,
+        scroll_x: i32,
+        scroll_y: i32,
+    },
+    TypeText {
+        text: String,
+    },
+    Key {
+        key: String,
+    },
+    Hotkey {
+        key: String,
+    },
+}
+
+/// Frozen execution-state projection for one private-host mutation.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DesktopActionResult {
+    pub state: String,
+    pub action: String,
+    pub message: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DesktopWindowAction {
+    Focus,
+    Minimize,
+    Maximize,
+    Restore,
+    Close,
+}
+
+#[cfg(windows)]
+impl DesktopWindowAction {
+    fn as_host_str(self) -> &'static str {
+        match self {
+            Self::Focus => "focus",
+            Self::Minimize => "minimize",
+            Self::Maximize => "maximize",
+            Self::Restore => "restore",
+            Self::Close => "close",
+        }
+    }
+}
+
 #[cfg(windows)]
 const HOST_PROTOCOL: &str = "deskal-computer-host/1";
 #[cfg(windows)]
@@ -40,6 +117,75 @@ struct HostRequest<'a> {
     max_nodes: Option<usize>,
     #[serde(skip_serializing_if = "Option::is_none")]
     max_depth: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    element_runtime_id: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    semantic_action: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    window_action: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    value: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    x: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    y: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    to_x: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    to_y: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    button: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    click_count: Option<u8>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    scroll_x: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    scroll_y: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    text: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    key: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    expected_last_input_tick: Option<u32>,
+}
+
+#[cfg(windows)]
+impl<'a> HostRequest<'a> {
+    fn new(op: &'a str) -> Self {
+        Self {
+            id: 0,
+            protocol: HOST_PROTOCOL,
+            op,
+            hwnd: None,
+            expected_pid: None,
+            expected_start_generation: None,
+            expected_window_nonce: None,
+            max_nodes: None,
+            max_depth: None,
+            element_runtime_id: None,
+            semantic_action: None,
+            window_action: None,
+            value: None,
+            x: None,
+            y: None,
+            to_x: None,
+            to_y: None,
+            button: None,
+            click_count: None,
+            scroll_x: None,
+            scroll_y: None,
+            text: None,
+            key: None,
+            expected_last_input_tick: None,
+        }
+    }
+
+    fn bind_window(&mut self, hwnd: u64, binding: HostTargetBinding) {
+        self.hwnd = Some(hwnd);
+        self.expected_pid = Some(binding.pid);
+        self.expected_start_generation = Some(binding.start_generation);
+        self.expected_window_nonce = Some(binding.window_nonce);
+    }
 }
 
 #[cfg(windows)]
@@ -109,6 +255,23 @@ struct HostCapture {
 
 #[cfg(windows)]
 #[derive(Debug, Deserialize)]
+struct HostCursor {
+    x: i32,
+    y: i32,
+    screen_width: i32,
+    screen_height: i32,
+    last_input_tick: u32,
+}
+
+#[cfg(windows)]
+#[derive(Debug, Deserialize)]
+struct HostAction {
+    state: String,
+    action: String,
+}
+
+#[cfg(windows)]
+#[derive(Debug, Deserialize)]
 struct HostResponse {
     id: u64,
     ok: bool,
@@ -119,6 +282,8 @@ struct HostResponse {
     #[serde(default)]
     elements: Vec<HostElement>,
     capture: Option<HostCapture>,
+    cursor: Option<HostCursor>,
+    action: Option<HostAction>,
     error: Option<HostError>,
 }
 
@@ -303,6 +468,17 @@ mod platform {
             max_nodes: Option<usize>,
             max_depth: Option<usize>,
         ) -> Result<HostResponse, UiaError> {
+            let mut request = HostRequest::new(op);
+            request.hwnd = hwnd;
+            if let (Some(hwnd), Some(binding)) = (hwnd, binding) {
+                request.bind_window(hwnd, binding);
+            }
+            request.max_nodes = max_nodes;
+            request.max_depth = max_depth;
+            self.send_checked(request)
+        }
+
+        fn exchange(&mut self, mut request: HostRequest<'_>) -> Result<HostResponse, UiaError> {
             let id = self.next_id;
             self.next_id = self.next_id.checked_add(1).ok_or_else(|| {
                 UiaError::new(
@@ -310,17 +486,7 @@ mod platform {
                     "Windows Computer Host request id overflow",
                 )
             })?;
-            let request = HostRequest {
-                id,
-                protocol: HOST_PROTOCOL,
-                op,
-                hwnd,
-                expected_pid: binding.map(|value| value.pid),
-                expected_start_generation: binding.map(|value| value.start_generation),
-                expected_window_nonce: binding.map(|value| value.window_nonce),
-                max_nodes,
-                max_depth,
-            };
+            request.id = id;
             let raw = serde_json::to_vec(&request).map_err(|_| {
                 UiaError::new(
                     FailureCode::InternalError,
@@ -380,6 +546,11 @@ mod platform {
                     "Windows Computer Host response binding mismatch",
                 ));
             }
+            Ok(response)
+        }
+
+        fn send_checked(&mut self, request: HostRequest<'_>) -> Result<HostResponse, UiaError> {
+            let response = self.exchange(request)?;
             if !response.ok {
                 return Err(response.error.map(map_host_error).unwrap_or_else(|| {
                     UiaError::new(
@@ -501,6 +672,237 @@ mod platform {
                 })?;
             self.request(op, Some(hwnd), Some(binding), max_nodes, max_depth)
         }
+
+        fn exact_binding(&self, hwnd: u64) -> Result<HostTargetBinding, UiaError> {
+            self.bindings
+                .lock()
+                .map_err(|_| {
+                    UiaError::new(
+                        FailureCode::ProviderUnavailable,
+                        "Windows Computer Host binding cache is poisoned",
+                    )
+                })?
+                .get(&hwnd)
+                .copied()
+                .ok_or_else(|| {
+                    UiaError::new(
+                        FailureCode::TargetStale,
+                        "Windows Computer Host has no live binding for the requested window; list windows again",
+                    )
+                })
+        }
+
+        fn exchange_host(&self, request: HostRequest<'_>) -> Result<HostResponse, UiaError> {
+            let mut session = self.session.lock().map_err(|_| {
+                UiaError::new(
+                    FailureCode::ProviderUnavailable,
+                    "Windows Computer Host session lock is poisoned",
+                )
+            })?;
+            session.exchange(request)
+        }
+
+        fn checked_host(&self, request: HostRequest<'_>) -> Result<HostResponse, UiaError> {
+            let mut session = self.session.lock().map_err(|_| {
+                UiaError::new(
+                    FailureCode::ProviderUnavailable,
+                    "Windows Computer Host session lock is poisoned",
+                )
+            })?;
+            session.send_checked(request)
+        }
+
+        pub fn cursor_position(&self) -> Result<DesktopCursorPosition, UiaError> {
+            let response = self.checked_host(HostRequest::new("cursor_position"))?;
+            let cursor = response.cursor.ok_or_else(|| {
+                UiaError::new(
+                    FailureCode::ProviderUnavailable,
+                    "Windows Computer Host omitted cursor payload",
+                )
+            })?;
+            Ok(DesktopCursorPosition {
+                x: cursor.x,
+                y: cursor.y,
+                screen_width: cursor.screen_width,
+                screen_height: cursor.screen_height,
+                last_input_tick: cursor.last_input_tick,
+            })
+        }
+
+        pub fn execute_raw_input(
+            &self,
+            hwnd: u64,
+            action: &DesktopInputAction,
+            expected_last_input_tick: u32,
+        ) -> Result<DesktopActionResult, UiaError> {
+            let binding = self.exact_binding(hwnd)?;
+            let mut request = match action {
+                DesktopInputAction::Move { x, y } => {
+                    let mut request = HostRequest::new("input_move");
+                    request.x = Some(*x);
+                    request.y = Some(*y);
+                    request
+                }
+                DesktopInputAction::Click {
+                    x,
+                    y,
+                    button,
+                    count,
+                } => {
+                    let mut request = HostRequest::new("input_click");
+                    request.x = Some(*x);
+                    request.y = Some(*y);
+                    request.button = Some(button.as_str());
+                    request.click_count = Some(*count);
+                    request
+                }
+                DesktopInputAction::Drag { x, y, to_x, to_y } => {
+                    let mut request = HostRequest::new("input_drag");
+                    request.x = Some(*x);
+                    request.y = Some(*y);
+                    request.to_x = Some(*to_x);
+                    request.to_y = Some(*to_y);
+                    request
+                }
+                DesktopInputAction::Scroll {
+                    x,
+                    y,
+                    scroll_x,
+                    scroll_y,
+                } => {
+                    let mut request = HostRequest::new("input_scroll");
+                    request.x = Some(*x);
+                    request.y = Some(*y);
+                    request.scroll_x = Some(*scroll_x);
+                    request.scroll_y = Some(*scroll_y);
+                    request
+                }
+                DesktopInputAction::TypeText { text } => {
+                    let mut request = HostRequest::new("input_type_text");
+                    request.text = Some(text.as_str());
+                    request
+                }
+                DesktopInputAction::Key { key } => {
+                    let mut request = HostRequest::new("input_key");
+                    request.key = Some(key.as_str());
+                    request
+                }
+                DesktopInputAction::Hotkey { key } => {
+                    let mut request = HostRequest::new("input_hotkey");
+                    request.key = Some(key.as_str());
+                    request
+                }
+            };
+            request.bind_window(hwnd, binding);
+            request.expected_last_input_tick = Some(expected_last_input_tick);
+            let operation = request.op.to_owned();
+            let response = self.exchange_host(request)?;
+            if response.ok {
+                let action = response.action.ok_or_else(|| {
+                    UiaError::new(
+                        FailureCode::ProviderUnavailable,
+                        "Windows Computer Host omitted action outcome",
+                    )
+                })?;
+                return Ok(DesktopActionResult {
+                    state: action.state,
+                    action: action.action,
+                    message: None,
+                });
+            }
+            let error = response.error.ok_or_else(|| {
+                UiaError::new(
+                    FailureCode::ProviderUnavailable,
+                    "Windows Computer Host failed without typed error",
+                )
+            })?;
+            if matches!(error.code.as_str(), "cancelled" | "outcome_unknown") {
+                return Ok(DesktopActionResult {
+                    state: error.code,
+                    action: operation,
+                    message: Some(error.message),
+                });
+            }
+            Err(map_host_error(error))
+        }
+
+        pub fn execute_window_action(
+            &self,
+            hwnd: u64,
+            action: DesktopWindowAction,
+            expected_last_input_tick: u32,
+        ) -> Result<DesktopActionResult, UiaError> {
+            let binding = self.exact_binding(hwnd)?;
+            let mut request = HostRequest::new("window_action");
+            request.bind_window(hwnd, binding);
+            request.window_action = Some(action.as_host_str());
+            request.expected_last_input_tick = Some(expected_last_input_tick);
+            let response = self.exchange_host(request)?;
+            if response.ok {
+                let action = response.action.ok_or_else(|| {
+                    UiaError::new(
+                        FailureCode::ProviderUnavailable,
+                        "Windows Computer Host omitted window action outcome",
+                    )
+                })?;
+                return Ok(DesktopActionResult {
+                    state: action.state,
+                    action: action.action,
+                    message: None,
+                });
+            }
+            let error = response.error.ok_or_else(|| {
+                UiaError::new(
+                    FailureCode::ProviderUnavailable,
+                    "Windows Computer Host failed without typed error",
+                )
+            })?;
+            if matches!(error.code.as_str(), "cancelled" | "outcome_unknown") {
+                return Ok(DesktopActionResult {
+                    state: error.code,
+                    action: format!("window_{}", action.as_host_str()),
+                    message: Some(error.message),
+                });
+            }
+            Err(map_host_error(error))
+        }
+
+        fn semantic_action(
+            &self,
+            hwnd: u64,
+            runtime_id: &str,
+            action: &str,
+            value: Option<&str>,
+            scroll_x: i32,
+            scroll_y: i32,
+        ) -> Result<(), UiaError> {
+            let binding = self.exact_binding(hwnd)?;
+            let mut request = HostRequest::new("semantic_action");
+            request.bind_window(hwnd, binding);
+            request.element_runtime_id = Some(runtime_id);
+            request.semantic_action = Some(action);
+            request.value = value;
+            if scroll_x != 0 {
+                request.scroll_x = Some(scroll_x);
+            }
+            if scroll_y != 0 {
+                request.scroll_y = Some(scroll_y);
+            }
+            let response = self.checked_host(request)?;
+            let action = response.action.ok_or_else(|| {
+                UiaError::new(
+                    FailureCode::ProviderUnavailable,
+                    "Windows Computer Host omitted semantic action outcome",
+                )
+            })?;
+            if action.state != "completed" {
+                return Err(UiaError::new(
+                    FailureCode::PostconditionFailed,
+                    "Windows Computer Host did not complete the semantic action",
+                ));
+            }
+            Ok(())
+        }
     }
 
     impl UiaAdapter for ComputerHostAdapter {
@@ -555,6 +957,68 @@ mod platform {
             Ok(response.elements.into_iter().map(convert_element).collect())
         }
 
+        fn invoke_element(&self, hwnd: u64, runtime_id: &str) -> Result<(), UiaError> {
+            self.semantic_action(hwnd, runtime_id, "invoke", None, 0, 0)
+        }
+
+        fn set_value_element(
+            &self,
+            hwnd: u64,
+            runtime_id: &str,
+            value: &str,
+        ) -> Result<(), UiaError> {
+            self.semantic_action(hwnd, runtime_id, "set_value", Some(value), 0, 0)
+        }
+
+        fn select_element(
+            &self,
+            hwnd: u64,
+            runtime_id: &str,
+            selected: bool,
+        ) -> Result<(), UiaError> {
+            if !selected {
+                return Err(UiaError::new(
+                    FailureCode::CapabilityDenied,
+                    "Windows Computer Host semantic select does not widen to deselection",
+                ));
+            }
+            self.semantic_action(hwnd, runtime_id, "select", None, 0, 0)
+        }
+
+        fn toggle_element(
+            &self,
+            hwnd: u64,
+            runtime_id: &str,
+            _toggled: bool,
+        ) -> Result<(), UiaError> {
+            self.semantic_action(hwnd, runtime_id, "toggle", None, 0, 0)
+        }
+
+        fn scroll_element(
+            &self,
+            hwnd: u64,
+            runtime_id: &str,
+            direction: &str,
+            amount: u64,
+        ) -> Result<(), UiaError> {
+            let amount = i32::try_from(amount).map_err(|_| {
+                UiaError::new(FailureCode::InvalidRequest, "scroll amount is out of range")
+            })?;
+            let (scroll_x, scroll_y) = match direction {
+                "up" => (0, -amount),
+                "down" => (0, amount),
+                "left" => (-amount, 0),
+                "right" => (amount, 0),
+                _ => {
+                    return Err(UiaError::new(
+                        FailureCode::InvalidRequest,
+                        "scroll direction is not mapped",
+                    ))
+                }
+            };
+            self.semantic_action(hwnd, runtime_id, "scroll", None, scroll_x, scroll_y)
+        }
+
         fn capture_window(&self, hwnd: u64) -> Result<CapturedImage, UiaError> {
             let response = self.bound_request("capture_window", hwnd, None, None)?;
             let capture = response.capture.ok_or_else(|| {
@@ -603,6 +1067,39 @@ impl ComputerHostAdapter {
     pub fn executable(&self) -> &Path {
         &self.path
     }
+
+    // The Windows-only methods remain type-visible on other hosts but never
+    // acquire desktop, input, or authority capabilities.
+    pub fn cursor_position(&self) -> Result<DesktopCursorPosition, UiaError> {
+        Err(UiaError::new(
+            FailureCode::ProviderUnavailable,
+            "Windows Computer Host is available only on Windows",
+        ))
+    }
+
+    pub fn execute_raw_input(
+        &self,
+        _hwnd: u64,
+        _action: &DesktopInputAction,
+        _expected_last_input_tick: u32,
+    ) -> Result<DesktopActionResult, UiaError> {
+        Err(UiaError::new(
+            FailureCode::ProviderUnavailable,
+            "Windows Computer Host is available only on Windows",
+        ))
+    }
+
+    pub fn execute_window_action(
+        &self,
+        _hwnd: u64,
+        _action: DesktopWindowAction,
+        _expected_last_input_tick: u32,
+    ) -> Result<DesktopActionResult, UiaError> {
+        Err(UiaError::new(
+            FailureCode::ProviderUnavailable,
+            "Windows Computer Host is available only on Windows",
+        ))
+    }
 }
 
 #[cfg(not(windows))]
@@ -632,6 +1129,19 @@ impl UiaAdapter for ComputerHostAdapter {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(not(windows))]
+    #[test]
+    fn windows_desktop_control_fails_closed_on_other_platforms() {
+        let adapter = ComputerHostAdapter::from_path("not-a-windows-host").unwrap();
+        assert!(adapter.cursor_position().is_err());
+        assert!(adapter
+            .execute_raw_input(1, &DesktopInputAction::Move { x: 1, y: 1 }, 0)
+            .is_err());
+        assert!(adapter
+            .execute_window_action(1, DesktopWindowAction::Focus, 0)
+            .is_err());
+    }
 
     #[test]
     fn base64_decoder_is_bounded_and_strict() {

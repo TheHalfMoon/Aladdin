@@ -118,3 +118,28 @@ later governed grain may map a locally enabled `desktop_structured` profile.
   grain must implement and qualify each shape before exposure.
 - Raw `SendInput`, keyboard or mouse injection, focus stealing, and process
   termination remain absent.
+
+
+## SG-000095 successor update
+
+SG-000063 remains the historical read-only qualification above. DESKAL-P20 SG-000095 is the separately governed successor that implements and qualifies the previously deferred local Full User desktop-control surface. The historical SG-000063 and SG-000066 evidence is not rewritten.
+
+Current-tree exposure adds the following **local-only** MCP shapes:
+
+| Shape | Current status | MCP tool |
+| --- | --- | --- |
+| `desktop.cursor/get` | Full User cursor observation | `desktop_cursor_get` |
+| `uia.screenshot/capture` | exact target-window capture | `desktop_window_capture` |
+| `uia.element/invoke` | semantic actuation | `desktop_element_invoke` |
+| `uia.element/set_value` | semantic actuation | `desktop_element_set_value` |
+| `uia.element/select` | semantic actuation | `desktop_element_select` |
+| `uia.element/toggle` | semantic actuation | `desktop_element_toggle` |
+| `uia.element/scroll` | semantic actuation, at most 20 ticks | `desktop_element_scroll` |
+| `desktop.input/execute` | bounded real mouse/keyboard input | `desktop_input_execute` |
+| `desktop.window/action` | exact-window focus/minimize/maximize/restore/close | `desktop_window_action` |
+
+The successor does **not** expose `uia.visual/propose`, `uia.coordinates/propose`, or the legacy `uia.input/execute` click-lease chain as MCP tools. It also adds no MCP grant/renew/revoke operation. Full User is granted only through the local lifecycle CLI after STRONG platform presence, and every control call is denied for remote dispatch.
+
+All actuation is additionally gated by an exact FullControlLease, per-action SOFT approval, typed process/window/element generation checks, protected-surface rules, policy revision, runtime-session binding, authority epoch, and immediate pre-dispatch revalidation. Raw input binds the current human-input tick; drift cancels before dispatch. A mutating native worker is attempted once only, so a crash or timeout after possible dispatch reports `outcome_unknown` and is never automatically retried.
+
+The Windows Computer Host remains a private stdin/stdout child with no independent MCP/HTTP/LAN listener and no grant material. Whole-desktop or monitor capture, arbitrary capture regions, recording/ffmpeg, shell/process or filesystem widening, browser/network widening, elevation broker execution, Persistent Admin, Remote Full Control, UAC/Windows Hello/secure-desktop bypass, SYSTEM/TrustedInstaller authority, and release/installer/tag mutation remain outside SG-000095.
