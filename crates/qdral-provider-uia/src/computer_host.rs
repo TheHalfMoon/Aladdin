@@ -5,15 +5,23 @@
 // not the default NativeAdapter and adds no caller-facing MCP surface. It only
 // translates host OS facts/pixels into the existing UiaAdapter contract.
 
-use crate::{CapturedImage, NativeElement, NativeProcess, NativeWindow, UiaAdapter, UiaError};
+use crate::{NativeElement, NativeProcess, NativeWindow, UiaAdapter, UiaError};
+#[cfg(windows)]
+use crate::CapturedImage;
 use qdral_contracts::FailureCode;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+#[cfg(windows)]
+use serde::Serialize;
 use std::path::{Path, PathBuf};
 
+#[cfg(windows)]
 const HOST_PROTOCOL: &str = "deskal-computer-host/1";
+#[cfg(windows)]
 const HOST_IDENTITY: &str = "deskal-windows-computer-host";
+#[cfg(windows)]
 const MAX_HOST_RESPONSE_BYTES: usize = 16 * 1024 * 1024;
 
+#[cfg(windows)]
 #[derive(Debug, Serialize)]
 struct HostRequest<'a> {
     id: u64,
@@ -27,12 +35,14 @@ struct HostRequest<'a> {
     max_depth: Option<usize>,
 }
 
+#[cfg(windows)]
 #[derive(Debug, Deserialize)]
 struct HostError {
     code: String,
     message: String,
 }
 
+#[cfg(windows)]
 #[derive(Debug, Deserialize, Clone)]
 struct HostProcess {
     pid: u32,
@@ -44,6 +54,7 @@ struct HostProcess {
     generation_source: String,
 }
 
+#[cfg(windows)]
 #[derive(Debug, Deserialize, Clone)]
 struct HostWindow {
     process: HostProcess,
@@ -71,6 +82,7 @@ struct HostElement {
     children: Vec<HostElement>,
 }
 
+#[cfg(windows)]
 #[derive(Debug, Deserialize)]
 struct HostCapture {
     width: u32,
@@ -79,14 +91,13 @@ struct HostCapture {
     pixels_b64: String,
 }
 
+#[cfg(windows)]
 #[derive(Debug, Deserialize)]
 struct HostResponse {
     id: u64,
     ok: bool,
     protocol: String,
     host: String,
-    #[serde(default)]
-    pong: bool,
     #[serde(default)]
     windows: Vec<HostWindow>,
     #[serde(default)]
@@ -95,6 +106,7 @@ struct HostResponse {
     error: Option<HostError>,
 }
 
+#[cfg(windows)]
 fn map_host_error(error: HostError) -> UiaError {
     let code = match error.code.as_str() {
         "invalid_request" => FailureCode::InvalidRequest,
@@ -395,6 +407,11 @@ mod platform {
             &self.path
         }
 
+        #[cfg(test)]
+        pub(crate) fn ping_for_test(&self) -> Result<(), UiaError> {
+            self.request("ping", None, None, None).map(|_| ())
+        }
+
         fn request(
             &self,
             op: &str,
@@ -579,8 +596,6 @@ mod tests {
         };
         let adapter = ComputerHostAdapter::from_path(PathBuf::from(path)).unwrap();
         assert!(adapter.executable().ends_with("deskal-computer-host.exe"));
-        let mut session = adapter.session.lock().unwrap();
-        let pong = session.request("ping", None, None, None).unwrap();
-        assert!(pong.pong);
+        adapter.ping_for_test().unwrap();
     }
 }
