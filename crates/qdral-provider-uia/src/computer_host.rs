@@ -9,6 +9,7 @@
 use crate::CapturedImage;
 use crate::{NativeElement, NativeProcess, NativeWindow, UiaAdapter, UiaError};
 use qdral_contracts::FailureCode;
+#[cfg(any(windows, test))]
 use serde::Deserialize;
 #[cfg(windows)]
 use serde::Serialize;
@@ -65,6 +66,7 @@ struct HostWindow {
     window_nonce: u64,
 }
 
+#[cfg(any(windows, test))]
 #[derive(Debug, Deserialize)]
 struct HostElement {
     runtime_id: String,
@@ -119,6 +121,7 @@ fn map_host_error(error: HostError) -> UiaError {
     UiaError::new(code, error.message)
 }
 
+#[cfg(any(windows, test))]
 fn decode_base64(input: &str, max_bytes: usize) -> Result<Vec<u8>, UiaError> {
     fn value(byte: u8) -> Option<u8> {
         match byte {
@@ -193,6 +196,7 @@ fn decode_base64(input: &str, max_bytes: usize) -> Result<Vec<u8>, UiaError> {
     Ok(out)
 }
 
+#[cfg(any(windows, test))]
 fn convert_element(element: HostElement) -> NativeElement {
     NativeElement {
         runtime_id: element.runtime_id,
