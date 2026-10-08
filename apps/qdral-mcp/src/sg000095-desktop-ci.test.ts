@@ -31,6 +31,16 @@ test("SG-000095 disposable-window suite runs in the single native Go qualificati
     qualifier.includes('const unit = go(["test", "./..."]);'),
     "SG-000094 must execute the full SG-000095 Go suite exactly once"
   );
+
+  // Slow shared Windows CI runners must not turn a valid disposable WinForms
+  // startup into a false failure after 15 seconds, nor wait indefinitely.
+  const helper = readFileSync(
+    join(hostDir, "native_qualification_windows_test.go"),
+    "utf8"
+  );
+  assert.match(helper, /case <-time\.After\(45 \* time\.Second\)/);
+  assert.match(helper, /strings\.HasPrefix\(line, "READY:"\)/);
+  assert.match(helper, /cmd\.Process\.Kill\(\)/);
 });
 
 test("SG-000095 native mutation source stays private, bounded, and excludes donor widening", () => {
