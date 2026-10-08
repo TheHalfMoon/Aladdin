@@ -334,10 +334,22 @@ fn revoked_expired_foreign_lease_and_session_are_denied() {
     let mut l = lease(AuthorityMode::FullUser);
     l.policy_revision = "other".into();
     cases.push(l);
+    let expected_reasons = [
+        "lease revoked",
+        "lease inactive",
+        "authority epoch mismatch",
+        "Windows user binding mismatch",
+        "logon-session binding mismatch",
+        "device binding mismatch",
+        "Deskal-session binding mismatch",
+        "policy revision mismatch",
+    ];
     for (n, l) in cases.iter().enumerate() {
+        let error = authorize_shell_session_t01(&i, Some(l), &ctx(), &b).unwrap_err();
         assert!(
-            authorize_shell_session_t01(&i, Some(l), &ctx(), &b).is_err(),
-            "lease {n}"
+            error.message.contains(expected_reasons[n]),
+            "lease {n} did not fail for the tested binding: {}",
+            error.message
         );
     }
 }
