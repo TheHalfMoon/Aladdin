@@ -1344,6 +1344,21 @@ mod windows_contained_launch {
             }
             Ok(())
         }
+
+        // Never return an ordinary Job-assignment error while leaving a child
+        // suspended outside the Job. Termination must be observed, or its
+        // unverified outcome must replace the original assignment failure.
+        fn assign_or_terminate(&self, child: &mut ChildProcess) -> Result<(), ExecutionPlanError> {
+            if let Err(assignment_error) = self.assign_before_resume(child) {
+                child.terminate_verified().map_err(|_| {
+                    ExecutionPlanError::new(
+                        "unverified suspended-child termination after failed Job assignment",
+                    )
+                })?;
+                return Err(assignment_error);
+            }
+            Ok(())
+        }
     }
 
     struct ChildProcess {
@@ -1726,12 +1741,26 @@ mod windows_contained_launch {
             Ok(exit_code)
         }
 
-        fn terminate_best_effort(&mut self) {
+        // Unlike best effort Drop cleanup, security-sensitive pre-resume
+        // failure paths must verify exit before returning the original error.
+        fn terminate_verified(&mut self) -> Result<(), ExecutionPlanError> {
             unsafe {
                 TerminateProcess(self.process.raw(), 1);
-                WaitForSingleObject(self.process.raw(), 5_000);
+            }
+            let waited = unsafe { WaitForSingleObject(self.process.raw(), 5_000) };
+            if waited != WAIT_OBJECT_0 {
+                return Err(ExecutionPlanError::new(
+                    "child termination was not verified by a signaled process handle",
+                ));
             }
             self.completed = true;
+            Ok(())
+        }
+
+        fn terminate_best_effort(&mut self) {
+            // Never mark an unverified termination as completed. A caller
+            // needing strict cleanup must use terminate_verified directly.
+            let _ = self.terminate_verified();
         }
     }
 
@@ -1748,10 +1777,7 @@ mod windows_contained_launch {
         let job = JobObject::kill_on_close()?;
         let mut child = ChildProcess::create_suspended(profile.sid())?;
 
-        if let Err(error) = job.assign_before_resume(&child) {
-            child.terminate_best_effort();
-            return Err(error);
-        }
+        job.assign_or_terminate(&mut child)?;
 
         child.verify_appcontainer_token()?;
         child.resume()?;
@@ -2159,14 +2185,12 @@ mod windows_contained_launch {
         };
         drop(stdout_write);
         drop(stderr_write);
-        if let Some(error) = job.assign_before_resume(&child).err() {
-            child.terminate_best_effort();
+        if let Err(error) = job.assign_or_terminate(&mut child) {
             return Err(PrivateExecutionFailure::Provider(error.message));
         }
         if let Some(descendant_process) = descendant.as_mut() {
-            if let Err(error) = job.assign_before_resume(descendant_process) {
+            if let Err(error) = job.assign_or_terminate(descendant_process) {
                 child.terminate_best_effort();
-                descendant_process.terminate_best_effort();
                 return Err(PrivateExecutionFailure::Provider(error.message));
             }
         }
@@ -2335,10 +2359,7 @@ mod windows_contained_launch {
             child.terminate_best_effort();
             return Err(error);
         }
-        if let Err(error) = job.assign_before_resume(&child) {
-            child.terminate_best_effort();
-            return Err(error);
-        }
+        job.assign_or_terminate(&mut child)?;
         if let Err(error) = child.resume() {
             child.terminate_best_effort();
             return Err(error);
@@ -2351,6 +2372,45 @@ mod windows_contained_launch {
         if !job.wait_for_quiescence()? {
             return Err(ExecutionPlanError::new(
                 "ordinary current-user fixture Job remained nonquiescent",
+            ));
+        }
+        Ok(())
+    }
+
+    // Test-only native negative path: force a real AssignProcessToJobObject
+    // failure after successfully creating a suspended ordinary-user child.
+    // The shared production failure handler must verify child termination
+    // before returning the assignment error.
+    #[cfg(test)]
+    pub(super) fn qualify_failed_job_assignment_cleanup() -> Result<(), ExecutionPlanError> {
+        let mut child = ChildProcess::create_suspended_current_user_fixture(false)?;
+        if let Err(error) = child.verify_current_user_fixture_token() {
+            child.terminate_verified()?;
+            return Err(error);
+        }
+        let unusable_job = JobObject {
+            handle: OwnedHandle(ptr::null_mut()),
+        };
+        let result = unusable_job.assign_or_terminate(&mut child);
+        if result.is_ok() {
+            child.terminate_verified()?;
+            return Err(ExecutionPlanError::new(
+                "invalid Job handle unexpectedly accepted the suspended child",
+            ));
+        }
+        if !child.completed
+            || unsafe { WaitForSingleObject(child.process.raw(), 0) } != WAIT_OBJECT_0
+        {
+            return Err(ExecutionPlanError::new(
+                "child termination was not verified after real Job assignment failure",
+            ));
+        }
+        if result
+            .err()
+            .is_some_and(|error| error.message.contains("unverified"))
+        {
+            return Err(ExecutionPlanError::new(
+                "Job assignment failure yielded unverified child termination",
             ));
         }
         Ok(())
@@ -2839,6 +2899,15 @@ mod contained_launch_tests {
         let _tmp = EnvironmentVarGuard::replace("TMP", &tmp);
         windows_contained_launch::qualify_current_user_job_fixture(true)
             .expect("a failed thread wrapper must terminate its suspended child and verify exit");
+    }
+
+    #[test]
+    fn sg000096_real_job_assignment_failure_verifies_unassigned_child_exit() {
+        let _guard = ENVIRONMENT_LOCK.lock().expect("environment lock");
+        let tmp = std::env::temp_dir().to_string_lossy().into_owned();
+        let _tmp = EnvironmentVarGuard::replace("TMP", &tmp);
+        windows_contained_launch::qualify_failed_job_assignment_cleanup()
+            .expect("failed native Job attachment must terminate and verify the suspended child");
     }
 
     #[test]
