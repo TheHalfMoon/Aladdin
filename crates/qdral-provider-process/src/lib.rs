@@ -1367,6 +1367,25 @@ mod windows_contained_launch {
             Ok(())
         }
 
+        // Test-only recheck against the *exact* owned Job immediately before
+        // native ResumeThread. A separate Job must never authorize a child.
+        #[cfg(test)]
+        fn verify_member_before_resume(
+            &self,
+            child: &ChildProcess,
+        ) -> Result<(), ExecutionPlanError> {
+            let mut in_job = 0i32;
+            if unsafe { IsProcessInJob(child.process.raw(), self.handle.raw(), &mut in_job) } == 0 {
+                return Err(last_error("IsProcessInJob(pre-resume qualification)"));
+            }
+            if in_job == 0 {
+                return Err(ExecutionPlanError::new(
+                    "suspended child not a member of its expected Job Object",
+                ));
+            }
+            Ok(())
+        }
+
         // Never return an ordinary Job-assignment error while leaving a child
         // suspended outside the Job. Termination must be observed, or its
         // unverified outcome must replace the original assignment failure.
@@ -2591,6 +2610,72 @@ mod windows_contained_launch {
         Ok(())
     }
 
+    // Fault-inject a missing or foreign Job association and a native token
+    // inspection failure while holding the actual disposable child suspended.
+    // Denial is complete only after child exit and owned-Job quiescence.
+    #[cfg(test)]
+    pub(super) fn qualify_pre_resume_inspection_case(case: u8) -> Result<(), ExecutionPlanError> {
+        let job = JobObject::kill_on_close()?;
+        let mut child = ChildProcess::create_suspended_current_user_fixture(false)?;
+        job.assign_or_terminate(&mut child)?;
+
+        let inspection = match case {
+            0 => job
+                .verify_member_before_resume(&child)
+                .and_then(|_| ChildProcess::snapshot_native_owner(child.process.raw()).map(|_| ())),
+            1 => {
+                let unrelated_job = JobObject::kill_on_close()?;
+                unrelated_job.verify_member_before_resume(&child)
+            }
+            2 => ChildProcess::snapshot_native_owner(ptr::null_mut()).map(|_| ()),
+            3 => {
+                let mut in_job = 0i32;
+                let checked =
+                    unsafe { IsProcessInJob(child.process.raw(), 1usize as Handle, &mut in_job) };
+                if checked == 0 {
+                    Err(last_error("IsProcessInJob(invalid native Job handle)"))
+                } else {
+                    Ok(()) // An unexpectedly accepted invalid handle fails the negative fixture.
+                }
+            }
+            _ => Err(ExecutionPlanError::new(
+                "unrecognized native inspection case",
+            )),
+        };
+        if case == 0 {
+            if let Err(error) = inspection {
+                child.terminate_verified()?;
+                return Err(error);
+            }
+            if let Err(error) = child.resume() {
+                child.terminate_verified()?;
+                return Err(error);
+            }
+            let exit = match child.wait_for_completion() {
+                Ok(exit) => exit,
+                Err(error) => {
+                    child.terminate_verified()?;
+                    return Err(error);
+                }
+            };
+            if exit != 0 || !job.wait_for_quiescence()? {
+                return Err(ExecutionPlanError::new(
+                    "native pre-resume positive case did not quiesce",
+                ));
+            }
+            return Ok(());
+        }
+
+        let rejected = inspection.is_err();
+        child.terminate_verified()?;
+        if !rejected || !job.wait_for_quiescence()? {
+            return Err(ExecutionPlanError::new(
+                "native pre-resume inspection failed to deny with verified Job cleanup",
+            ));
+        }
+        Ok(())
+    }
+
     // Every mismatch uses a *real* suspended, Job-attached disposable child.
     // No native thread is resumed on the rejection path.
     #[cfg(test)]
@@ -3339,6 +3424,18 @@ mod contained_launch_tests {
         let _tmp = EnvironmentVarGuard::replace("TMP", &tmp);
         windows_contained_launch::qualify_failed_job_assignment_cleanup()
             .expect("failed native Job attachment must terminate and verify the suspended child");
+    }
+
+    #[test]
+    fn sg000096_native_pre_resume_inspection_failure_verifies_job_cleanup() {
+        let _guard = ENVIRONMENT_LOCK.lock().expect("environment lock");
+        let tmp = std::env::temp_dir().to_string_lossy().into_owned();
+        let _tmp = EnvironmentVarGuard::replace("TMP", &tmp);
+        for case in 0..=3 {
+            windows_contained_launch::qualify_pre_resume_inspection_case(case).expect(
+                "suspended native inspection case must deny or finish with verified cleanup",
+            );
+        }
     }
 
     #[test]
