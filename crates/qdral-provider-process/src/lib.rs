@@ -3147,7 +3147,7 @@ mod contained_launch_tests {
         let _tmp = EnvironmentVarGuard::replace("TMP", &tmp);
         for case in 0..=6 {
             windows_contained_launch::qualify_expected_owner_case(case)
-                .unwrap_or_else(|error| panic!("native owner case {case}: {}", error.message));
+                .expect("native expected-owner case must deny or complete with verified cleanup");
         }
     }
 
