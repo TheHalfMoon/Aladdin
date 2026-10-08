@@ -1,0 +1,111 @@
+{
+  "schema": "deskal-p20-sg000096-shell-session-import/1",
+  "grain": "SG-000096",
+  "program": "DESKAL-P20",
+  "activation_base": "7e0f93d11e9be27903d539d2f45bb2aba5fc56c0",
+  "source_issue": 260,
+  "donor": {
+    "repository": "wonderwhy-er/DesktopCommanderMCP",
+    "commit": "bc1e944e30302e0022d49f418d55563dd74a162c",
+    "license": "MIT",
+    "license_blob_sha": "cc6ce4fa68f26cd5db3dc1ff83c8163094f28451",
+    "notice_requirement": "Retain original copyright, MIT permission notice, and disclaimer with any COPY_ADAPT; add Deskal source-tree and binary notices before importing code."
+  },
+  "selected": [
+    {
+      "source": "src/terminal-manager.ts",
+      "blob": "528e2872754315751dc1559922bbf9764cdcd702",
+      "reuse": "COPY_ADAPT",
+      "destination": "crates/qdral-provider-process/src/session.rs",
+      "purpose": "Bounded session registry, stdin framing, separate output-ring semantics and completed-session lifecycle",
+      "boundary": "Port semantics to Deskal-owned typed session identity, existing execution limits and Windows job supervision; remove donor shell:false fallback, telemetry, uncontrolled buffer and environment assumptions."
+    },
+    {
+      "source": "src/handlers/terminal-handlers.ts",
+      "blob": "1f6930fdd6dcf28aebecd99036eab2585edaac23",
+      "reuse": "REFERENCE",
+      "destination": "None at activation",
+      "purpose": "Session action vocabulary and request/response shape reference",
+      "boundary": "No donor MCP wrapper, tools/list, public server or permissive tool schema; own MCP tools remain gated by Deskal policy."
+    },
+    {
+      "source": "src/handlers/process-handlers.ts",
+      "blob": "fef82042b75324d6ccf7ab566f737daad5c09487",
+      "reuse": "REFERENCE",
+      "destination": "None at activation",
+      "purpose": "Process lifecycle vocabulary reference only",
+      "boundary": "No generic kill_process foreign PID authority or ambient tasklist process control."
+    },
+    {
+      "source": "src/tools/improved-process-tools.ts",
+      "blob": "92bad49daf49230a60483fcc6a798802218d2e36",
+      "reuse": "REFERENCE",
+      "destination": "None at activation",
+      "purpose": "Timeout and interactive session behavior reference",
+      "boundary": "Reject node:local fallback, inherited auth, unmanaged shell, telemetry, implicit SSH -t and arbitrary relative execution files."
+    },
+    {
+      "source": "src/tools/process.ts",
+      "blob": "c91bcc7c831fbb9466847c2a4ebe159a1d6be74e",
+      "reuse": "REFERENCE",
+      "destination": "None at activation",
+      "purpose": "Windows process inspection display reference",
+      "boundary": "Do not add foreign PID inspection/termination until SG-000097."
+    },
+    {
+      "source": "src/utils/process-detection.ts",
+      "blob": "a58b500eed84865af8d37ae61120bd8a540a2ca8",
+      "reuse": "REFERENCE",
+      "destination": "None at activation",
+      "purpose": "Non-authoritative prompt/wait UX hints",
+      "boundary": "Output prompt regex is never proof of child exit, session completion, authorization or dispatch success."
+    }
+  ],
+  "reused_deskal": [
+    "crates/qdral-provider-process/src/lib.rs",
+    "crates/qdral-policy/src/executable_registry.rs",
+    "crates/qdral-policy/src/full_control.rs",
+    "crates/qdral-policy/src/full_control_store.rs",
+    "crates/qdral-lifecycle/src/full_control.rs",
+    "crates/qdrald/src"
+  ],
+  "excluded_features": [
+    "donor public MCP/catalog/service",
+    "node:local eval",
+    "implicit shell:true or arbitrary fallback",
+    "unmanaged kill_process by PID",
+    "unmediated PATH/PATHEXT trust in Safe",
+    "implicit ssh -t rewriting",
+    "donor telemetry/capture",
+    "remote or hosted backend",
+    "detached/orphan process",
+    "user credentials or secrets in logs",
+    "admin or system token elevation",
+    "unqualified network containment assertions"
+  ],
+  "authority_profile": {
+    "safe": "existing registered executable only, no widening",
+    "full_user": "new executor requires independent local lease and fresh SOFT per-action approval after implementation",
+    "full_admin": false,
+    "persistent_admin": false,
+    "remote_full_control": false,
+    "delegated_mcp_self_grant": false
+  },
+  "security_notes": [
+    "Job Objects supervise descendant processes but do not by themselves restrict user-level network or filesystem side effects.",
+    "Bound process output separately and return explicit truncation; do not fabricate complete streams.",
+    "Consent/lease/revoke/epoch applies at every mutation boundary; uncertain dispatch never auto-retries."
+  ],
+  "activation_state": {
+    "donor_runtime_imported": false,
+    "local_shell_executor_implemented": false,
+    "full_user_shell_authority_enabled": false,
+    "mcp_tools_added": [],
+    "process_sessions_started": 0,
+    "new_dependencies": [],
+    "new_listeners": [],
+    "release_payload_changed": false
+  },
+  "implementation_owner_grain": "SG-000096",
+  "release_owner_grain": "SG-000106"
+}

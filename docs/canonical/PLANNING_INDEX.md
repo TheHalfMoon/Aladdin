@@ -59,7 +59,8 @@ canonically.
 | `docs/canonical/PLANNING_INDEX.md` | This precedence and classification index. |
 | `docs/identity/DESKAL_RENAME.md` | Product identity and compatibility boundary. |
 | `docs/governance/DIFFCIPLINE.md` | Exact-diff execution discipline. |
-| `.specgrain/specs/SG-000095.json` | Closed canonical: DESKAL-P20 local Full User desktop control; SG-000096 activation remains separate. |
+| `.specgrain/specs/SG-000095.json` | Closed canonical: DESKAL-P20 local Full User desktop control. |
+| `.specgrain/specs/SG-000096.json` | Sole active DESKAL-P20 grain: local shell and process session qualification; this packet grants no executable authority itself. |
 | `docs/canonical/DESKAL_P20_UNIVERSAL_AGENT_RUNTIME_PLAN.md` | Active DESKAL-P20 reuse-first architecture, authority, implementation-order, and qualification plan. |
 | `docs/canonical/DESKAL_P20_DONOR_LEDGER.md` | Active pinned donor/provenance and reuse-boundary ledger for DESKAL-P20. |
 
@@ -68,6 +69,7 @@ canonically.
 | Document | Role |
 | --- | --- |
 | `docs/p20/sg000095_desktop_input_import.json` | Closed SG-000095 exact donor/source/reuse/rejection/private-protocol manifest and implementation record; the activation snapshot is historical, and the implementation state records the qualified imported runtime. |
+| `docs/p20/sg000096_shell_session_import.json` | Active SG-000096 frozen donor source/blob/MIT/reuse plan, existing Deskal executor ownership, and zero-code-import activation record. |
 | `docs/p20/sg000094_windows_host_import.json` | Closed SG-000094 donor/provenance/private-protocol record for the qualified Windows observation/capture host. |
 | `docs/canonical/DESKAL_POST_P18_LAUNCH_PLAN.md` | Exited DESKAL-P19 launch-program record; it authorizes no P20 runtime work. |
 | `docs/p19/sg000091_exit_matrix.json` | Canonical P19 launch-completeness exit matrix: 18 rows, zero UNVERIFIED rows. |

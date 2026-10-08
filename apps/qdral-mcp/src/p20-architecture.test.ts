@@ -177,7 +177,7 @@ test("P20 subsystem ownership and sequence have no gap", () => {
   assert.equal(plan.includes("SG-000108"), false);
 });
 
-test("SG-000094 and SG-000095 are closed, with no successor yet activated", () => {
+test("SG-000094 and SG-000095 are closed and SG-000096 alone is active", () => {
   const specDir = join(repo, ".specgrain", "specs");
   const specs = readdirSync(specDir).filter((name) => /^SG-\d{6}\.json$/.test(name));
   const open: string[] = [];
@@ -187,7 +187,7 @@ test("SG-000094 and SG-000095 are closed, with no successor yet activated", () =
       open.push(spec.id);
     }
   }
-  assert.deepEqual(open, []);
+  assert.deepEqual(open, ["SG-000096"]);
 
   const sg94 = readJson<{
     state: string;
@@ -232,12 +232,75 @@ test("SG-000094 and SG-000095 are closed, with no successor yet activated", () =
   assert.equal(sg95.canonical_evidence.signed_dco_commits, 3);
   assert.equal(sg95.canonical_evidence.unresolved_review_threads, 0);
 
-  for (let n = 96; n <= 107; n += 1) {
+  const sg96 = readJson<{ id: string; title: string; program: string; state: string; base: string; dependencies: string[]; planning_issue: number; authority_delta: { activation: string; safe: string }; scope: { exclude: string[] } }>(".specgrain/specs/SG-000096.json");
+  assert.equal(sg96.id, "SG-000096");
+  assert.equal(sg96.title, "Shell and process sessions");
+  assert.equal(sg96.program, "DESKAL-P20");
+  assert.equal(sg96.state, "GRAIN");
+  assert.equal(sg96.base, "7e0f93d11e9be27903d539d2f45bb2aba5fc56c0");
+  assert.deepEqual(sg96.dependencies, ["SG-000095"]);
+  assert.equal(sg96.planning_issue, 260);
+  assert.match(sg96.authority_delta.activation, /^None\./);
+  assert.match(sg96.authority_delta.safe, /Unchanged:/);
+  assert.ok(sg96.scope.exclude.some(item => item.includes("Full Admin")));
+
+  for (let n = 97; n <= 107; n += 1) {
     const id = `SG-${String(n).padStart(6, "0")}.json`;
     assert.equal(specs.includes(id), false, id);
   }
 });
 
+
+test("SG-000096 donor freeze is attributable, local-only and not executable at activation", () => {
+  const manifest = readJson<{
+    schema: string;
+    grain: string;
+    activation_base: string;
+    source_issue: number;
+    donor: { repository: string; commit: string; license: string; license_blob_sha: string };
+    selected: Array<{ source: string; blob: string; reuse: string; destination: string }>;
+    reused_deskal: string[];
+    excluded_features: string[];
+    authority_profile: { safe: string; full_user: string; full_admin: boolean; persistent_admin: boolean; remote_full_control: boolean; delegated_mcp_self_grant: boolean };
+    activation_state: { donor_runtime_imported: boolean; local_shell_executor_implemented: boolean; full_user_shell_authority_enabled: boolean; mcp_tools_added: string[]; new_dependencies: string[]; new_listeners: string[]; release_payload_changed: boolean };
+  }>("docs/p20/sg000096_shell_session_import.json");
+  assert.equal(manifest.schema, "deskal-p20-sg000096-shell-session-import/1");
+  assert.equal(manifest.grain, "SG-000096");
+  assert.equal(manifest.activation_base, "7e0f93d11e9be27903d539d2f45bb2aba5fc56c0");
+  assert.equal(manifest.source_issue, 260);
+  assert.deepEqual(
+    [manifest.donor.repository, manifest.donor.commit, manifest.donor.license, manifest.donor.license_blob_sha],
+    ["wonderwhy-er/DesktopCommanderMCP", "bc1e944e30302e0022d49f418d55563dd74a162c", "MIT", "cc6ce4fa68f26cd5db3dc1ff83c8163094f28451"]
+  );
+  assert.deepEqual(
+    manifest.selected.map(({ source, blob }) => [source, blob]),
+    [
+      ["src/terminal-manager.ts", "528e2872754315751dc1559922bbf9764cdcd702"],
+      ["src/handlers/terminal-handlers.ts", "1f6930fdd6dcf28aebecd99036eab2585edaac23"],
+      ["src/handlers/process-handlers.ts", "fef82042b75324d6ccf7ab566f737daad5c09487"],
+      ["src/tools/improved-process-tools.ts", "92bad49daf49230a60483fcc6a798802218d2e36"],
+      ["src/tools/process.ts", "c91bcc7c831fbb9466847c2a4ebe159a1d6be74e"],
+      ["src/utils/process-detection.ts", "a58b500eed84865af8d37ae61120bd8a540a2ca8"]
+    ]
+  );
+  assert.ok(manifest.selected.every(entry => /^(COPY_ADAPT|PORT|REFERENCE)$/.test(entry.reuse)));
+  assert.ok(manifest.reused_deskal.includes("crates/qdral-provider-process/src/lib.rs"));
+  assert.ok(manifest.reused_deskal.includes("crates/qdral-policy/src/full_control_store.rs"));
+  assert.ok(manifest.excluded_features.some(entry => entry.includes("node:local")));
+  assert.ok(manifest.excluded_features.some(entry => entry.includes("remote")));
+  assert.match(manifest.authority_profile.safe, /no widening/);
+  assert.equal(manifest.authority_profile.full_admin, false);
+  assert.equal(manifest.authority_profile.persistent_admin, false);
+  assert.equal(manifest.authority_profile.remote_full_control, false);
+  assert.equal(manifest.authority_profile.delegated_mcp_self_grant, false);
+  assert.equal(manifest.activation_state.donor_runtime_imported, false);
+  assert.equal(manifest.activation_state.local_shell_executor_implemented, false);
+  assert.equal(manifest.activation_state.full_user_shell_authority_enabled, false);
+  assert.deepEqual(manifest.activation_state.mcp_tools_added, []);
+  assert.deepEqual(manifest.activation_state.new_dependencies, []);
+  assert.deepEqual(manifest.activation_state.new_listeners, []);
+  assert.equal(manifest.activation_state.release_payload_changed, false);
+});
 
 test("SG-000094 donor selection is exact and keeps input paths deferred", () => {
   const manifest = readJson<{
