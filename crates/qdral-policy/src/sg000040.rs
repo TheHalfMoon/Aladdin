@@ -5,6 +5,7 @@ pub mod protected_state;
 pub mod remote_session;
 #[path = "sg000039.rs"]
 mod sg000039_legacy;
+pub mod shell_session;
 
 pub use qdral_approval::ApprovalClass;
 pub use sg000039_legacy::{
