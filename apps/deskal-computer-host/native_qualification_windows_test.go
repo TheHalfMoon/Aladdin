@@ -96,8 +96,11 @@ $form.Add_Shown({
 	case line = <-lineCh:
 	case err := <-errCh:
 		t.Fatalf("native helper startup failed: %v; stderr=%s", err, stderr.String())
-	case <-time.After(15 * time.Second):
-		t.Fatalf("native helper startup timed out; stderr=%s", stderr.String())
+	case <-time.After(45 * time.Second):
+		// Windows Forms first-load compilation on a shared CI runner can take
+		// longer than 15s under parallel Rust/Node jobs. This remains a finite
+		// fail-closed readiness deadline; only a real READY handle can pass.
+		t.Fatalf("native helper startup timed out after 45s; stderr=%s", stderr.String())
 	}
 	if !strings.HasPrefix(line, "READY:") {
 		t.Fatalf("unexpected helper readiness line %q", line)
