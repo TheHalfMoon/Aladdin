@@ -2768,7 +2768,50 @@ mod windows_contained_launch {
         let _root = DisposableStore(root.clone());
         let store_path = root.join("full-control.json");
         let key = [0x5au8; 32];
-        let deskal_session_id = "test-owned-local-desktop-session";
+        let live_identity =
+            qdral_lifecycle::runtime::identify(std::process::id()).ok_or_else(|| {
+                ExecutionPlanError::new("disposable native owner identity unavailable")
+            })?;
+        if live_identity.creation_time != parent.creation_generation {
+            return Err(ExecutionPlanError::new(
+                "disposable lifecycle/native owner creation generations differ",
+            ));
+        }
+        let deskal_session_id = format!(
+            "deskal-session-{}-{:016x}-0123456789abcdef0123456789abcdef",
+            live_identity.pid, live_identity.creation_time
+        );
+        let runtime_path = root.join("runtime-session.json");
+        let mut recorded_owner = qdral_lifecycle::full_control::RuntimeSessionRecord {
+            schema: qdral_lifecycle::full_control::RUNTIME_SESSION_SCHEMA.into(),
+            session_id: deskal_session_id.clone(),
+            owner_pid: live_identity.pid,
+            owner_creation_time: live_identity.creation_time,
+            owner_image: live_identity.image,
+            started_at_ms: now_ms,
+        };
+        match case {
+            10 => recorded_owner.owner_creation_time ^= 1,
+            11 => recorded_owner.owner_image.push_str(".forged"),
+            12 => {
+                recorded_owner.session_id.pop();
+                recorded_owner.session_id.push('e');
+            }
+            13 => recorded_owner.owner_pid ^= 1,
+            15 => recorded_owner.schema = "untrusted-runtime-schema".into(),
+            _ => {}
+        }
+        if case != 14 {
+            std::fs::write(
+                &runtime_path,
+                serde_json::to_vec(&recorded_owner).map_err(|error| {
+                    ExecutionPlanError::new(format!("serialize disposable runtime record: {error}"))
+                })?,
+            )
+            .map_err(|error| {
+                ExecutionPlanError::new(format!("write disposable runtime record: {error}"))
+            })?;
+        }
         let original_lease = full_control_store::grant_local(
             &store_path,
             &key,
@@ -2776,7 +2819,7 @@ mod windows_contained_launch {
             60_000,
             parent.sid.clone(),
             parent.logon_luid,
-            deskal_session_id.into(),
+            deskal_session_id.clone(),
             now_ms,
         )
         .map_err(|error| ExecutionPlanError::new(error.message))?;
@@ -2801,6 +2844,37 @@ mod windows_contained_launch {
         }
 
         let validated = (|| -> Result<_, ExecutionPlanError> {
+            let record: qdral_lifecycle::full_control::RuntimeSessionRecord =
+                serde_json::from_slice(&std::fs::read(&runtime_path).map_err(|error| {
+                    ExecutionPlanError::new(format!(
+                        "read independently persisted owner record: {error}"
+                    ))
+                })?)
+                .map_err(|error| {
+                    ExecutionPlanError::new(format!("decode owner record: {error}"))
+                })?;
+            if record.schema != qdral_lifecycle::full_control::RUNTIME_SESSION_SCHEMA
+                || record.owner_pid != std::process::id()
+                || record.owner_creation_time != parent.creation_generation
+                || record.session_id != deskal_session_id
+            {
+                return Err(ExecutionPlanError::new(
+                    "persisted owner record has inconsistent schema, PID, generation or nonce",
+                ));
+            }
+            let verified_identity = qdral_lifecycle::runtime::ProcessIdentity {
+                pid: record.owner_pid,
+                creation_time: record.owner_creation_time,
+                image: record.owner_image.clone(),
+            };
+            let _verified_live_owner =
+                qdral_lifecycle::runtime::open_verified(&verified_identity).ok_or_else(|| {
+                    ExecutionPlanError::new(
+                        "persisted runtime owner PID, process creation or executable image not live",
+                    )
+                })?;
+            full_control_store::validate_runtime_session(&record.session_id)
+                .map_err(|error| ExecutionPlanError::new(error.message))?;
             let stored = full_control_store::load_store(&store_path, &key)
                 .map_err(|error| ExecutionPlanError::new(error.message))?;
             let lease = stored.lease.ok_or_else(|| {
@@ -2828,7 +2902,7 @@ mod windows_contained_launch {
                 } else {
                     &device_id
                 },
-                deskal_session_id,
+                deskal_session_id: &record.session_id,
                 policy_revision: qdral_policy::POLICY_REVISION,
                 authority_epoch: if case == 4 {
                     stored.authority_epoch.saturating_add(1)
@@ -2849,15 +2923,16 @@ mod windows_contained_launch {
                 || lease.windows_user_sid != parent.sid
                 || lease.logon_session_id != parent.logon_luid
                 || lease.authority_epoch != stored.authority_epoch
+                || lease.deskal_session_id != record.session_id
             {
                 return Err(ExecutionPlanError::new(
                     "protected lease does not match the separately observed live native owner",
                 ));
             }
-            Ok(lease)
+            Ok((lease, record.owner_creation_time))
         })();
 
-        if (1..=7).contains(&case) {
+        if (1..=7).contains(&case) || (10..=15).contains(&case) {
             if validated.is_ok() {
                 return Err(ExecutionPlanError::new(
                     "invalid protected native authority was unexpectedly accepted",
@@ -2866,11 +2941,11 @@ mod windows_contained_launch {
             // No child is created at all when protected authority verification denies.
             return Ok(());
         }
-        let lease = validated?;
+        let (lease, persisted_owner_generation) = validated?;
         let expected_owner_generation = if case == 8 {
-            parent.creation_generation ^ 1
+            persisted_owner_generation ^ 1
         } else {
-            parent.creation_generation
+            persisted_owner_generation
         };
         let observed_owner_generation =
             ChildProcess::snapshot_native_owner(unsafe { GetCurrentProcess() })?
@@ -3454,7 +3529,7 @@ mod contained_launch_tests {
         let _guard = ENVIRONMENT_LOCK.lock().expect("environment lock");
         let tmp = std::env::temp_dir().to_string_lossy().into_owned();
         let _tmp = EnvironmentVarGuard::replace("TMP", &tmp);
-        for case in 0..=9 {
+        for case in 0..=15 {
             windows_contained_launch::qualify_protected_expected_owner_case(case)
                 .expect("protected native owner case must deny or verify clean completion");
         }

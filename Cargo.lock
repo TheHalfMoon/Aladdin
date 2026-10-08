@@ -202,7 +202,9 @@ dependencies = [
 name = "qdral-provider-process"
 version = "0.2.0"
 dependencies = [
+ "qdral-lifecycle",
  "qdral-policy",
+ "serde_json",
 ]
 
 [[package]]
