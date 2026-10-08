@@ -873,6 +873,14 @@ mod windows_contained_launch {
         attribute_list: *mut c_void,
     }
 
+    #[cfg(test)]
+    #[repr(C)]
+    #[derive(Clone, Copy, Default)]
+    struct NativeFileTime {
+        low: u32,
+        high: u32,
+    }
+
     #[repr(C)]
     struct ProcessInformation {
         process: Handle,
@@ -960,6 +968,10 @@ mod windows_contained_launch {
         ) -> i32;
         #[cfg(test)]
         fn EqualSid(left: Psid, right: Psid) -> i32;
+        #[cfg(test)]
+        fn ConvertSidToStringSidW(sid: Psid, text: *mut *mut u16) -> i32;
+        #[cfg(test)]
+        fn ConvertStringSidToSidW(text: *const u16, sid: *mut Psid) -> i32;
     }
 
     #[link(name = "kernel32")]
@@ -1010,6 +1022,16 @@ mod windows_contained_launch {
         fn GetSystemDirectoryW(buffer: *mut u16, size: u32) -> u32;
         #[cfg(test)]
         fn GetCurrentProcess() -> Handle;
+        #[cfg(test)]
+        fn GetProcessTimes(
+            process: Handle,
+            creation: *mut NativeFileTime,
+            exit: *mut NativeFileTime,
+            kernel: *mut NativeFileTime,
+            user: *mut NativeFileTime,
+        ) -> i32;
+        #[cfg(test)]
+        fn LocalFree(memory: Handle) -> Handle;
         fn CreatePipe(
             read_pipe: *mut Handle,
             write_pipe: *mut Handle,
@@ -1361,6 +1383,44 @@ mod windows_contained_launch {
         }
     }
 
+    #[cfg(test)]
+    #[derive(Clone)]
+    struct NativeOwnerSnapshot {
+        sid: String,
+        logon_luid: u64,
+        session_id: u32,
+        elevation: u32,
+        creation_generation: u64,
+    }
+
+    #[cfg(test)]
+    fn native_sid_equal(actual: &str, expected: &str) -> Result<bool, ExecutionPlanError> {
+        fn parsed(text: &str) -> Result<Psid, ExecutionPlanError> {
+            let wide = wide(OsStr::new(text));
+            let mut sid: Psid = ptr::null_mut();
+            if unsafe { ConvertStringSidToSidW(wide.as_ptr(), &mut sid) } == 0 {
+                return Err(last_error("ConvertStringSidToSidW(native expectation)"));
+            }
+            Ok(sid)
+        }
+        let actual_sid = parsed(actual)?;
+        let expected_sid = match parsed(expected) {
+            Ok(sid) => sid,
+            Err(error) => {
+                unsafe {
+                    LocalFree(actual_sid);
+                }
+                return Err(error);
+            }
+        };
+        let equal = unsafe { EqualSid(actual_sid, expected_sid) != 0 };
+        unsafe {
+            LocalFree(actual_sid);
+            LocalFree(expected_sid);
+        }
+        Ok(equal)
+    }
+
     struct ChildProcess {
         process: OwnedHandle,
         thread: OwnedHandle,
@@ -1614,6 +1674,121 @@ mod windows_contained_launch {
                         "ordinary current-user fixture {label} differs from its parent",
                     )));
                 }
+            }
+            Ok(())
+        }
+
+        // T02-C qualification-only representation. Production callers cannot
+        // construct or consume it; later code must populate it from protected
+        // server-owned Full User lease and process-handle records.
+        #[cfg(test)]
+        fn snapshot_native_owner(
+            process: Handle,
+        ) -> Result<NativeOwnerSnapshot, ExecutionPlanError> {
+            const TOKEN_USER: i32 = 1;
+            const TOKEN_STATISTICS: i32 = 10;
+            const TOKEN_SESSION_ID: i32 = 12;
+            const TOKEN_ELEVATION: i32 = 20;
+            let mut raw_token: Handle = ptr::null_mut();
+            if unsafe { OpenProcessToken(process, TOKEN_QUERY, &mut raw_token) } == 0 {
+                return Err(last_error("OpenProcessToken(native owner snapshot)"));
+            }
+            let token = OwnedHandle::new(raw_token, "OpenProcessToken(native owner snapshot)")?;
+            let user = Self::fixture_token_data(
+                &token,
+                TOKEN_USER,
+                mem::size_of::<SidAndAttributes>() as u32,
+            )?;
+            let sid_ptr = unsafe { (*(user.as_ptr().cast::<SidAndAttributes>())).sid };
+            if sid_ptr.is_null() {
+                return Err(ExecutionPlanError::new("null native TokenUser SID"));
+            }
+            let mut text_ptr: *mut u16 = ptr::null_mut();
+            if unsafe { ConvertSidToStringSidW(sid_ptr, &mut text_ptr) } == 0 {
+                return Err(last_error("ConvertSidToStringSidW"));
+            }
+            let sid_result = (|| {
+                let mut len = 0usize;
+                while len < 192 && unsafe { *text_ptr.add(len) } != 0 {
+                    len += 1;
+                }
+                if len == 192 {
+                    return Err(ExecutionPlanError::new("overlong native token SID"));
+                }
+                String::from_utf16(unsafe { std::slice::from_raw_parts(text_ptr, len) })
+                    .map_err(|_| ExecutionPlanError::new("invalid native token SID UTF-16"))
+            })();
+            unsafe {
+                LocalFree(text_ptr.cast());
+            }
+            let sid = sid_result?;
+            let stats = Self::fixture_token_data(&token, TOKEN_STATISTICS, 16)?;
+            let stats_bytes =
+                unsafe { std::slice::from_raw_parts(stats.as_ptr().cast::<u8>(), 16) };
+            let mut luid = [0u8; 8];
+            luid.copy_from_slice(&stats_bytes[8..16]);
+            let value = |kind: i32| -> Result<u32, ExecutionPlanError> {
+                let raw = Self::fixture_token_data(&token, kind, 4)?;
+                let bytes = unsafe { std::slice::from_raw_parts(raw.as_ptr().cast::<u8>(), 4) };
+                Ok(u32::from_le_bytes(bytes.try_into().expect("four bytes")))
+            };
+            let mut created = NativeFileTime::default();
+            let mut exited = NativeFileTime::default();
+            let mut kernel = NativeFileTime::default();
+            let mut user_time = NativeFileTime::default();
+            if unsafe {
+                GetProcessTimes(
+                    process,
+                    &mut created,
+                    &mut exited,
+                    &mut kernel,
+                    &mut user_time,
+                )
+            } == 0
+            {
+                return Err(last_error("GetProcessTimes(native owner snapshot)"));
+            }
+            let creation_generation = u64::from(created.high) << 32 | u64::from(created.low);
+            if creation_generation == 0 {
+                return Err(ExecutionPlanError::new(
+                    "missing native process creation generation",
+                ));
+            }
+            Ok(NativeOwnerSnapshot {
+                sid,
+                logon_luid: u64::from_le_bytes(luid),
+                session_id: value(TOKEN_SESSION_ID)?,
+                elevation: value(TOKEN_ELEVATION)?,
+                creation_generation,
+            })
+        }
+
+        #[cfg(test)]
+        fn verify_expected_native_owner(
+            &self,
+            expected: &NativeOwnerSnapshot,
+        ) -> Result<(), ExecutionPlanError> {
+            let actual = Self::snapshot_native_owner(self.process.raw())?;
+            if !native_sid_equal(&actual.sid, &expected.sid)? {
+                return Err(ExecutionPlanError::new("expected native SID mismatch"));
+            }
+            if expected.logon_luid != actual.logon_luid {
+                return Err(ExecutionPlanError::new(
+                    "expected native logon LUID mismatch",
+                ));
+            }
+            if expected.session_id != actual.session_id {
+                return Err(ExecutionPlanError::new("expected native session mismatch"));
+            }
+            if expected.elevation != actual.elevation {
+                return Err(ExecutionPlanError::new(
+                    "expected native elevation mismatch",
+                ));
+            }
+            if expected.creation_generation != actual.creation_generation {
+                return Err(ExecutionPlanError::new(
+                    "expected native process generation mismatch",
+                ));
             }
             Ok(())
         }
@@ -2416,6 +2591,61 @@ mod windows_contained_launch {
         Ok(())
     }
 
+    // Every mismatch uses a *real* suspended, Job-attached disposable child.
+    // No native thread is resumed on the rejection path.
+    #[cfg(test)]
+    pub(super) fn qualify_expected_owner_case(case: u8) -> Result<(), ExecutionPlanError> {
+        let job = JobObject::kill_on_close()?;
+        let mut child = ChildProcess::create_suspended_current_user_fixture(false)?;
+        job.assign_or_terminate(&mut child)?;
+        let mut expected = ChildProcess::snapshot_native_owner(unsafe { GetCurrentProcess() })?;
+        expected.creation_generation =
+            ChildProcess::snapshot_native_owner(child.process.raw())?.creation_generation;
+        match case {
+            0 => {}
+            1 => {
+                expected.sid = if expected.sid == "S-1-5-18" {
+                    "S-1-5-19".into()
+                } else {
+                    "S-1-5-18".into()
+                }
+            }
+            2 => expected.logon_luid ^= 1,
+            3 => expected.session_id ^= 1,
+            4 => expected.elevation ^= 1,
+            5 => expected.creation_generation ^= 1,
+            6 => expected.sid = "not-a-native-SID".into(),
+            _ => {
+                child.terminate_verified()?;
+                return Err(ExecutionPlanError::new("unknown owner qualification case"));
+            }
+        }
+        let result = child.verify_expected_native_owner(&expected);
+        if case == 0 {
+            if let Err(error) = result {
+                child.terminate_verified()?;
+                return Err(error);
+            }
+            child.resume()?;
+            if child.wait_for_completion()? != 0 || !job.wait_for_quiescence()? {
+                return Err(ExecutionPlanError::new(
+                    "expected-owner positive fixture not quiescent",
+                ));
+            }
+            return Ok(());
+        }
+        // Even malformed expected SIDs and native conversion errors must not
+        // leak a child suspended outside the caller's expected authority.
+        let rejected = result.is_err();
+        child.terminate_verified()?;
+        if !job.wait_for_quiescence()? || !rejected {
+            return Err(ExecutionPlanError::new(
+                "expected owner mismatch did not deny and verify native cleanup",
+            ));
+        }
+        Ok(())
+    }
+
     fn command_line_for_cmd(executable: &Path) -> Vec<u16> {
         let mut command = Vec::new();
         command.push('"' as u16);
@@ -2908,6 +3138,17 @@ mod contained_launch_tests {
         let _tmp = EnvironmentVarGuard::replace("TMP", &tmp);
         windows_contained_launch::qualify_failed_job_assignment_cleanup()
             .expect("failed native Job attachment must terminate and verify the suspended child");
+    }
+
+    #[test]
+    fn sg000096_expected_native_owner_mismatches_fail_closed_before_resume() {
+        let _guard = ENVIRONMENT_LOCK.lock().expect("environment lock");
+        let tmp = std::env::temp_dir().to_string_lossy().into_owned();
+        let _tmp = EnvironmentVarGuard::replace("TMP", &tmp);
+        for case in 0..=6 {
+            windows_contained_launch::qualify_expected_owner_case(case)
+                .unwrap_or_else(|error| panic!("native owner case {case}: {}", error.message));
+        }
     }
 
     #[test]
