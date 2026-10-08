@@ -958,6 +958,8 @@ mod windows_contained_launch {
             token_information_length: u32,
             return_length: *mut u32,
         ) -> i32;
+        #[cfg(test)]
+        fn EqualSid(left: Psid, right: Psid) -> i32;
     }
 
     #[link(name = "kernel32")]
@@ -1006,6 +1008,8 @@ mod windows_contained_launch {
         fn WaitForSingleObject(handle: Handle, milliseconds: u32) -> u32;
         fn GetExitCodeProcess(process: Handle, exit_code: *mut u32) -> i32;
         fn GetSystemDirectoryW(buffer: *mut u16, size: u32) -> u32;
+        #[cfg(test)]
+        fn GetCurrentProcess() -> Handle;
         fn CreatePipe(
             read_pipe: *mut Handle,
             write_pipe: *mut Handle,
@@ -1349,6 +1353,44 @@ mod windows_contained_launch {
     }
 
     impl ChildProcess {
+        // Centralize post-CreateProcessW ownership: CloseHandle alone does not
+        // terminate a newly created suspended child that has no Job yet.
+        fn from_created_process(
+            information: ProcessInformation,
+        ) -> Result<Self, ExecutionPlanError> {
+            let process = match OwnedHandle::new(information.process, "CreateProcessW process") {
+                Ok(process) => process,
+                Err(error) => {
+                    // The process handle is unusable; at least close the returned
+                    // thread handle instead of leaking it on this failed path.
+                    if !information.thread.is_null() && information.thread as isize != -1 {
+                        unsafe {
+                            CloseHandle(information.thread);
+                        }
+                    }
+                    return Err(error);
+                }
+            };
+            let thread = match OwnedHandle::new(information.thread, "CreateProcessW thread") {
+                Ok(thread) => thread,
+                Err(error) => {
+                    let killed = unsafe { TerminateProcess(process.raw(), 1) };
+                    let waited = unsafe { WaitForSingleObject(process.raw(), 5_000) };
+                    if killed == 0 || waited != WAIT_OBJECT_0 {
+                        return Err(ExecutionPlanError::new(
+                            "unverified termination after suspended thread-handle failure",
+                        ));
+                    }
+                    return Err(error);
+                }
+            };
+            Ok(Self {
+                process,
+                thread,
+                completed: false,
+            })
+        }
+
         fn create_suspended(profile_sid: Psid) -> Result<Self, ExecutionPlanError> {
             let executable = fixed_system_executable()?;
 
@@ -1390,24 +1432,175 @@ mod windows_contained_launch {
                 return Err(last_error("CreateProcessW(AppContainer suspended)"));
             }
 
-            let process = OwnedHandle::new(process_information.process, "CreateProcessW process")?;
-            let thread = match OwnedHandle::new(process_information.thread, "CreateProcessW thread")
-            {
-                Ok(thread) => thread,
-                Err(error) => {
-                    unsafe {
-                        TerminateProcess(process.raw(), 1);
-                        WaitForSingleObject(process.raw(), 5_000);
-                    }
-                    return Err(error);
-                }
-            };
+            Self::from_created_process(process_information)
+        }
 
-            Ok(Self {
-                process,
-                thread,
-                completed: false,
-            })
+        // T02 qualification only: prove that an ordinary current-user child
+        // can be attached to the owned Job before any user code runs. This
+        // method is intentionally absent from production builds until the
+        // independent lease + one-shot approval dispatcher is qualified.
+        #[cfg(test)]
+        fn create_suspended_current_user_fixture(
+            simulate_invalid_thread: bool,
+        ) -> Result<Self, ExecutionPlanError> {
+            let executable = fixed_system_executable()?;
+            let application = wide(executable.as_os_str());
+            let mut command_line = command_line_for_cmd(&executable);
+            let mut environment = filtered_environment_block()?;
+            let mut startup: StartupInfoW = unsafe { mem::zeroed() };
+            startup.cb = mem::size_of::<StartupInfoW>() as u32;
+            let mut information: ProcessInformation = unsafe { mem::zeroed() };
+            let created = unsafe {
+                CreateProcessW(
+                    application.as_ptr(),
+                    command_line.as_mut_ptr(),
+                    ptr::null(),
+                    ptr::null(),
+                    0,
+                    CREATE_SUSPENDED | CREATE_UNICODE_ENVIRONMENT | CREATE_NO_WINDOW,
+                    environment.as_mut_ptr().cast(),
+                    ptr::null(),
+                    &startup,
+                    &mut information,
+                )
+            };
+            if created == 0 {
+                return Err(last_error("CreateProcessW(current-user fixture)"));
+            }
+
+            if simulate_invalid_thread {
+                // Simulates an unwrappable thread after a *successful* suspended
+                // creation. The process handle must be terminated and drained
+                // before this function returns; retain the raw thread solely
+                // to close it in this test-only fault injection.
+                let raw_thread = information.thread;
+                information.thread = ptr::null_mut();
+                let result = Self::from_created_process(information);
+                unsafe {
+                    CloseHandle(raw_thread);
+                }
+                return result;
+            }
+            Self::from_created_process(information)
+        }
+
+        #[cfg(test)]
+        fn fixture_token_data(
+            token: &OwnedHandle,
+            information_class: i32,
+            minimum_bytes: u32,
+        ) -> Result<Vec<usize>, ExecutionPlanError> {
+            let mut required = 0u32;
+            unsafe {
+                GetTokenInformation(
+                    token.raw(),
+                    information_class,
+                    ptr::null_mut(),
+                    0,
+                    &mut required,
+                );
+            }
+            if required < minimum_bytes || required > 64 * 1024 {
+                return Err(ExecutionPlanError::new(
+                    "unexpected token-information size in disposable fixture",
+                ));
+            }
+            // usize-backed storage provides the alignment needed for TOKEN_USER,
+            // which begins with a pointer-sized SID field.
+            let words = (required as usize).div_ceil(mem::size_of::<usize>());
+            let mut bytes = vec![0usize; words];
+            let mut returned = 0u32;
+            if unsafe {
+                GetTokenInformation(
+                    token.raw(),
+                    information_class,
+                    bytes.as_mut_ptr().cast(),
+                    required,
+                    &mut returned,
+                )
+            } == 0
+                || returned < minimum_bytes
+                || returned > required
+            {
+                return Err(last_error("GetTokenInformation(disposable fixture)"));
+            }
+            Ok(bytes)
+        }
+
+        #[cfg(test)]
+        fn verify_current_user_fixture_token(&self) -> Result<(), ExecutionPlanError> {
+            const TOKEN_USER: i32 = 1;
+            const TOKEN_STATISTICS: i32 = 10;
+            const TOKEN_SESSION_ID: i32 = 12;
+            const TOKEN_ELEVATION: i32 = 20;
+
+            let mut raw_child: Handle = ptr::null_mut();
+            if unsafe { OpenProcessToken(self.process.raw(), TOKEN_QUERY, &mut raw_child) } == 0 {
+                return Err(last_error("OpenProcessToken(child fixture)"));
+            }
+            let child = OwnedHandle::new(raw_child, "OpenProcessToken(child fixture)")?;
+
+            let mut raw_parent: Handle = ptr::null_mut();
+            if unsafe { OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut raw_parent) } == 0 {
+                return Err(last_error("OpenProcessToken(parent fixture)"));
+            }
+            let parent = OwnedHandle::new(raw_parent, "OpenProcessToken(parent fixture)")?;
+
+            let container = Self::fixture_token_data(&child, TOKEN_IS_APP_CONTAINER, 4)?;
+            if container[0] != 0 {
+                return Err(ExecutionPlanError::new(
+                    "ordinary current-user fixture unexpectedly received an AppContainer token",
+                ));
+            }
+
+            let child_user = Self::fixture_token_data(
+                &child,
+                TOKEN_USER,
+                mem::size_of::<SidAndAttributes>() as u32,
+            )?;
+            let parent_user = Self::fixture_token_data(
+                &parent,
+                TOKEN_USER,
+                mem::size_of::<SidAndAttributes>() as u32,
+            )?;
+            let child_sid = unsafe { (*(child_user.as_ptr().cast::<SidAndAttributes>())).sid };
+            let parent_sid = unsafe { (*(parent_user.as_ptr().cast::<SidAndAttributes>())).sid };
+            if child_sid.is_null()
+                || parent_sid.is_null()
+                || unsafe { EqualSid(child_sid, parent_sid) } == 0
+            {
+                return Err(ExecutionPlanError::new(
+                    "ordinary current-user fixture SID differs from its parent",
+                ));
+            }
+
+            // The AuthenticationId LUID is the second eight-byte field in
+            // TOKEN_STATISTICS. Compare the actual child/parent logon LUIDs.
+            let child_stats = Self::fixture_token_data(&child, TOKEN_STATISTICS, 16)?;
+            let parent_stats = Self::fixture_token_data(&parent, TOKEN_STATISTICS, 16)?;
+            let child_stats_bytes =
+                unsafe { std::slice::from_raw_parts(child_stats.as_ptr().cast::<u8>(), 16) };
+            let parent_stats_bytes =
+                unsafe { std::slice::from_raw_parts(parent_stats.as_ptr().cast::<u8>(), 16) };
+            if child_stats_bytes[8..16] != parent_stats_bytes[8..16] {
+                return Err(ExecutionPlanError::new(
+                    "ordinary current-user fixture logon LUID differs from its parent",
+                ));
+            }
+
+            for (kind, label) in [
+                (TOKEN_SESSION_ID, "session ID"),
+                (TOKEN_ELEVATION, "elevation state"),
+            ] {
+                let actual = Self::fixture_token_data(&child, kind, 4)?;
+                let expected = Self::fixture_token_data(&parent, kind, 4)?;
+                if actual[0] != expected[0] {
+                    return Err(ExecutionPlanError::new(format!(
+                        "ordinary current-user fixture {label} differs from its parent",
+                    )));
+                }
+            }
+            Ok(())
         }
 
         fn create_suspended_with_pipes(
@@ -1459,13 +1652,7 @@ mod windows_contained_launch {
             if created == 0 {
                 return Err(last_error("CreateProcessW(contained execution)"));
             }
-            let process = OwnedHandle::new(information.process, "CreateProcessW process")?;
-            let thread = OwnedHandle::new(information.thread, "CreateProcessW thread")?;
-            Ok(Self {
-                process,
-                thread,
-                completed: false,
-            })
+            Self::from_created_process(information)
         }
 
         fn verify_appcontainer_token(&self) -> Result<(), ExecutionPlanError> {
@@ -2119,6 +2306,56 @@ mod windows_contained_launch {
         })
     }
 
+    // Test-owned one-shot fixture only. Neither this proof nor a valid intent
+    // exposes a callable Full User shell executor to production or MCP.
+    #[cfg(test)]
+    pub(super) fn qualify_current_user_job_fixture(
+        invalid_thread: bool,
+    ) -> Result<(), ExecutionPlanError> {
+        let job = JobObject::kill_on_close()?;
+        let mut child = match ChildProcess::create_suspended_current_user_fixture(invalid_thread) {
+            Ok(child) if !invalid_thread => child,
+            Ok(mut child) => {
+                child.terminate_best_effort();
+                return Err(ExecutionPlanError::new(
+                    "invalid-thread fault injection unexpectedly created a usable child",
+                ));
+            }
+            Err(error) if invalid_thread => {
+                // The specific wrapper error is returned only after verified
+                // TerminateProcess + WaitForSingleObject on the suspended child.
+                if !error.message.contains("CreateProcessW thread") {
+                    return Err(error);
+                }
+                return Ok(());
+            }
+            Err(error) => return Err(error),
+        };
+        if let Err(error) = child.verify_current_user_fixture_token() {
+            child.terminate_best_effort();
+            return Err(error);
+        }
+        if let Err(error) = job.assign_before_resume(&child) {
+            child.terminate_best_effort();
+            return Err(error);
+        }
+        if let Err(error) = child.resume() {
+            child.terminate_best_effort();
+            return Err(error);
+        }
+        if child.wait_for_completion()? != 0 {
+            return Err(ExecutionPlanError::new(
+                "ordinary current-user disposable fixture did not exit successfully",
+            ));
+        }
+        if !job.wait_for_quiescence()? {
+            return Err(ExecutionPlanError::new(
+                "ordinary current-user fixture Job remained nonquiescent",
+            ));
+        }
+        Ok(())
+    }
+
     fn command_line_for_cmd(executable: &Path) -> Vec<u16> {
         let mut command = Vec::new();
         command.push('"' as u16);
@@ -2583,6 +2820,25 @@ mod contained_launch_tests {
             ),
             PrivateExecutionFailure::TerminationUnverified
         );
+    }
+
+    #[test]
+    fn sg000096_current_user_disposable_child_is_job_assigned_before_resume() {
+        let _guard = ENVIRONMENT_LOCK.lock().expect("environment lock");
+        let tmp = std::env::temp_dir().to_string_lossy().into_owned();
+        let _tmp = EnvironmentVarGuard::replace("TMP", &tmp);
+        windows_contained_launch::qualify_current_user_job_fixture(false).expect(
+            "a native ordinary-user fixture must be suspended, verified, Job-bound and drained",
+        );
+    }
+
+    #[test]
+    fn sg000096_suspended_thread_handle_failure_terminates_before_return() {
+        let _guard = ENVIRONMENT_LOCK.lock().expect("environment lock");
+        let tmp = std::env::temp_dir().to_string_lossy().into_owned();
+        let _tmp = EnvironmentVarGuard::replace("TMP", &tmp);
+        windows_contained_launch::qualify_current_user_job_fixture(true)
+            .expect("a failed thread wrapper must terminate its suspended child and verify exit");
     }
 
     #[test]
