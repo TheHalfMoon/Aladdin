@@ -124,7 +124,7 @@ test("canonical repository metadata matches the live exit snapshot exactly", () 
   assert.deepEqual(metadata.topics, matrix.live_snapshot.repository.topics);
 });
 
-test("P19 is exited and P20 records the canonical SG-000094 and SG-000095 closeouts", () => {
+test("P19 exits remain immutable and P20 activates SG-000096 only after SG-000095 closeout", () => {
   const p19 = read("docs/canonical/DESKAL_POST_P18_LAUNCH_PLAN.md");
   const p20 = read("docs/canonical/DESKAL_P20_UNIVERSAL_AGENT_RUNTIME_PLAN.md");
   const sg91 = json(".specgrain/specs/SG-000091.json");
@@ -132,6 +132,7 @@ test("P19 is exited and P20 records the canonical SG-000094 and SG-000095 closeo
   const sg93 = json(".specgrain/specs/SG-000093.json");
   const sg94 = json(".specgrain/specs/SG-000094.json");
   const sg95 = json(".specgrain/specs/SG-000095.json");
+  const sg96 = json(".specgrain/specs/SG-000096.json");
 
   assert.match(p19, /Status: EXITED CANONICAL/);
   assert.match(p19, /SG-000091 is CLOSED canonical/);
@@ -160,7 +161,13 @@ test("P19 is exited and P20 records the canonical SG-000094 and SG-000095 closeo
   assert.equal(sg95.implementation_merge, "be21813d29e4faf4887a9b23f67b2158ce247832");
   assert.equal(sg95.post_merge_ci, "37700649594");
 
-  for (let n = 96; n <= 107; n += 1) {
+  assert.equal(sg96.id, "SG-000096");
+  assert.equal(sg96.program, "DESKAL-P20");
+  assert.equal(sg96.state, "GRAIN");
+  assert.equal(sg96.base, "7e0f93d11e9be27903d539d2f45bb2aba5fc56c0");
+  assert.deepEqual(sg96.dependencies, ["SG-000095"]);
+
+  for (let n = 97; n <= 107; n += 1) {
     const id = `SG-${String(n).padStart(6, "0")}.json`;
     assert.throws(() => read(`.specgrain/specs/${id}`), undefined, id);
   }

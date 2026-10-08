@@ -1,0 +1,110 @@
+{
+  "id": "SG-000096",
+  "title": "Shell and process sessions",
+  "program": "DESKAL-P20",
+  "state": "GRAIN",
+  "risk": "high",
+  "created": "2026-10-08",
+  "base": "7e0f93d11e9be27903d539d2f45bb2aba5fc56c0",
+  "dependencies": [
+    "SG-000095"
+  ],
+  "planning_issue": 260,
+  "objective": "Qualify Deskal-owned one-shot and interactive local shell/process sessions by reusing existing qdral-provider-process Safe execution plans, protected FullControlLease/approval identities, and selectively adapting pinned Desktop Commander bounded terminal/session mechanics. Preserve Safe behavior and prohibit implicit privilege, remote shell, and ungoverned donor executor authority.",
+  "scope": {
+    "include": [
+      "Activate the SG-000096 contract only; actual execution/import/authority changes require independently exact-head qualified implementation work.",
+      "Reuse crates/qdral-provider-process/src/lib.rs for canonical executable, argv, cwd, sanitized execution environment, and resource bounds; preserve existing Safe registered-executable semantics.",
+      "Reuse crates/qdral-policy/src/full_control.rs and full_control_store.rs plus crates/qdral-lifecycle/src/full_control.rs for independently verified local Full User lease, STRONG user-presence grant, SID/logon/process-owner/epoch/revoke/expiry identity and independent SOFT action approval.",
+      "Selectively COPY_ADAPT only source-level buffered stdout/stderr, session registry, stdin, and process exit/cancellation mechanics from the pinned Desktop Commander terminal-manager.ts and handlers; do not inherit donor MCP, JS eval, telemetry, default shell fallback, or service authentication.",
+      "Provide one-shot and interactive input, separate bounded stdout/stderr pagination with monotonic offsets and explicit eviction/truncation, bounded session catalog, deterministic close/termination and no automatic post-dispatch retry.",
+      "Reuse qdral-provider-process's existing Windows JobObject kill-on-close, assignment-before-resume, TerminateJobObject and bounded quiescence primitives as Deskal-owned process-tree supervision; qualify an ordinary current-user token separately rather than repurposing its AppContainer execution mode as Full User. Bind handles and generation, cancellation, lease revoke/expiry and no-orphan cleanup.",
+      "Gate each new shell/process and mutating stdin/termination operation through local Full User and an action-bound fresh SOFT approval; never mint or extend Full User through MCP/model/browser/remote/donor input.",
+      "Exercise real disposable Windows process trees, consent boundaries, resource limits, Unicode/binary outputs, interrupt/revoke/expiry, session-generation drift, and racey cancellation against fail-closed outcomes."
+    ],
+    "exclude": [
+      "Full Admin elevation, Persistent Admin, Remote Full Control, UAC or Windows Hello bypass, secure desktop, SYSTEM or TrustedInstaller process execution.",
+      "Direct donor public MCP server/REST/socket endpoints, node:local arbitrary-eval fallback, implicit SSH -t mutation, donor command-manager credentials, telemetry, remote providers, or fallback to unmanaged shell:true.",
+      "Automatic project-scoped Safe executor widening, implicit PATH/shell evaluation in Safe, unmapped process PID kill, arbitrary foreign session attach, detached process launch, synthetic completion, or automatic retries after ambiguous dispatch.",
+      "Filesystem, clipboard, browser, scraping/search, recording, global process-management parity, privileged broker, installer, release/tag, or product distribution changes owned by successor grains."
+    ]
+  },
+  "authority_delta": {
+    "activation": "None. The GRAIN packet is an authorization to implement and prove SG-000096 separately, not an executable shell grant.",
+    "safe": "Unchanged: registered/verified executable plan and existing workspace-bound cwd/sanitized environment, with no arbitrary command or ambient shell fallback.",
+    "full_user": "Proposed only; an exact locally granted unexpired FullControlLease with fresh per-action SOFT approval may execute ordinary user-token commands on the local host after implementation and native qualification.",
+    "privileged": "None. Full Admin/Persistent Admin/Remote Full Control excluded.",
+    "remote": "None. Remote requests cannot select Full User shells, attach sessions, relay or mint local grants.",
+    "network": "No added network listener, relay, or managed web host. Ordinary user-level shell commands may still use ambient OS network access; this is an explicit authority risk that must be modeled and consented to, not described as network-isolated without native proof.",
+    "secrets": "Never pass Deskal protected lease keys, credential providers, approval token, tunnel credentials, agent secrets or donor configs to child environment/argv/logs.",
+    "filesystem": "No direct filesystem API widening; executing locally approved shell commands can nevertheless modify files accessible to that user, and this non-sandboxed side effect must be disclosed and bound to explicit authority."
+  },
+  "invariants": [
+    "Safe is always the default and retains its existing registered-executable and workspace-bound execution behavior. Safe never inherits SG-000096 arbitrary shell execution.",
+    "SG-000096 cannot become executable merely because ExecutorClass::ShellProcess exists in a future ceiling; enablement requires an independently reviewed dedicated local Full User check plus live protected lease and approval proof.",
+    "Only authenticated, owner-bound local strong-presence grants may mint/renew FullControlLease; user SID, AuthenticationId, owner PID creation generation, profile, workspace, policy revision, epoch, expiry, and active local session are rechecked before each dispatch.",
+    "New processes are bound to server-created typed identities including OS process creation time, handle, owner, exact executable and session; caller-supplied PID, executable/path alias and stale identities cannot retarget or kill foreign processes.",
+    "Each spawn and stdin write/terminate/close is independently digest-bound to exact executable/argv/command content, cwd, chosen shell, sanitized environment keys, session, timeout, and target-generation state before actuation.",
+    "Every active process is supervised, revocable and bounded in time, output bytes, bytes per stdin frame, process count, session duration, and descendant/process-tree lifecycle; an unsupported child-supervision capability fails closed rather than detaching.",
+    "Output is separated into stdout/stderr with bounded pagination and explicit eviction/truncation counters, never falsely reported as complete; binary output and Unicode are handled or refused explicitly.",
+    "Cancellation, timeout, crash, broken pipe, revoke, stale identity and uncertain dispatch produce frozen typed states and cannot silently auto-retry or fabricate an exit status.",
+    "Current-user shells may execute arbitrary user-authorized operations including filesystem and network side effects. Neither a Job Object nor environment scrubbing alone constitutes a network or filesystem sandbox; fail closed where a promised restriction is not enforceable.",
+    "No privileged token elevation, named-pipe admin broker, remote shell grant, public listener, service autostart, donor MCP server, release artifact, installer or tag modification enters this grain.",
+    "Every copied MIT donor fragment must retain license/copyright, source commit/blob provenance, modifications, and notices before implementation qualifies."
+  ],
+  "acceptance": [
+    {
+      "id": "A1",
+      "claim": "SG-000095 closure is canonical with PR #259 signed+DCO normal merge 7e0f93d11e9be27903d539d2f45bb2aba5fc56c0 and successful exact-main post-merge CI, and SG-000096 is the sole active grain on that exact base."
+    },
+    {
+      "id": "A2",
+      "claim": "An exact pinned Desktop Commander donor manifest records source blob SHAs, reuse decisions, MIT notice obligations, excluded features, the existing qdral-provider-process reuse path, and zero code import at activation."
+    },
+    {
+      "id": "A3",
+      "claim": "Safe registered-executable behavior and workspace/secret boundaries stay unchanged; only exact locally STRONG-granted Full User with independent SOFT action approval may execute a shell command or mutate a session, and future ceiling alone grants nothing."
+    },
+    {
+      "id": "A4",
+      "claim": "One-shot and interactive sessions have server-owned typed process/session identity, strict cwd/executable/argv/env identity, finite time and buffer/input quotas, monotonic paged stdout/stderr and explicit overflow, eviction and output uncertainty."
+    },
+    {
+      "id": "A5",
+      "claim": "Native Windows qualification proves supervised own-child process-tree exit/terminate/revoke/expiry, bounded descendant cleanup, foreign-PID denial, no detach, stale PID/process-generation denial, signal races, and no uncertain-dispatch retry."
+    },
+    {
+      "id": "A6",
+      "claim": "A valid cancellation is bounded and typed, never fabricates success; timeout/revoke/owner-death/daemon-exit and user interruption clean sessions or report explicit partial failures without silent fallback."
+    },
+    {
+      "id": "A7",
+      "claim": "The local user ambient filesystem and network power of a Full User shell is disclosed; no unsupported claims of shell sandboxing or mediation; shell cannot activate Full Admin/remote/donor authorities."
+    },
+    {
+      "id": "A8",
+      "claim": "Native and CI regressions show no Safe widening or release changes, and preserve existing desktop, UIA, Windows native, Rust, Node, Web, relay, supply chain and reproducibility qualifications."
+    },
+    {
+      "id": "A9",
+      "claim": "Exact-head genuine Jev, Alibaba OCR qualified review/delegation plus human review of exclusions, security review, zero unresolved threads, signed+DCO normal merge, and post-merge CI evidence recorded before canonical closeout."
+    }
+  ],
+  "review": {
+    "diffcipline": true,
+    "jev_semantic_review": true,
+    "alibaba_open_code_review": "required exact-range review/delegation and manual exclusions",
+    "security_review": true,
+    "exact_head_ci": true,
+    "native_windows": true,
+    "donor_provenance": true,
+    "release_artifact_qualification": false
+  },
+  "successor_requirements": {
+    "sg_000097": "Full filesystem/process-management workstation parity is separate from SG-000096; do not add arbitrary foreign PID termination or filesystem API widening.",
+    "sg_000098": "Elevation Host and Full Admin execution stay disabled until the separate broker grain qualifies.",
+    "sg_000106": "No new shell sidecar enters release payload without unified packaging, license notices and signed provenance qualification."
+  },
+  "activation_note": "No donor runtime import or production authority change in this activation packet. Separate implementation and closeout PRs must qualify the head and must not be treated as complete based on activation CI alone.",
+  "done_when": "Bounded local Full User one-shot and interactive shell/process sessions are genuinely native-Windows qualified under owned lease/approval, identity, job-tree and uncertainty semantics; Safe and remote/privileged surfaces remain unchanged, every accepted donor fragment is attributable, and independent exact-head security/CI plus canonical closeout/post-merge CI passes."
+}
