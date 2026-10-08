@@ -3007,6 +3007,236 @@ mod windows_contained_launch {
         Ok(())
     }
 
+    // Disposable authorization-contract integration only: no real user
+    // approval is simulated as production evidence, and no process is launched.
+    // A synthetic broker cannot mint STRONG authority or enable ShellProcess.
+    #[cfg(test)]
+    pub(super) fn qualify_soft_action_gate_case(case: u8) -> Result<(), ExecutionPlanError> {
+        use qdral_approval::test_support::FixedApprovalBroker;
+        use qdral_approval::{
+            ApprovalBroker, ApprovalClass, ApprovalDecision, ApprovalPrompt, ConsumeExpectation,
+        };
+        use qdral_policy::full_control::{
+            check_full_control, AuthorityContext, AuthorityMode, ElevationState,
+        };
+        use qdral_policy::full_control_store;
+        use qdral_policy::shell_session::{
+            authorize_shell_session_t01, shell_intent_approval_digest, verify_shell_intent_binding,
+            ExpectedShellBinding, ShellIntentPhase, ShellKind, ShellOperation, ShellSessionIntent,
+            ShellSessionLimits, SHELL_SESSION_INTENT_SCHEMA,
+        };
+
+        struct DisposableApprovalState(std::path::PathBuf);
+        impl Drop for DisposableApprovalState {
+            fn drop(&mut self) {
+                let _ = std::fs::remove_dir_all(&self.0);
+            }
+        }
+
+        let now = qdral_approval::now_ms();
+        let root = std::env::temp_dir().join(format!(
+            "deskal-sg96-soft-action-{}-{now}-{case}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&root).map_err(|error| {
+            ExecutionPlanError::new(format!("create synthetic SOFT gate root: {error}"))
+        })?;
+        let _cleanup = DisposableApprovalState(root.clone());
+        let key = [0x39u8; 32];
+        let native = qdral_policy::full_control::current_windows_identity()
+            .map_err(|error| ExecutionPlanError::new(error.message))?;
+        let owner = qdral_lifecycle::runtime::identify(std::process::id())
+            .ok_or_else(|| ExecutionPlanError::new("live approval owner unavailable"))?;
+        let session_id = format!(
+            "deskal-session-{}-{:016x}-0123456789abcdef0123456789abcdef",
+            owner.pid, owner.creation_time
+        );
+        let authority_path = root.join("synthetic-authority.json");
+        full_control_store::grant_local(
+            &authority_path,
+            &key,
+            AuthorityMode::FullUser,
+            60_000,
+            native.windows_user_sid.clone(),
+            native.logon_session_id,
+            session_id.clone(),
+            now,
+        )
+        .map_err(|error| ExecutionPlanError::new(error.message))?;
+        let stored = full_control_store::load_store(&authority_path, &key)
+            .map_err(|error| ExecutionPlanError::new(error.message))?;
+        let lease = stored.lease.ok_or_else(|| {
+            ExecutionPlanError::new("synthetic Full User authority lease missing")
+        })?;
+        let device = full_control_store::derive_device_id(&key);
+        let authority = AuthorityContext {
+            windows_user_sid: &native.windows_user_sid,
+            logon_session_id: native.logon_session_id,
+            device_id: &device,
+            deskal_session_id: &session_id,
+            policy_revision: qdral_policy::POLICY_REVISION,
+            authority_epoch: stored.authority_epoch,
+            now_ms: now,
+            elevation_state: ElevationState::Standard,
+            elevation_proof_id: None,
+        };
+        check_full_control(&lease, &authority)
+            .map_err(|error| ExecutionPlanError::new(error.message))?;
+        if lease.mode != AuthorityMode::FullUser {
+            return Err(ExecutionPlanError::new("test authority is not Full User"));
+        }
+
+        // The file hash/path are merely valid proposed bytes, NOT proof of
+        // any native executable or directory identity and never dispatched.
+        let mut intent = ShellSessionIntent {
+            schema: SHELL_SESSION_INTENT_SCHEMA.into(),
+            phase: ShellIntentPhase::Proposed,
+            operation: ShellOperation::Spawn,
+            session_handle: "sh_0123456789abcdef0123456789abcdef".into(),
+            shell_kind: ShellKind::Direct,
+            executable_path: r"C:\Windows\System32\cmd.exe".into(),
+            executable_sha256: "a".repeat(64),
+            argv: vec!["/d".into(), "/c".into(), "exit 0".into()],
+            command: String::new(),
+            cwd: r"C:\work\repo".into(),
+            environment_value_digests: std::collections::BTreeMap::new(),
+            limits: ShellSessionLimits {
+                timeout_ms: 1_000,
+                stdout_bytes: 1024,
+                stderr_bytes: 1024,
+                stdin_bytes: 1024,
+            },
+            workspace_id: "synthetic-workspace".into(),
+            policy_revision: qdral_policy::POLICY_REVISION.into(),
+            windows_user_sid: lease.windows_user_sid.clone(),
+            logon_session_id: lease.logon_session_id,
+            device_id: device.clone(),
+            deskal_session_id: session_id.clone(),
+            authority_epoch: stored.authority_epoch,
+            owner_process_generation: owner.creation_time,
+            session_generation: 1,
+            expected_process_generation: 1,
+            approval_nonce: "0123456789abcdef0123456789abcdef".into(),
+        };
+        let trusted = intent.clone();
+        let digest = shell_intent_approval_digest(&trusted)
+            .map_err(|error| ExecutionPlanError::new(error.message))?;
+        match case {
+            1 => intent.argv.push("changed-argument".into()),
+            2 => intent.approval_nonce = "f".repeat(32),
+            7 => intent.operation = ShellOperation::WriteStdin,
+            10 => intent.expected_process_generation += 1,
+            _ => {}
+        }
+        let expected_binding = ExpectedShellBinding {
+            session_handle: &trusted.session_handle,
+            workspace_id: &trusted.workspace_id,
+            policy_revision: &trusted.policy_revision,
+            windows_user_sid: &trusted.windows_user_sid,
+            logon_session_id: trusted.logon_session_id,
+            device_id: &trusted.device_id,
+            deskal_session_id: &trusted.deskal_session_id,
+            authority_epoch: trusted.authority_epoch,
+            owner_process_generation: trusted.owner_process_generation,
+            session_generation: trusted.session_generation,
+            expected_process_generation: trusted.expected_process_generation,
+            approval_nonce: &trusted.approval_nonce,
+            operation: trusted.operation,
+            approval_digest: &digest,
+        };
+        let intent_verification = verify_shell_intent_binding(&intent, &expected_binding);
+        if matches!(case, 1 | 2 | 7 | 10) {
+            if intent_verification.is_ok() {
+                return Err(ExecutionPlanError::new(
+                    "changed intent/nonce/generation wrongly passed exact binding",
+                ));
+            }
+            return Ok(());
+        }
+        intent_verification.map_err(|error| ExecutionPlanError::new(error.message))?;
+
+        let prompt = ApprovalPrompt::new_with_clock(
+            &trusted.workspace_id,
+            &trusted.policy_revision,
+            "one-shot synthetic local Full User shell proposal",
+            &trusted.session_handle,
+            "test-only exact shell session digest; execution remains unarmed",
+            &digest,
+            now,
+        );
+        let broker = FixedApprovalBroker(ApprovalDecision::Approved);
+        if case == 6 {
+            let strong = ApprovalPrompt::new_strong_with_clock(
+                &trusted.workspace_id,
+                &trusted.policy_revision,
+                "synthetic strong request must fail",
+                &trusted.session_handle,
+                "no real user presence",
+                &digest,
+                now,
+            );
+            if broker.request_token(&strong).is_ok() {
+                return Err(ExecutionPlanError::new(
+                    "test SOFT broker unlawfully minted STRONG presence",
+                ));
+            }
+            return Ok(());
+        }
+        let mut token = broker
+            .request_token(&prompt)
+            .map_err(|error| ExecutionPlanError::new(error.message))?;
+        let mut expected = ConsumeExpectation::new(
+            digest.clone(),
+            trusted.workspace_id.clone(),
+            trusted.policy_revision.clone(),
+        );
+        let at = match case {
+            3 => {
+                expected.workspace_id.push_str("-foreign");
+                now
+            }
+            4 => prompt.expires_at_ms.saturating_add(1),
+            5 => {
+                expected.approval_class = ApprovalClass::Strong;
+                now
+            }
+            8 => {
+                expected.digest = "b".repeat(64);
+                now
+            }
+            9 => {
+                token.nonce = "f".repeat(64);
+                now
+            }
+            _ => now,
+        };
+        let consumed = broker.consume(&token, &expected, at);
+        if matches!(case, 3 | 4 | 5 | 8 | 9) {
+            if consumed.is_ok() {
+                return Err(ExecutionPlanError::new(
+                    "invalid synthetic SOFT approval was consumed",
+                ));
+            }
+            return Ok(());
+        }
+        consumed.map_err(|error| ExecutionPlanError::new(error.message))?;
+        // An approved SOFT nonce can authorize exactly one operation in the
+        // synthetic ledger, but it never enables production T01 shell dispatch.
+        if broker.consume(&token, &expected, at).is_ok() {
+            return Err(ExecutionPlanError::new(
+                "replayed synthetic SOFT approval was accepted",
+            ));
+        }
+        if authorize_shell_session_t01(&trusted, Some(&lease), &authority, &expected_binding)
+            .is_ok()
+        {
+            return Err(ExecutionPlanError::new(
+                "T01 production ShellProcess erroneously enabled by synthetic approval",
+            ));
+        }
+        Ok(())
+    }
+
     fn command_line_for_cmd(executable: &Path) -> Vec<u16> {
         let mut command = Vec::new();
         command.push('"' as u16);
@@ -3521,6 +3751,17 @@ mod contained_launch_tests {
         for case in 0..=6 {
             windows_contained_launch::qualify_expected_owner_case(case)
                 .expect("native expected-owner case must deny or complete with verified cleanup");
+        }
+    }
+
+    #[test]
+    fn sg000096_protected_lease_and_one_shot_soft_action_stay_unarmed() {
+        let _guard = ENVIRONMENT_LOCK.lock().expect("environment lock");
+        let tmp = std::env::temp_dir().to_string_lossy().into_owned();
+        let _tmp = EnvironmentVarGuard::replace("TMP", &tmp);
+        for case in 0..=10 {
+            windows_contained_launch::qualify_soft_action_gate_case(case)
+                .expect("synthetic protected lease and one-shot SOFT case must fail closed");
         }
     }
 
