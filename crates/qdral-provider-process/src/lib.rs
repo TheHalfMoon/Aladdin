@@ -2646,6 +2646,207 @@ mod windows_contained_launch {
         Ok(())
     }
 
+    // Native, test-only integration proof that a child token is checked
+    // against a MAC-authenticated local Full User lease, not just its parent.
+    // This is NOT a ShellProcess approval or production execution route.
+    #[cfg(test)]
+    pub(super) fn qualify_protected_expected_owner_case(
+        case: u8,
+    ) -> Result<(), ExecutionPlanError> {
+        use qdral_policy::full_control::{
+            check_full_control, AuthorityContext, AuthorityMode, ElevationState,
+        };
+        use qdral_policy::full_control_store;
+        use std::time::{SystemTime, UNIX_EPOCH};
+
+        struct DisposableStore(std::path::PathBuf);
+        impl Drop for DisposableStore {
+            fn drop(&mut self) {
+                let _ = std::fs::remove_dir_all(&self.0);
+            }
+        }
+
+        let parent = ChildProcess::snapshot_native_owner(unsafe { GetCurrentProcess() })?;
+        let now_ms = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_err(|_| {
+                ExecutionPlanError::new("system clock unavailable for native qualification")
+            })?
+            .as_millis() as u64;
+        let root = std::env::temp_dir().join(format!(
+            "deskal-sg96-protected-native-{}-{now_ms}-{case}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&root).map_err(|error| {
+            ExecutionPlanError::new(format!("create disposable authority root: {error}"))
+        })?;
+        let _root = DisposableStore(root.clone());
+        let store_path = root.join("full-control.json");
+        let key = [0x5au8; 32];
+        let deskal_session_id = "test-owned-local-desktop-session";
+        let original_lease = full_control_store::grant_local(
+            &store_path,
+            &key,
+            AuthorityMode::FullUser,
+            60_000,
+            parent.sid.clone(),
+            parent.logon_luid,
+            deskal_session_id.into(),
+            now_ms,
+        )
+        .map_err(|error| ExecutionPlanError::new(error.message))?;
+
+        if case == 1 {
+            let mut envelope = std::fs::read(&store_path).map_err(|error| {
+                ExecutionPlanError::new(format!("read disposable signed store: {error}"))
+            })?;
+            let marker = b"\"mac\": \"";
+            let offset = envelope
+                .windows(marker.len())
+                .position(|window| window == marker)
+                .ok_or_else(|| ExecutionPlanError::new("signed store MAC field is missing"))?
+                + marker.len();
+            envelope[offset] = if envelope[offset] == b'0' { b'1' } else { b'0' };
+            std::fs::write(&store_path, envelope).map_err(|error| {
+                ExecutionPlanError::new(format!("tamper disposable signed store: {error}"))
+            })?;
+        } else if case == 2 {
+            full_control_store::revoke(&store_path, &key)
+                .map_err(|error| ExecutionPlanError::new(error.message))?;
+        }
+
+        let validated = (|| -> Result<_, ExecutionPlanError> {
+            let stored = full_control_store::load_store(&store_path, &key)
+                .map_err(|error| ExecutionPlanError::new(error.message))?;
+            let lease = stored.lease.ok_or_else(|| {
+                ExecutionPlanError::new("disposable Full User lease is absent or revoked")
+            })?;
+            let device_id = full_control_store::derive_device_id(&key);
+            let expected_sid = if case == 5 {
+                if parent.sid == "S-1-5-18" {
+                    "S-1-5-19"
+                } else {
+                    "S-1-5-18"
+                }
+            } else {
+                &parent.sid
+            };
+            let context = AuthorityContext {
+                windows_user_sid: expected_sid,
+                logon_session_id: if case == 6 {
+                    parent.logon_luid ^ 1
+                } else {
+                    parent.logon_luid
+                },
+                device_id: if case == 7 {
+                    "wrong-local-device"
+                } else {
+                    &device_id
+                },
+                deskal_session_id,
+                policy_revision: qdral_policy::POLICY_REVISION,
+                authority_epoch: if case == 4 {
+                    stored.authority_epoch.saturating_add(1)
+                } else {
+                    stored.authority_epoch
+                },
+                now_ms: if case == 3 {
+                    original_lease.expires_at_ms.saturating_add(1)
+                } else {
+                    now_ms
+                },
+                elevation_state: ElevationState::Standard,
+                elevation_proof_id: None,
+            };
+            check_full_control(&lease, &context)
+                .map_err(|error| ExecutionPlanError::new(error.message))?;
+            if lease.mode != AuthorityMode::FullUser
+                || lease.windows_user_sid != parent.sid
+                || lease.logon_session_id != parent.logon_luid
+                || lease.authority_epoch != stored.authority_epoch
+            {
+                return Err(ExecutionPlanError::new(
+                    "protected lease does not match the separately observed live native owner",
+                ));
+            }
+            Ok(lease)
+        })();
+
+        if (1..=7).contains(&case) {
+            if validated.is_ok() {
+                return Err(ExecutionPlanError::new(
+                    "invalid protected native authority was unexpectedly accepted",
+                ));
+            }
+            // No child is created at all when protected authority verification denies.
+            return Ok(());
+        }
+        let lease = validated?;
+        let expected_owner_generation = if case == 8 {
+            parent.creation_generation ^ 1
+        } else {
+            parent.creation_generation
+        };
+        let observed_owner_generation =
+            ChildProcess::snapshot_native_owner(unsafe { GetCurrentProcess() })?
+                .creation_generation;
+        if expected_owner_generation != observed_owner_generation {
+            if case == 8 {
+                return Ok(());
+            }
+            return Err(ExecutionPlanError::new(
+                "local owner process generation changed",
+            ));
+        }
+        if case == 8 {
+            return Err(ExecutionPlanError::new(
+                "changed native owner generation was unexpectedly accepted",
+            ));
+        }
+
+        let job = JobObject::kill_on_close()?;
+        let mut child = ChildProcess::create_suspended_current_user_fixture(false)?;
+        job.assign_or_terminate(&mut child)?;
+        let child_generation =
+            ChildProcess::snapshot_native_owner(child.process.raw())?.creation_generation;
+        let expected = NativeOwnerSnapshot {
+            sid: lease.windows_user_sid,
+            logon_luid: lease.logon_session_id,
+            session_id: parent.session_id,
+            elevation: parent.elevation,
+            creation_generation: if case == 9 {
+                child_generation ^ 1
+            } else {
+                child_generation
+            },
+        };
+        let result = child.verify_expected_native_owner(&expected);
+        if case == 9 {
+            let rejected = result.is_err();
+            child.terminate_verified()?;
+            if !rejected || !job.wait_for_quiescence()? {
+                return Err(ExecutionPlanError::new(
+                    "changed child generation did not reject and verify cleanup",
+                ));
+            }
+            return Ok(());
+        }
+        if let Err(error) = result {
+            child.terminate_verified()?;
+            return Err(error);
+        }
+        if let Err(error) = child.resume() {
+            child.terminate_verified()?;
+            return Err(error);
+        }
+        if child.wait_for_completion()? != 0 || !job.wait_for_quiescence()? {
+            return Err(ExecutionPlanError::new(
+                "protected-lease native child failed clean completion",
+            ));
+        }
+        Ok(())
+    }
+
     fn command_line_for_cmd(executable: &Path) -> Vec<u16> {
         let mut command = Vec::new();
         command.push('"' as u16);
@@ -3148,6 +3349,17 @@ mod contained_launch_tests {
         for case in 0..=6 {
             windows_contained_launch::qualify_expected_owner_case(case)
                 .expect("native expected-owner case must deny or complete with verified cleanup");
+        }
+    }
+
+    #[test]
+    fn sg000096_protected_full_user_lease_binds_native_expected_owner() {
+        let _guard = ENVIRONMENT_LOCK.lock().expect("environment lock");
+        let tmp = std::env::temp_dir().to_string_lossy().into_owned();
+        let _tmp = EnvironmentVarGuard::replace("TMP", &tmp);
+        for case in 0..=9 {
+            windows_contained_launch::qualify_protected_expected_owner_case(case)
+                .expect("protected native owner case must deny or verify clean completion");
         }
     }
 

@@ -201,6 +201,9 @@ dependencies = [
 [[package]]
 name = "qdral-provider-process"
 version = "0.2.0"
+dependencies = [
+ "qdral-policy",
+]
 
 [[package]]
 name = "qdral-provider-uia"
