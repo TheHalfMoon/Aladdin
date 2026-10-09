@@ -41,6 +41,12 @@ On an ambiguous append/sync failure, deny dispatch and poison the broker for fur
 
 Keep the security repair minimal in product scope: one writer, one durable event transaction path, strict bounded loading, explicit migration, and a clearly specified restart/rollback model. A full distributed approval system or general event database is not required. Whether all tokens should die on broker restart is an OPEN DECISION with compatibility implications, not an unnoticed implementation shortcut.
 
+## Existing offline repair candidate: not native qualification
+
+The public [follow-up on the sentinel prototype](https://github.com/TheHalfMoon/Aladdin/issues/278#issuecomment-6073712808) correctly distinguishes its Python behavior tests and synthetic patch-order checks from Rust/Windows qualification. The candidate archive is not available in this checkout; it was not independently compiled or accepted here. A create_new claim only serializes cooperating brokers reaching the same filesystem identity, and pathname cleanup can race replacement. Crashes leave stale claims; do not automatically steal/delete them. Require protected parent/ledger handle identity, ACL/reparse checks, bounded loading and explicit recovery.
+
+Workspace Cargo.toml declares Rust MSRV1.82; the actual reproduction host used1.97.1. The issue notes std File::lock stabilized in1.89, so native LockFileEx or a reviewed MSRV-compatible implementation is required unless a separate toolchain change is authorized. Running on the newer host does not qualify MSRV. Preserve candidate limitations instead of treating its model8/8 or synthetic patch checks as a production fix.
+
 ## Qualification matrix still required
 
 Existing tests plus all three regressions must pass after repair. Add out-of-order A/B consumption and repeated restart; revoke/restart/old token; expired/digest/workspace/revision mismatch; duplicate brokers/processes; path aliases and replaced ledger; empty/unreadable/malformed/truncated/valid-prefix-restored ledgers; mid-write and sync failure on issued/consumed/revoke events; crash after sync before response/dispatch; migration interruption; size limits; randomized interleavings. Verify no dispatch on persistence failure and no resume after poisoned state. Fault injection, disk durability, production reachability and repair tests have NOT been run here.
