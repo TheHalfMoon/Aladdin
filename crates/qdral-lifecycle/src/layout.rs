@@ -94,7 +94,7 @@ impl Layout {
 
     /// User-owned data that uninstall retains unless purging is requested.
     pub fn retained_data(&self) -> Vec<PathBuf> {
-        vec![
+        let mut data = vec![
             self.state_dir(),
             self.logs_dir(),
             self.root.join("audit.jsonl"),
@@ -103,7 +103,21 @@ impl Layout {
             self.root.join("approval-history.jsonl.lock"),
             self.root.join("trust.jsonl"),
             self.root.join("browser-profile"),
-        ]
+        ];
+        // Approval ledgers quarantined by `qdral approvals recover` (#278).
+        if let Ok(entries) = std::fs::read_dir(&self.root) {
+            let mut quarantined: Vec<PathBuf> = entries
+                .filter_map(|entry| entry.ok().map(|entry| entry.path()))
+                .filter(|path| {
+                    path.file_name()
+                        .and_then(|name| name.to_str())
+                        .is_some_and(|name| name.starts_with("approval-history.jsonl.quarantine-"))
+                })
+                .collect();
+            quarantined.sort();
+            data.extend(quarantined);
+        }
+        data
     }
 
     /// Executable state that uninstall removes.

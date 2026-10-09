@@ -625,6 +625,8 @@ mod tests {
             .unwrap();
         fs::write(root.join("approval-history.jsonl"), b"{}\n").unwrap();
         fs::write(root.join("approval-history.jsonl.lock"), b"").unwrap();
+        let quarantined = root.join("approval-history.jsonl.quarantine-1-abcdef012345");
+        fs::write(&quarantined, b"{}\n").unwrap();
         let report = installer
             .uninstall(&UninstallOptions { purge_data: true })
             .unwrap();
@@ -634,6 +636,7 @@ mod tests {
         assert!(report
             .purged
             .contains(&root.join("approval-history.jsonl.lock")));
+        assert!(report.purged.contains(&quarantined));
     }
 
     #[test]

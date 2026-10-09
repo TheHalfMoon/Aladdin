@@ -59,6 +59,30 @@ fn jsonl_parses(path: &Path) -> Result<usize, String> {
     Ok(count)
 }
 
+/// Verifies the approval ledger's whole hash chain, not just its JSON syntax.
+fn approval_history(path: &Path) -> Check {
+    use qdral_approval::ApprovalLedgerStatus;
+    let inspection = qdral_approval::inspect_approval_ledger(path);
+    match inspection.status {
+        ApprovalLedgerStatus::Missing => check("approval_history", CheckStatus::Pass, "no records yet"),
+        ApprovalLedgerStatus::Verified => check(
+            "approval_history",
+            CheckStatus::Pass,
+            format!("{} record(s) verify", inspection.verified_records),
+        ),
+        ApprovalLedgerStatus::Corrupt => check(
+            "approval_history",
+            CheckStatus::Fail,
+            "the approval ledger fails verification, so approvals are blocked; run `qdral approvals recover`",
+        ),
+        ApprovalLedgerStatus::Busy => check(
+            "approval_history",
+            CheckStatus::Warn,
+            "the approval ledger was busy or temporarily unreadable; rerun doctor",
+        ),
+    }
+}
+
 pub fn run(layout: &Layout, platform: &dyn Platform) -> DoctorReport {
     let mut checks = Vec::new();
 
@@ -275,11 +299,12 @@ pub fn run(layout: &Layout, platform: &dyn Platform) -> DoctorReport {
         )
     });
 
-    for (name, file) in [
-        ("trust_state", "trust.jsonl"),
-        ("approval_history", "approval-history.jsonl"),
-        ("audit_log", "audit.jsonl"),
-    ] {
+    // The same override the brokers and `qdral approvals recover` honor.
+    let approval_path = std::env::var_os("QDRAL_APPROVAL_HISTORY_PATH")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| layout.root.join("approval-history.jsonl"));
+    checks.push(approval_history(&approval_path));
+    for (name, file) in [("trust_state", "trust.jsonl"), ("audit_log", "audit.jsonl")] {
         let path = layout.root.join(file);
         checks.push(if !path.exists() {
             check(name, CheckStatus::Pass, "no records yet")
@@ -538,6 +563,24 @@ mod tests {
             .checks
             .iter()
             .any(|check| check.name == "ipc" && check.status == CheckStatus::Pass));
+    }
+
+    #[test]
+    fn approval_history_check_verifies_the_chain_not_just_json() {
+        let layout = Layout::new(temp_dir("doctor-approvals").join("Qdral"));
+        let path = layout.root.join("approval-history.jsonl");
+        assert_eq!(approval_history(&path).status, CheckStatus::Pass);
+        std::fs::create_dir_all(&layout.root).unwrap();
+        // Well-formed JSON that is not a verifiable approval chain.
+        std::fs::write(
+            &path,
+            b"{\"schema\":\"qdral-approval-ledger-v3\"}
+",
+        )
+        .unwrap();
+        let corrupt = approval_history(&path);
+        assert_eq!(corrupt.status, CheckStatus::Fail);
+        assert!(corrupt.detail.contains("qdral approvals recover"));
     }
 
     #[test]

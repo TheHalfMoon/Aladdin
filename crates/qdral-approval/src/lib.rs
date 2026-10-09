@@ -2,9 +2,10 @@ use qdral_contracts::FailureCode;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, HashSet};
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 pub const APPROVAL_TTL_MS: u64 = 5 * 60 * 1_000;
 pub const SINGLE_OPERATION_SCOPE: &str = "single-operation";
@@ -702,7 +703,7 @@ impl LocalApprovalBroker {
     pub fn history(&self, limit: usize) -> Vec<ApprovalRecordSummary> {
         self.ledger
             .lock()
-            .map(|ledger| ledger.history(limit))
+            .map(|mut ledger| ledger.history(limit))
             .unwrap_or_default()
     }
 }
@@ -745,6 +746,7 @@ impl ApprovalBroker for LocalApprovalBroker {
                 "emergency revoke requires the STRONG class",
             ));
         }
+        self.preflight()?;
         let lease = InputLeaseGuard::suspend_for_presence();
         if !lease.is_suspended() {
             return Err(ApprovalError::unavailable(
@@ -798,7 +800,17 @@ impl ApprovalBroker for LocalApprovalBroker {
 }
 
 impl LocalApprovalBroker {
+    /// Verifies the ledger before any person is prompted. The ledger mutex
+    /// and the cross-process lock are released while the person decides.
+    fn preflight(&self) -> Result<u64, ApprovalError> {
+        self.ledger
+            .lock()
+            .map_err(|_| ApprovalError::unavailable("approval ledger is unavailable"))?
+            .preflight()
+    }
+
     fn request_soft_token(&self, prompt: &ApprovalPrompt) -> Result<ApprovedToken, ApprovalError> {
+        let prompt_epoch = self.preflight()?;
         let decision = platform_prompt(prompt);
         let mut ledger = self
             .ledger
@@ -806,11 +818,12 @@ impl LocalApprovalBroker {
             .map_err(|_| ApprovalError::unavailable("approval ledger is unavailable"))?;
         match decision {
             Ok(ApprovalDecision::Approved) => {
-                let record = ledger.record_decision(
+                let record = ledger.record_prompted_decision(
                     prompt,
                     RecordedDecision::Approved,
                     PresenceOutcome::SoftApproved,
                     "soft-button",
+                    Some(prompt_epoch),
                 )?;
                 Ok(ApprovedToken {
                     record_id: record.id.clone(),
@@ -848,6 +861,7 @@ impl LocalApprovalBroker {
         &self,
         prompt: &ApprovalPrompt,
     ) -> Result<ApprovedToken, ApprovalError> {
+        let prompt_epoch = self.preflight()?;
         let lease = InputLeaseGuard::suspend_for_presence();
         if !lease.is_suspended() {
             return Err(ApprovalError::unavailable(
@@ -890,11 +904,12 @@ impl LocalApprovalBroker {
                         "strong presence method mismatch; STRONG approval fails closed",
                     ));
                 }
-                let record = ledger.record_decision(
+                let record = ledger.record_prompted_decision(
                     prompt,
                     RecordedDecision::Approved,
                     PresenceOutcome::VerifiedStrong,
                     &attestation.method,
+                    Some(prompt_epoch),
                 )?;
                 Ok(ApprovedToken {
                     record_id: record.id.clone(),
@@ -951,142 +966,319 @@ fn validate_prompt(prompt: &ApprovalPrompt) -> Result<(), ApprovalError> {
     Ok(())
 }
 
+/// How long one ledger transaction waits for another Qdral process to finish
+/// its own transaction before the ledger is reported busy (never corrupt).
+const LEDGER_LOCK_WAIT: Duration = Duration::from_secs(5);
+const LEDGER_RECOVERY_HINT: &str =
+    "run `qdral approvals recover` to quarantine it (the evidence is preserved) and start a new approval ledger";
+const RECOVERY_WORKSPACE: &str = "qdral-ledger-recovery";
+const RECOVERY_METHOD: &str = "ledger-recovery";
+
+/// Sidecar file whose OS lock serializes ledger transactions across
+/// processes. The ledger itself is never locked, so readers are not blocked.
+pub fn approval_ledger_lock_path(path: &Path) -> PathBuf {
+    let mut name = path.file_name().unwrap_or_default().to_os_string();
+    name.push(".lock");
+    path.with_file_name(name)
+}
+
+fn acquire_ledger_lock(path: &Path, wait: Duration) -> Result<std::fs::File, ApprovalError> {
+    let lock_path = approval_ledger_lock_path(path);
+    let opened = (|| -> std::io::Result<std::fs::File> {
+        if let Some(parent) = lock_path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .open(&lock_path)
+    })();
+    let lock = opened.map_err(|error| {
+        ApprovalError::unavailable(format!("approval ledger lock is unavailable: {error}"))
+    })?;
+    let deadline = Instant::now() + wait;
+    loop {
+        match fs4::FileExt::try_lock(&lock) {
+            // Released when the handle closes, including on process death.
+            Ok(()) => return Ok(lock),
+            Err(fs4::TryLockError::WouldBlock) if Instant::now() < deadline => {
+                std::thread::sleep(Duration::from_millis(10));
+            }
+            Err(fs4::TryLockError::WouldBlock) => {
+                return Err(ApprovalError::unavailable(
+                    "approval ledger is busy in another Qdral process; retry shortly",
+                ))
+            }
+            Err(fs4::TryLockError::Error(error)) => {
+                return Err(ApprovalError::unavailable(format!(
+                    "approval ledger lock failed: {error}"
+                )))
+            }
+        }
+    }
+}
+
+/// Why a ledger refuses every approval until it is recovered.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum LedgerFault {
+    /// An event does not verify against the chain. Every v0.1.0 history that
+    /// consumed an approval is affected by #278 and lands here once.
+    Unverifiable,
+    /// The last record is incomplete, as after a crash during a write.
+    TornTail,
+    /// The file shrank, vanished or was replaced while this broker ran.
+    Replaced,
+    /// An append failed, so whether it became durable is unknown.
+    Durability,
+}
+
+impl LedgerFault {
+    fn describe(self) -> &'static str {
+        match self {
+            Self::Unverifiable => "the approval ledger does not verify (expected once after upgrading from v0.1.0, see #278; otherwise it indicates damage or tampering)",
+            Self::TornTail => "the approval ledger's last record is incomplete, as after a crash during a write",
+            Self::Replaced => "the approval ledger was truncated, deleted or replaced while Qdral was running",
+            Self::Durability => "an approval ledger write failed, so its durability is unknown",
+        }
+    }
+}
+
 #[derive(Debug)]
 struct ApprovalLedger {
-    path: std::path::PathBuf,
+    path: PathBuf,
     records: BTreeMap<String, StoredRecord>,
     nonces: HashSet<String>,
     consumed: HashSet<String>,
     tip: String,
     revoke_epoch: u64,
-    // The OS-level writer lease is held for this ledger's entire lifetime.
-    _writer_lock: Option<std::fs::File>,
-    poisoned: bool,
+    /// Checksum of the chain's first record, identifying this chain.
+    genesis: Option<String>,
+    /// Bytes of the ledger file already verified and applied in memory.
+    verified_len: u64,
+    /// The last verified line (with its newline), re-read before trusting
+    /// the file again so a same-length replacement cannot go unnoticed.
+    last_line: Vec<u8>,
+    lock_wait: Duration,
+    fault: Option<LedgerFault>,
 }
 
 impl ApprovalLedger {
-    fn load_or_create(path: std::path::PathBuf) -> Self {
-        let mut ledger = Self {
+    fn empty(path: PathBuf) -> Self {
+        Self {
             path,
             records: BTreeMap::new(),
             nonces: HashSet::new(),
             consumed: HashSet::new(),
             tip: String::from("GENESIS"),
             revoke_epoch: 0,
-            _writer_lock: None,
-            poisoned: false,
-        };
-        // A second broker (even in a different process) must never mutate
-        // the same approval history concurrently.
-        let ready = (|| -> std::io::Result<std::fs::File> {
-            if let Some(parent) = ledger.path.parent() {
-                std::fs::create_dir_all(parent)?;
-            }
-            let lock_path = ledger.path.with_extension(format!(
-                "{}.lock",
-                ledger
-                    .path
-                    .extension()
-                    .unwrap_or_default()
-                    .to_string_lossy()
-            ));
-            let lock = std::fs::OpenOptions::new()
-                .read(true)
-                .write(true)
-                .create(true)
-                .truncate(false)
-                .open(lock_path)?;
-            fs4::FileExt::try_lock(&lock)
-                .map_err(|error| std::io::Error::other(error.to_string()))?;
-            Ok(lock)
-        })();
-        match ready {
-            Ok(lock) => ledger._writer_lock = Some(lock),
-            Err(_) => {
-                ledger.poisoned = true;
-                return ledger;
-            }
+            genesis: None,
+            verified_len: 0,
+            last_line: Vec::new(),
+            lock_wait: LEDGER_LOCK_WAIT,
+            fault: None,
         }
+    }
+
+    fn load_or_create(path: PathBuf) -> Self {
+        let mut ledger = Self::empty(path);
         if !ledger.path.exists() {
             return ledger;
         }
-        // Every persisted event must verify. An invalid suffix does not
-        // create a usable, valid-prefix history: the broker fails closed.
-        let text = match std::fs::read_to_string(&ledger.path) {
-            Ok(text) => text,
-            Err(_) => {
-                ledger.poisoned = true;
-                return ledger;
-            }
-        };
-        if !text.is_empty() && !text.ends_with('\n') {
-            ledger.poisoned = true;
-            return ledger;
+        // A busy ledger is not an integrity failure: every later transaction
+        // verifies the file again under the lock before it acts.
+        if let Ok(_lock) = acquire_ledger_lock(&ledger.path, ledger.lock_wait) {
+            let _ = ledger.refresh();
         }
-        let mut tip = String::from("GENESIS");
-        for line in text.lines() {
-            if line.trim().is_empty() {
-                ledger.poisoned = true;
-                break;
-            }
-            let Ok(record) = serde_json::from_str::<StoredRecord>(line) else {
-                ledger.poisoned = true;
-                break;
-            };
-            if record.schema != LEDGER_SCHEMA || !verify_record_checksum(&record, &tip) {
-                ledger.poisoned = true;
-                break;
-            }
-            if record.is_revoke && !record.consumed {
-                ledger.poisoned = true;
-                break;
-            }
-            if record.consumed && !record.is_revoke {
-                // Consumption is a separate append-only transition, never a
-                // rewrite of the original issuance entry.
-                let Some(previous) = ledger.records.get(&record.id) else {
-                    ledger.poisoned = true;
-                    break;
-                };
-                let mut expected = previous.clone();
-                expected.consumed = true;
-                expected.prev_checksum = record.prev_checksum.clone();
-                expected.checksum = record.checksum.clone();
-                if previous.consumed
-                    || serde_json::to_value(&expected).ok() != serde_json::to_value(&record).ok()
-                {
-                    ledger.poisoned = true;
-                    break;
-                }
-                ledger.consumed.insert(record.nonce.clone());
-            } else {
-                if ledger.records.contains_key(&record.id)
-                    || !ledger.nonces.insert(record.nonce.clone())
-                    || (record.is_revoke && record.epoch != ledger.revoke_epoch.saturating_add(1))
-                    || (!record.is_revoke && record.epoch != ledger.revoke_epoch)
-                {
-                    ledger.poisoned = true;
-                    break;
-                }
-                if record.is_revoke {
-                    ledger.revoke_epoch = record.epoch;
-                    ledger.consumed.insert(record.nonce.clone());
-                }
-            }
-            tip = record.checksum.clone();
-            ledger.records.insert(record.id.clone(), record);
-        }
-        ledger.tip = tip;
         ledger
     }
 
-    fn ensure_ready(&self) -> Result<(), ApprovalError> {
-        if self.poisoned || self._writer_lock.is_none() {
-            return Err(ApprovalError::unavailable(
-                "approval ledger is locked, corrupted or I/O-ambiguous; manual recovery required",
-            ));
+    fn poisoned(&self) -> bool {
+        self.fault.is_some()
+    }
+
+    /// Runs one transaction under the cross-process writer lock, after
+    /// applying every record other processes appended since the last view.
+    fn transact<T>(
+        &mut self,
+        operation: impl FnOnce(&mut Self) -> Result<T, ApprovalError>,
+    ) -> Result<T, ApprovalError> {
+        let _lock = acquire_ledger_lock(&self.path, self.lock_wait)?;
+        if self.poisoned() && !self.adopt_recovered() {
+            self.ensure_ready()?;
         }
+        self.refresh()?;
+        operation(self)
+    }
+
+    /// Checks the ledger before a person is asked to decide, so nobody is
+    /// prompted for an approval the broker could not record. Returns the
+    /// revoke epoch the prompt is shown under.
+    fn preflight(&mut self) -> Result<u64, ApprovalError> {
+        self.transact(|ledger| Ok(ledger.revoke_epoch))
+    }
+
+    /// Lets a poisoned broker continue after `qdral approvals recover`
+    /// replaced the ledger: the new chain must differ from the one this
+    /// broker knew, start with the recovery record, and verify completely.
+    /// Nothing from the old view carries over. The caller holds the lock.
+    fn adopt_recovered(&mut self) -> bool {
+        let mut fresh = Self::empty(self.path.clone());
+        fresh.lock_wait = self.lock_wait;
+        if fresh.refresh().is_err() || fresh.genesis == self.genesis {
+            return false;
+        }
+        let starts_with_recovery = fresh
+            .records
+            .values()
+            .find(|record| record.prev_checksum == "GENESIS")
+            .is_some_and(|record| {
+                record.workspace_id == RECOVERY_WORKSPACE
+                    && record.presence_method == RECOVERY_METHOD
+                    && record.decision == RecordedDecision::Unavailable
+            });
+        if starts_with_recovery {
+            *self = fresh;
+        }
+        starts_with_recovery
+    }
+
+    fn ensure_ready(&self) -> Result<(), ApprovalError> {
+        match self.fault {
+            Some(fault) => Err(ApprovalError::unavailable(format!(
+                "{}; no approval can be granted; {LEDGER_RECOVERY_HINT}",
+                fault.describe()
+            ))),
+            None => Ok(()),
+        }
+    }
+
+    fn poison(&mut self, fault: LedgerFault) -> ApprovalError {
+        self.fault.get_or_insert(fault);
+        self.ensure_ready().unwrap_err()
+    }
+
+    /// Verifies and applies the bytes appended since `verified_len`, after
+    /// confirming the last verified line is still in place. A missing,
+    /// shrunken, replaced, torn or unverifiable file poisons the ledger; an
+    /// invalid suffix never yields a usable valid-prefix history. Transient
+    /// I/O errors fail the transaction without poisoning.
+    fn refresh(&mut self) -> Result<(), ApprovalError> {
+        use std::io::{Read as _, Seek as _, SeekFrom};
+        self.ensure_ready()?;
+        let unreadable = |error: std::io::Error| {
+            ApprovalError::unavailable(format!(
+                "approval ledger is temporarily unreadable; retry shortly: {error}"
+            ))
+        };
+        let len = match std::fs::metadata(&self.path) {
+            Ok(metadata) if metadata.is_file() => metadata.len(),
+            Ok(_) => return Err(self.poison(LedgerFault::Replaced)),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                return if self.verified_len == 0 {
+                    Ok(())
+                } else {
+                    Err(self.poison(LedgerFault::Replaced))
+                };
+            }
+            Err(error) => return Err(unreadable(error)),
+        };
+        if len < self.verified_len {
+            return Err(self.poison(LedgerFault::Replaced));
+        }
+        let start = self.verified_len - self.last_line.len() as u64;
+        let mut bytes = Vec::new();
+        std::fs::File::open(&self.path)
+            .and_then(|mut file| {
+                file.seek(SeekFrom::Start(start))?;
+                file.read_to_end(&mut bytes)
+            })
+            .map_err(unreadable)?;
+        let Some(appended) = bytes.strip_prefix(self.last_line.as_slice()) else {
+            return Err(self.poison(LedgerFault::Replaced));
+        };
+        if appended.is_empty() {
+            return Ok(());
+        }
+        if appended.last() != Some(&b'\n') {
+            return Err(self.poison(LedgerFault::TornTail));
+        }
+        let appended = appended.to_vec();
+        let Ok(text) = std::str::from_utf8(&appended) else {
+            return Err(self.poison(LedgerFault::Unverifiable));
+        };
+        let mut last_line = self.last_line.clone();
+        for line in text.split_terminator('\n') {
+            let applied = serde_json::from_str::<StoredRecord>(line)
+                .ok()
+                .is_some_and(|record| self.apply(record));
+            if !applied {
+                return Err(self.poison(LedgerFault::Unverifiable));
+            }
+            last_line = format!("{line}\n").into_bytes();
+        }
+        self.verified_len += appended.len() as u64;
+        self.last_line = last_line;
         Ok(())
+    }
+
+    /// Applies one persisted event, returning false when it does not verify.
+    fn apply(&mut self, record: StoredRecord) -> bool {
+        if record.schema != LEDGER_SCHEMA || !verify_record_checksum(&record, &self.tip) {
+            return false;
+        }
+        if record.is_revoke && !record.consumed {
+            return false;
+        }
+        if record.consumed && !record.is_revoke {
+            // Consumption is a separate append-only transition, never a
+            // rewrite of the original issuance entry.
+            let Some(previous) = self.records.get(&record.id) else {
+                return false;
+            };
+            let mut expected = previous.clone();
+            expected.consumed = true;
+            expected.prev_checksum = record.prev_checksum.clone();
+            expected.checksum = record.checksum.clone();
+            if previous.consumed
+                || serde_json::to_value(&expected).ok() != serde_json::to_value(&record).ok()
+            {
+                return false;
+            }
+            self.consumed.insert(record.nonce.clone());
+        } else {
+            if self.records.contains_key(&record.id)
+                || !self.nonces.insert(record.nonce.clone())
+                || (record.is_revoke && record.epoch != self.revoke_epoch.saturating_add(1))
+                || (!record.is_revoke && record.epoch != self.revoke_epoch)
+            {
+                return false;
+            }
+            if record.is_revoke {
+                self.revoke_epoch = record.epoch;
+                self.consumed.insert(record.nonce.clone());
+            }
+        }
+        self.tip = record.checksum.clone();
+        self.genesis.get_or_insert_with(|| record.checksum.clone());
+        self.records.insert(record.id.clone(), record);
+        true
+    }
+
+    /// Record ids embed the wall clock and a per-process counter, which can
+    /// repeat after a restart or a clock step backwards.
+    fn unique_record_id(&self, prefix: &str) -> (String, u64) {
+        loop {
+            let decided_at = now_ms();
+            let id = format!(
+                "{prefix}-{decided_at}-{}",
+                NONCE_COUNTER.fetch_add(1, Ordering::Relaxed)
+            );
+            if !self.records.contains_key(&id) {
+                return (id, decided_at);
+            }
+        }
     }
 
     fn record_decision(
@@ -1096,11 +1288,20 @@ impl ApprovalLedger {
         presence_outcome: PresenceOutcome,
         presence_method: &str,
     ) -> Result<StoredRecord, ApprovalError> {
-        if self.nonces.contains(&prompt.nonce) {
-            return Err(ApprovalError::invalid(
-                "approval nonce was already issued; retry with a fresh prompt",
-            ));
-        }
+        self.record_prompted_decision(prompt, decision, presence_outcome, presence_method, None)
+    }
+
+    /// Records a person's decision. When `prompt_epoch` is the revoke epoch
+    /// the prompt was shown under and an emergency revoke happened while the
+    /// person decided, an approval is recorded as unavailable and refused.
+    fn record_prompted_decision(
+        &mut self,
+        prompt: &ApprovalPrompt,
+        decision: RecordedDecision,
+        presence_outcome: PresenceOutcome,
+        presence_method: &str,
+        prompt_epoch: Option<u64>,
+    ) -> Result<StoredRecord, ApprovalError> {
         if prompt.approval_class == ApprovalClass::Strong
             && presence_outcome == PresenceOutcome::SoftApproved
         {
@@ -1108,39 +1309,50 @@ impl ApprovalLedger {
                 "a soft button alone never satisfies the STRONG class",
             ));
         }
-        let decided_at = now_ms();
-        let id = format!(
-            "apr-{}-{}",
-            decided_at,
-            NONCE_COUNTER.fetch_add(1, Ordering::Relaxed)
-        );
-        let mut record = StoredRecord {
-            schema: LEDGER_SCHEMA.to_owned(),
-            id,
-            nonce: prompt.nonce.clone(),
-            digest: prompt.digest.clone(),
-            workspace_id: prompt.workspace_id.clone(),
-            policy_revision: prompt.policy_revision.clone(),
-            decision,
-            approval_class: prompt.approval_class,
-            presence_outcome,
-            presence_method: presence_method.to_owned(),
-            epoch: self.revoke_epoch,
-            is_revoke: false,
-            requested_at_ms: prompt.requested_at_ms,
-            decided_at_ms: decided_at,
-            expires_at_ms: prompt.expires_at_ms,
-            reuse_scope: prompt.reuse_scope.clone(),
-            consumed: false,
-            prev_checksum: self.tip.clone(),
-            checksum: String::new(),
-        };
-        record.checksum = record_checksum(&record);
-        self.append_to_file(&record)?;
-        self.tip = record.checksum.clone();
-        self.nonces.insert(record.nonce.clone());
-        self.records.insert(record.id.clone(), record.clone());
-        Ok(record)
+        self.transact(|ledger| {
+            if ledger.nonces.contains(&prompt.nonce) {
+                return Err(ApprovalError::invalid(
+                    "approval nonce was already issued; retry with a fresh prompt",
+                ));
+            }
+            let revoked_meanwhile = decision == RecordedDecision::Approved
+                && prompt_epoch.is_some_and(|epoch| epoch != ledger.revoke_epoch);
+            let (decision, presence_outcome) = if revoked_meanwhile {
+                (RecordedDecision::Unavailable, PresenceOutcome::Unavailable)
+            } else {
+                (decision, presence_outcome)
+            };
+            let (id, decided_at) = ledger.unique_record_id("apr");
+            let mut record = StoredRecord {
+                schema: LEDGER_SCHEMA.to_owned(),
+                id,
+                nonce: prompt.nonce.clone(),
+                digest: prompt.digest.clone(),
+                workspace_id: prompt.workspace_id.clone(),
+                policy_revision: prompt.policy_revision.clone(),
+                decision,
+                approval_class: prompt.approval_class,
+                presence_outcome,
+                presence_method: presence_method.to_owned(),
+                epoch: ledger.revoke_epoch,
+                is_revoke: false,
+                requested_at_ms: prompt.requested_at_ms,
+                decided_at_ms: decided_at,
+                expires_at_ms: prompt.expires_at_ms,
+                reuse_scope: prompt.reuse_scope.clone(),
+                consumed: false,
+                prev_checksum: ledger.tip.clone(),
+                checksum: String::new(),
+            };
+            record.checksum = record_checksum(&record);
+            let record = ledger.append(record)?;
+            if revoked_meanwhile {
+                return Err(ApprovalError::denied(
+                    "an emergency revoke happened while this approval was pending; request a fresh approval",
+                ));
+            }
+            Ok(record)
+        })
     }
 
     fn record_revoke(
@@ -1153,47 +1365,37 @@ impl ApprovalLedger {
                 "emergency revoke requires the STRONG class",
             ));
         }
-        if self.nonces.contains(&prompt.nonce) {
-            return Err(ApprovalError::invalid(
-                "approval nonce was already issued; retry with a fresh prompt",
-            ));
-        }
-        let new_epoch = self.revoke_epoch.saturating_add(1);
-        let decided_at = now_ms();
-        let id = format!(
-            "rev-{}-{}",
-            decided_at,
-            NONCE_COUNTER.fetch_add(1, Ordering::Relaxed)
-        );
-        let mut record = StoredRecord {
-            schema: LEDGER_SCHEMA.to_owned(),
-            id,
-            nonce: prompt.nonce.clone(),
-            digest: prompt.digest.clone(),
-            workspace_id: prompt.workspace_id.clone(),
-            policy_revision: prompt.policy_revision.clone(),
-            decision: RecordedDecision::Approved,
-            approval_class: ApprovalClass::Strong,
-            presence_outcome: PresenceOutcome::VerifiedStrong,
-            presence_method: presence_method.to_owned(),
-            epoch: new_epoch,
-            is_revoke: true,
-            requested_at_ms: prompt.requested_at_ms,
-            decided_at_ms: decided_at,
-            expires_at_ms: prompt.expires_at_ms,
-            reuse_scope: prompt.reuse_scope.clone(),
-            consumed: true,
-            prev_checksum: self.tip.clone(),
-            checksum: String::new(),
-        };
-        record.checksum = record_checksum(&record);
-        self.append_to_file(&record)?;
-        self.tip = record.checksum.clone();
-        self.revoke_epoch = new_epoch;
-        self.nonces.insert(record.nonce.clone());
-        self.consumed.insert(record.nonce.clone());
-        self.records.insert(record.id.clone(), record.clone());
-        Ok(record)
+        self.transact(|ledger| {
+            if ledger.nonces.contains(&prompt.nonce) {
+                return Err(ApprovalError::invalid(
+                    "approval nonce was already issued; retry with a fresh prompt",
+                ));
+            }
+            let (id, decided_at) = ledger.unique_record_id("rev");
+            let mut record = StoredRecord {
+                schema: LEDGER_SCHEMA.to_owned(),
+                id,
+                nonce: prompt.nonce.clone(),
+                digest: prompt.digest.clone(),
+                workspace_id: prompt.workspace_id.clone(),
+                policy_revision: prompt.policy_revision.clone(),
+                decision: RecordedDecision::Approved,
+                approval_class: ApprovalClass::Strong,
+                presence_outcome: PresenceOutcome::VerifiedStrong,
+                presence_method: presence_method.to_owned(),
+                epoch: ledger.revoke_epoch.saturating_add(1),
+                is_revoke: true,
+                requested_at_ms: prompt.requested_at_ms,
+                decided_at_ms: decided_at,
+                expires_at_ms: prompt.expires_at_ms,
+                reuse_scope: prompt.reuse_scope.clone(),
+                consumed: true,
+                prev_checksum: ledger.tip.clone(),
+                checksum: String::new(),
+            };
+            record.checksum = record_checksum(&record);
+            ledger.append(record)
+        })
     }
 
     #[allow(dead_code)]
@@ -1207,7 +1409,20 @@ impl ApprovalLedger {
         expected: &ConsumeExpectation,
         now_ms: u64,
     ) -> Result<(), ApprovalError> {
-        self.ensure_ready()?;
+        self.transact(|ledger| {
+            let marker = ledger.check_consumable(token, expected, now_ms)?;
+            // No authorization is released until this transition is durable.
+            // Any ambiguous append poisons the broker, without retrying.
+            ledger.append(marker).map(|_| ())
+        })
+    }
+
+    fn check_consumable(
+        &self,
+        token: &ApprovedToken,
+        expected: &ConsumeExpectation,
+        now_ms: u64,
+    ) -> Result<StoredRecord, ApprovalError> {
         let record = self.records.get(&token.record_id).ok_or_else(|| {
             ApprovalError::invalid("approval token references an unknown approval record")
         })?;
@@ -1281,39 +1496,48 @@ impl ApprovalLedger {
         marker.consumed = true;
         marker.prev_checksum = self.tip.clone();
         marker.checksum = record_checksum(&marker);
-        // No authorization is released until this transition is durable.
-        // Any ambiguous append poisons the broker, without retrying a side effect.
-        self.append_to_file(&marker)?;
-        self.tip = marker.checksum.clone();
-        self.consumed.insert(marker.nonce.clone());
-        self.records.insert(marker.id.clone(), marker);
-        Ok(())
+        Ok(marker)
     }
 
-    fn append_to_file(&mut self, record: &StoredRecord) -> Result<(), ApprovalError> {
+    /// Durably appends one event (the caller holds the writer lock), then
+    /// applies it in memory through the same verifier used on load.
+    fn append(&mut self, record: StoredRecord) -> Result<StoredRecord, ApprovalError> {
         use std::io::Write as _;
         self.ensure_ready()?;
-        let persist = (|| -> Result<(), Box<dyn std::error::Error>> {
-            let mut serialized = serde_json::to_vec(record)?;
-            serialized.push(b'\n');
+        let mut serialized = serde_json::to_vec(&record)
+            .map_err(|error| ApprovalError::unavailable(format!("serialize approval: {error}")))?;
+        serialized.push(b'\n');
+        let created = self.verified_len == 0;
+        let persist = (|| -> std::io::Result<()> {
             let mut file = std::fs::OpenOptions::new()
                 .create(true)
                 .append(true)
                 .open(&self.path)?;
             file.write_all(&serialized)?;
             file.sync_all()?;
+            if created {
+                sync_parent_dir(&self.path)?;
+            }
             Ok(())
         })();
         if let Err(error) = persist {
-            self.poisoned = true;
+            let refused = self.poison(LedgerFault::Durability);
             return Err(ApprovalError::unavailable(format!(
-                "approval ledger append/durability uncertain; refuse further grants: {error}"
+                "{}: {error}",
+                refused.message
             )));
         }
-        Ok(())
+        if !self.apply(record.clone()) {
+            return Err(self.poison(LedgerFault::Unverifiable));
+        }
+        self.verified_len += serialized.len() as u64;
+        self.last_line = serialized;
+        Ok(record)
     }
 
-    fn history(&self, limit: usize) -> Vec<ApprovalRecordSummary> {
+    fn history(&mut self, limit: usize) -> Vec<ApprovalRecordSummary> {
+        // A busy or failed refresh still reports the last verified view.
+        let _ = self.transact(|_| Ok(()));
         let bound = limit.clamp(1, 200);
         self.records
             .values()
@@ -1338,6 +1562,149 @@ impl ApprovalLedger {
             })
             .collect()
     }
+}
+
+/// Makes a newly created ledger's directory entry durable. NTFS journals
+/// metadata and Windows offers no portable directory flush, so this is a
+/// no-op there.
+fn sync_parent_dir(path: &Path) -> std::io::Result<()> {
+    #[cfg(unix)]
+    if let Some(parent) = path.parent() {
+        std::fs::File::open(parent)?.sync_all()?;
+    }
+    #[cfg(not(unix))]
+    let _ = path;
+    Ok(())
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ApprovalLedgerStatus {
+    /// No ledger has been written yet.
+    Missing,
+    /// Every persisted event verifies.
+    Verified,
+    /// The ledger fails verification; approvals stay blocked until recovery.
+    Corrupt,
+    /// Another Qdral process held the writer lock for the whole wait, or the
+    /// file was temporarily unreadable; retry.
+    Busy,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ApprovalLedgerInspection {
+    pub status: ApprovalLedgerStatus,
+    pub verified_records: usize,
+}
+
+/// Verifies the ledger without changing it (only the sidecar lock may be
+/// created).
+pub fn inspect_approval_ledger(path: &Path) -> ApprovalLedgerInspection {
+    let mut ledger = ApprovalLedger::empty(path.to_path_buf());
+    if !path.exists() {
+        return ApprovalLedgerInspection {
+            status: ApprovalLedgerStatus::Missing,
+            verified_records: 0,
+        };
+    }
+    let status = match acquire_ledger_lock(path, ledger.lock_wait) {
+        Err(_) => ApprovalLedgerStatus::Busy,
+        Ok(_lock) => match ledger.refresh() {
+            Ok(()) => ApprovalLedgerStatus::Verified,
+            Err(_) if ledger.poisoned() => ApprovalLedgerStatus::Corrupt,
+            Err(_) => ApprovalLedgerStatus::Busy,
+        },
+    };
+    ApprovalLedgerInspection {
+        status,
+        verified_records: ledger.records.len(),
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ApprovalLedgerRecovery {
+    pub quarantined_to: PathBuf,
+    pub quarantined_sha256: String,
+    pub quarantined_bytes: u64,
+}
+
+/// Recovers a ledger that fails verification. The original file is renamed,
+/// byte for byte, to a quarantine path for forensics (never deleted or
+/// rewritten), and a new chain starts with a non-authorizing record that
+/// names the quarantined file and its SHA-256. No earlier approval is carried
+/// over, so every operation needs a fresh approval afterwards. A verified,
+/// missing or busy ledger is refused.
+pub fn recover_approval_ledger(path: &Path) -> Result<ApprovalLedgerRecovery, ApprovalError> {
+    recover_approval_ledger_with_wait(path, LEDGER_LOCK_WAIT)
+}
+
+fn recover_approval_ledger_with_wait(
+    path: &Path,
+    wait: Duration,
+) -> Result<ApprovalLedgerRecovery, ApprovalError> {
+    let _lock = acquire_ledger_lock(path, wait)?;
+    if !path.exists() {
+        return Err(ApprovalError::invalid(
+            "there is no approval ledger to recover",
+        ));
+    }
+    let mut current = ApprovalLedger::empty(path.to_path_buf());
+    if current.refresh().is_ok() {
+        return Err(ApprovalError::invalid(
+            "the approval ledger verifies; recovery is only for a ledger that fails verification",
+        ));
+    }
+    let bytes = std::fs::read(path).map_err(|error| {
+        ApprovalError::unavailable(format!("read approval ledger for quarantine: {error}"))
+    })?;
+    let sha256 = hex_lower(&Sha256::digest(&bytes));
+    let mut name = path.file_name().unwrap_or_default().to_os_string();
+    name.push(format!(".quarantine-{}-{}", now_ms(), &sha256[..12]));
+    let quarantined_to = path.with_file_name(name);
+    if quarantined_to.exists() {
+        return Err(ApprovalError::unavailable(
+            "approval ledger quarantine path already exists; retry",
+        ));
+    }
+    std::fs::rename(path, &quarantined_to)
+        .and_then(|()| sync_parent_dir(path))
+        .map_err(|error| {
+            ApprovalError::unavailable(format!("quarantine approval ledger: {error}"))
+        })?;
+    let mut fresh = ApprovalLedger::empty(path.to_path_buf());
+    let (id, decided_at) = fresh.unique_record_id("rcv");
+    let mut record = StoredRecord {
+        schema: LEDGER_SCHEMA.to_owned(),
+        id,
+        nonce: fresh_nonce(&sha256, decided_at),
+        digest: format!("sha256:{sha256}"),
+        workspace_id: RECOVERY_WORKSPACE.to_owned(),
+        policy_revision: quarantined_to
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .into_owned(),
+        // Unavailable records can never authorize execution.
+        decision: RecordedDecision::Unavailable,
+        approval_class: ApprovalClass::Soft,
+        presence_outcome: PresenceOutcome::Unavailable,
+        presence_method: RECOVERY_METHOD.to_owned(),
+        epoch: 0,
+        is_revoke: false,
+        requested_at_ms: decided_at,
+        decided_at_ms: decided_at,
+        expires_at_ms: decided_at,
+        reuse_scope: SINGLE_OPERATION_SCOPE.to_owned(),
+        consumed: false,
+        prev_checksum: fresh.tip.clone(),
+        checksum: String::new(),
+    };
+    record.checksum = record_checksum(&record);
+    fresh.append(record)?;
+    Ok(ApprovalLedgerRecovery {
+        quarantined_to,
+        quarantined_sha256: sha256,
+        quarantined_bytes: bytes.len() as u64,
+    })
 }
 
 fn record_checksum(record: &StoredRecord) -> String {
@@ -1790,7 +2157,7 @@ mod tests {
         ledger.consume(&token, &expected, 5_100).expect("consume A");
         drop(ledger);
         let mut resumed = ledger_in(&path);
-        assert!(!resumed.poisoned, "history must load completely");
+        assert!(!resumed.poisoned(), "history must load completely");
         assert!(resumed.consumed.contains(&token.nonce));
         assert_eq!(
             resumed.consume(&token, &expected, 5_200).unwrap_err().code,
@@ -1831,7 +2198,7 @@ mod tests {
             .expect("issue C");
         drop(ledger);
         let mut resumed = ledger_in(&path);
-        assert!(!resumed.poisoned);
+        assert!(!resumed.poisoned());
         assert!(
             resumed.records.contains_key(&rc.id),
             "C must survive restart"
@@ -1847,43 +2214,118 @@ mod tests {
         let _ = std::fs::remove_file(path);
     }
 
-    #[test]
-    fn concurrent_brokers_cannot_both_consume_one_token() {
-        let path = temp_path("reg278-writers");
-        let mut first = ledger_in(&path);
-        let a = strong_prompt_with("reg278-concurrent", 5_000);
-        let ra = first
+    fn strong_expectation(record: &StoredRecord) -> ConsumeExpectation {
+        ConsumeExpectation::strong(record.digest.clone(), "default", "sg-000019-v1")
+    }
+
+    fn issue_strong(ledger: &mut ApprovalLedger, digest: &str, now: u64) -> StoredRecord {
+        ledger
             .record_decision(
-                &a,
+                &strong_prompt_with(digest, now),
                 RecordedDecision::Approved,
                 PresenceOutcome::VerifiedStrong,
                 "test",
             )
-            .expect("issue A");
-        let token = token_from(&ra);
-        let expected = ConsumeExpectation::strong(a.digest.clone(), "default", "sg-000019-v1");
-        let mut rival = ledger_in(&path);
-        assert!(
-            rival.poisoned,
-            "second writer must fail closed while first owns lock"
-        );
-        assert_eq!(
-            rival.consume(&token, &expected, 5_100).unwrap_err().code,
-            FailureCode::ApprovalUnavailable
-        );
-        first
-            .consume(&token, &expected, 5_100)
-            .expect("only first succeeds");
-        drop(rival);
-        drop(first);
-        let mut resumed = ledger_in(&path);
-        assert!(!resumed.poisoned);
-        assert_eq!(
-            resumed.consume(&token, &expected, 5_200).unwrap_err().code,
-            FailureCode::ApprovalDenied
-        );
-        drop(resumed);
+            .expect("issue")
+    }
+
+    fn remove_ledger(path: &std::path::Path) {
         let _ = std::fs::remove_file(path);
+        let _ = std::fs::remove_file(approval_ledger_lock_path(path));
+    }
+
+    #[test]
+    fn two_brokers_on_one_ledger_see_each_others_transitions() {
+        let path = temp_path("reg278-writers");
+        let mut first = ledger_in(&path);
+        let mut second = ledger_in(&path);
+        assert!(
+            !first.poisoned() && !second.poisoned(),
+            "a second broker is not an integrity failure"
+        );
+        let a = issue_strong(&mut first, "reg278-concurrent-a", 5_000);
+        second
+            .consume(&token_from(&a), &strong_expectation(&a), 5_100)
+            .expect("second broker sees and consumes A");
+        assert_eq!(
+            first
+                .consume(&token_from(&a), &strong_expectation(&a), 5_100)
+                .unwrap_err()
+                .code,
+            FailureCode::ApprovalDenied,
+            "first broker must observe the other broker's consumption"
+        );
+        let b = issue_strong(&mut second, "reg278-concurrent-b", 5_200);
+        first
+            .consume(&token_from(&b), &strong_expectation(&b), 5_300)
+            .expect("first broker sees and consumes B");
+        assert!(!first.poisoned() && !second.poisoned());
+        drop(first);
+        drop(second);
+        let mut resumed = ledger_in(&path);
+        assert!(!resumed.poisoned());
+        for record in [&a, &b] {
+            assert_eq!(
+                resumed
+                    .consume(&token_from(record), &strong_expectation(record), 5_400)
+                    .unwrap_err()
+                    .code,
+                FailureCode::ApprovalDenied
+            );
+        }
+        drop(resumed);
+        remove_ledger(&path);
+    }
+
+    #[test]
+    fn writer_lock_contention_is_transient_and_never_corruption() {
+        let path = temp_path("reg278-busy");
+        let mut ledger = ledger_in(&path);
+        ledger.lock_wait = Duration::from_millis(50);
+        let a = issue_strong(&mut ledger, "reg278-busy", 5_000);
+        let holder = acquire_ledger_lock(&path, Duration::ZERO).expect("hold the writer lock");
+        let error = ledger
+            .consume(&token_from(&a), &strong_expectation(&a), 5_100)
+            .unwrap_err();
+        assert_eq!(error.code, FailureCode::ApprovalUnavailable);
+        assert!(error.message.contains("busy"), "{}", error.message);
+        assert!(!ledger.poisoned(), "contention must not poison the broker");
+        drop(holder);
+        ledger
+            .consume(&token_from(&a), &strong_expectation(&a), 5_100)
+            .expect("consumption succeeds once the other transaction ends");
+        drop(ledger);
+        remove_ledger(&path);
+    }
+
+    #[test]
+    fn truncated_or_deleted_ledger_under_a_live_broker_fails_closed() {
+        for delete in [false, true] {
+            let path = temp_path("reg278-rollback");
+            let mut ledger = ledger_in(&path);
+            let a = issue_strong(&mut ledger, "reg278-rollback-a", 5_000);
+            ledger
+                .consume(&token_from(&a), &strong_expectation(&a), 5_100)
+                .expect("consume A");
+            let source = std::fs::read_to_string(&path).expect("read");
+            if delete {
+                std::fs::remove_file(&path).expect("delete ledger");
+            } else {
+                // Roll back to the issuance, dropping A's consumption marker.
+                let first_line = source.find('\n').expect("one line") + 1;
+                std::fs::write(&path, &source[..first_line]).expect("truncate");
+            }
+            assert_eq!(
+                ledger
+                    .consume(&token_from(&a), &strong_expectation(&a), 5_200)
+                    .unwrap_err()
+                    .code,
+                FailureCode::ApprovalUnavailable
+            );
+            assert!(ledger.poisoned(), "delete={delete}");
+            drop(ledger);
+            remove_ledger(&path);
+        }
     }
 
     #[test]
@@ -1913,7 +2355,7 @@ mod tests {
         drop(file);
         let mut reloaded = ledger_in(&path);
         assert!(
-            reloaded.poisoned,
+            reloaded.poisoned(),
             "invalid tail must poison instead of trusting prefix"
         );
         assert_eq!(
@@ -1965,7 +2407,7 @@ mod tests {
         drop(ledger);
         for _ in 0..2 {
             let mut ledger = ledger_in(&path);
-            assert!(!ledger.poisoned);
+            assert!(!ledger.poisoned());
             assert_eq!(
                 ledger
                     .consume(&token_from(&ra), &ea, 5_300)
@@ -2008,7 +2450,7 @@ mod tests {
         let modified = source.replace("\"consumed\":true", "\"consumed\":false");
         std::fs::write(&path, modified).expect("tamper");
         let mut restarted = ledger_in(&path);
-        assert!(restarted.poisoned);
+        assert!(restarted.poisoned());
         assert_eq!(
             restarted
                 .consume(&token_from(&record), &expected, 5_200)
@@ -2024,7 +2466,7 @@ mod tests {
     fn unsuccessful_append_poison_blocks_all_later_grants() {
         let path = temp_path("reg278-write-failure");
         let mut ledger = ledger_in(&path);
-        assert!(!ledger.poisoned);
+        assert!(!ledger.poisoned());
         // Deliberately make the ledger path a directory so the append fails.
         std::fs::create_dir(&path).expect("simulate storage failure");
         let prompt = strong_prompt_with("reg278-io-failure", 5_000);
@@ -2037,7 +2479,7 @@ mod tests {
             )
             .expect_err("persist must fail");
         assert_eq!(err.code, FailureCode::ApprovalUnavailable);
-        assert!(ledger.poisoned);
+        assert!(ledger.poisoned());
         std::fs::remove_dir(&path).expect("remove blocker");
         let fresh = strong_prompt_with("reg278-next-grant", 5_200);
         assert_eq!(
@@ -2053,6 +2495,498 @@ mod tests {
             FailureCode::ApprovalUnavailable
         );
         drop(ledger);
+    }
+
+    /// Writes a history exactly as the v0.1.0 broker did: after consuming A
+    /// it reset the tip to A's issuance checksum, so the next record (B)
+    /// chains to the issuance instead of to A's consumption marker.
+    fn write_legacy_v010_ledger(
+        path: &std::path::Path,
+        with_successor: bool,
+    ) -> (StoredRecord, Vec<u8>) {
+        let issuance = |prompt: &ApprovalPrompt, id: &str, prev: &str| {
+            let mut record = StoredRecord {
+                schema: LEDGER_SCHEMA.to_owned(),
+                id: id.to_owned(),
+                nonce: prompt.nonce.clone(),
+                digest: prompt.digest.clone(),
+                workspace_id: prompt.workspace_id.clone(),
+                policy_revision: prompt.policy_revision.clone(),
+                decision: RecordedDecision::Approved,
+                approval_class: ApprovalClass::Strong,
+                presence_outcome: PresenceOutcome::VerifiedStrong,
+                presence_method: String::from("test-hello"),
+                epoch: 0,
+                is_revoke: false,
+                requested_at_ms: prompt.requested_at_ms,
+                decided_at_ms: prompt.requested_at_ms,
+                expires_at_ms: prompt.expires_at_ms,
+                reuse_scope: prompt.reuse_scope.clone(),
+                consumed: false,
+                prev_checksum: prev.to_owned(),
+                checksum: String::new(),
+            };
+            record.checksum = record_checksum(&record);
+            record
+        };
+        let a = issuance(
+            &strong_prompt_with("legacy-a", 5_000),
+            "apr-5000-0",
+            "GENESIS",
+        );
+        let mut marker = a.clone();
+        marker.consumed = true;
+        marker.prev_checksum = a.checksum.clone();
+        marker.checksum = record_checksum(&marker);
+        let mut lines = vec![a.clone(), marker];
+        if with_successor {
+            lines.push(issuance(
+                &strong_prompt_with("legacy-b", 5_100),
+                "apr-5100-1",
+                &a.checksum,
+            ));
+        }
+        let mut bytes = Vec::new();
+        for line in &lines {
+            bytes.extend(serde_json::to_vec(line).expect("serialize"));
+            bytes.push(b'\n');
+        }
+        std::fs::write(path, &bytes).expect("write legacy ledger");
+        (a, bytes)
+    }
+
+    #[test]
+    fn legacy_v010_history_without_a_successor_still_verifies() {
+        let path = temp_path("reg278-legacy-ok");
+        let (a, _) = write_legacy_v010_ledger(&path, false);
+        let mut ledger = ledger_in(&path);
+        assert!(!ledger.poisoned(), "a valid v0.1.0 chain must keep loading");
+        assert_eq!(
+            ledger
+                .consume(&token_from(&a), &strong_expectation(&a), 5_100)
+                .unwrap_err()
+                .code,
+            FailureCode::ApprovalDenied
+        );
+        drop(ledger);
+        remove_ledger(&path);
+    }
+
+    #[test]
+    fn legacy_v010_broken_chain_fails_closed_until_recovered_with_preserved_evidence() {
+        let path = temp_path("reg278-legacy");
+        let (a, original) = write_legacy_v010_ledger(&path, true);
+        let mut ledger = ledger_in(&path);
+        assert!(
+            ledger.poisoned(),
+            "a broken chain is never trusted as a prefix"
+        );
+        let error = ledger
+            .consume(&token_from(&a), &strong_expectation(&a), 5_100)
+            .unwrap_err();
+        assert_eq!(error.code, FailureCode::ApprovalUnavailable);
+        assert!(
+            error.message.contains("qdral approvals recover"),
+            "{}",
+            error.message
+        );
+        drop(ledger);
+        assert_eq!(
+            inspect_approval_ledger(&path).status,
+            ApprovalLedgerStatus::Corrupt
+        );
+
+        let recovery = recover_approval_ledger(&path).expect("recover");
+        assert_eq!(
+            std::fs::read(&recovery.quarantined_to).expect("quarantine"),
+            original,
+            "quarantined evidence is preserved byte for byte"
+        );
+        assert_eq!(
+            recovery.quarantined_sha256,
+            hex_lower(&Sha256::digest(&original))
+        );
+        assert_eq!(recovery.quarantined_bytes, original.len() as u64);
+        assert_eq!(
+            inspect_approval_ledger(&path),
+            ApprovalLedgerInspection {
+                status: ApprovalLedgerStatus::Verified,
+                verified_records: 1,
+            }
+        );
+
+        let mut fresh = ledger_in(&path);
+        assert!(!fresh.poisoned());
+        assert!(
+            fresh
+                .consume(&token_from(&a), &strong_expectation(&a), 5_100)
+                .is_err(),
+            "nothing from the quarantined history authorizes"
+        );
+        let marker = fresh
+            .records
+            .values()
+            .next()
+            .cloned()
+            .expect("recovery record");
+        assert_eq!(marker.workspace_id, RECOVERY_WORKSPACE);
+        assert!(marker.digest.ends_with(&recovery.quarantined_sha256));
+        assert!(
+            fresh
+                .consume(
+                    &token_from(&marker),
+                    &ConsumeExpectation::new_with_class(
+                        marker.digest.clone(),
+                        RECOVERY_WORKSPACE,
+                        marker.policy_revision.clone(),
+                        ApprovalClass::Soft,
+                    ),
+                    marker.expires_at_ms,
+                )
+                .is_err(),
+            "the recovery record never authorizes"
+        );
+        let c = issue_strong(&mut fresh, "reg278-after-recovery", 6_000);
+        fresh
+            .consume(&token_from(&c), &strong_expectation(&c), 6_100)
+            .expect("fresh approvals work after recovery");
+        drop(fresh);
+        let _ = std::fs::remove_file(&recovery.quarantined_to);
+        remove_ledger(&path);
+    }
+
+    #[test]
+    fn recovery_refuses_missing_verified_or_busy_ledgers() {
+        let path = temp_path("reg278-recover-refuse");
+        assert_eq!(
+            recover_approval_ledger(&path).unwrap_err().code,
+            FailureCode::InvalidRequest
+        );
+        let mut ledger = ledger_in(&path);
+        let a = issue_strong(&mut ledger, "reg278-recover-refuse", 5_000);
+        assert_eq!(
+            recover_approval_ledger(&path).unwrap_err().code,
+            FailureCode::InvalidRequest,
+            "a verified ledger is never quarantined"
+        );
+        let holder = acquire_ledger_lock(&path, Duration::ZERO).expect("hold the writer lock");
+        let busy = recover_approval_ledger_with_wait(&path, Duration::from_millis(50)).unwrap_err();
+        assert!(busy.message.contains("busy"), "{}", busy.message);
+        drop(holder);
+        ledger
+            .consume(&token_from(&a), &strong_expectation(&a), 5_100)
+            .expect("the refused recovery left the ledger untouched");
+        drop(ledger);
+        remove_ledger(&path);
+    }
+
+    #[test]
+    fn same_length_replacement_under_a_live_broker_fails_closed() {
+        let path = temp_path("reg278-replaced");
+        let mut ledger = ledger_in(&path);
+        let a = issue_strong(&mut ledger, "reg278-replaced", 5_000);
+        let source = std::fs::read_to_string(&path).expect("read");
+        // Same length, different content: flip one checksum hex digit.
+        let at = source.find("\"checksum\":\"").expect("checksum") + 12;
+        let flipped = if &source[at..at + 1] == "0" { "1" } else { "0" };
+        let replaced = format!("{}{}{}", &source[..at], flipped, &source[at + 1..]);
+        assert_eq!(replaced.len(), source.len());
+        std::fs::write(&path, replaced).expect("replace");
+        let error = ledger
+            .consume(&token_from(&a), &strong_expectation(&a), 5_100)
+            .unwrap_err();
+        assert_eq!(error.code, FailureCode::ApprovalUnavailable);
+        assert!(error.message.contains("replaced"), "{}", error.message);
+        assert!(ledger.poisoned());
+        drop(ledger);
+        remove_ledger(&path);
+    }
+
+    #[test]
+    fn emergency_revoke_during_an_open_prompt_refuses_the_approval() {
+        let path = temp_path("reg278-revoke-race");
+        let mut ledger = ledger_in(&path);
+        let prompt = strong_prompt_with("reg278-pending", 5_000);
+        let prompt_epoch = ledger.preflight().expect("preflight");
+        // Another process revokes while the person is still deciding.
+        let mut other = ledger_in(&path);
+        other
+            .record_revoke(&strong_prompt_with("reg278-revoke", 5_010), "test")
+            .expect("revoke");
+        let error = ledger
+            .record_prompted_decision(
+                &prompt,
+                RecordedDecision::Approved,
+                PresenceOutcome::VerifiedStrong,
+                "test",
+                Some(prompt_epoch),
+            )
+            .unwrap_err();
+        assert_eq!(error.code, FailureCode::ApprovalDenied);
+        let recorded = ledger
+            .records
+            .values()
+            .find(|record| record.nonce == prompt.nonce)
+            .expect("the refused decision is still recorded");
+        assert_eq!(recorded.decision, RecordedDecision::Unavailable);
+        drop(other);
+        drop(ledger);
+        remove_ledger(&path);
+    }
+
+    #[test]
+    fn live_broker_adopts_a_recovered_ledger_without_restart() {
+        let path = temp_path("reg278-adopt");
+        let mut live = ledger_in(&path);
+        let a = issue_strong(&mut live, "reg278-adopt-a", 5_000);
+        let mut file = std::fs::OpenOptions::new()
+            .append(true)
+            .open(&path)
+            .expect("open");
+        use std::io::Write as _;
+        file.write_all(b"{\"torn\":").expect("torn tail");
+        drop(file);
+        let torn = live
+            .consume(&token_from(&a), &strong_expectation(&a), 5_100)
+            .unwrap_err();
+        assert!(torn.message.contains("incomplete"), "{}", torn.message);
+        let recovery = recover_approval_ledger(&path).expect("recover");
+        let b = issue_strong(&mut live, "reg278-adopt-b", 6_000);
+        assert!(!live.poisoned(), "the live broker adopted the new ledger");
+        assert!(
+            live.consume(&token_from(&a), &strong_expectation(&a), 6_050)
+                .is_err(),
+            "nothing from the old view survives adoption"
+        );
+        live.consume(&token_from(&b), &strong_expectation(&b), 6_100)
+            .expect("fresh approval after adoption");
+        drop(live);
+        let _ = std::fs::remove_file(&recovery.quarantined_to);
+        remove_ledger(&path);
+    }
+
+    #[test]
+    fn poisoned_broker_never_adopts_its_own_unchanged_chain() {
+        let path = temp_path("reg278-no-self-adopt");
+        let mut ledger = ledger_in(&path);
+        issue_strong(&mut ledger, "reg278-no-self-adopt", 5_000);
+        ledger.fault = Some(LedgerFault::Durability);
+        let error = ledger.preflight().unwrap_err();
+        assert!(error.message.contains("durability"), "{}", error.message);
+        assert!(ledger.poisoned());
+        drop(ledger);
+        remove_ledger(&path);
+    }
+
+    #[test]
+    fn legacy_v010_interleaved_consumption_fails_closed_with_upgrade_guidance() {
+        let path = temp_path("reg278-legacy-interleaved");
+        let (a, _) = write_legacy_v010_ledger(&path, false);
+        // v0.1.0 chained a marker to its own issuance, so "issue A, issue B,
+        // consume A" breaks the chain even with no record after the marker.
+        let text = std::fs::read_to_string(&path).expect("read");
+        let mut lines: Vec<StoredRecord> = text
+            .lines()
+            .map(|line| serde_json::from_str(line).expect("record"))
+            .collect();
+        let mut b = a.clone();
+        b.id = String::from("apr-5050-9");
+        b.nonce = String::from("legacy-b-nonce");
+        b.prev_checksum = a.checksum.clone();
+        b.checksum = record_checksum(&b);
+        lines.insert(1, b);
+        let rebuilt: String = lines
+            .iter()
+            .map(|record| serde_json::to_string(record).expect("serialize") + "\n")
+            .collect();
+        std::fs::write(&path, rebuilt).expect("write");
+        let mut ledger = ledger_in(&path);
+        assert!(ledger.poisoned());
+        let error = ledger.preflight().unwrap_err();
+        assert!(error.message.contains("v0.1.0"), "{}", error.message);
+        assert!(error.message.contains("qdral approvals recover"));
+        drop(ledger);
+        remove_ledger(&path);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn sharing_violation_is_transient_and_never_corruption() {
+        use std::os::windows::fs::OpenOptionsExt as _;
+        let path = temp_path("reg278-sharing");
+        let mut ledger = ledger_in(&path);
+        let a = issue_strong(&mut ledger, "reg278-sharing", 5_000);
+        // Like antivirus or backup software holding the file exclusively.
+        let exclusive = std::fs::OpenOptions::new()
+            .read(true)
+            .share_mode(0)
+            .open(&path)
+            .expect("exclusive open");
+        let error = ledger
+            .consume(&token_from(&a), &strong_expectation(&a), 5_100)
+            .unwrap_err();
+        assert!(
+            error.message.contains("temporarily unreadable"),
+            "{}",
+            error.message
+        );
+        assert!(!ledger.poisoned());
+        drop(exclusive);
+        ledger
+            .consume(&token_from(&a), &strong_expectation(&a), 5_100)
+            .expect("consumption succeeds once the file is readable");
+        drop(ledger);
+        remove_ledger(&path);
+    }
+
+    const CHILD_MODE: &str = "QDRAL_APPROVAL_TEST_CHILD";
+    const CHILD_PATH: &str = "QDRAL_APPROVAL_TEST_PATH";
+    const CHILD_RECORD: &str = "QDRAL_APPROVAL_TEST_RECORD";
+    const CHILD_GO: &str = "QDRAL_APPROVAL_TEST_GO";
+
+    fn spawn_child(
+        mode: &str,
+        path: &std::path::Path,
+        extra: &[(&str, &str)],
+    ) -> std::process::Child {
+        let mut command = std::process::Command::new(std::env::current_exe().expect("test exe"));
+        command
+            .args(["--exact", "tests::cross_process_child", "--nocapture"])
+            .env(CHILD_MODE, mode)
+            .env(CHILD_PATH, path)
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null());
+        for (key, value) in extra {
+            command.env(key, value);
+        }
+        command.spawn().expect("spawn child broker")
+    }
+
+    /// Child-process body for the cross-process tests; returns immediately
+    /// unless one of them spawned this process.
+    #[test]
+    fn cross_process_child() {
+        use std::io::Write as _;
+        let Ok(mode) = std::env::var(CHILD_MODE) else {
+            return;
+        };
+        let path = std::path::PathBuf::from(std::env::var_os(CHILD_PATH).expect("path"));
+        match mode.as_str() {
+            "consume" => {
+                let mut ledger = ledger_in(&path);
+                let id = std::env::var(CHILD_RECORD).expect("record id");
+                let record = ledger.records.get(&id).cloned().expect("child sees record");
+                let go = std::path::PathBuf::from(std::env::var_os(CHILD_GO).expect("go"));
+                let deadline = Instant::now() + Duration::from_secs(20);
+                while !go.exists() && Instant::now() < deadline {
+                    std::thread::sleep(Duration::from_millis(1));
+                }
+                let now = record.requested_at_ms + 1;
+                let code =
+                    match ledger.consume(&token_from(&record), &strong_expectation(&record), now) {
+                        Ok(()) => 0,
+                        Err(error) if error.code == FailureCode::ApprovalDenied => 3,
+                        Err(_) => 4,
+                    };
+                std::process::exit(code);
+            }
+            "crash-mid-append" => {
+                let _lock = acquire_ledger_lock(&path, Duration::from_secs(5)).expect("lock");
+                let mut file = std::fs::OpenOptions::new()
+                    .append(true)
+                    .open(&path)
+                    .expect("open");
+                file.write_all(b"{\"schema\":\"qdral-approval-ledger-v3\",\"id\":")
+                    .expect("partial append");
+                file.sync_all().expect("sync");
+                // Die holding the lock, mid-record, without unwinding.
+                std::process::abort();
+            }
+            _ => std::process::exit(5),
+        }
+    }
+
+    #[test]
+    fn concurrent_processes_consume_one_token_exactly_once() {
+        let path = temp_path("reg278-processes");
+        let mut ledger = ledger_in(&path);
+        let a = issue_strong(&mut ledger, "reg278-processes", 5_000);
+        let go = path.with_extension("go");
+        let go_value = go.to_string_lossy().into_owned();
+        let children: Vec<_> = (0..4)
+            .map(|_| {
+                spawn_child(
+                    "consume",
+                    &path,
+                    &[(CHILD_RECORD, &a.id), (CHILD_GO, &go_value)],
+                )
+            })
+            .collect();
+        std::fs::write(&go, b"").expect("release the children together");
+        let codes: Vec<i32> = children
+            .into_iter()
+            .map(|mut child| child.wait().expect("wait").code().unwrap_or(-1))
+            .collect();
+        assert_eq!(
+            codes.iter().filter(|code| **code == 0).count(),
+            1,
+            "{codes:?}"
+        );
+        assert_eq!(
+            codes.iter().filter(|code| **code == 3).count(),
+            3,
+            "{codes:?}"
+        );
+        assert_eq!(
+            ledger
+                .consume(
+                    &token_from(&a),
+                    &strong_expectation(&a),
+                    a.requested_at_ms + 1
+                )
+                .unwrap_err()
+                .code,
+            FailureCode::ApprovalDenied,
+            "this process observes the child's durable consumption"
+        );
+        assert!(!ledger.poisoned());
+        drop(ledger);
+        let _ = std::fs::remove_file(go);
+        remove_ledger(&path);
+    }
+
+    #[test]
+    fn crash_mid_append_releases_the_lock_and_fails_closed_until_recovery() {
+        let path = temp_path("reg278-crash");
+        let mut ledger = ledger_in(&path);
+        let a = issue_strong(&mut ledger, "reg278-crash", 5_000);
+        let status = spawn_child("crash-mid-append", &path, &[])
+            .wait()
+            .expect("wait");
+        assert!(!status.success(), "the child must die mid-append");
+        assert_eq!(
+            inspect_approval_ledger(&path).status,
+            ApprovalLedgerStatus::Corrupt,
+            "the OS released the dead writer's lock and the torn tail is detected"
+        );
+        assert_eq!(
+            ledger
+                .consume(&token_from(&a), &strong_expectation(&a), 5_100)
+                .unwrap_err()
+                .code,
+            FailureCode::ApprovalUnavailable
+        );
+        assert!(ledger.poisoned());
+        drop(ledger);
+        let recovery = recover_approval_ledger(&path).expect("recover after crash");
+        let mut fresh = ledger_in(&path);
+        let b = issue_strong(&mut fresh, "reg278-after-crash", 6_000);
+        fresh
+            .consume(&token_from(&b), &strong_expectation(&b), 6_100)
+            .expect("fresh approval after recovery");
+        drop(fresh);
+        let _ = std::fs::remove_file(&recovery.quarantined_to);
+        remove_ledger(&path);
     }
 
     #[test]
