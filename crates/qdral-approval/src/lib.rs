@@ -959,6 +959,9 @@ struct ApprovalLedger {
     consumed: HashSet<String>,
     tip: String,
     revoke_epoch: u64,
+    // The OS-level writer lease is held for this ledger's entire lifetime.
+    _writer_lock: Option<std::fs::File>,
+    poisoned: bool,
 }
 
 impl ApprovalLedger {
@@ -970,36 +973,120 @@ impl ApprovalLedger {
             consumed: HashSet::new(),
             tip: String::from("GENESIS"),
             revoke_epoch: 0,
+            _writer_lock: None,
+            poisoned: false,
         };
-        if ledger.path.is_file() {
-            if let Ok(text) = std::fs::read_to_string(&ledger.path) {
-                let mut tip = String::from("GENESIS");
-                for line in text.lines() {
-                    if line.trim().is_empty() {
-                        continue;
-                    }
-                    let Ok(record) = serde_json::from_str::<StoredRecord>(line) else {
-                        break;
-                    };
-                    if record.schema != LEDGER_SCHEMA || !verify_record_checksum(&record, &tip) {
-                        break;
-                    }
-                    tip = record.checksum.clone();
-                    ledger.nonces.insert(record.nonce.clone());
-                    if record.consumed {
-                        ledger.consumed.insert(record.nonce.clone());
-                    }
-                    if record.epoch > ledger.revoke_epoch {
-                        ledger.revoke_epoch = record.epoch;
-                    }
-                    ledger.records.insert(record.id.clone(), record);
-                }
-                ledger.tip = tip;
+        // A second broker (even in a different process) must never mutate
+        // the same approval history concurrently.
+        let ready = (|| -> std::io::Result<std::fs::File> {
+            if let Some(parent) = ledger.path.parent() {
+                std::fs::create_dir_all(parent)?;
             }
-        } else if let Some(parent) = ledger.path.parent() {
-            let _ = std::fs::create_dir_all(parent);
+            let lock_path = ledger.path.with_extension(format!(
+                "{}.lock",
+                ledger
+                    .path
+                    .extension()
+                    .unwrap_or_default()
+                    .to_string_lossy()
+            ));
+            let lock = std::fs::OpenOptions::new()
+                .read(true)
+                .write(true)
+                .create(true)
+                .truncate(false)
+                .open(lock_path)?;
+            fs4::FileExt::try_lock(&lock)
+                .map_err(|error| std::io::Error::other(error.to_string()))?;
+            Ok(lock)
+        })();
+        match ready {
+            Ok(lock) => ledger._writer_lock = Some(lock),
+            Err(_) => {
+                ledger.poisoned = true;
+                return ledger;
+            }
         }
+        if !ledger.path.exists() {
+            return ledger;
+        }
+        // Every persisted event must verify. An invalid suffix does not
+        // create a usable, valid-prefix history: the broker fails closed.
+        let text = match std::fs::read_to_string(&ledger.path) {
+            Ok(text) => text,
+            Err(_) => {
+                ledger.poisoned = true;
+                return ledger;
+            }
+        };
+        if !text.is_empty() && !text.ends_with('\n') {
+            ledger.poisoned = true;
+            return ledger;
+        }
+        let mut tip = String::from("GENESIS");
+        for line in text.lines() {
+            if line.trim().is_empty() {
+                ledger.poisoned = true;
+                break;
+            }
+            let Ok(record) = serde_json::from_str::<StoredRecord>(line) else {
+                ledger.poisoned = true;
+                break;
+            };
+            if record.schema != LEDGER_SCHEMA || !verify_record_checksum(&record, &tip) {
+                ledger.poisoned = true;
+                break;
+            }
+            if record.is_revoke && !record.consumed {
+                ledger.poisoned = true;
+                break;
+            }
+            if record.consumed && !record.is_revoke {
+                // Consumption is a separate append-only transition, never a
+                // rewrite of the original issuance entry.
+                let Some(previous) = ledger.records.get(&record.id) else {
+                    ledger.poisoned = true;
+                    break;
+                };
+                let mut expected = previous.clone();
+                expected.consumed = true;
+                expected.prev_checksum = record.prev_checksum.clone();
+                expected.checksum = record.checksum.clone();
+                if previous.consumed
+                    || serde_json::to_value(&expected).ok() != serde_json::to_value(&record).ok()
+                {
+                    ledger.poisoned = true;
+                    break;
+                }
+                ledger.consumed.insert(record.nonce.clone());
+            } else {
+                if ledger.records.contains_key(&record.id)
+                    || !ledger.nonces.insert(record.nonce.clone())
+                    || (record.is_revoke && record.epoch != ledger.revoke_epoch.saturating_add(1))
+                    || (!record.is_revoke && record.epoch != ledger.revoke_epoch)
+                {
+                    ledger.poisoned = true;
+                    break;
+                }
+                if record.is_revoke {
+                    ledger.revoke_epoch = record.epoch;
+                    ledger.consumed.insert(record.nonce.clone());
+                }
+            }
+            tip = record.checksum.clone();
+            ledger.records.insert(record.id.clone(), record);
+        }
+        ledger.tip = tip;
         ledger
+    }
+
+    fn ensure_ready(&self) -> Result<(), ApprovalError> {
+        if self.poisoned || self._writer_lock.is_none() {
+            return Err(ApprovalError::unavailable(
+                "approval ledger is locked, corrupted or I/O-ambiguous; manual recovery required",
+            ));
+        }
+        Ok(())
     }
 
     fn record_decision(
@@ -1009,7 +1096,7 @@ impl ApprovalLedger {
         presence_outcome: PresenceOutcome,
         presence_method: &str,
     ) -> Result<StoredRecord, ApprovalError> {
-        if !self.nonces.insert(prompt.nonce.clone()) {
+        if self.nonces.contains(&prompt.nonce) {
             return Err(ApprovalError::invalid(
                 "approval nonce was already issued; retry with a fresh prompt",
             ));
@@ -1049,8 +1136,9 @@ impl ApprovalLedger {
             checksum: String::new(),
         };
         record.checksum = record_checksum(&record);
-        self.tip = record.checksum.clone();
         self.append_to_file(&record)?;
+        self.tip = record.checksum.clone();
+        self.nonces.insert(record.nonce.clone());
         self.records.insert(record.id.clone(), record.clone());
         Ok(record)
     }
@@ -1065,7 +1153,7 @@ impl ApprovalLedger {
                 "emergency revoke requires the STRONG class",
             ));
         }
-        if !self.nonces.insert(prompt.nonce.clone()) {
+        if self.nonces.contains(&prompt.nonce) {
             return Err(ApprovalError::invalid(
                 "approval nonce was already issued; retry with a fresh prompt",
             ));
@@ -1099,9 +1187,11 @@ impl ApprovalLedger {
             checksum: String::new(),
         };
         record.checksum = record_checksum(&record);
+        self.append_to_file(&record)?;
         self.tip = record.checksum.clone();
         self.revoke_epoch = new_epoch;
-        self.append_to_file(&record)?;
+        self.nonces.insert(record.nonce.clone());
+        self.consumed.insert(record.nonce.clone());
         self.records.insert(record.id.clone(), record.clone());
         Ok(record)
     }
@@ -1117,6 +1207,7 @@ impl ApprovalLedger {
         expected: &ConsumeExpectation,
         now_ms: u64,
     ) -> Result<(), ApprovalError> {
+        self.ensure_ready()?;
         let record = self.records.get(&token.record_id).ok_or_else(|| {
             ApprovalError::invalid("approval token references an unknown approval record")
         })?;
@@ -1181,58 +1272,44 @@ impl ApprovalLedger {
                 "policy revision changed after approval; approval cannot be reused",
             ));
         }
-        if record.consumed || !self.consumed.insert(record.nonce.clone()) {
+        if record.consumed || self.consumed.contains(&record.nonce) {
             return Err(ApprovalError::denied(
                 "approval was already consumed and cannot authorize another operation",
             ));
         }
-        if let Some(stored) = self.records.get_mut(&token.record_id) {
-            stored.consumed = true;
-            let updated = stored.clone();
-            self.tip = updated.checksum.clone();
-            self.append_consumed_marker(&updated).map_err(|error| {
-                ApprovalError::unavailable(format!(
-                    "persist approval consumption; retry with a fresh approval: {error}"
-                ))
-            })?;
-        }
-        Ok(())
-    }
-
-    fn append_to_file(&self, record: &StoredRecord) -> Result<(), ApprovalError> {
-        use std::io::Write as _;
-        let mut file = std::fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&self.path)
-            .map_err(|error| {
-                ApprovalError::unavailable(format!("persist approval record: {error}"))
-            })?;
-        serde_json::to_writer(&mut file, record).map_err(|error| {
-            ApprovalError::unavailable(format!("serialize approval record: {error}"))
-        })?;
-        file.write_all(b"\n").map_err(|error| {
-            ApprovalError::unavailable(format!("persist approval record: {error}"))
-        })?;
-        file.flush().map_err(|error| {
-            ApprovalError::unavailable(format!("persist approval record: {error}"))
-        })?;
-        Ok(())
-    }
-
-    fn append_consumed_marker(&self, record: &StoredRecord) -> std::io::Result<()> {
-        use std::io::Write as _;
         let mut marker = record.clone();
         marker.consumed = true;
         marker.prev_checksum = self.tip.clone();
         marker.checksum = record_checksum(&marker);
-        let mut file = std::fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&self.path)?;
-        serde_json::to_writer(&mut file, &marker)?;
-        file.write_all(b"\n")?;
-        file.flush()?;
+        // No authorization is released until this transition is durable.
+        // Any ambiguous append poisons the broker, without retrying a side effect.
+        self.append_to_file(&marker)?;
+        self.tip = marker.checksum.clone();
+        self.consumed.insert(marker.nonce.clone());
+        self.records.insert(marker.id.clone(), marker);
+        Ok(())
+    }
+
+    fn append_to_file(&mut self, record: &StoredRecord) -> Result<(), ApprovalError> {
+        use std::io::Write as _;
+        self.ensure_ready()?;
+        let persist = (|| -> Result<(), Box<dyn std::error::Error>> {
+            let mut serialized = serde_json::to_vec(record)?;
+            serialized.push(b'\n');
+            let mut file = std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&self.path)?;
+            file.write_all(&serialized)?;
+            file.sync_all()?;
+            Ok(())
+        })();
+        if let Err(error) = persist {
+            self.poisoned = true;
+            return Err(ApprovalError::unavailable(format!(
+                "approval ledger append/durability uncertain; refuse further grants: {error}"
+            )));
+        }
         Ok(())
     }
 
@@ -1687,6 +1764,298 @@ mod tests {
     }
 
     #[test]
+    fn issue_a_and_b_consume_a_then_restart_replay_denied() {
+        let path = temp_path("reg278-replay");
+        let mut ledger = ledger_in(&path);
+        let a = strong_prompt_with("reg278-a", 5_000);
+        let b = strong_prompt_with("reg278-b", 5_000);
+        let ra = ledger
+            .record_decision(
+                &a,
+                RecordedDecision::Approved,
+                PresenceOutcome::VerifiedStrong,
+                "test",
+            )
+            .expect("issue A");
+        ledger
+            .record_decision(
+                &b,
+                RecordedDecision::Approved,
+                PresenceOutcome::VerifiedStrong,
+                "test",
+            )
+            .expect("issue B");
+        let token = token_from(&ra);
+        let expected = ConsumeExpectation::strong(a.digest.clone(), "default", "sg-000019-v1");
+        ledger.consume(&token, &expected, 5_100).expect("consume A");
+        drop(ledger);
+        let mut resumed = ledger_in(&path);
+        assert!(!resumed.poisoned, "history must load completely");
+        assert!(resumed.consumed.contains(&token.nonce));
+        assert_eq!(
+            resumed.consume(&token, &expected, 5_200).unwrap_err().code,
+            FailureCode::ApprovalDenied
+        );
+        drop(resumed);
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn issue_c_after_consumption_survives_restart() {
+        let path = temp_path("reg278-successor");
+        let mut ledger = ledger_in(&path);
+        let a = strong_prompt_with("reg278-before", 5_000);
+        let ra = ledger
+            .record_decision(
+                &a,
+                RecordedDecision::Approved,
+                PresenceOutcome::VerifiedStrong,
+                "test",
+            )
+            .expect("issue A");
+        ledger
+            .consume(
+                &token_from(&ra),
+                &ConsumeExpectation::strong(a.digest.clone(), "default", "sg-000019-v1"),
+                5_100,
+            )
+            .expect("consume A");
+        let c = strong_prompt_with("reg278-after", 5_300);
+        let rc = ledger
+            .record_decision(
+                &c,
+                RecordedDecision::Approved,
+                PresenceOutcome::VerifiedStrong,
+                "test",
+            )
+            .expect("issue C");
+        drop(ledger);
+        let mut resumed = ledger_in(&path);
+        assert!(!resumed.poisoned);
+        assert!(
+            resumed.records.contains_key(&rc.id),
+            "C must survive restart"
+        );
+        resumed
+            .consume(
+                &token_from(&rc),
+                &ConsumeExpectation::strong(c.digest.clone(), "default", "sg-000019-v1"),
+                5_400,
+            )
+            .expect("consume C after restart");
+        drop(resumed);
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn concurrent_brokers_cannot_both_consume_one_token() {
+        let path = temp_path("reg278-writers");
+        let mut first = ledger_in(&path);
+        let a = strong_prompt_with("reg278-concurrent", 5_000);
+        let ra = first
+            .record_decision(
+                &a,
+                RecordedDecision::Approved,
+                PresenceOutcome::VerifiedStrong,
+                "test",
+            )
+            .expect("issue A");
+        let token = token_from(&ra);
+        let expected = ConsumeExpectation::strong(a.digest.clone(), "default", "sg-000019-v1");
+        let mut rival = ledger_in(&path);
+        assert!(
+            rival.poisoned,
+            "second writer must fail closed while first owns lock"
+        );
+        assert_eq!(
+            rival.consume(&token, &expected, 5_100).unwrap_err().code,
+            FailureCode::ApprovalUnavailable
+        );
+        first
+            .consume(&token, &expected, 5_100)
+            .expect("only first succeeds");
+        drop(rival);
+        drop(first);
+        let mut resumed = ledger_in(&path);
+        assert!(!resumed.poisoned);
+        assert_eq!(
+            resumed.consume(&token, &expected, 5_200).unwrap_err().code,
+            FailureCode::ApprovalDenied
+        );
+        drop(resumed);
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn torn_or_modified_chain_never_authorizes_a_token() {
+        let path = temp_path("reg278-torn");
+        let mut ledger = ledger_in(&path);
+        let a = strong_prompt_with("reg278-torn", 5_000);
+        let ra = ledger
+            .record_decision(
+                &a,
+                RecordedDecision::Approved,
+                PresenceOutcome::VerifiedStrong,
+                "test",
+            )
+            .expect("issue A");
+        let token = token_from(&ra);
+        let expected = ConsumeExpectation::strong(a.digest.clone(), "default", "sg-000019-v1");
+        ledger.consume(&token, &expected, 5_100).expect("consume A");
+        drop(ledger);
+        let mut file = std::fs::OpenOptions::new()
+            .append(true)
+            .open(&path)
+            .expect("open");
+        use std::io::Write as _;
+        file.write_all(b"{\\\"truncated\\\":")
+            .expect("partial write");
+        drop(file);
+        let mut reloaded = ledger_in(&path);
+        assert!(
+            reloaded.poisoned,
+            "invalid tail must poison instead of trusting prefix"
+        );
+        assert_eq!(
+            reloaded.consume(&token, &expected, 5_200).unwrap_err().code,
+            FailureCode::ApprovalUnavailable
+        );
+        assert!(reloaded
+            .record_decision(
+                &a,
+                RecordedDecision::Approved,
+                PresenceOutcome::VerifiedStrong,
+                "test"
+            )
+            .is_err());
+        drop(reloaded);
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn out_of_order_consumptions_remain_one_shot_across_two_restarts() {
+        let path = temp_path("reg278-out-of-order");
+        let mut ledger = ledger_in(&path);
+        let a = strong_prompt_with("reg278-out-a", 5_000);
+        let b = strong_prompt_with("reg278-out-b", 5_100);
+        let ra = ledger
+            .record_decision(
+                &a,
+                RecordedDecision::Approved,
+                PresenceOutcome::VerifiedStrong,
+                "test",
+            )
+            .expect("issue A");
+        let rb = ledger
+            .record_decision(
+                &b,
+                RecordedDecision::Approved,
+                PresenceOutcome::VerifiedStrong,
+                "test",
+            )
+            .expect("issue B");
+        let ea = ConsumeExpectation::strong(a.digest.clone(), "default", "sg-000019-v1");
+        let eb = ConsumeExpectation::strong(b.digest.clone(), "default", "sg-000019-v1");
+        ledger
+            .consume(&token_from(&rb), &eb, 5_200)
+            .expect("consume B first");
+        ledger
+            .consume(&token_from(&ra), &ea, 5_200)
+            .expect("consume A second");
+        drop(ledger);
+        for _ in 0..2 {
+            let mut ledger = ledger_in(&path);
+            assert!(!ledger.poisoned);
+            assert_eq!(
+                ledger
+                    .consume(&token_from(&ra), &ea, 5_300)
+                    .unwrap_err()
+                    .code,
+                FailureCode::ApprovalDenied
+            );
+            assert_eq!(
+                ledger
+                    .consume(&token_from(&rb), &eb, 5_300)
+                    .unwrap_err()
+                    .code,
+                FailureCode::ApprovalDenied
+            );
+            drop(ledger);
+        }
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn modified_consumption_marker_poison_blocks_further_approvals() {
+        let path = temp_path("reg278-marker-tamper");
+        let mut ledger = ledger_in(&path);
+        let prompt = strong_prompt_with("reg278-tamper", 5_000);
+        let record = ledger
+            .record_decision(
+                &prompt,
+                RecordedDecision::Approved,
+                PresenceOutcome::VerifiedStrong,
+                "test",
+            )
+            .expect("issue");
+        let expected = ConsumeExpectation::strong(prompt.digest.clone(), "default", "sg-000019-v1");
+        ledger
+            .consume(&token_from(&record), &expected, 5_100)
+            .expect("consume");
+        drop(ledger);
+        let source = std::fs::read_to_string(&path).expect("read");
+        assert!(source.contains("\"consumed\":true"));
+        let modified = source.replace("\"consumed\":true", "\"consumed\":false");
+        std::fs::write(&path, modified).expect("tamper");
+        let mut restarted = ledger_in(&path);
+        assert!(restarted.poisoned);
+        assert_eq!(
+            restarted
+                .consume(&token_from(&record), &expected, 5_200)
+                .unwrap_err()
+                .code,
+            FailureCode::ApprovalUnavailable
+        );
+        drop(restarted);
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn unsuccessful_append_poison_blocks_all_later_grants() {
+        let path = temp_path("reg278-write-failure");
+        let mut ledger = ledger_in(&path);
+        assert!(!ledger.poisoned);
+        // Deliberately make the ledger path a directory so the append fails.
+        std::fs::create_dir(&path).expect("simulate storage failure");
+        let prompt = strong_prompt_with("reg278-io-failure", 5_000);
+        let err = ledger
+            .record_decision(
+                &prompt,
+                RecordedDecision::Approved,
+                PresenceOutcome::VerifiedStrong,
+                "test",
+            )
+            .expect_err("persist must fail");
+        assert_eq!(err.code, FailureCode::ApprovalUnavailable);
+        assert!(ledger.poisoned);
+        std::fs::remove_dir(&path).expect("remove blocker");
+        let fresh = strong_prompt_with("reg278-next-grant", 5_200);
+        assert_eq!(
+            ledger
+                .record_decision(
+                    &fresh,
+                    RecordedDecision::Approved,
+                    PresenceOutcome::VerifiedStrong,
+                    "test"
+                )
+                .unwrap_err()
+                .code,
+            FailureCode::ApprovalUnavailable
+        );
+        drop(ledger);
+    }
+
+    #[test]
     fn nonces_are_fresh_unique_and_bound_to_digest() {
         let first = prompt_with("digest-a", 1_000);
         let second = prompt_with("digest-a", 1_000);
@@ -1986,6 +2355,7 @@ mod tests {
                 )
                 .expect("soft record")
         });
+        drop(soft_broker);
         let strong_broker = broker_with_presence(path.clone(), TestPresenceVerifier::verified());
         drop(strong_broker);
         let mut ledger = ledger_in(&path);
