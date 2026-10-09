@@ -1,43 +1,50 @@
-# Aladdin App — UI/UX and Size Budget (Proposed)
+# Windows v1 application decision
 
-Status: PROPOSED PLANNING ONLY. There is no Aladdin desktop GUI on `main`; approvals use `MessageBoxW` (SOFT) and Windows Hello `UserConsentVerifier` (STRONG). Draft PR #282 (opened 2026-10-09 during this research) adds a read-only WPF preview app (`apps/aladdin-desktop-preview`) built with the in-box .NET Framework compiler; its description reports a 22,016-byte executable (DOCUMENTED by the PR, not re-measured here).
+Status: independent planning review, 2026-10-09. PROPOSED, NOT ADOPTED. No implementation or authority change. Evidence baseline: PR #283 at `87bc9d6a69b6c5b5dc415ee6e30ee0fcb60d8985`, PR #282 at `10540885f3c52bd0c0d2f00cc23e3cafe067fe36`.
 
-## 1. Stack decision
+## Decision: keep WPF
 
-The UI must be a replaceable client of a stable local app API exposed by `qdrald` (status, task events, intents, device list). If that API is the contract, the UI toolkit becomes a reversible choice.
+PR282 is a genuine small read-only foundation, not the product. Its fixed allowlist and explicit unconfigured AI/pairing states are worth preserving. Independently running its verification script compiled a 22,016-byte executable and passed router and layout tests. That number excludes kernel, hosts, Node, production JavaScript, installer, updates, caches and OS prerequisites. It proves neither RAM nor startup speed.
 
-| Option | Download size | Fit | Decision |
+| Criterion | WPF / in-box .NET Framework | Tauri 2 / WebView2 | Windows v1 assessment |
 |---|---|---|---|
-| WPF on in-box .NET Framework 4.8.x (PR #282) | Smallest possible: no runtime to ship; tens of KB for the executable (DOCUMENTED in #282) | Windows-only; mature accessibility and RTL support; legacy framework with no new feature investment; a third language (C#) next to Rust/Go/TypeScript | ACCEPTABLE for the Windows MVP if the app stays a thin client |
-| Tauri 2 + system WebView2 (Rust backend) | Small: WebView2 ships with Windows 11; app binary typically single-digit MB (ESTIMATE) | Same language as `qdrald`; cross-platform path to macOS/Linux; the founder's Winds project uses Tauri 2 | RECOMMENDED when macOS/Linux enter scope, or now if one UI codebase across platforms is preferred |
-| Electron | Bundles Chromium and Node (typically well over 100 MB installed) | Large; duplicates the browser runtime | REJECT |
-| WinUI 3 / Windows App SDK | Requires the Windows App SDK runtime | Windows-only, heavier than WPF on in-box .NET Framework | REJECT for v1 |
-| Existing web stack in `apps/web` | Marketing site only | Not an app | n/a |
+| Startup/RAM | No bundled runtime; mature native controls | Native host plus web renderer processes | Both NOT MEASURED; test identical screens and process trees |
+| Native integration | Direct Windows accessibility, dialogs, tray and hotkeys | Rust/Windows bindings plus frontend bridge | WPF already provides a tested starting point |
+| Polish/flexibility | Templates/resources support compact professional UI | CSS and web ecosystem offer flexibility | Existing preview needs actual UX work in either case |
+| Arabic/English RTL | FlowDirection, localization, native automation patterns | CSS direction and web accessibility | Both supported in principle, neither qualified in Aladdin |
+| Accessibility | Standard controls expose UIA, custom controls need testing | DOM semantics, focus and WebView accessibility testing | Name controls, test Narrator, keyboard, scaling and high contrast |
+| Packaging | Small app; OS framework prerequisite must be detected | Small host; WebView2 availability/version still a prerequisite | Measure online/offline and clean Windows 11 installs |
+| Updates/signing | Existing lifecycle can install signed WPF payload | Tauri updater adds its own mechanism unless integrated | One governed signed update path, not two competing updaters |
+| Isolation/security | Separate client process, no arbitrary process API | Renderer plus narrowly allowlisted IPC/CSP/navigation | Neither can guarantee protection against same-user malware |
+| Windows 11 | Framework available on supported images, detect failures | WebView2 often available, detect/offline repair | Pin supported Windows builds and explicit prerequisite handling |
+| Future platforms | Windows only | Cross-platform UI candidate | Cross-platform kernel/host work remains regardless of toolkit |
+| Effort/reuse | Builds on PR282 now | Requires new shell/front-end integration | Marketing apps/web is not a reusable product frontend |
 
-Decision rule for WP-08: freeze the local app API first; then choose WPF (smallest, Windows-only) or Tauri (cross-platform) by measuring installed size, idle memory, RTL/Arabic rendering quality, and accessibility on the same screens.
+No head-to-head toolkit benchmark was run. C# is not a material problem in an already Rust/Go/TypeScript product. The app must never mint consent. Kernel-owned dialogs reduce coupling and forgery opportunities, but a dedicated process alone does not prevent same-user UI spoofing or synthetic input; preserve Hello and present residual risk honestly.
 
-The app is a client of `qdrald`, never an authority. The Tauri command allowlist exposes only: connect to local `qdrald`, read status and task events, submit user intents, and open approval dialogs that `qdrald` itself renders. Approval dialogs must remain owned by `qdrald` (or a dedicated, protected approval process) so that a compromised web UI cannot click "Approve".
+## Preview corrections before evolving it
 
-## 2. Screens and components
+Source review found synchronous UI-thread folder enumeration: GetFileSystemEntries materializes the directory before Take(12). Use cancellable bounded enumeration off the UI thread, report inaccessible/network folders without freezing. The CLI reader waits for process exit before draining redirected streams, which can deadlock on full pipes. Drain both streams concurrently with byte limits, timeout and owned-process cleanup. Executable presence is not daemon health. Use authenticated status/version responses and distinguish installed, stopped, reachable and incompatible.
 
-| Element | Behavior |
-|---|---|
-| Floating compact window | Chat input, push-to-talk button, device selector, current-task chip, Stop button; always-on-top optional |
-| Expanded workspace | Task timeline (observe -> propose -> approve -> execute -> verify), observation preview (cropped, redacted), receipts, files, sessions |
-| Device dashboard | Online state, active leases, queued tasks, last receipt per device, per-device kill switch |
-| Approval dialog (protected) | Exact action, target, digest summary, consequence class, device; Approve once / Deny; STRONG via Windows Hello |
-| Human takeover | "Take over" pauses the agent and revokes the input lease; physical input already invalidates leases (SG-000037 interruption epoch) |
-| Stop | Global hotkey and button: emergency revoke of all leases, cancel queued work, release held keys |
-| Privacy indicator | Shows whether the current step sends data to a model (Hala One, BYO provider) or stays local |
-| Remote indicator | Screen-edge border plus tray badge whenever a remote session or remote lease is active |
-| Settings | Profiles (Safe, Full User), workspaces, MCP client connections, devices, voice, privacy and retention |
-| Error recovery | Every `outcome_unknown` shows what is known, the last observation, and the safe next steps |
+The 1,160-pixel three-column preview is not the requested compact chat experience. Add a compact conversation/task view, optional expanded files/terminal pane, device selector and real event timeline. Bind actual capability availability; no placeholder model messages or apparent paired devices. Add UIA names, visible keyboard focus and explicit RTL layout. The existing verify script constructs layout; it does not exercise a visible Windows session.
 
-Arabic and English UI with right-to-left layout support from the start.
+## Incremental acceptance
 
-## 3. Size budget
+1. Read-only app: status unavailable/timeout/version mismatch are truthful; huge-directory and 5-second stalled-process fixtures leave UI responsive; bounded events recover after sequence gaps.
+2. Real task: intent goes through kernel; no free-form shell execution in UI; create-only report shows exact save path and approval; independent checker verifies bytes/hash.
+3. Control: cancel/stop during observation, approval wait and dispatch; cloud disconnected; Hello unavailable; owned process cleanup and input release verified. Unknown state remains visible.
+4. Usability: keyboard-only and Narrator, 100/150/200% DPI, multiple monitors, long English/Arabic text, RTL, reduced motion and high contrast.
+5. Release: non-admin clean Windows installation, signed payload/update verification, stale-version rejection, rollback without authority resurrection, full size report.
 
-### 3.1 Measured inputs (VERIFIED on this machine, 2026-10-09)
+## Exact reversal conditions
+
+Move to Tauri only if (a) macOS/Linux becomes a funded near-term product requirement, (b) a real reusable frontend or prototype demonstrably reduces implementation effort, and (c) the same functional app passes all authority, accessibility/RTL, installer/offline, update and non-admin tests with acceptable measured startup and memory within the overall 400 MB limit. Record total porting effort and regressions. A tiny Rust executable or a preference for one language does not satisfy these conditions.
+
+Measure signed installer download, full installed bytes including bundled runtime/dependencies, allocated disk, cold/warm time to interactive, aggregate working set/private bytes at idle and under task load, update download, and separately bounded cache growth. The founder's 400 MB target applies to the installed app/dependencies; optional cache is separately reported and cannot obscure product growth.
+
+## Historical component-size evidence (Opus, not independently remeasured)
+
+### 3.1 Measured inputs (reported by Opus on the research machine, 2026-10-09)
 
 | Artifact | Bytes | gzip bytes | Command |
 |---|---:|---:|---|
@@ -47,33 +54,5 @@ Arabic and English UI with right-to-left layout support from the start.
 | External Node.js runtime `node.exe` 24.19.0 (required today, not bundled) | 92,825,416 | 34,716,108 | `ls -la`; `gzip -c | wc -c` |
 | `deskal-computer-host.exe` (Go) | UNMEASURED (Go toolchain not installed) | | |
 
-### 3.2 Budget (targets; items marked ESTIMATE must be measured)
 
-| Component | Download (compressed) | Installed | Notes |
-|---|---:|---:|---|
-| `qdrald` + providers | 1.4 MB | 3.8 MB | Measured basis |
-| Computer Host (Go) | 2.5 MB ESTIMATE | 6 MB ESTIMATE | Measure with `-trimpath -ldflags "-s -w"` |
-| Browser engine (Rust CDP client, D4) | 1 MB ESTIMATE | 3 MB ESTIMATE | Uses installed Edge/Chrome; no bundled Chromium |
-| Shell/PTY host (Rust, D5) | 0.5 MB ESTIMATE | 1.5 MB ESTIMATE | |
-| MCP edge, option A: Rust (D7) | 1 MB ESTIMATE | 3 MB ESTIMATE | Removes Node entirely |
-| MCP edge, option B: Node bundled | 35 MB | 93 MB + JS | Measured Node size; only if D7 is rejected |
-| App UI: Tauri + assets, or WPF (PR #282) | Tauri 4 MB ESTIMATE; WPF under 1 MB | Tauri 12 MB ESTIMATE; WPF under 2 MB | WebView2 and .NET Framework are OS-provided on Windows 11 |
-| Voice client | 0 | 0 | Server-side STT/TTS; only Opus encoding (OS or small library) |
-| Notices, SBOM, manifests | 0.5 MB | 1 MB | Measured release notices are about 0.37 MB |
-| Total with option A | about 11 MB | about 30 MB | Far below the 400 MB ceiling |
-| Total with option B | about 45 MB | about 120 MB | Still below the ceiling |
-
-Runtime disk: task cache capped (default 500 MB, user-configurable) with LRU eviction; receipts small; no model weights on device. Memory target on a 16 GB machine: idle under 150 MB across all Aladdin processes, active under 400 MB excluding the user's own browser.
-
-Update size: delta updates per component (each host is a separate signed binary), so a typical update downloads one or two binaries (1 to 5 MB).
-
-### 3.3 Reproducible measurement procedure
-
-1. Build each component in release mode from a clean checkout at an exact commit with pinned toolchains (`rust-toolchain.toml`, `go.mod` toolchain, `package-lock.json`).
-2. Record `sha256`, raw size, and `gzip -9` size for each artifact in `size-report.json`.
-3. Build the installer; record signed installer size and unpacked installed size (`Get-ChildItem -Recurse | Measure-Object -Sum Length`).
-4. Measure runtime: start `qdrald` and the app, idle 5 minutes, record working set and private bytes per process (`Get-Process`), then run the standard E2E task set and record peak values.
-5. CI gate: fail the build if any component grows more than 10% or the total exceeds the budget without an approved budget change.
-6. Optionally run REA `inspect-artifact` on each release candidate for an independent component inventory.
-
-Code signing: the project currently ships unsigned binaries (zero-cost rule). SmartScreen friction is a real adoption cost; record "signing certificate or Microsoft Store/MSIX distribution" as an open founder decision.
+These component figures are not a complete installation and do not quantify incremental Playwright costs. One bundled Node runtime plus dependencies and separate workers remains the preferred MVP path; measure the complete release.

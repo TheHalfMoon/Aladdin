@@ -1,139 +1,58 @@
-"""Aladdin unit-economics model (planning estimate, not a measurement).
-
-Every input is an explicit assumption listed in ASSUMPTIONS; change them and
-re-run with `python -I unit_economics.py`. No network access, no dependencies.
+"""Planning-only cost sensitivity; no prices, network, dependencies or measured throughput.
+Historical API comparator is illustrative, not an Aladdin AI hosting proposal.
 """
+import math
 
 ASSUMPTIONS = {
-    # Pricing hypotheses (founder-proposed, not validated).
-    "core_price": 5.00,
-    "ai_price": 12.00,
-    # Payment processing: card processor 2.9% + $0.30 per charge (merchant of
-    # record would be higher, about 5% + $0.50). Taxes are passed through.
-    "card_pct": 0.029,
-    "card_fixed": 0.30,
-    # Hala One per visual step through a per-token API (no idle cost):
-    # ~1,500 uncached input tokens (screenshot ~1,300 + delta text),
-    # ~2,500 cached prefix tokens, ~150 output tokens.
-    # Prices: $0.30/M input, $0.03/M cached input, $2.00/M output.
-    "hala_step_low": 0.30e-6 * 1500 + 0.03e-6 * 2500 + 2.00e-6 * 100,
-    "hala_step_expected": 0.30e-6 * 1500 + 0.03e-6 * 2500 + 2.00e-6 * 150,
-    "hala_step_high": 0.30e-6 * 4000 + 2.00e-6 * 400,  # no cache, verbose
-    # Reliance decision (d1-3B class, zero output tokens, ~8-30 ms GPU).
-    "reliance_low": 0.000005,
-    "reliance_expected": 0.00002,
-    "reliance_high": 0.0001,
-    # Voice per minute (streaming STT + TTS, self-hosted GPU at moderate load).
-    "voice_min_low": 0.001,
-    "voice_min_expected": 0.003,
-    "voice_min_high": 0.01,
-    # Control plane (gateway, auth, relay rendezvous, DB, monitoring) fixed
-    # monthly cost by scale, plus per-subscriber variable cost.
-    "fixed_by_subs": {100: 60.0, 1000: 250.0, 10000: 1500.0, 100000: 9000.0},
-    "per_sub_ops": 0.15,  # logs, storage, egress, email, support tooling
-}
-
-# Monthly usage profiles for one Aladdin AI subscriber.
-USAGE = {
-    "low": {"hala": 300, "reliance": 1500, "voice_min": 10},
-    "expected": {"hala": 1500, "reliance": 6000, "voice_min": 45},
-    "high": {"hala": 6000, "reliance": 20000, "voice_min": 240},
+    "month_hours": 720,
+    "warm_gpu_hour": 2.20,  # illustrative; obtain a dated GPU/region quote
+    "min_warm_gpus": 1,
+    "gpu_seconds_per_step": 0.2,  # unmeasured amortized batch work, not latency
+    "utilization": 0.30,  # unmeasured average, not peak capacity
+    "steps_per_task": 10,  # illustrative sensitivity input
+    "historical_api_step": 0.000825,
+    "historical_steps_per_account": 1500,
 }
 
 
-def net_revenue(price):
-    return price - (price * ASSUMPTIONS["card_pct"] + ASSUMPTIONS["card_fixed"])
-
-
-def ai_variable_cost(profile, price_level):
-    a = ASSUMPTIONS
-    u = USAGE[profile]
-    return (
-        u["hala"] * a[f"hala_step_{price_level}"]
-        + u["reliance"] * a[f"reliance_{price_level}"]
-        + u["voice_min"] * a[f"voice_min_{price_level}"]
-        + a["per_sub_ops"]
-    )
-
-
-def table_subscribers():
-    rows = []
-    for subs, fixed in ASSUMPTIONS["fixed_by_subs"].items():
-        for profile in ("low", "expected", "high"):
-            level = "expected" if profile != "high" else "high"
-            var = ai_variable_cost(profile, level)
-            revenue = subs * net_revenue(ASSUMPTIONS["ai_price"])
-            cost = subs * var + fixed
-            rows.append((subs, profile, revenue, cost, revenue - cost))
-    return rows
-
-
-def ten_thousand_calls():
-    a = ASSUMPTIONS
-    per_call = {
-        "1 local tool invocation (runs on user device)": 0.0,
-        "2 remote device action via relay (~20 KB, $0.02/GB egress)": 20e3 / 1e9 * 0.02,
-        "3 Reliance decision": a["reliance_expected"],
-        "4 Hala One visual inference": a["hala_step_expected"],
-        "5 full AI workflow step (1 Hala + 3 Reliance + relay + log)": a["hala_step_expected"]
-        + 3 * a["reliance_expected"]
-        + 150e3 / 1e9 * 0.02
-        + 0.00005,
+def estimate(a):
+    for key in ("month_hours", "warm_gpu_hour", "min_warm_gpus",
+                "gpu_seconds_per_step", "steps_per_task",
+                "historical_api_step", "historical_steps_per_account"):
+        if a[key] <= 0:
+            raise ValueError(key + " must be positive")
+    if not 0 < a["utilization"] <= 1:
+        raise ValueError("utilization must be in (0, 1]")
+    seconds = a["month_hours"] * 3600
+    capacity = seconds * a["utilization"] / a["gpu_seconds_per_step"]
+    warm = a["month_hours"] * a["warm_gpu_hour"] * a["min_warm_gpus"]
+    return {
+        "warm_monthly_floor": warm,
+        "steps_per_gpu_month_assumed": capacity,
+        "amortized_busy_step_cost": a["gpu_seconds_per_step"] / 3600 * a["warm_gpu_hour"],
+        "historical_api_crossover_accounts": warm / (a["historical_api_step"] * a["historical_steps_per_account"]),
     }
-    budget = net_revenue(a["ai_price"]) - a["per_sub_ops"]
-    out = []
-    for name, cost in per_call.items():
-        total = cost * 10_000
-        max_calls = budget / cost if cost else float("inf")
-        out.append((name, cost, total, max_calls))
-    return budget, out
 
 
-# Self-hosted fine-tuned Hala One (required if the fine-tuned weights cannot be
-# served by a per-token provider). Assumptions: one H100-class GPU at
-# $3.95/hour serverless or $2.20/hour reserved; ~0.2 GPU-seconds per step at
-# good batching; 30% achievable average utilization; at least one warm GPU to
-# avoid 30-90 s cold starts on a ~35B-parameter checkpoint.
-SELF_HOST = {"gpu_hour_serverless": 3.95, "gpu_hour_reserved": 2.20,
-             "gpu_s_per_step": 0.2, "utilization": 0.30, "min_warm_gpus": 1}
-
-
-def self_host_hala_monthly(subs, steps_per_sub, hourly):
-    import math
-    sh = SELF_HOST
-    capacity = 30 * 24 * 3600 * sh["utilization"] / sh["gpu_s_per_step"]
-    gpus = max(sh["min_warm_gpus"], math.ceil(subs * steps_per_sub / capacity))
-    return gpus, gpus * hourly * 24 * 30
-
-
-def core_check():
-    return net_revenue(ASSUMPTIONS["core_price"])
+def cost_at_load(steps, a):
+    if steps < 0:
+        raise ValueError("steps must be nonnegative")
+    e = estimate(a)
+    workers = max(a["min_warm_gpus"], math.ceil(steps / e["steps_per_gpu_month_assumed"]))
+    return workers, workers * a["month_hours"] * a["warm_gpu_hour"]
 
 
 if __name__ == "__main__":
-    print("Net revenue per charge: Core $%.2f, AI $%.2f" % (core_check(), net_revenue(ASSUMPTIONS["ai_price"])))
-    print("\nHala step cost low/expected/high: $%.5f / $%.5f / $%.5f" % (
-        ASSUMPTIONS["hala_step_low"], ASSUMPTIONS["hala_step_expected"], ASSUMPTIONS["hala_step_high"]))
-    print("\nAI variable cost per subscriber-month:")
-    for p in USAGE:
-        lvl = "expected" if p != "high" else "high"
-        print("  %-9s $%.2f" % (p, ai_variable_cost(p, lvl)))
-    print("\n| Subscribers | Usage | Net revenue | Total cost | Monthly margin |")
-    print("|---:|---|---:|---:|---:|")
-    for subs, prof, rev, cost, margin in table_subscribers():
-        print("| %d | %s | $%s | $%s | $%s |" % (subs, prof, f"{rev:,.0f}", f"{cost:,.0f}", f"{margin:,.0f}"))
-    print("\nSelf-hosted Hala One (reserved $%.2f/h, 30%% utilization, >=1 warm GPU), expected usage:" % SELF_HOST["gpu_hour_reserved"])
-    print("| Subscribers | GPUs | Hala GPU cost/month | Per subscriber | Margin after all costs |")
-    print("|---:|---:|---:|---:|---:|")
-    for subs, fixed in ASSUMPTIONS["fixed_by_subs"].items():
-        g, c = self_host_hala_monthly(subs, USAGE["expected"]["hala"], SELF_HOST["gpu_hour_reserved"])
-        other = subs * (ai_variable_cost("expected", "expected") - USAGE["expected"]["hala"] * ASSUMPTIONS["hala_step_expected"])
-        margin = subs * net_revenue(ASSUMPTIONS["ai_price"]) - c - other - fixed
-        print("| %d | %d | $%s | $%.2f | $%s |" % (subs, g, f"{c:,.0f}", c / subs, f"{margin:,.0f}"))
-    budget, rows = ten_thousand_calls()
-    print("\nCompute budget per $12 subscriber after fees and ops: $%.2f" % budget)
-    print("| Interpretation of one 'call' | Cost per call | Cost of 10,000 | Break-even calls per month |")
-    print("|---|---:|---:|---:|")
-    for name, c, total, maxc in rows:
-        mc = "unbounded" if maxc == float("inf") else f"{maxc:,.0f}"
-        print("| %s | $%.6f | $%.2f | %s |" % (name, c, total, mc))
+    a = ASSUMPTIONS
+    e = estimate(a)
+    print("ILLUSTRATIVE ESTIMATES; throughput/latency/provider pricing NOT MEASURED")
+    print("Warm GPU monthly floor: $%.2f" % e["warm_monthly_floor"])
+    print("Assumed steps/GPU-month: %.0f" % e["steps_per_gpu_month_assumed"])
+    print("Amortized busy-step cost: $%.8f (excludes idle/load/storage/egress)" % e["amortized_busy_step_cost"])
+    print("Historical API-equivalent crossover: %.0f accounts; NOT a hosting/pricing decision" % e["historical_api_crossover_accounts"])
+    print("| Attempted steps/month | Assumed warm GPUs | GPU cost/month | Cost/attempted task at %d steps |" % a["steps_per_task"])
+    print("|---:|---:|---:|---:|")
+    for steps in (150000, 450000, 1500000, 15000000):
+        workers, spend = cost_at_load(steps, a)
+        print("| %d | %d | $%.2f | $%.4f |" % (steps, workers, spend, spend / (steps / a["steps_per_task"])))
+    print("Cost/verified task needs measured success counts and all failed/idle/load/storage/egress spend.")

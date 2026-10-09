@@ -1,98 +1,89 @@
-# Aladdin Master Plan (Proposed, NOT ADOPTED)
+# Aladdin master plan — independent Sol revision
 
-Status: PROPOSED PLANNING ONLY. Research date 2026-10-09. Author: Claude (Opus 5.5) research session for the founder. Grants no authority, imports no code, closes no issue.
+Status: independent planning review, 2026-10-09. PROPOSED, NOT ADOPTED. No implementation or authority change. Evidence baseline: PR #283 at `87bc9d6a69b6c5b5dc415ee6e30ee0fcb60d8985`, PR #282 at `10540885f3c52bd0c0d2f00cc23e3cafe067fe36`.
 
-## 1. Executive summary
+## Judgment
 
-Aladdin already has the hardest part that competitors lack: a governed, typed, per-action authority kernel with native Windows UI Automation, exact-window capture, bounded real input under a local Full User lease, approvals with Windows Hello, device identity, OAuth, and a self-hostable relay. Its largest product gaps are not safety but capability and usability: no live browser engine (the browser layer is contract-only), no governed interactive shell yet, no desktop app, no multi-device orchestration, and an unsigned release that still depends on a separately installed Node.js.
+Opus produced a useful research inventory and a defensible authority model. I would not adopt the package unchanged. Its delivery strategy optimizes hypothetical runtime size before proving working tasks, duplicates mature browser engineering, and contradicts the founder's server-only AI and deferred-pricing requirements. The security repair proposal is incomplete. Keep the kernel, simplify everything around it, and ship a Windows app that completes one bounded task before building fleet infrastructure.
 
-The plan therefore keeps the existing architecture and fills gaps in this order: repair the reproduced approval-ledger defect (#278); finish shell sessions with a same-language Rust ConPTY engine from the founder's Winds project; make the browser contracts real with a small Rust CDP client against the user's installed Edge/Chrome; add a task/receipt model; ship a compact thin-client app (building on the WPF preview in draft PR #282, or Tauri if cross-platform is prioritized); then multi-device; then the server-side Aladdin AI tier, priced with two usage meters so heavy vision use cannot sink the margin.
+These scores assess the proposed plan, not the quality or security of a shipped product. They are engineering judgments, not benchmark measurements.
 
-Two founder assumptions should change: (1) "Aladdin" and "Reliance" carry serious trademark risk and need counsel review before any public rebrand; (2) "10,000 calls for $12" is only sustainable if "calls" are not Hala One vision inferences; define two meters instead.
+| Category | /10 | Evidence and reason |
+|---|---:|---|
+| Research quality | 7 | Exact source pins and honest measurement labels are valuable; REA raw provenance is unavailable, donor conclusions sometimes outrun inspected code. |
+| Architecture quality | 7 | One local authority and structured-first execution are strong; Rust CDP and an MCP rewrite add avoidable ownership. |
+| Security | 6 | Correct local trust boundary; independently reproduced ledger defects, incomplete crash/concurrency/rollback repair, overconfident redaction. |
+| Speed/performance strategy | 6 | Good focus on observations and postconditions; no task baseline, warm-worker or extra Reliance-call measurements. |
+| Product UX strategy | 6 | Thin shell and visible approvals are sound; toolkit indecision and broad prerequisite graph postpone an actual workflow. |
+| Reuse efficiency | 5 | Keeps existing kernel; rejects the most useful browser runtime on an incorrect incremental Node-size argument. |
+| Multi-device design | 6 | Explicit target grants and unknown-outcome handling are strong; LAN, QUIC and DAGs precede the two-target proof. |
+| Aladdin AI integration | 5 | Cloud proposes/device decides is right; API pilot contradicts founder hosting; d1 is a custom decision head. |
+| Cost efficiency | 5 | Script arithmetic reproduces; 300-subscriber crossover is unsupported; price hypotheses become architectural dependencies. |
+| Speed to a real MVP | 4 | 25 packets are not all on the MVP path, but shell/browser/task/parity/installer sequencing still delays narrow value. |
+| Maintainability | 6 | Typed contracts help; new CDP maintenance, optional edge rewrite and overlapping plan registers increase drift. |
+| Competitive potential | 7 | Local authority, native Windows and verified artifacts could differentiate; superiority has not been measured. |
 
-## 2. Verified GitHub frontier (2026-10-09)
+## Verified frontier and evidence ledger
 
-| Item | Value | Evidence |
-|---|---|---|
-| Repository | `TheHalfMoon/Aladdin` (renamed from Deskal), public, Apache-2.0, default branch `main` | `gh repo view` |
-| `main` head | `61e664b3c39380a76aede29aa9c2d7fcbc449b08` (merge of PR #277, 2026-10-09 04:13 +0300) | fresh clone |
-| CI on head | Run `37868730423` success | `gh run list` |
-| Open PRs | None at research start; draft #282 (read-only WPF desktop preview) opened at 05:02Z during research | `gh pr list --state open` |
-| Remote branches | 289 | `git branch -r` |
-| Releases | One: "Cotra 0.1.0" (`v0.1.0`), zip 4,839,256 bytes | `gh release view` |
-| Open issues in scope | #278 (security), #279, #280, #281 (planning, not adopted), #260 (SG-000096 active) | `gh issue view` |
-| Active grain | SG-000096 shell and process sessions (T02 sub-slices merging; production shell unarmed) | `.specgrain/specs/SG-000096.json`, `docs/canonical/CURRENT.md` |
-| #278 | Reproduced deterministically at ledger level (see `SECURITY_THREAT_MODEL.md` Section 5) | local test run |
-| Branch protection API | 404 for the research account (READ permission); repository rules unknown to this session | `gh api .../protection` |
+Fresh GitHub reads on 2026-10-09 confirmed public repository identity Aladdin, default branch main, and main head `61e664b3c39380a76aede29aa9c2d7fcbc449b08`. PR #283 remains open/draft at the baseline above, 15 changed files: 14 Markdown and the dependency-free economics script. PR #282 remains open/draft, four files. Issues #278/#279/#280/#281/#260 were open when inspected. The active canonical program remains SG-000096; this review does not activate a successor.
 
-## 3. Research and REA execution summary
+Both original PR heads had 11/11 completed successful checks. Actual #283 Jev log: 15 expected and 15 reviewed hunks, PASSED, no reported blocking findings. Actual Alibaba log: one reviewable file, 14 Markdown exclusions with unsupported_ext. Green delegation does not establish review of those documents. No submitted formal reviews or review threads were returned at initial inspection; an earlier independent issue comment existed. This report supplies manual architectural review, not founder adoption.
 
-- Aladdin source read across all crates and apps; inventory in `ARCHITECTURE.md` Section 1.
-- Founder repositories inspected: kernux, Ascout, Kodac, Winds, Sentrdel, Orcel, Morize, commandF, SpecGrain, Diffcipline (revisions in `SOURCE_REUSE_MATRIX.md`). Private-repository details are summarized at capability level; file-level evidence was delivered privately.
-- External sources cloned and read at exact revisions: Desktop Commander, Open Computer Use, AgentQL, REA, browser-use, Stagehand, Playwright MCP, Chrome DevTools MCP, MeshAgent, UFO, cua, Windows-MCP, Agent-S, WebMCP.
-- REA 6.1.0 installed from the exact registry tarball (integrity verified), diagnostics run, and used on Desktop Commander's installed package: one run failed (out of memory on 17,510 files), one scoped run succeeded and produced confirmed findings. Native decompilation is blocked (no Ghidra/Hopper/IDA). See `REA_INVESTIGATION_REPORT.md`.
-- Claude and OpenAI computer-use internals were studied only through public documentation; their local apps were not reverse engineered because their terms prohibit it.
-- Not accessible: the founder's Desktop Commander fork and any private TinyFish source (searched four authenticated GitHub accounts and the local disk).
-- Measurements actually taken: release binary sizes for `qdrald` and the browser host, Node runtime size, REA timings, #278 reproduction. Not measured: Go host size, any task latency or success rate, any GPU throughput.
+The live active [main ruleset](https://github.com/TheHalfMoon/Aladdin/rules/24456712) has ten required check contexts, no bypass actors, and strict status checks. It permits merge/squash/rebase and does not require thread resolution at API level; project governance is stricter and requires normal merge and resolution. Do not infer absent protection from the legacy branch-protection field or Opus's 404.
 
-## 4. Final recommended architecture
+| ID / evidence class | Observation and primary evidence |
+|---|---|
+| E1 VERIFIED FACT | [PR283](https://github.com/TheHalfMoon/Aladdin/pull/283), [PR282](https://github.com/TheHalfMoon/Aladdin/pull/282), [main](https://github.com/TheHalfMoon/Aladdin/tree/61e664b3c39380a76aede29aa9c2d7fcbc449b08). GitHub reports PR283 signature valid; DCO footer present. |
+| E2 VERIFIED FACT | [Browser provider](https://github.com/TheHalfMoon/Aladdin/blob/87bc9d6a69b6c5b5dc415ee6e30ee0fcb60d8985/crates/qdral-provider-browser/src/lib.rs#L1730) returns a fixed template; host supervision is not live browser actuation. |
+| E3 VERIFIED FACT | [MCP tool contract](https://github.com/TheHalfMoon/Aladdin/blob/87bc9d6a69b6c5b5dc415ee6e30ee0fcb60d8985/apps/qdral-mcp/src/tool_contract.ts) has 40 tools, 26 core plus 14 local-only; OAuth, pairing and relay already exist. |
+| E4 EXPERIMENTAL FINDING | Original approval library plus three added tests in an isolated copy: 27 existing passed, three regressions failed, exit 101. Replay after restart, approval C lost, two live brokers accept one token. See security report and retained test log. |
+| E5 MEASURED RESULT | PR282 verification compiled a 22,016-byte WPF executable and passed router/layout self-tests. No visible GUI automation, installer, RAM, startup or user-journey qualification was performed. |
+| E6 VERIFIED FACT | Twelve public donor source checkouts, licenses and exact HEADs independently read; inventory in reuse matrix. Main snapshots of Playwright are prerelease, not selected production dependency pins. |
+| E7 SOURCE-DOCUMENTED CLAIM | Holo4/d1 model cards, Liquid license, Chrome debugging-profile guidance, RunPod billing docs; serving and vendor scores are not Aladdin measurements. |
+| E8 MEASURED RESULT | Original unit_economics.py executes offline and reproduces tables. At its assumptions, reserved GPU cost is $1,584/month and API-equivalent Hala cost $1.2375/subscriber; crossover is 1,280 subscribers, not 300. This comparison is illustrative and not the permitted AI pilot. |
+| E9 BLOCKED CAPABILITY | REA doctor invocation exits 1: compiled runtime missing. Opus's timings, OOM and analysis artifact remain secondary execution evidence; installed Desktop Commander 0.2.52 and source patterns were independently inspected. |
+| E10 VERIFIED FACT / limitation | Authorized private donor code and tests were inspected. Private revision/file evidence is kept in the local reuse-matrix appendix and excluded from public publication. No private code imported. |
 
-See `ARCHITECTURE.md` Section 2. In one line: untrusted intent (app, MCP clients, Aladdin AI cloud) -> edge -> `qdrald` (sole authority) -> execution hosts (Computer Host, Browser Engine, Shell Host, providers, Device Fabric) -> verified receipts.
+Use MEASURED RESULT only for an actual run; SOURCE-DOCUMENTED CLAIM for vendor statements; ENGINEERING INFERENCE for architecture choices; ESTIMATE for effort/budgets; UNPROVEN ASSUMPTION for throughput/size; OPEN DECISION for adoption/legal clearance. A source contract is not an implemented journey. Competitor task performance is NOT MEASURED.
 
-## 5. Decision register
+## Direct answers A–O
 
-Each decision lists rationale, source, reuse option, alternatives, trade-offs, dependencies, owner, acceptance test, rollback, and uncertainty.
+**A — Is the plan good?** Yes as research and a proposal inventory; insufficient as the adopted execution plan.
 
-| ID | Decision | Rationale and source | Reuse | Alternatives and trade-offs | Depends on | Owner | Acceptance test | Rollback | Uncertainty |
-|---|---|---|---|---|---|---|---|---|---|
-| D1 | Keep `qdrald` as the only authority; adopt Kernux vocabularies, not a Kernux daemon | Two authorities create "least restrictive wins" bugs; #279 already forbids a second policy owner | ADAPT Kernux method ceilings, consequence and egress classes | Run Kernux as peer daemon: more processes, duplicated policy | None | Founder + security reviewer | Policy unit tests map every Kernux class to one `qdral-policy` rule | Remove vocabulary mapping | Low |
-| D2 | Fix #278 before any approval-holding feature | Reproduced replay and record loss after restart | Repair design in threat model | Defer: unacceptable for SG-000096 interactive sessions and remote approvals | None | Security | Section 5.5 matrix | Revert to current ledger (known-defective) | Low |
-| D3 | Shell sessions via Rust ConPTY adapted from Winds; Desktop Commander as behavioral reference | Same language as `qdral-provider-process`; Winds has Windows-native lifecycle tests | ADAPT (private founder source) | Port DC TypeScript: adds Node runtime coupling and a language boundary | D2, SG-000096 T01 | Process owner | SG-000096 contract items 1 to 9 | Keep Safe-only execution | Medium (Winds engine maturity outside Winds) |
-| D4 | Live browser engine: small Rust CDP client over a debugging pipe to the user's installed Edge/Chrome; keep existing SG-000021 to SG-000026 contracts | The current snapshot is a template; Playwright-based Node sidecar would add ~93 MB Node runtime | REFERENCE Playwright AX snapshot and refs, browser-use DOM serializer, Stagehand extension (for signed-in mode later) | Playwright sidecar: fastest to build, large; Stagehand extension: great for signed-in browsers, powerful `debugger` permission | D1 | Browser owner | Live fixtures pass with all existing origin/redirect/download/upload controls | Disable live engine (contract-only state) | Medium (CDP surface area) |
-| D5 | Structured-first execution hierarchy L1 to L7, no silent escalation | Fewer screenshots, fewer model calls, fewer wrong targets | Existing UIA registry | Screenshot-first: simpler, slower, costlier | D4 | Architecture | ANWS: screenshots per task and wrong-target rate | n/a | Low |
-| D6 | Device Fabric on existing identity/relay with E2E device channel, LAN direct, per-device grants, visible indicator | Reuses SG-000052 to SG-000057 contracts; avoids AGPL and SYSTEM-agent designs | REFERENCE MeshAgent indicators, UFO3 DAG | MeshCentral import: large, different security model | D2, WP-06 | Remote owner | `MULTI_DEVICE_ARCHITECTURE.md` Section 9 | Disable controller role | Medium (NAT traversal) |
-| D7 | Evaluate removing Node from the device by porting the MCP edge to Rust | Node is 92.8 MB of a ~100 MB install; the rest is ~10 MB | Official Rust MCP SDK (verify license and maturity) | Bundle Node: simpler, larger | WP-09 prototype | Edge owner | 40-tool contract tests pass on Rust edge | Keep Node edge | Medium (edge has 13.8k TS lines including OAuth) |
-| D8 | Thin app client over a frozen local app API; approvals rendered by `qdrald`. Toolkit: WPF on in-box .NET Framework (draft PR #282) for a Windows-only MVP, or Tauri 2 for a cross-platform path, chosen by measurement | Size is a hard constraint; WPF ships no runtime; Tauri shares Rust and reaches macOS/Linux | PR #282 preview; REFERENCE Winds desktop (Tauri) | Electron (large); WinUI (extra runtime) | WP-08 | UX owner | App cannot approve; size and memory budget; Arabic RTL review | Ship CLI-only | Medium (toolkit choice is reversible only if the app API is frozen first) |
-| D9 | Aladdin AI: cloud proposes, device decides; Kodac-derived bounded orchestrator | Keeps OS authority local | ADAPT Kodac model layer and loop | Cloud-side execution: violates safety model | D1, WP-06 | AI owner | Forged/stale proposals fail closed | Disable AI tier | Low |
-| D10 | Hala One base = Holo4-35B-A3B (Apache-2.0); reject Holo4-27B (CC BY-NC) | License | Model card | 27B: better claimed scores, non-commercial | License verification of base and processor | Founder | License audit record | Use BYO provider | Medium (claimed scores conflict with OSWorld 2.0 authors) |
-| D11 | Reliance = d1 family, strictly advisory (can only make actions stricter) | Calibrated typed answers, low latency | Model card | Use Hala One for decisions: costlier | LFM revenue-cap acceptance | Founder | False-allow metrics; disabled-model test | Disable Reliance | Medium (calibration on Windows data unknown) |
-| D12 | Two-meter AI allowance; per-token API at launch; self-host after ~300 subscribers | Economics model | `tools/unit_economics.py` | Single 10,000-call meter: loss-making for heavy vision users | WP-20 measurements | Founder | Measured cost per verified task under cap | Adjust allowance | High (GPU-seconds per step unmeasured) |
-| D13 | Never inject vendor-controlled content into model-visible results; no remote feature flags affecting tools | Verified Desktop Commander pattern | n/a | n/a | None | Security | Code review checklist | n/a | Low |
-| D14 | Name clearance before public rebrand | Registered ALADDIN marks in classes 9 and 42 | n/a | Rebrand anyway: legal risk | WP-02 | Founder + counsel | Written clearance | Keep Deskal or choose a new mark | High |
+**B — Adopt unchanged?** No. Correct ledger recovery, browser reuse, hosting, pricing and milestone sequence first.
 
-## 6. Strongest source-reuse strategy (summary)
+**C — Five largest weaknesses:** unnecessary CDP ownership; incomplete approval persistence/recovery; contradictory AI-hosting and subscriber threshold; infrastructure-heavy two-device path; no working-task evidence behind performance/product conclusions.
 
-Keep what Aladdin owns (authority, UIA, capture, input, approvals, identity, relay). Adapt from the founder's own code where it is same-language and tested (Winds ConPTY, Kodac model loop, Kernux vocabularies and secret handles, Sentrdel detectors). Adapt narrowly from MIT/Apache donors (Desktop Commander edit/search/PDF behaviors; UI-TARS action parser). Reference, never import, large or restrictively licensed systems (Playwright, Stagehand, UFO3, MeshAgent, RustDesk, cua Spaces). Details in `SOURCE_REUSE_MATRIX.md`.
+**D — Five strongest decisions:** qdrald remains sole authority; structured methods before pixels; no cloud-granted privilege; explicit per-device grants; unknown-outcome reconciliation rather than automatic mutation retries.
 
-## 7. Adversarial review of this plan
+**E — Remove immediately:** MVP MCP rewrite prototype; LAN/QUIC prerequisites; compulsory Reliance calls; subscription allowances/billing gates; rollback to a known-defective ledger. Remove categorical claims that competitors lack authority kernels or that registered-secret filtering finds every screenshot secret.
 
-| # | Question | Answer |
-|---|---|---|
-| 1 | Duplicating existing Aladdin functionality? | The browser host and UIA registry appear to carry parallel coordinate/capture contracts; the plan assigns one owner before adding browser actuation. No other duplication proposed. |
-| 2 | Unnecessary donor import? | Porting Desktop Commander's terminal manager was planned in SG-000096; the Winds Rust engine is a better fit. Firecrawl remains gated. Playwright is not imported. |
-| 3 | Simpler proven alternative? | For the browser, a Playwright sidecar is simpler to build but costs ~93 MB and a second runtime; D4/D7 trade build effort for size. This is the plan's main bet and should be reconsidered if WP-09 shows the Rust edge is expensive. |
-| 4 | Two authorization systems? | No. Kernux contributes vocabulary only; Reliance is advisory; the cloud only proposes. |
-| 5 | Hosted AI too much authority? | No authority: proposals are validated on device against local policy and approvals. Residual risk: a persuasive model can still get a user to click "Approve"; mitigated by exact-action dialogs and consequence classes. |
-| 6 | Lateral movement? | Per-device grants, no inheritance, controller compromise test (MD Section 9). Residual risk: a user who grants unattended Full User on many devices to one controller accepts that blast radius; default is observation-only. |
-| 7 | Scales without uncontrolled cost? | Yes with two meters and hard caps; no with a single 10,000-vision-call promise. |
-| 8 | 16 GB Windows thin client? | Yes: no local model, no bundled browser; budget idle under 150 MB. Needs measurement. |
-| 9 | Core independent of the founder's AI? | Yes by design: BYO clients and providers; local execution. |
-| 10 | Largest latency source? | Model round trips per step (seconds), not input injection (milliseconds). Structured routing and batching attack it. |
-| 11 | Largest failure source? | Stale or wrong targets and unexpected UI states (dialogs, focus changes), plus web pages without stable structure. Generation binding and postconditions address the first; the browser engine and Hala One address the rest. |
-| 12 | Highest security risk? | Approval integrity (#278) today; tomorrow, remote actuation plus prompt injection steering users to approve. |
-| 13 | MCP limits per client? | ChatGPT: write actions plan-dependent (beta for Business/Enterprise/Edu per OpenAI help center; Plus/Pro disputed), no mobile, local servers need the tunnel. Others: untested in this session. |
-| 14 | Simplest first product? | Core MVP: local Windows, files + Git + governed shell + live browser + UIA desktop, thin app client (D8), works with Claude/Codex/Cursor via stdio. No cloud. |
-| 15 | Better than Desktop Commander and TinyFish how? | Enforced per-action authority instead of guardrails; native UIA semantics; local structured browser extraction without per-step fees; multi-device with device auth; receipts. |
-| 16 | Measurable differentiators? | Verified success on ANWS, wrong-target rate, screenshots per task, cost per verified task, adversarial pass rate, kill-switch latency, install size. |
-| 17 | Evidence that would disprove the architecture? | If ANWS shows structured-first routing does not reduce model calls or wrong targets versus a screenshot-only loop with the same model; if per-action approvals make tasks unusable (approval count per task too high); if the Rust CDP engine fails on common sites that Playwright handles. |
-| 18 | Postpone? | Full Admin, Persistent Admin, macOS/Linux, unattended remote, TinyFish adapter, Firecrawl crawl, WebMCP execution (keep discovery). |
-| 19 | Without rebuilding third-party products wholesale? | Yes; every row in the reuse matrix is a bounded file set or a pattern. |
-| 20 | Every milestone has tests and dependencies? | Yes in `IMPLEMENTATION_ROADMAP.md` Sections 2 to 4; quantitative thresholds for success rates remain to be set after the first baseline (cannot be set honestly before measurement). |
+**F — Redesign:** browser as a constrained Playwright worker; task receipts as a minimal per-step record; two-target orchestration over the existing relay; founder-hosted AI as one control service plus workers; compact WPF shell with real broker events.
 
-## 8. Conclusion
+**G — Reuse:** keep authority/UIA/capture/input/identity/OAuth/MCP; wrap Playwright-core; adapt bounded file/search and lifecycle behavior; copy small tested parser parts only after provenance review; use fleet and agent frameworks as references. Do not replace the authorized SG096 donor merely on a language preference.
 
-NOT READY FOR ADOPTION AS CANONICAL; READY FOR FOUNDER REVIEW AS A PROPOSAL.
+**H — Better browser approach?** Yes: Playwright-core behind a private typed host interface, using installed Edge/Chrome and a dedicated profile. Qualify stable release and policy enforcement. Rust CDP remains a later, measurement-triggered optimization.
 
-Reasons it is ready for review: the frontier is verified; the main code facts, the #278 defect, donor licenses, model licenses, and economics drivers are evidenced; decisions have owners, tests, and rollbacks.
+**I — WPF or Tauri?** Keep WPF for Windows v1. Reverse only with a funded near-term cross-platform requirement and measured parity on the same functional screens, accessibility/RTL, IPC security, startup, memory, packaging and update tests.
 
-Reasons it is not ready for adoption: trademark clearance is unresolved (D14); no product benchmark exists yet, so success and latency targets are hypotheses; GPU cost per step is unmeasured; the Go host size and client compatibility are unverified; governance review (Jev, Alibaba OCR, exact-head CI) has not been run on this planning PR; and #278 must remain open until an independently qualified repair merges.
+**J — Rewrite MCP now?** No. Preserve the 40-tool contract, OAuth and pairing. Package one pinned Node runtime for edge and worker processes. Measure total installed bytes before reconsidering.
+
+**K — Fastest safe app?** Start the read-only shell/API and harness immediately; repair #278 independently; deliver approved create-only report generation and real browser download; qualify one actual MCP client; finish terminal activation under SG096 rather than making every shell feature a browser dependency.
+
+**L — Faster/more reliable than rivals?** Possibly through generation-bound structured observations, direct APIs, event-driven waits, minimal model calls and independent artifact verification. Prove paired task-time distributions, success and unauthorized effects with the same planner and workload. Present advantage is a hypothesis.
+
+**M — Scale without bloat?** Yes in design: same thin app, paginated directory, lazy device subscriptions, bounded queues and per-target grants. Fleet load, revocation propagation and staffing remain unmeasured.
+
+**N — Overengineered?** Governance is necessary and must be preserved. The execution dependency graph and proposed networking/serving decomposition are overbuilt for the initial product. Evidence collection can be automated; review cannot be bypassed.
+
+**O — My company first?** A Windows app that finds a real document and creates a verified approved report, with truthful progress and stop. Refuse a browser-engine rewrite, edge rewrite, enterprise mesh, payment system, mandatory router model or broad unattended privileges before that proof.
+
+## Adoption and next work
+
+Adopt the revised direction as planning only after founder and normal governance review. Keep #283 draft and #278 open. No production source, permissions, CI, canonical state, models or infrastructure were changed by this review.
+
+Next three executable packets: (1) #278 isolated security repair with durable one-writer append and full fault tests; (2) WPF read-only app API/timeline and truthful daemon status, correcting UI-blocking I/O; (3) narrow live-browser adapter behind existing contracts with real download and denial fixtures. Packet 2 can develop read-only functionality independently; packet 3's mutations wait for qualified ledger repair and authorized grain sequencing. See fast-track report for estimates and exact exit tests.
+
+## Revision provenance
+
+This proposed revision corrects the Opus planning package at the baseline above. Original research/decisions remain available at that immutable Git revision; Opus execution claims are attributed and are not relabeled as Sol measurements. OPUS_TO_SOL_CHANGELOG.md records decision changes. No canonical adoption or implementation is claimed.

@@ -1,11 +1,74 @@
-# Aladdin Architecture (Proposed)
+# Aladdin improved architecture
 
-Status: PROPOSED PLANNING ONLY. Grants no authority.
-Base: `main@61e664b3c39380a76aede29aa9c2d7fcbc449b08`.
+Status: independent planning review, 2026-10-09. PROPOSED, NOT ADOPTED. No implementation or authority change. Evidence baseline: PR #283 at `87bc9d6a69b6c5b5dc415ee6e30ee0fcb60d8985`, PR #282 at `10540885f3c52bd0c0d2f00cc23e3cafe067fe36`.
+
+## Preferred design
+
+Keep the existing authority and compatibility interfaces. Use the current Node MCP edge and a thin WPF Windows app. Add a constrained Playwright-core browser worker. Finish existing process work through SG096. Introduce the smallest task record that explains execution and supports reconciliation. Core needs no founder inference; hosted AI is a separate client of exactly the same local kernel.
+
+`WPF / external MCP client / founder AI -> authenticated input adapter -> qdrald -> authorized providers and owned workers -> observations + checked receipts`
+
+This is an ENGINEERING INFERENCE. It preserves working components and reduces new ownership; its latency and full installation size remain unmeasured.
+
+## Ownership and isolation
+
+| Component | Owns | Must not own |
+|---|---|---|
+| WPF shell | Display, explicit device selection, user intent, progress, cancel/takeover requests | Approval tokens, permission decisions, arbitrary command execution |
+| Existing MCP edge | Tool discovery, transport, client binding, OAuth/pairing | Device authority or cloud-derived privilege |
+| qdrald | Policy, exact targets, leases, broker interaction, dispatch, task/step records, interruption | Model inference or subscription logic |
+| Browser worker | Installed-browser lifecycle, bounded AX/DOM extraction and typed actions | Raw public CDP endpoint, unrestricted evaluate, shell, donor policy engine |
+| Computer Host | Existing UIA, capture and authorized input execution | Choosing a stronger method or protected-screen access |
+| Process/files providers | Existing identity-bound operations and owned process cleanup | Ambient model-generated shell or implicit path expansion |
+| Relay | Existing bounded routing and session binding | Target grants or approval authority |
+| Founder AI service | Tenant sessions, bounded planning, model/speech routing, cost telemetry | Minting local targets, approvals, leases or completion proof |
+
+One signed, pinned Node runtime may serve separate edge and browser processes. Separate processes have separate private channels and lifecycles; runtime deduplication does not mean shared privilege. Inventory production dependencies and notices. No runtime npx@latest, bundled browser, Electron or model weights.
+
+## App API proposal
+
+Use a private per-user stdio/named-pipe adapter whose authenticated peer and session are bound to the actual local user. Named pipes require explicit ACLs and peer/process validation; loopback alone is not authentication. Freeze a small versioned contract, not an entire future platform:
+
+- status/capabilities and paginated enrolled-device reads;
+- submit intent with explicit target device and opaque task id;
+- bounded event subscription with sequence/cursor, snapshot after gaps;
+- task/step status and receipt reads;
+- cancel, immediate stop and takeover;
+- request broker presentation of an exact proposal, never submit an approved token from UI.
+
+Method names above are PROPOSED, not currently exported tools. Preserve all existing MCP tool names, scopes, failure codes and qdral identifiers. Adding methods or changing relay payloads requires the existing governance process.
+
+The UI renders observe -> proposed -> awaiting user -> dispatched -> verified, with explicit error/unknown branches. These display stages map to existing execution states; they do not redefine P20. Host completion alone does not establish task success. Show exact device, path/origin, data destination and cloud/model availability. Disabled capability controls explain what is unavailable; do not animate fabricated progress.
+
+Immediate stop only reduces authority: close admission, interrupt owned workers, release input, and record what remains unknown. It must work while cloud, renderer or Hello is unavailable. Separately preserve the existing protected persistent emergency-revoke operation; do not make the stop button wait for its STRONG approval flow. Resume never restores old leases or redispatches an unknown mutation.
+
+## Minimal task record
+
+Record task id, target device/epoch, request principal/session, authorized scope, step id, proposal/target generation, state, dispatch timestamp, error and postcondition evidence reference. Bound bytes and retention. Receipts can be signed by the target identity when qualified, but a signature proves origin, not correctness: independent checkers verify file contents, artifact hashes, browser download and termination.
+
+Use read-only observation batching and per-step generation checks. A multi-action proposal is not a blanket authorization. Re-observe after mutations unless an authorized deterministic transaction provides an independently checkable postcondition. Avoid a new general DAG engine for the first local task.
+
+## Server and devices
+
+Start hosted AI with one control service and separate model/speech workers as needed. All Aladdin AI inference, orchestration and voice processing run on founder-controlled servers. External AI services remain Core integrations. Local deterministic policy/execution and audio capture are not hosted model inference.
+
+For one controller and two targets, extend the existing identity/OAuth/outbound relay with explicit target grants and a small bounded coordinator. Do not add LAN listeners, hole punching or a new transport to make the initial journey work. Existing relay frame vocabulary is frozen; new proposal/transfer capabilities need a reviewed versioned application contract compatible with it or an explicitly authorized protocol successor.
+
+## Reversibility and limits
+
+Disable unqualified live browser, remote or AI adapters without reviving old authority. Security migration rollback must preserve fail-closed state; never revert to the defective ledger with live approvals. WPF can be replaced later because UI logic and kernel authority are separated, but that is still a UI rewrite with accessibility and packaging work. Playwright could be replaced only when measurements show a material bottleneck and equivalent security/feature tests pass.
+
+Do not declare helpers isolated merely because their IPC is private. Pin executables, limit resources and APIs, enforce policy at dispatch, validate outputs, and qualify actual network/file confinement. The fast track reduces scope; it does not relax authority.
+
+For comparative browser options, see the source-reuse matrix and implementation roadmap. Preferred live browser: constrained Playwright-core worker, dedicated installed-browser profile, bounded AX/DOM refs, generation validation, staged approved downloads. No generic evaluate endpoint, cookie export or unconfined browser traffic. Rust CDP is deferred until measurements justify replacement and parity tests pass.
+
+## Preserved source inventory (Opus, baseline attributed)
+
+The following inventory is retained from Opus at main61e664b. Source inspection supports the main capability/gap distinctions; line counts and release/build measurements are attributed to the original session rather than independently remeasured. The original categorical production-reachability row is a source inventory, not installed-release E2E proof.
 
 ## 1. Current-code inventory (what exists today)
 
-All rows were read from source at the base revision. Line counts include tests.
+Opus reports source reading at the base revision. Line counts include tests.
 
 | Component | Path | Lines | Language | State | Notes |
 |---|---|---:|---|---|---|
@@ -40,105 +103,6 @@ Documentation drift (VERIFIED): `README.md` lists 31 tools; the code exposes 40.
 | Exists but not integrated | Browser host supervision is not connected to any DOM engine; Go host is not in any published release. |
 | Duplicated (apparent; confirm in CU-01) | `qdral-browser-host` exports its own coordinate/input-lease (`src/coordinates.rs`) and capture (`src/capture.rs`) contracts, while `qdral-provider-uia` owns frames, proposals, coordinates, and input leases for the desktop. Before adding browser actuation, decide one owner for coordinate and capture identity (recommended: the UIA registry for desktop surfaces, the browser engine only for in-page DOM targets). |
 | Extend directly | UIA registry, approval broker (after #278), FullControlLease, process provider, relay, device identity. |
-| Replace | Browser provider snapshot/actuation internals (replace the template with a real CDP engine behind the same contracts). |
+| Replace | Browser provider snapshot/actuation internals (replace the template with a constrained Playwright worker behind the same contracts). |
 | Preserve as compatibility interface | `qdral` CLI, `qdrald`, `@qdral/*`, `QDRAL_*`, `qdral.*` OAuth scopes, storage paths, MCP name `qdral`, tool names, failure-code vocabulary. |
 
-## 2. Target architecture
-
-```text
-            Untrusted intent sources
-  Aladdin app chat/voice | Claude | ChatGPT | Codex | Cursor | other MCP
-                 |                     |
-                 |              MCP (stdio / loopback HTTP / relay)
-                 v                     v
-        +--------------------------------------------+
-        |  Aladdin edge (MCP + local app API)        |  untrusted-input parsing,
-        |  apps/qdral-mcp  (later: Rust edge, D7)    |  tool discovery, client binding
-        +---------------------+----------------------+
-                              | private stdio frames
-        +---------------------v----------------------+
-        |  qdrald  — THE ONLY AUTHORITY              |
-        |  policy, profiles (Safe/Full User/...),    |
-        |  leases, approvals (#278-repaired ledger), |
-        |  method ceilings, egress classes, audit,   |
-        |  task receipts, kill switch                |
-        +--+--------+---------+---------+---------+--+
-           |        |         |         |         |
-     Computer   Browser    Shell/PTY   Files/Git  Device Fabric
-     Host (Go)  Engine     Host        providers  (relay/peer)
-     UIA+input  (CDP, D4)  (ConPTY,D5)            (D6)
-           |        |         |
-       Windows   Chrome/Edge  ConPTY + Job Object
-```
-
-Rules (unchanged from P20, restated as invariants):
-
-1. `qdrald` is the only component that decides authority. Hosts, donors, models, the app UI, the relay, and Aladdin AI cloud services only propose or execute already-authorized work.
-2. Every side effect carries an exact typed target, an observation generation, a method ceiling, and a consequence class. Stale targets fail closed.
-3. A failure at one method level never authorizes a stronger method. Escalation needs a policy that already permits it.
-4. Results use the P20 states `not_started`, `dispatched`, `completed`, `cancelled`, `outcome_unknown`. No automatic retry after dispatch.
-5. Model output (Hala One, Reliance, Claude, GPT, UI-TARS-format parsers) is never authority.
-
-## 3. Execution method hierarchy
-
-| Level | Method | Status in Aladdin | Required authority |
-|---|---|---|---|
-| L1 | First-party app API (Git, filesystem, Office COM later) | VERIFIED for FS/Git | Capability grant plus SOFT where mutating |
-| L2 | Structured browser (CDP DOM/AX tree, WebMCP) | CONTRACT-ONLY; engine missing (D4) | Browser capability plus origin binding |
-| L3 | UI Automation semantic action | VERIFIED | Typed element, generation, SOFT |
-| L4 | Exact-window targeted input (`PostMessage`/focus-bound `SendInput`) | VERIFIED under Full User | Full User lease plus SOFT |
-| L5 | Bounded visual reasoning (frame -> proposal -> coordinates) | VERIFIED pipeline, no model attached | Frame binding, proposal generation |
-| L6 | Coordinate fallback | VERIFIED under Full User | Separate method ceiling |
-| L7 | Global input | NOT AUTHORIZED | Not in baseline |
-
-## 4. Performance architecture
-
-The largest latency source in screenshot-driven agents is the model round trip per action (typically 1 to 5 seconds per step for hosted frontier models; the Claude computer-use docs state roughly 1,000 to 1,800 input tokens per screenshot). Aladdin's latency strategy is therefore to reduce the number of model turns, not to micro-optimize input injection:
-
-1. Structured-first routing (L1 to L3) removes screenshots entirely for most file, Git, browser-form, and standard-control actions.
-2. Batched read-only observation: one call returns window list plus bounded UIA tree plus optional cropped capture, with a single generation token.
-3. Observation reuse with revision validation: an observation is reusable for planning but never actionable after a process, window, document, layout, or target generation change. The UIA registry already enforces generation binding.
-4. Region capture and zoom (as in Claude's `zoom` action) instead of full-screen capture; the Go host already captures exact windows.
-5. Event-driven waiting: UIA structure-changed and focus events, CDP lifecycle events, and process exit events instead of fixed sleeps.
-6. Action batching with fail-fast semantics: one model turn may propose an ordered batch; execution stops at the first failure and returns "not executed" for the rest (the Claude toolset contract uses the same rule).
-7. Deterministic verifiers (postconditions) run locally and cheaply after each mutation, so the model is consulted for recovery only when a postcondition fails.
-8. Remote routing: tasks run on the device that owns the target; only compact results and optional thumbnails cross the network.
-
-## 5. Local host and MCP surfaces
-
-### 5.1 Transports (VERIFIED existing)
-
-| Transport | Path | Use |
-|---|---|---|
-| stdio | `apps/qdral-mcp/src/entrypoints/stdio.ts` | Claude Desktop, Claude Code, Codex, Cursor, generic MCP clients |
-| Loopback Streamable HTTP | `apps/qdral-mcp/src/transports/loopback_http.ts` | Local clients that need HTTP; loopback only |
-| Relay device uplink | `apps/qdral-mcp/src/device_uplink.ts` + `apps/qdral-relay` | Remote clients via outbound-only device connection and OAuth 2.1 |
-| OpenAI Secure MCP Tunnel | documented in `README.md` | ChatGPT to a local machine without inbound ports |
-
-### 5.2 Proposed additions
-
-| Addition | Rationale | Authority delta |
-|---|---|---|
-| Task tools: `task_status`, `task_cancel`, `task_receipt` | Long operations need status and cancel without re-invoking side effects | None (observation and cancellation of owned work only) |
-| Compact CLI + Agent Skill (`aladdin` command, skill file) | Microsoft's Playwright MCP README now recommends CLI + Skills over MCP for coding agents because large tool schemas and trees waste context. Offer both. | None; the CLI calls the same `qdrald` |
-| Per-client identity binding | Bind each MCP session to a client profile id; already partly modeled in `client_profile` fields of `RemoteDispatchContext` | None |
-| Device-scoped tool lists | When the Device Fabric lands, tools take an explicit `device_id`; no implicit "current device" for remote calls | Future, gated (D6) |
-
-### 5.3 Client compatibility (verify before claiming)
-
-| Client | Transport | State | Notes |
-|---|---|---|---|
-| Claude Desktop / Claude Code | stdio | DOCUMENTED in `distribution/claude` | Must be re-tested per release; not claimed here. |
-| Codex | stdio | DOCUMENTED in `distribution/codex` | Same. |
-| ChatGPT | Remote MCP via Developer Mode, local via Secure MCP Tunnel | DOCUMENTED with limits | OpenAI's help center states full MCP including write actions is in beta for Business, Enterprise, and Edu; Plus/Pro write support is disputed across sources; mobile does not support MCP apps; ChatGPT cannot connect directly to a local server. Treat writes as plan-dependent. |
-| Cursor and other MCP clients | stdio | UNKNOWN until tested | |
-
-## 6. What not to build
-
-- A second policy engine (Kernux daemon, Agent-S, UFO, Desktop Commander config) inside Aladdin.
-- A screenshot-only agent loop.
-- A bundled local LLM or model weights in the desktop app.
-- A hosted backend that receives OS authority. The cloud proposes; the device decides.
-- A public, unauthenticated LAN or WAN listener on any device.
-- Remote feature flags that change model-visible content or tool behavior (Desktop Commander's `onboarding_injection` pattern, verified in `src/utils/usageTracker.ts:417`).
-- Firecrawl SaaS layers, cua Spaces (FSL), OmniParser (AGPL), RustDesk code (AGPL).

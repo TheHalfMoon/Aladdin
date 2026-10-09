@@ -1,6 +1,6 @@
 # Hala One and Reliance — Integration Contracts (Proposed)
 
-Status: PROPOSED PLANNING ONLY. Neither model exists yet as an Aladdin artifact. The founder owns fine-tuning, datasets, experiments, and checkpoints. This document specifies only interfaces, data specifications for later founder use, evaluation, serving targets, and rollout rules.
+Status: PROPOSED PLANNING ONLY. Neither model is deployed by this work. The founder owns fine-tuning, datasets, experiments, and checkpoints. This document specifies only interfaces, data specifications for later founder use, evaluation, serving targets, and rollout rules.
 
 ## 1. Common rules
 
@@ -20,7 +20,7 @@ Status: PROPOSED PLANNING ONLY. Neither model exists yet as an Aladdin artifact.
 | Architecture | Qwen3.6 MoE; about 35B total parameters; "A3B" implies about 3B active (inferred from naming, not stated) |
 | Context | 262,144 tokens (config) |
 | Inputs | Image + text |
-| Serving | vLLM and SGLang listed |
+| Serving | UNKNOWN until exact runtime/vision processor/function-calling qualification; current pinned README does not list vLLM/SGLang support. |
 | Rejected sibling | `Holo4-27B` is CC BY-NC 4.0 |
 
 ### 2.2 Request schema (device-minimized observation)
@@ -66,19 +66,19 @@ Status: PROPOSED PLANNING ONLY. Neither model exists yet as an Aladdin artifact.
 
 Device-side normalization: maps to existing typed operations (`desktop_element_invoke`, `desktop_input_execute`, and so on), rejects coordinates outside the captured frame, rejects stale generations, and evaluates each action separately for consequence class and approval.
 
-### 2.4 Serving and latency targets (to validate)
+### 2.4 Proposed hypotheses, not adopted performance gates
 
 | Metric | Target |
 |---|---|
 | p50 step latency (server, warm) | <= 1.2 s |
 | p95 step latency | <= 3.0 s |
-| Cold start (serverless) | Measure; if > 20 s, keep one warm replica |
+| Cold start (serverless) | Measure startup/loading/queue and warm-worker spend before choosing policy |
 | Throughput | Measure GPU-seconds per step at batch sizes 1, 8, 32 |
 | Cost per step | <= US$0.001 at expected utilization (see economics) |
 
 Engineering levers: prefix caching for stable system and task context, image downscale to the smallest size that preserves accuracy (measure 1024, 1280, 1568 long edge), FP8 weights for inference only (validate accuracy delta), speculative decoding if supported, short structured outputs.
 
-### 2.5 Data specification for the founder's training program (do not execute here)
+### 2.5 Optional data specification for the founder's separate program (not a Core dependency)
 
 - Unit: `(observation, history, goal) -> proposal` plus outcome labels (`postcondition_passed`, `human_override`, `outcome_unknown`).
 - Sources: opt-in user trajectories (redacted on device), synthetic Windows fixtures (control galleries, Office, Explorer, Settings, browsers), and public datasets with licenses that permit commercial training.
@@ -94,7 +94,7 @@ Engineering levers: prefix caching for stable system and task context, image dow
 4. p95 latency and cost per step within targets.
 5. Schema-valid output in at least 99.9% of steps; invalid output is treated as abstain.
 
-Rollout: shadow mode (proposals logged, not executed) on opted-in tenants, then canary 5%, then 50%, then 100%; instant rollback by router configuration to the previous revision.
+Rollout after independent qualification: shadow mode (minimized proposals logged under consent, not executed) on opted-in tenants, then canary 5%, then 50%, then 100%; instant rollback by router configuration to the previous revision.
 
 ## 3. Reliance (decision model)
 
@@ -110,9 +110,11 @@ Rollout: shadow mode (proposals logged, not executed) on opted-in tenants, then 
 | Latency (card) | 8 ms warm on RTX 4090 per question | Not reported |
 | Precision note | bf16 recommended | fp16 recommended; bf16 changed answers on 0.8% text and 1.7% audio rows |
 
-LFM Open License v1.0: commercial use is licensed only while the licensee's annual revenue is at or below US$10,000,000; above that a commercial license from Liquid AI is required. Record this as a business risk with a planned review trigger.
+The founder reports direct permission to use/rebrand the models; retain the written scope and distinguish it from public licensing. Public LFM v1 has conditional commercial rights and a US$10M threshold; review its exact entity/boundary wording and any direct-grant override before distribution. See ALADDIN_AI_SERVER_ARCHITECTURE.md for pinned source revisions and serving assessment.
 
-### 3.2 Decision catalog (initial)
+A d1 service needs a pinned audited custom adapter around model.system_one/system_one_batch, not a generic chat-completion endpoint. Vendor warm latency excludes end-to-end network/queue/prefill qualification. Reliance is optional pending ablations; all inference is server-side.
+
+### 3.2 Decision catalog (optional, after qualification)
 
 | Decision id | Type | Inputs | Use |
 |---|---|---|---|
