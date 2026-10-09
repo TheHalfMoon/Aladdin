@@ -347,12 +347,7 @@ fn copy_env_if_present(command: &mut Command, name: &str) {
     }
 }
 
-#[cfg(windows)]
-fn null_device() -> OsString {
-    OsString::from("NUL")
-}
-
-#[cfg(not(windows))]
+// Git for Windows maps `/dev/null` to the null device; Git 2.56 rejects `NUL`.
 fn null_device() -> OsString {
     OsString::from("/dev/null")
 }
@@ -393,6 +388,30 @@ mod tests {
         git(&root, &["add", "a.txt"]);
         git(&root, &["commit", "-m", "initial"]);
         root
+    }
+
+    #[test]
+    fn provider_git_reads_no_global_or_system_config() {
+        // Git 2.56 for Windows rejects `NUL` as GIT_CONFIG_GLOBAL; the
+        // isolated invocation must still run and see no user configuration.
+        let root = repository();
+        let provider = GitProvider::new(&root).unwrap();
+        let global = provider
+            .run_git_raw(&root, &["config", "--global", "--list"])
+            .expect("isolated git accepts its null global config");
+        assert_eq!(global.stdout.trim(), "");
+        let origins = provider
+            .run_git_raw(&root, &["config", "--list", "--show-origin"])
+            .expect("list effective config");
+        assert!(
+            origins
+                .stdout
+                .lines()
+                .all(|line| line.contains(".git/config") || line.starts_with("command line:")),
+            "only repository and command-line config may apply:\n{}",
+            origins.stdout
+        );
+        let _ = fs::remove_dir_all(root);
     }
 
     #[test]

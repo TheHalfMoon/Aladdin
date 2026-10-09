@@ -1885,12 +1885,7 @@ mod tests {
         let _ = fs::remove_dir_all(browser_root);
     }
 
-    #[cfg(windows)]
-    fn null_device() -> &'static str {
-        "NUL"
-    }
-
-    #[cfg(not(windows))]
+    // Git for Windows maps `/dev/null` to the null device; Git 2.56 rejects `NUL`.
     fn null_device() -> &'static str {
         "/dev/null"
     }

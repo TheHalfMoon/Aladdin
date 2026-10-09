@@ -534,12 +534,7 @@ pub fn build_child_env(askpass: Option<&Path>) -> Vec<(String, String)> {
     env
 }
 
-#[cfg(windows)]
-fn push_cookie_file() -> &'static str {
-    "NUL"
-}
-
-#[cfg(not(windows))]
+// Git for Windows maps `/dev/null` to the null device; Git 2.56 rejects `NUL`.
 fn push_cookie_file() -> &'static str {
     "/dev/null"
 }
@@ -1086,12 +1081,7 @@ fn run_push_raw(
     Ok(stdout_text)
 }
 
-#[cfg(windows)]
-fn null_push_device() -> std::ffi::OsString {
-    std::ffi::OsString::from("NUL")
-}
-
-#[cfg(not(windows))]
+// Git for Windows maps `/dev/null` to the null device; Git 2.56 rejects `NUL`.
 fn null_push_device() -> std::ffi::OsString {
     std::ffi::OsString::from("/dev/null")
 }
