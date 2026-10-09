@@ -21,7 +21,7 @@ Status: PROPOSED PLANNING ONLY. Neither model is deployed by this work. The foun
 | Context | 262,144 tokens (config) |
 | Inputs | Image + text |
 | Serving | UNKNOWN until exact runtime/vision processor/function-calling qualification; current pinned README does not list vLLM/SGLang support. |
-| Rejected sibling | `Holo4-27B` is CC BY-NC 4.0 |
+| Other sibling | Holo4-27B is not selected under the founder's preferred35B candidate; restrictive public terms and any direct-grant coverage require separate qualification, not categorical rejection. |
 
 ### 2.2 Request schema (device-minimized observation)
 
@@ -35,7 +35,7 @@ Status: PROPOSED PLANNING ONLY. Neither model is deployed by this work. The foun
   "observation": {
     "generation": "obs-...",
     "window": {"window_ref": "win-...", "title": "redacted-or-text", "process": "notepad.exe"},
-    "accessibility": [{"element_ref": "el-...", "role": "Button", "name": "Save", "bounds": [x, y, w, h]}],
+    "accessibility": [{"element_ref": "el-...", "role": "Button", "name": "Save", "bounds": [10, 20, 100, 30]}],
     "image": {"format": "png", "width": 1280, "height": 800, "coordinate_space": "window", "scale": 1.0, "redactions": [[x, y, w, h]]},
     "truncation": {"elements_omitted": 0}
   },
@@ -58,7 +58,7 @@ Status: PROPOSED PLANNING ONLY. Neither model is deployed by this work. The foun
     {"type": "type", "text": "...", "secret": false}
   ],
   "expected_postcondition": {"kind": "element_exists", "role": "Dialog", "name": "Save As"},
-  "status": "continue | done | ask_user | abstain",
+  "status": "continue",
   "confidence": 0.0,
   "rationale_short": "<= 200 chars, never shown as authority"
 }
