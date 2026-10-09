@@ -99,6 +99,8 @@ impl Layout {
             self.logs_dir(),
             self.root.join("audit.jsonl"),
             self.root.join("approval-history.jsonl"),
+            // Single-writer lock created beside the approval ledger (#278).
+            self.root.join("approval-history.jsonl.lock"),
             self.root.join("trust.jsonl"),
             self.root.join("browser-profile"),
         ]

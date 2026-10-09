@@ -624,12 +624,16 @@ mod tests {
             .install(&release_dir("0.2.0"), &options())
             .unwrap();
         fs::write(root.join("approval-history.jsonl"), b"{}\n").unwrap();
+        fs::write(root.join("approval-history.jsonl.lock"), b"").unwrap();
         let report = installer
             .uninstall(&UninstallOptions { purge_data: true })
             .unwrap();
         assert!(report.residual.is_empty(), "{:?}", report.residual);
         assert!(!root.exists());
         assert!(report.purged.contains(&root.join("approval-history.jsonl")));
+        assert!(report
+            .purged
+            .contains(&root.join("approval-history.jsonl.lock")));
     }
 
     #[test]
