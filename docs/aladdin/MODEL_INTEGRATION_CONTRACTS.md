@@ -36,7 +36,7 @@ Status: PROPOSED PLANNING ONLY. Neither model is deployed by this work. The foun
     "generation": "obs-...",
     "window": {"window_ref": "win-...", "title": "redacted-or-text", "process": "notepad.exe"},
     "accessibility": [{"element_ref": "el-...", "role": "Button", "name": "Save", "bounds": [10, 20, 100, 30]}],
-    "image": {"format": "png", "width": 1280, "height": 800, "coordinate_space": "window", "scale": 1.0, "redactions": [[x, y, w, h]]},
+    "image": {"format": "png", "width": 1280, "height": 800, "coordinate_space": "window", "scale": 1.0, "redactions": [[10, 20, 100, 30]]},
     "truncation": {"elements_omitted": 0}
   },
   "history": [{"step": 6, "action": "click", "target": "el-...", "result": "completed", "postcondition": "passed"}],
