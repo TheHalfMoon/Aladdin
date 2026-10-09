@@ -778,6 +778,9 @@ pub fn qualify_private_execution(
     ))
 }
 
+#[cfg(all(test, windows))]
+mod native_path_identity_windows;
+
 #[cfg(windows)]
 mod windows_contained_launch {
     use super::{

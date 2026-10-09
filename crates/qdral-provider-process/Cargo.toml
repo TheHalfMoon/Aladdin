@@ -13,3 +13,4 @@ qdral-policy = { path = "../qdral-policy" }
 qdral-lifecycle = { path = "../qdral-lifecycle" }
 qdral-approval = { path = "../qdral-approval", features = ["test-support"] }
 serde_json.workspace = true
+sha2.workspace = true
