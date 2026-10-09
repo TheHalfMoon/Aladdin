@@ -105,4 +105,3 @@ Documentation drift (VERIFIED): `README.md` lists 31 tools; the code exposes 40.
 | Extend directly | UIA registry, approval broker (after #278), FullControlLease, process provider, relay, device identity. |
 | Replace | Browser provider snapshot/actuation internals (replace the template with a constrained Playwright worker behind the same contracts). |
 | Preserve as compatibility interface | `qdral` CLI, `qdrald`, `@qdral/*`, `QDRAL_*`, `qdral.*` OAuth scopes, storage paths, MCP name `qdral`, tool names, failure-code vocabulary. |
-
