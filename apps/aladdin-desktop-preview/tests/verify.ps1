@@ -13,6 +13,7 @@ if ($LASTEXITCODE -ne 0) { throw "Read-only self-test failed" }
 if ($LASTEXITCODE -ne 0) { throw "WPF layout construction failed" }
 if ((Get-Item $app).Length -ge 5MB) { throw "Preview binary exceeded its guard" }
 $source = [IO.File]::ReadAllText((Join-Path $root "src\Program.cs"))
+# A tripwire against obvious capability creep, not proof of absence.
 foreach ($forbidden in @("WebClient", "HttpClient", "TcpClient", "HttpListener", "ProcessStartInfo(commandBox.Text)", "ProcessStartInfo(value)")) {
     if ($source.Contains($forbidden)) { throw "Forbidden capability: $forbidden" }
 }

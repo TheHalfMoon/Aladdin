@@ -1,9 +1,10 @@
 # Native Windows end-to-end test of the read-only desktop foundation, driven
 # through Windows UI Automation (no third-party framework). It launches the
-# real executable, optionally against an isolated per-user runtime install
-# (-RuntimeRoot is used as LOCALAPPDATA for the app only), and checks what a
-# person would see. It performs no computer actions beyond typing into the
-# app's own command box.
+# real executable with an isolated LOCALAPPDATA for the app process only:
+# -RuntimeRoot points at a per-user runtime install made for testing; without
+# it an empty temporary folder is used, so the user's real install is never
+# queried. It checks what a person would see and performs no computer actions
+# beyond typing into the app's own command box.
 param(
     [string]$RuntimeRoot = "",
     [string]$BuildDirectory = (Join-Path $env:TEMP "AladdinDesktopPreviewBuild"),
@@ -15,6 +16,11 @@ Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes
 $app = Join-Path $BuildDirectory "Aladdin.Desktop.exe"
 if (-not (Test-Path $app)) { throw "Build the app first (tests\verify.ps1): $app" }
 $expectInstalled = $RuntimeRoot -ne ""
+$emptyRoot = $null
+if (-not $expectInstalled) {
+    $emptyRoot = Join-Path $env:TEMP ("aladdin-e2e-empty-" + [guid]::NewGuid().ToString("N"))
+    New-Item -ItemType Directory -Path $emptyRoot | Out-Null
+}
 $results = New-Object System.Collections.Generic.List[object]
 function Check([string]$name, [bool]$ok, [string]$detail) {
     $results.Add([pscustomobject]@{ check = $name; pass = $ok; detail = $detail })
@@ -53,7 +59,7 @@ function WaitForMessage($window, [string]$needle, [int]$timeoutMs) {
 
 $start = New-Object System.Diagnostics.ProcessStartInfo $app
 $start.UseShellExecute = $false
-if ($expectInstalled) { $start.EnvironmentVariables["LOCALAPPDATA"] = $RuntimeRoot }
+$start.EnvironmentVariables["LOCALAPPDATA"] = $(if ($expectInstalled) { $RuntimeRoot } else { $emptyRoot })
 $clock = [Diagnostics.Stopwatch]::StartNew()
 $process = [System.Diagnostics.Process]::Start($start)
 try {
@@ -63,6 +69,12 @@ try {
     if ($null -eq $window) { throw "window not found" }
     $windowProcess = $window.Current.ProcessId
     Check "window belongs to the launched process" ($windowProcess -eq $process.Id) "pid $windowProcess"
+
+    # Activate the window (a test launch is not foreground); WPF restores the
+    # element that received focus on load, which must be the command box.
+    $window.SetFocus()
+    $focused = WaitFor { if ((ById $window "CommandBox").Current.HasKeyboardFocus) { $true } } 3000
+    Check "keyboard focus starts in the command box" ($focused -eq $true) ""
 
     $runtime = WaitFor { $t = (ById $window "RuntimeState").Current.Name; if ($t -and $t -ne "Checking...") { $t } } 15000
     $readyMs = $clock.ElapsedMilliseconds
@@ -76,11 +88,16 @@ try {
     $status = WaitForMessage $window $(if ($expectInstalled) { "is installed and not running" } else { "is not installed" }) 15000
     Check "status command shows the runtime's own state" ($null -ne $status) "$status"
 
+
+    # Let earlier runtime queries finish so only new children are counted.
+    Start-Sleep -Milliseconds 1500
+    $refusedAt = Get-Date
     SendCommand $window "rm -rf / ; calc.exe"
     $refused = WaitFor { TranscriptTexts $window | Where-Object { $_.StartsWith("Not executed. Aladdin AI is not connected.", [StringComparison]::Ordinal) } | Select-Object -First 1 } 5000
     Check "shell-like text is refused, not executed" ($null -ne $refused) "$refused"
-    $calc = Get-Process -Name "calc", "CalculatorApp" -ErrorAction SilentlyContinue | Where-Object { $_.StartTime -gt $process.StartTime }
-    Check "no process was started by the refused text" ($null -eq $calc) ""
+    Start-Sleep -Milliseconds 1500
+    $children = @(Get-CimInstance Win32_Process -Filter "ParentProcessId = $($process.Id)" | Where-Object { $_.CreationDate -ge $refusedAt })
+    Check "no process was started by the refused text" ($children.Count -eq 0) (($children | ForEach-Object { $_.Name }) -join ", ")
 
     if ($expectInstalled) {
         SendCommand $window "doctor"
@@ -105,6 +122,7 @@ try {
 }
 finally {
     if (-not $process.HasExited) { $process.Kill() }
+    if ($emptyRoot) { Remove-Item -Recurse -Force $emptyRoot -ErrorAction SilentlyContinue }
 }
 
 $failed = @($results | Where-Object { -not $_.pass }).Count

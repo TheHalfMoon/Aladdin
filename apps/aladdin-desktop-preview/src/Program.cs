@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -85,21 +86,35 @@ namespace Aladdin.DesktopPreview
                 if (localAppData != null) process.StartInfo.EnvironmentVariables["LOCALAPPDATA"] = localAppData;
                 try { process.Start(); }
                 catch (Exception) { result.FailedToStart = true; return result; }
+                // The child and everything it starts after this point are killed
+                // together on timeout (and when the job handle closes).
+                JobObject job = JobObject.TryCreateFor(process);
                 try { process.StandardInput.Close(); } catch (Exception) { }
                 bool stdoutTruncated = false;
                 Task<string> stdout = Task.Factory.StartNew(() => ReadBounded(process.StandardOutput, out stdoutTruncated), TaskCreationOptions.LongRunning);
                 bool ignored;
                 Task<string> stderr = Task.Factory.StartNew(() => ReadBounded(process.StandardError, out ignored), TaskCreationOptions.LongRunning);
-                if (!process.WaitForExit(timeoutMs))
+                try
                 {
-                    result.TimedOut = true;
-                    KillTree(process.Id);
-                    process.WaitForExit(2000);
+                    if (!process.WaitForExit(timeoutMs))
+                    {
+                        result.TimedOut = true;
+                        if (job == null || !job.Terminate())
+                        {
+                            try { process.Kill(); } catch (Exception) { }
+                        }
+                        process.WaitForExit(2000);
+                    }
+                    try { Task.WaitAll(new Task[] { stdout, stderr }, 2000); } catch (AggregateException) { }
+                    // A faulted or unfinished read yields no output, never an exception.
+                    result.Stdout = stdout.Status == TaskStatus.RanToCompletion ? stdout.Result : "";
+                    result.Truncated = stdoutTruncated;
+                    if (!result.TimedOut && process.HasExited) result.ExitCode = process.ExitCode;
                 }
-                Task.WaitAll(new Task[] { stdout, stderr }, 2000);
-                result.Stdout = stdout.IsCompleted ? stdout.Result : "";
-                result.Truncated = stdoutTruncated;
-                if (!result.TimedOut && process.HasExited) result.ExitCode = process.ExitCode;
+                finally
+                {
+                    if (job != null) job.Dispose();
+                }
             }
             return result;
         }
@@ -125,22 +140,83 @@ namespace Aladdin.DesktopPreview
             return kept.ToString();
         }
 
-        private static void KillTree(int pid)
+    }
+
+    /// A Windows Job Object with kill-on-close, so a timed-out query cannot
+    /// leave its own child processes behind and cannot affect any other process.
+    internal sealed class JobObject : IDisposable
+    {
+        private IntPtr handle;
+
+        internal static JobObject TryCreateFor(Process process)
         {
-            try
-            {
-                using (Process killer = Process.Start(new ProcessStartInfo {
-                    FileName = Path.Combine(Environment.SystemDirectory, "taskkill.exe"),
-                    Arguments = "/PID " + pid + " /T /F",
-                    UseShellExecute = false,
-                    CreateNoWindow = true
-                }))
-                {
-                    if (killer != null) killer.WaitForExit(5000);
-                }
-            }
-            catch (Exception) { }
+            IntPtr job = CreateJobObject(IntPtr.Zero, null);
+            if (job == IntPtr.Zero) return null;
+            JOBOBJECT_EXTENDED_LIMIT_INFORMATION limits = new JOBOBJECT_EXTENDED_LIMIT_INFORMATION();
+            limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+            bool ok = SetInformationJobObject(job, JobObjectExtendedLimitInformation, ref limits,
+                (uint)Marshal.SizeOf(typeof(JOBOBJECT_EXTENDED_LIMIT_INFORMATION)));
+            try { ok = ok && AssignProcessToJobObject(job, process.Handle); }
+            catch (Exception) { ok = false; }
+            if (!ok) { CloseHandle(job); return null; }
+            return new JobObject { handle = job };
         }
+
+        internal bool Terminate()
+        {
+            return handle != IntPtr.Zero && TerminateJobObject(handle, 1);
+        }
+
+        public void Dispose()
+        {
+            if (handle != IntPtr.Zero) { CloseHandle(handle); handle = IntPtr.Zero; }
+        }
+
+        private const uint JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE = 0x2000;
+        private const int JobObjectExtendedLimitInformation = 9;
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct JOBOBJECT_BASIC_LIMIT_INFORMATION
+        {
+            public long PerProcessUserTimeLimit;
+            public long PerJobUserTimeLimit;
+            public uint LimitFlags;
+            public UIntPtr MinimumWorkingSetSize;
+            public UIntPtr MaximumWorkingSetSize;
+            public uint ActiveProcessLimit;
+            public UIntPtr Affinity;
+            public uint PriorityClass;
+            public uint SchedulingClass;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct IO_COUNTERS
+        {
+            public ulong ReadOperationCount, WriteOperationCount, OtherOperationCount;
+            public ulong ReadTransferCount, WriteTransferCount, OtherTransferCount;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct JOBOBJECT_EXTENDED_LIMIT_INFORMATION
+        {
+            public JOBOBJECT_BASIC_LIMIT_INFORMATION BasicLimitInformation;
+            public IO_COUNTERS IoInfo;
+            public UIntPtr ProcessMemoryLimit;
+            public UIntPtr JobMemoryLimit;
+            public UIntPtr PeakProcessMemoryUsed;
+            public UIntPtr PeakJobMemoryUsed;
+        }
+
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        private static extern IntPtr CreateJobObject(IntPtr attributes, string name);
+        [DllImport("kernel32.dll", SetLastError = true)]
+        private static extern bool SetInformationJobObject(IntPtr job, int infoClass, ref JOBOBJECT_EXTENDED_LIMIT_INFORMATION info, uint length);
+        [DllImport("kernel32.dll", SetLastError = true)]
+        private static extern bool AssignProcessToJobObject(IntPtr job, IntPtr process);
+        [DllImport("kernel32.dll", SetLastError = true)]
+        private static extern bool TerminateJobObject(IntPtr job, uint exitCode);
+        [DllImport("kernel32.dll", SetLastError = true)]
+        private static extern bool CloseHandle(IntPtr handle);
     }
 
     internal enum RuntimeAvailability { NotInstalled, Unresponsive, Incompatible, Installed }
@@ -181,8 +257,15 @@ namespace Aladdin.DesktopPreview
         internal static string LocalAppData()
         {
             string fromEnvironment = Environment.GetEnvironmentVariable("LOCALAPPDATA");
-            if (!string.IsNullOrEmpty(fromEnvironment) && Path.IsPathRooted(fromEnvironment)) return fromEnvironment;
+            if (IsDriveQualified(fromEnvironment)) return fromEnvironment;
             return Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        }
+
+        /// `C:\...` only: no UNC share (`\\host\share`), no drive-relative path.
+        internal static bool IsDriveQualified(string path)
+        {
+            return !string.IsNullOrEmpty(path) && path.Length >= 3 && char.IsLetter(path[0])
+                && path[1] == ':' && (path[2] == '\\' || path[2] == '/');
         }
 
         internal static string PathToCompatCli()
@@ -234,7 +317,8 @@ namespace Aladdin.DesktopPreview
             if (result.FailedToStart || result.TimedOut) return new RuntimeStatus { Availability = RuntimeAvailability.Unresponsive };
             Dictionary<string, object> json = Parse(result.Stdout);
             object runtime = null;
-            if (json == null || result.ExitCode != 0 || !json.TryGetValue("runtime", out runtime) || !(runtime is Dictionary<string, object>))
+            if (json == null || result.ExitCode != 0 || !(json.ContainsKey("ok") && true.Equals(json["ok"]))
+                || !json.TryGetValue("runtime", out runtime) || !(runtime is Dictionary<string, object>))
                 return new RuntimeStatus { Availability = RuntimeAvailability.Incompatible };
             Dictionary<string, object> runtimeMap = (Dictionary<string, object>)runtime;
             string version = Text(json, "installed");
@@ -268,7 +352,7 @@ namespace Aladdin.DesktopPreview
         internal static string VersionMessage(CliResult result)
         {
             if (result.FailedToStart || result.TimedOut) return "The Aladdin runtime did not answer a read-only version query in time.";
-            Dictionary<string, object> json = Parse(result.Stdout);
+            Dictionary<string, object> json = result.ExitCode == 0 ? Parse(result.Stdout) : null;
             string cli = Text(json, "cli");
             if (json == null || cli == null) return "The installed Aladdin runtime returned a version response this preview does not understand.";
             string installed = Text(json, "installed");
@@ -323,6 +407,26 @@ namespace Aladdin.DesktopPreview
             }
             string summary = names.Count == 0 ? "(empty)" : string.Join("\n", names.ToArray());
             return "Local folder preview (up to " + MaxEntries + " entries" + (more ? "; more not shown" : "") + "):\n" + summary + "\nNo files were modified or uploaded.";
+        }
+
+        /// Gives up waiting after `limit` even if the file system never returns
+        /// (for example a stalled network share); the abandoned enumeration is
+        /// cancelled and its result ignored.
+        internal static async Task<string> ListWithin(string folder, TimeSpan limit)
+        {
+            CancellationTokenSource cancel = new CancellationTokenSource();
+            Task<string> work = Task.Run(() => List(folder, cancel.Token));
+            Task finished = await Task.WhenAny(work, Task.Delay(limit));
+            if (finished != work)
+            {
+                cancel.Cancel();
+                // Observe the abandoned task's outcome so it can never surface later.
+                Task observed = work.ContinueWith(t => { var ignored = t.Exception; cancel.Dispose(); });
+                return "Listing this folder took too long and was stopped. No changes were made.";
+            }
+            cancel.Dispose();
+            try { return await work; }
+            catch (Exception) { return "Unable to list this folder. No changes were made."; }
         }
     }
 
@@ -527,6 +631,11 @@ namespace Aladdin.DesktopPreview
             return root;
         }
 
+        internal void ReportInternalError()
+        {
+            AddMessage(false, "An internal error occurred in this preview. No action was performed.");
+        }
+
         private void AddMessage(bool fromUser, string message)
         {
             messages++;
@@ -554,7 +663,7 @@ namespace Aladdin.DesktopPreview
             if (kind == SafeCommand.Help)
                 AddMessage(false, "Available: status, version, doctor, devices, files, help. These operations are read-only. AI chat, voice, pairing, and execution are not connected.");
             else if (kind == SafeCommand.Devices)
-                AddMessage(false, "Local computer: " + Environment.MachineName + ". Aladdin runtime: " + (LocalHost.IsInstalled() ? "installed" : "not installed") + ". Remote devices: none (pairing is not integrated in this preview).");
+                AddMessage(false, "Local computer: " + Environment.MachineName + ". Aladdin runtime: " + (LocalHost.IsInstalled() ? "present (type status for its state)" : "not installed") + ". Remote devices: none (pairing is not integrated in this preview).");
             else if (kind == SafeCommand.Files)
                 InspectFolder();
             else if (CommandRouter.CanInvokeInstalledHost(kind))
@@ -571,12 +680,33 @@ namespace Aladdin.DesktopPreview
                 return;
             }
             AddMessage(false, "Reading local runtime " + CommandRouter.CliArguments(command)[0] + "...");
-            string response = await Task.Run(delegate {
-                if (command == SafeCommand.Status) return Interpret.StatusMessage(LocalHost.ReadStatus(QueryTimeoutMs));
-                CliResult result = LocalHost.Query(command, command == SafeCommand.Doctor ? DoctorTimeoutMs : QueryTimeoutMs);
-                return command == SafeCommand.Version ? Interpret.VersionMessage(result) : Interpret.DoctorMessage(result);
-            });
-            AddMessage(false, response);
+            try
+            {
+                if (command == SafeCommand.Status)
+                {
+                    RuntimeStatus status = await Task.Run(delegate { return LocalHost.ReadStatus(QueryTimeoutMs); });
+                    ShowRuntime(status);
+                    AddMessage(false, Interpret.StatusMessage(status));
+                    return;
+                }
+                string response = await Task.Run(delegate {
+                    CliResult result = LocalHost.Query(command, command == SafeCommand.Doctor ? DoctorTimeoutMs : QueryTimeoutMs);
+                    return command == SafeCommand.Version ? Interpret.VersionMessage(result) : Interpret.DoctorMessage(result);
+                });
+                AddMessage(false, response);
+            }
+            catch (Exception)
+            {
+                AddMessage(false, "The read-only runtime query failed unexpectedly. No action was performed.");
+            }
+        }
+
+        private void ShowRuntime(RuntimeStatus status)
+        {
+            hostState.Text = status.Headline();
+            deviceState.Text = status.Availability == RuntimeAvailability.NotInstalled
+                ? "This PC • Aladdin runtime missing"
+                : "This PC • " + status.Headline();
         }
 
         private async void RefreshHost()
@@ -585,12 +715,19 @@ namespace Aladdin.DesktopPreview
             refreshing = true;
             hostState.Text = "Checking...";
             deviceState.Text = "Reading local runtime";
-            RuntimeStatus status = await Task.Run(delegate { return LocalHost.ReadStatus(QueryTimeoutMs); });
-            hostState.Text = status.Headline();
-            deviceState.Text = status.Availability == RuntimeAvailability.NotInstalled
-                ? "Windows online • Aladdin runtime missing"
-                : "Windows online • " + status.Headline();
-            refreshing = false;
+            try
+            {
+                ShowRuntime(await Task.Run(delegate { return LocalHost.ReadStatus(QueryTimeoutMs); }));
+            }
+            catch (Exception)
+            {
+                hostState.Text = "Status unavailable";
+                deviceState.Text = "This PC • runtime status could not be read";
+            }
+            finally
+            {
+                refreshing = false;
+            }
         }
 
         private async void InspectFolder()
@@ -603,14 +740,7 @@ namespace Aladdin.DesktopPreview
                 folder = dialog.SelectedPath;
             }
             AddMessage(false, "Listing the selected folder...");
-            using (CancellationTokenSource cancel = new CancellationTokenSource(TimeSpan.FromSeconds(10)))
-            {
-                string result;
-                try { result = await Task.Run(() => FolderPreview.List(folder, cancel.Token), cancel.Token); }
-                catch (OperationCanceledException) { result = "Listing this folder took too long and was stopped. No changes were made."; }
-                catch (Exception) { result = "Unable to list this folder. No changes were made."; }
-                AddMessage(false, result);
-            }
+            AddMessage(false, await FolderPreview.ListWithin(folder, TimeSpan.FromSeconds(10)));
         }
     }
 
@@ -640,10 +770,22 @@ namespace Aladdin.DesktopPreview
             expect(doctor.StartsWith("Health check: 1 passed, 1 warnings, 1 failed.") && doctor.Contains("FAIL workspaces: none"), "doctor summarizes failures");
             expect(Interpret.VersionMessage(new CliResult { ExitCode = 0, Stdout = "{\"cli\":\"0.2.0\",\"installed\":\"0.2.0\"}" }) == "Aladdin CLI 0.2.0; installed release 0.2.0.", "version parses");
 
-            // A stalled child is stopped at the timeout and its tree is killed.
+            expect(Interpret.Status(new CliResult { ExitCode = 0, Stdout = "{\"ok\":false,\"installed\":\"0.2.0\",\"runtime\":{\"state\":\"running\"}}" }).Availability == RuntimeAvailability.Incompatible, "ok:false is never healthy");
+            expect(Interpret.Status(new CliResult { ExitCode = 0, Stdout = "{\"ok\":true,\"installed\":\"0.2.0\",\"runtime\":\"running\"}" }).Availability == RuntimeAvailability.Incompatible, "non-object runtime is incompatible");
+            expect(Interpret.Status(new CliResult { ExitCode = 0, Stdout = "{\"ok\":true,\"installed\":\"0.2.0\",\"runtime\":{\"state\":\"runn" }).Availability == RuntimeAvailability.Incompatible, "truncated JSON is incompatible");
+            expect(Interpret.Status(new CliResult { FailedToStart = true }).Availability == RuntimeAvailability.Unresponsive, "start failure is unresponsive");
+            expect(Interpret.VersionMessage(new CliResult { ExitCode = 3, Stdout = "{\"cli\":\"0.2.0\"}" }).Contains("does not understand"), "version error is not a version");
+            expect(BoundedProcess.Run(Path.Combine(Environment.SystemDirectory, "no-such-aladdin-binary.exe"), new string[0], 1000, null).FailedToStart, "missing binary fails to start");
+            expect(LocalHost.IsDriveQualified("C:\\Users\\x") && !LocalHost.IsDriveQualified("\\\\host\\share") && !LocalHost.IsDriveQualified("\\x") && !LocalHost.IsDriveQualified("C:x"), "only drive-qualified LOCALAPPDATA is used");
+
+            // A stalled child and the process it started are both killed at the timeout.
+            DateTime started = DateTime.Now.AddSeconds(-1);
             Stopwatch clock = Stopwatch.StartNew();
-            CliResult stalled = BoundedProcess.Run(Path.Combine(Environment.SystemDirectory, "ping.exe"), new[] { "-n", "30", "127.0.0.1" }, 1000, null);
+            CliResult stalled = BoundedProcess.Run(Path.Combine(Environment.SystemDirectory, "cmd.exe"), new[] { "/c", "ping -n 30 127.0.0.1 >nul" }, 1500, null);
             expect(stalled.TimedOut && clock.ElapsedMilliseconds < 8000, "stalled child times out");
+            Thread.Sleep(500);
+            bool grandchildAlive = Process.GetProcessesByName("PING").Any(p => { try { return p.StartTime >= started; } catch (Exception) { return false; } });
+            expect(!grandchildAlive, "timed-out child's own children are killed");
             // A child that floods stdout and stderr never deadlocks and is bounded.
             CliResult flood = BoundedProcess.Run(Path.Combine(Environment.SystemDirectory, "cmd.exe"),
                 new[] { "/c", "for /L %i in (1,1,40000) do @echo flooding-stdout-and-stderr-line-%i & echo err 1>&2" }, 30000, null);
@@ -663,6 +805,8 @@ namespace Aladdin.DesktopPreview
                     try { FolderPreview.List(dir, cancel.Token); } catch (OperationCanceledException) { cancelled = true; }
                 }
                 expect(cancelled, "folder preview honors cancellation");
+                expect(FolderPreview.ListWithin(dir, TimeSpan.FromSeconds(10)).Result.Contains("more not shown"), "bounded listing completes within its limit");
+                expect(FolderPreview.ListWithin(Path.Combine(dir, "missing"), TimeSpan.FromSeconds(10)).Result.StartsWith("Unable to list"), "listing failure is reported");
             }
             finally { try { Directory.Delete(dir, true); } catch (Exception) { } }
 
@@ -680,7 +824,14 @@ namespace Aladdin.DesktopPreview
         {
             if (args.Length == 1 && args[0] == "--self-test") return SelfTest();
             if (args.Length == 1 && args[0] == "--ui-self-test") { MainWindow window = new MainWindow(); if (window.Content == null) return 2; Console.WriteLine("Aladdin WPF layout construction: PASS"); return 0; }
-            new System.Windows.Application().Run(new MainWindow());
+            System.Windows.Application app = new System.Windows.Application();
+            // A bug must never take the window down silently; report and continue.
+            app.DispatcherUnhandledException += (sender, e) => {
+                e.Handled = true;
+                MainWindow main = app.MainWindow as MainWindow;
+                if (main != null) main.ReportInternalError();
+            };
+            app.Run(new MainWindow());
             return 0;
         }
     }
