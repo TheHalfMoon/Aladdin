@@ -354,7 +354,8 @@ fn copy_env_if_present(command: &mut Command, name: &str) {
 pub(crate) const NULL_GIT_CONFIG: &str = "/dev/null";
 
 /// Null device for editor/ssh commands, which must never resolve to a file
-/// that could be created (`/dev/null` would resolve to `C:\dev\null`).
+/// that could be created (`/dev/null` would resolve to `\dev\null` on the
+/// current drive).
 #[cfg(windows)]
 fn null_device() -> OsString {
     OsString::from("NUL")
@@ -444,10 +445,23 @@ mod tests {
                 command.env_remove("GIT_CONFIG_GLOBAL");
             }
             let output = command.output().expect("run git");
-            String::from_utf8_lossy(&output.stdout).trim().to_owned()
+            (
+                output.status.code(),
+                String::from_utf8_lossy(&output.stdout).trim().to_owned(),
+            )
         };
-        assert_eq!(read_global(false), "yes", "control: git reads the decoy");
-        assert_eq!(read_global(true), "", "NULL_GIT_CONFIG ignores it");
+        assert_eq!(
+            read_global(false),
+            (Some(0), String::from("yes")),
+            "control: git reads the decoy"
+        );
+        // Exit 1 is "key not found": git accepted the value and found nothing
+        // (exit 128 would mean it rejected the value, as 2.56 does for NUL).
+        assert_eq!(
+            read_global(true),
+            (Some(1), String::new()),
+            "NULL_GIT_CONFIG ignores it"
+        );
         let _ = fs::remove_dir_all(home);
         let _ = fs::remove_dir_all(root);
     }
