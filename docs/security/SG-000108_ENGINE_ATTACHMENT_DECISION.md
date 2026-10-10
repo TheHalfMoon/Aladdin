@@ -12,15 +12,23 @@ The evidence comes from throwaway spikes outside the repository. They ran on
 Windows 11 (10.0.26300) against the installed Microsoft Edge 155.0.4283.45
 with `playwright-core` 1.63.0. The package was installed with
 `--ignore-scripts`, and its lockfile integrity equals the admitted
-`sha512-rYCsBF/M…nyxo5mCg==`. No browser binary was downloaded. The
-implementation PR turns each spike into a native Windows test.
+`sha512-rYCsBF/M…nyxo5mCg==`. No browser binary was downloaded, and no Edge
+or Chrome policy key was present (`HKLM`/`HKCU\Software\Policies\Microsoft\Edge`,
+`HKLM\Software\Policies\Google\Chrome`). The implementation PR turns each
+probe into a native Windows test.
+
+The probes behind the second, third and fifth rows ran with the policy route
+removed, so they test layers 1 and 2 alone. They used the full proposed flag
+set from the next section.
 
 | Probe | Result |
 |---|---|
-| `launchPersistentContext` with `ignoreDefaultArgs: true`, the seven frozen flags, `--user-data-dir`, `--remote-debugging-pipe`, `about:blank` | Launches and is driven, and an ARIA snapshot of a fixture page is returned. The OS-reported engine command line (`Win32_Process.CommandLine`) is exactly those arguments: no `--enable-automation`, no debugging port or address, no Playwright default flags. |
-| `--host-resolver-rules` mapping only the admitted names to host-chosen addresses, then `MAP * ~NOTFOUND` | Admitted names reach only the pinned address. A real public name (`example.com`) and every unmapped name fail with `ERR_NAME_NOT_RESOLVED` even with the URL router removed. The fixture server saw only admitted requests. |
-| Add `--proxy-server=http://0.0.0.0:9` and `--proxy-bypass-list=<admitted names>;<-loopback>` | With the URL router removed, IP literals (`127.0.0.1`, `10.0.0.1`, `169.254.169.254`) and unmapped names fail with `ERR_PROXY_CONNECTION_FAILED` in about 4 s. Admitted names still go direct to their pinned address. |
-| WebRTC STUN to an IP literal (loopback and LAN) from page script | **Without a policy flag, UDP reaches an arbitrary address**: 4 packets, bypassing both layers above. `--force-webrtc-ip-handling-policy=…` has no effect. `--webrtc-ip-handling-policy=disable_non_proxied_udp` yields zero candidates and zero packets. TURN over TCP yields zero connections, because it must go through the dead proxy. |
+| `launchPersistentContext` with `ignoreDefaultArgs: true`, the seven frozen flags, `--user-data-dir`, `--remote-debugging-pipe`, `about:blank` | Launches and is driven, and an ARIA snapshot of a fixture page is returned. The OS-reported engine command line is exactly those arguments: no `--enable-automation`, no debugging port or address, no Playwright default flag. |
+| Resolver rules mapping only admitted names, then `MAP * ~NOTFOUND` | A real public name (`example.com`) and unmapped names fail. The fixture saw only admitted requests. |
+| Proxy `http://0.0.0.0:9` with an exact bypass list plus `<-loopback>`, and hostile TCP listeners on `0.0.0.0:9`, `127.0.0.1:9` and `[::]:9` | IPv4 literal, IPv6 literal (`[::1]`), IPv6 metadata (`[fd00:ec2::254]`) and unmapped names fail with `ERR_PROXY_CONNECTION_FAILED` in 55–75 ms. **Zero** connections reach any listener. The admitted name still connects directly. |
+| `MAP <name> <ip>:<port>` | A request for the admitted name on another port is delivered to the pinned port. Without the port, any port is reachable. Pins therefore carry `:443`. |
+| WebRTC STUN to IP literals (loopback and LAN), and TURN over TCP | Without a policy flag, UDP reaches an arbitrary address (4 packets), bypassing layers 1 and 2. On Edge 155, `--force-webrtc-ip-handling-policy=…` had no effect. `--webrtc-ip-handling-policy=disable_non_proxied_udp` yields zero candidates, zero packets and zero TURN-TCP connections. |
+| WebTransport | Not reachable from the HTTP fixture: it requires a secure context. **Untested.** It is a required HTTPS-fixture test (see below). |
 
 ## Decision 1: engine launch and attachment (option a)
 
@@ -31,16 +39,25 @@ implementation PR turns each spike into a native Windows test.
 - engine discovery and signature verification;
 - profile adoption and the fingerprint check;
 - the scrubbed environment;
-- construction of the complete argv.
+- the complete argv.
 
 **What the worker receives.** The worker gets the engine path, the profile
 directory, the argv and the environment from the host, and passes them
 unchanged with `ignoreDefaultArgs: true`. The worker has no code path that
 adds a flag.
 
-**Post-launch verification.** After launch the host reads the engine's
-OS-reported command line, parent process and Job Object membership. Any
-deviation from the host-built argv stops the engine and fails closed.
+**Drift detection, not containment.** After launch, the host compares the
+engine's OS-reported command line with the argv it built. It also enumerates
+every process in its Job Object and refuses any second browser-process engine
+(an engine process without `--type=`). This catches drift, for example a
+Playwright upgrade that adds default flags, a wrong engine, or a stray
+process. It does **not** defend against a compromised worker:
+- the worker holds a full-access handle to the engine, so it could rewrite
+  the command line the OS reports after the engine has parsed it;
+- a compromised worker is a full-user process and needs no browser to reach
+  the network.
+
+Worker compromise is a residual risk (below).
 
 **Supervision.** The worker runs in the host's kill-on-close Job Object
 without breakaway, so the engine and its child processes inherit the job.
@@ -48,45 +65,57 @@ without breakaway, so the engine and its child processes inherit the job.
 **Option (b) rejected.** Option (b) would have the host launch the engine and
 hand the pipe to the worker. It was rejected because Playwright has no public
 API for an inherited pipe: it would need a private adapter that breaks on
-upgrades, with no security gain over verifying the launched command line.
+upgrades, and the drift check above gives the same assurance.
 
-**SG-000074 argv amendment.** This is the explicit authority delta of the
-implementation PR. `ALLOWED_FLAGS` gains `--remote-debugging-pipe` plus the
-three value-carrying flags of Decision 2. Rules for the argv:
-- The value of each value-carrying flag must equal the string built by the
-  host for that launch; a flag present only by name is refused.
-- `FORBIDDEN_FLAGS` is unchanged: `--remote-debugging-port`,
-  `--remote-debugging-address` and `--enable-automation` stay forbidden.
-- `--remote-debugging-pipe` is added to the closed set, never to a
-  caller-reachable path.
+### SG-000074 argv amendment
+
+This is the explicit authority delta of the implementation PR.
+`ALLOWED_FLAGS` gains exactly six entries. `FORBIDDEN_FLAGS` is unchanged:
+`--remote-debugging-port`, `--remote-debugging-address`, `--enable-automation`
+and `--disable-component-update` stay forbidden.
+
+| Flag | Value |
+|---|---|
+| `--remote-debugging-pipe` | none |
+| `--host-resolver-rules` | host-built for this launch: `MAP <name> <pin>:443, …, MAP * ~NOTFOUND` |
+| `--proxy-server` | fixed: `http://0.0.0.0:9` |
+| `--proxy-bypass-list` | host-built for this launch: `<name>;…;<-loopback>` |
+| `--webrtc-ip-handling-policy` | fixed: `disable_non_proxied_udp` |
+| `--disable-quic` | none |
+
+A host-valued flag is accepted only when its value equals the string the host
+built for that launch. A fixed-value flag is accepted only with its fixed
+value. A flag present by name only, or with any other value, is refused.
 
 ## Decision 2: actual-traffic enforcement of SG-000075
 
-Three independent layers are used. Each layer fails closed by itself.
+Three layers, each fail-closed on its own, plus the required flags and
+launch preconditions below.
 
-1. **Host-pinned resolution.** The engine never resolves names.
-   - For each admitted destination, the host resolves the name itself and
-     chooses the pin with the existing `select_public_address`. Public
-     addresses only: loopback, private, link-local, metadata and mapped
-     forms are denied by `is_public_address`.
-   - The host then emits `--host-resolver-rules=MAP <name> <pin>, …, MAP * ~NOTFOUND`.
-   - DNS rebinding is impossible within an engine lifetime because the
-     mapping is fixed at launch.
-   - A redirect, frame or subresource to a name outside the map fails at
-     the resolver.
+1. **Host-pinned resolution, port-pinned.** The engine never resolves names.
+   - For each admitted destination, the host resolves the name and chooses
+     the pin with the existing `select_public_address`. Public addresses
+     only: loopback, private, link-local, metadata and mapped forms are
+     denied by `is_public_address`.
+   - The host emits `MAP <name> <pin>:443` for each name, then
+     `MAP * ~NOTFOUND`. This enforces SG-000075's port-443 rule at the
+     resolver.
+   - DNS rebinding is impossible within an engine lifetime because the map is
+     fixed at launch.
+   - A redirect, frame or subresource to a name outside the map fails.
    - Widening the set means a host-mediated relaunch after a fresh
      `check_rebinding_consistent` check, never an in-place change.
 2. **No route for IP literals or unmapped names.** The host sets
    `--proxy-server=http://0.0.0.0:9` and
    `--proxy-bypass-list=<admitted names>;<-loopback>`.
-   - Only admitted names connect directly, and only to their pinned address.
-   - Everything else, including IP literals, is sent to an address that
-     cannot accept a connection on Windows.
+   - Only admitted names connect directly, and only to their pinned address
+     and port.
+   - Everything else, IPv4 and IPv6 literals included, goes to `0.0.0.0:9`,
+     which accepted no connection even with listeners bound to `0.0.0.0:9`,
+     `127.0.0.1:9` and `[::]:9`.
    - `<-loopback>` removes the engine's implicit loopback bypass.
-   - `0.0.0.0` is chosen over a loopback port because a local process could
-     listen on a loopback port and act as a proxy. Connecting to `0.0.0.0`
-     on Linux reaches the local host, so this choice is valid only for the
-     Windows release.
+   - On Linux, connecting to `0.0.0.0` reaches the local host, so this
+     choice is valid only for the Windows release.
 3. **Policy gate.** The worker's context-level route consults the host's
    SG-000075 decision for every request it sees: navigation, redirect,
    frame, popup, subresource and download. Layer 3 carries policy (scheme,
@@ -94,12 +123,24 @@ Three independent layers are used. Each layer fails closed by itself.
    - `serviceWorkers: "block"` is set.
    - WebSocket is denied through the context WebSocket route until a later
      grain admits mediated WebSocket.
+   - Layer 3 does not see every request: preconnect, keepalive after unload,
+     and internal fetches are not routed. Layers 1 and 2 therefore must hold
+     without it, and the tests prove that.
 
-**Required with the layers:**
-- `--webrtc-ip-handling-policy=disable_non_proxied_udp`, because the WebRTC
-  probe proves that layers 1 and 2 do not cover UDP.
-- Page-level APIs that need permissions stay denied by
-  `permission_allowed`.
+**Required flags.**
+- `--webrtc-ip-handling-policy=disable_non_proxied_udp`: WebRTC UDP otherwise
+  bypasses layers 1 and 2.
+- `--disable-quic`: SG-000075 denies QUIC.
+
+Permission-gated page APIs stay denied by `permission_allowed`.
+
+**Launch precondition: no managed policy.** Managed Edge policy outranks
+command-line settings. A machine proxy policy would turn layer 2 into a
+working proxy, which resolves names itself and so skips layer 1 too. The
+host therefore reads `HKLM` and `HKCU\Software\Policies\Microsoft\Edge`
+before every launch. It refuses to launch, with a typed error, when any
+proxy, DNS, WebRTC or QUIC policy is present. Release qualification
+additionally runs the layer 1 and 2 probes against the installed engine.
 
 ### Hostname and value hygiene
 
@@ -107,39 +148,85 @@ Three independent layers are used. Each layer fails closed by itself.
   ASCII LDH hostnames only:
   - lowercase;
   - labels of 1 to 63 characters, 253 characters in total;
-  - no wildcard, comma, semicolon, whitespace, `=` or `~`.
+  - at least two labels;
+  - a last label that is not all-numeric and does not start with `0x`, so
+    that a name can never be parsed as an IPv4 address.
+  - This also rules out wildcards and the separators `,` `;` and whitespace.
 - **Addresses.** Values come from typed `IpAddr`, formatted by Rust. IPv6
   pins are bracketed.
-- **Construction.** No page, caller or worker string reaches either flag.
+- **Construction.** No page, caller or worker string reaches any flag.
+
+### Test-only fixture pinning
+
+Fixtures listen on loopback, which `is_public_address` correctly rejects.
+Tests therefore need a test-only pin source. It must be compiled only into
+test builds (a `cfg(test)` path or a non-default feature that the release
+build never enables). A release-qualification check must prove that it is
+absent from the shipped binaries. No runtime configuration may enable it.
 
 ## Residual risks (for review)
 
 - **Admitted host is hostile.** An admitted name pinned to its public address
   still serves whatever that host returns. Content is never policy (SG-000076
   redaction and SG-000077 approvals still apply).
-- **Engine bugs.** A future Edge may change how it honours the resolver,
-  proxy or WebRTC flags. A10's supported version window must re-run the
-  probes in release qualification on every supported engine version, and
-  refuse versions where they fail.
+- **Worker compromise.** A compromised worker equals user-level code with
+  network access. The drift check does not contain it. Mitigations are the
+  pinned, integrity-checked dependency, the scrubbed environment, no CLI and
+  no install scripts. The implementation PR must evaluate running the worker
+  under a restricted token or AppContainer without network capability, and
+  record the outcome.
+- **Same-user processes.** The debugging pipe is not reachable by other users
+  or the network. But a same-user, medium-integrity process can duplicate the
+  pipe handles out of the worker or engine and take full CDP control. This
+  matches the existing threat model, where same-user code is not a security
+  boundary. Tests must show the pipe handles are not inherited by the
+  engine's child processes.
+- **Browser-internal update and reputation traffic.** The no-route proxy also
+  blocks:
+  - component updates, including CRLSet revocation data (so SG-000074's
+    choice not to pass `--disable-component-update` has no effect while
+    this decision stands);
+  - Safe Browsing / SmartScreen lookups.
+
+  This is an explicit decision for the first slice. Admitted traffic stays
+  TLS-verified, and downloads are staged and host-checked (size, type,
+  digest) rather than trusted to SmartScreen. Revocation freshness relies on
+  the OS certificate stack. Admitting specific update endpoints is a later
+  grain decision.
+- **Engine drift.** A future Edge may change how it honours these flags
+  (the WebRTC switch name already differs from the `--force-` spelling). The
+  A10 supported version window must re-run every probe per supported engine
+  version and refuse versions where any probe fails.
 - **Relaunch cost.** Relaunching to widen the destination set costs latency
   in exchange for no in-place mutation. This is accepted for the first
   journey (A6), whose destinations are known up front.
-- **No-router case.** In the spikes, the router itself (layer 3) was removed
-  only to test layers 1 and 2. In production all three are active.
 
 ## Tests the implementation PR must add (native Windows, fixture origin only)
 
 - **Argv.** The exact argv, and the OS command line equal to it, before and
-  after the navigation. Refusal of a pipe flag without the host-built values.
-  Refusal of every forbidden flag, as today.
-- **Name pinning.** Unmapped name, real public name, IP literal (v4 and v6),
-  private, loopback and metadata are denied with the router disabled by a
-  test-only hook.
-- **Rebinding.** Rebinding attempt via a fixture resolver that changes
-  answers; the engine keeps the pin.
-- **WebRTC.** STUN and TURN probes send zero packets and make zero
+  after the navigation. Refusal of every new flag without its host-built or
+  fixed value. Refusal of every forbidden flag, as today. Refusal of a second
+  browser-process engine in the job.
+- **Layers 1 and 2, with the policy route disabled by a test-only hook.**
+  Every case below is denied:
+  - an unmapped name and a real public name;
+  - IPv4 and IPv6 literals;
+  - private, loopback and IPv4/IPv6 metadata addresses;
+  - another port of an admitted name, which lands on the pinned port;
+  - a connection to listeners bound on port 9 (zero accepts).
+- **Rebinding.** A fixture resolver whose answers change; the engine keeps
+  the pin.
+- **WebRTC.** STUN and TURN (UDP and TCP) yield zero packets and zero
   connections.
+- **QUIC and WebTransport.** An HTTPS fixture shows no QUIC and a refused
+  WebTransport session.
 - **Service workers and WebSocket.** A service worker registration and a
   WebSocket connection are refused.
+- **Policy precondition.** A test registry hive with a proxy policy makes the
+  launch refuse.
 - **Supervision.** The engine is a descendant of the worker inside the host
-  job; killing the host leaves no engine process.
+  job; killing the host leaves no engine process; the pipe handles are not
+  inherited by engine child processes; the measured process count stays
+  within SG-000074's job process limit.
+- **Hostname hygiene.** Names with numeric, hex or wildcard labels, or
+  containing separators, are refused.

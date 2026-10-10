@@ -20,8 +20,8 @@
     "include": [
       "Activate the SG-000108 contract only; the engine, dependency, tools and authority changes require separately exact-head qualified implementation PRs.",
       "Admit exactly playwright-core 1.63.0 (dependency facts under `dependency_admission`) as a pinned, lockfile-recorded dependency of a separate private worker process. The worker runs on Node.js 20+; today the release requires a separately installed Node.js (no runtime is shipped), so the worker inherits that prerequisite until a signed, pinned Node runtime is admitted under SG-000106. No bundled browser download: the worker drives only the engine the host verified.",
-      "Worker transport: private anonymous-pipe IPC with the Rust host using a closed, versioned frame vocabulary that extends the SG-000074 protocol generation (an explicit authority delta of the implementation PR, since SG-000074 currently has no capability frames); no TCP/HTTP listener, no remote-debugging port or address, no generic CDP passthrough. Engine launch and attachment follow `decisions` (pipe, host-built argv, OS command-line verification).",
-      "Every navigation, redirect, frame, popup, worker, subresource and download decision is made by the existing qdral-browser-host navigation policy (SG-000075) before the worker acts; actual traffic is enforced by host-pinned resolution and a no-route proxy for everything else (see `decisions`), not by URL interception alone; WebRTC is limited to proxied transport; service workers are blocked and WebSocket traffic is explicitly mediated or denied; page content never becomes policy.",
+      "Worker transport: private anonymous-pipe IPC with the Rust host using a closed, versioned frame vocabulary that extends the SG-000074 protocol generation (an explicit authority delta of the implementation PR, since SG-000074 currently has no capability frames); no TCP/HTTP listener, no remote-debugging port or address, no generic CDP passthrough. Engine launch and attachment follow `decisions` (PROPOSED) (pipe, host-built argv, OS command-line verification).",
+      "Every navigation, redirect, frame, popup, worker, subresource and download decision is made by the existing qdral-browser-host navigation policy (SG-000075) before the worker acts; actual traffic is enforced by host-pinned resolution and a no-route proxy for everything else (see `decisions`, PROPOSED), not by URL interception alone; WebRTC is limited to proxied transport; service workers are blocked and WebSocket traffic is explicitly mediated or denied; page content never becomes policy.",
       "Observation uses Playwright accessibility/aria snapshots mapped onto the SG-000076 bounded, redacted, generation-bound node identity model; caller-supplied selectors are never authority.",
       "Actuation (SG-000077) and transfers (SG-000078) reuse their existing typed shapes; downloads are staged, size/type-checked, digest-recorded and committed create-only inside the approved workspace destination; uploads stay limited to SG-000025/SG-000078-recorded sources.",
       "Exposure follows SG-000079: the live tool set changes only through an explicit, reviewed profile update recorded in discovery, documentation, OAuth scope tables and runtime together.",
@@ -69,13 +69,13 @@
       "question": "Engine launch and attachment",
       "status": "PROPOSED, pending security review",
       "record": "docs/security/SG-000108_ENGINE_ATTACHMENT_DECISION.md",
-      "decision": "Option (a): the worker launches the host-verified engine with playwright-core launchPersistentContext over --remote-debugging-pipe and ignoreDefaultArgs: true, using exactly the argv, profile and scrubbed environment built by the host; the host then verifies the engine's OS-reported command line, parent and Job Object membership. SG-000074's ALLOWED_FLAGS gains --remote-debugging-pipe and three host-valued flags; FORBIDDEN_FLAGS is unchanged."
+      "decision": "Option (a): the worker launches the host-verified engine with playwright-core launchPersistentContext over --remote-debugging-pipe and ignoreDefaultArgs: true, using exactly the argv, profile and scrubbed environment built by the host. After launch the host compares the OS-reported command line with that argv and refuses any second browser-process engine in its Job Object; this detects drift and does not contain a compromised worker (a recorded residual risk). SG-000074's ALLOWED_FLAGS gains exactly --remote-debugging-pipe, --host-resolver-rules (host-built), --proxy-server=http://0.0.0.0:9, --proxy-bypass-list (host-built), --webrtc-ip-handling-policy=disable_non_proxied_udp and --disable-quic, each accepted only with its host-built or fixed value; FORBIDDEN_FLAGS is unchanged."
     },
     {
       "question": "Actual-traffic enforcement of SG-000075",
       "status": "PROPOSED, pending security review",
       "record": "docs/security/SG-000108_ENGINE_ATTACHMENT_DECISION.md",
-      "decision": "Three layers: host-pinned resolution (--host-resolver-rules mapping each admitted name to its select_public_address pin, then MAP * ~NOTFOUND); no route for IP literals or unmapped names (--proxy-server=http://0.0.0.0:9 with an exact --proxy-bypass-list of admitted names plus <-loopback>); and the SG-000075 policy gate in the worker's context route, with service workers blocked and WebSocket denied. --webrtc-ip-handling-policy=disable_non_proxied_udp is required because WebRTC UDP otherwise bypasses the first two layers."
+      "decision": "Three fail-closed layers: host-pinned, port-pinned resolution (MAP <name> <select_public_address pin>:443 for each admitted name, then MAP * ~NOTFOUND); no route for IP literals or unmapped names (--proxy-server=http://0.0.0.0:9 with an exact --proxy-bypass-list of admitted names plus <-loopback>; zero accepts by hostile listeners on port 9); and the SG-000075 policy route, with service workers blocked and WebSocket denied. WebRTC UDP, which otherwise bypasses the first two layers, is refused with --webrtc-ip-handling-policy=disable_non_proxied_udp, and QUIC with --disable-quic. The host refuses to launch when any Edge proxy, DNS, WebRTC or QUIC policy is present."
     }
   ],
   "invariants": [
@@ -102,7 +102,7 @@
     },
     {
       "id": "A4",
-      "claim": "Live navigation on the verified installed engine obeys every SG-000075 rule against real traffic (redirect widening, downgrade, rebinding, private/loopback/metadata, frames/popups/workers, service workers blocked, WebSocket denied, WebRTC UDP refused), proven with fixtures; the resolver-pinning and no-route layers are each proven with the policy route disabled by a test-only hook."
+      "claim": "Live navigation on the verified installed engine obeys every SG-000075 rule against real traffic (redirect widening, downgrade, rebinding, private/loopback/metadata, frames/popups/workers, service workers blocked, WebSocket denied, WebRTC UDP refused, QUIC and WebTransport refused, non-443 ports and managed-policy overrides refused), proven with fixtures; the resolver-pinning and no-route layers are each proven with the policy route disabled by a test-only hook."
     },
     {
       "id": "A5",
@@ -130,7 +130,7 @@
     },
     {
       "id": "A11",
-      "claim": "Supervision: worker and engine are in the host kill-on-close Job Object; native tests kill the host, the worker and the engine in turn and show no process survives and no partial download is committed."
+      "claim": "Supervision: worker and engine are in the host kill-on-close Job Object; native tests kill the host, the worker and the engine in turn and show no process survives and no partial download is committed; the measured process count stays within the job's active-process limit and the debugging-pipe handles are not inherited by engine child processes."
     },
     {
       "id": "A12",
