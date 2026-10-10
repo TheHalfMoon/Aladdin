@@ -9,7 +9,7 @@ use std::path::Path;
 
 /// Flags the host passes to the engine, in order. This set is frozen:
 /// sandbox-enabling, extensionless, background-quiet, ephemeral.
-const ALLOWED_FLAGS: &[&str] = &[
+pub(crate) const ALLOWED_FLAGS: &[&str] = &[
     "--headless",
     "--no-first-run",
     "--no-default-browser-check",
@@ -21,7 +21,7 @@ const ALLOWED_FLAGS: &[&str] = &[
 
 /// Flags that must never appear. Each weakens the sandbox, opens a
 /// control surface, loads foreign code, or escapes the profile.
-const FORBIDDEN_FLAGS: &[&str] = &[
+pub(crate) const FORBIDDEN_FLAGS: &[&str] = &[
     "--no-sandbox",
     "--disable-setuid-sandbox",
     "--no-zygote",
@@ -35,7 +35,7 @@ const FORBIDDEN_FLAGS: &[&str] = &[
     "--disable-component-update",
 ];
 
-const INITIAL_URL: &str = "about:blank";
+pub(crate) const INITIAL_URL: &str = "about:blank";
 
 /// Build the exact engine command line: frozen flags, the Deskal-owned
 /// profile directory, and the blank initial page. No caller input beyond

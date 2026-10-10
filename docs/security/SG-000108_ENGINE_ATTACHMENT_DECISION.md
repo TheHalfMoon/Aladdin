@@ -1,10 +1,10 @@
 # SG-000108 engine attachment and resolved-address enforcement decision
 
-Status: PROPOSED for security review. This record resolves the first two
-`open_questions` of `.specgrain/specs/SG-000108.json`. It changes no code,
-grants no authority and admits no dependency: the frozen SG-000074 command
-line in `crates/qdral-browser-host/src/argv.rs` stays exactly as it is until
-the implementation PR changes it with the tests listed below.
+Status: PROPOSED; security review passed on PR #291. This record resolves
+the first two `open_questions` of `.specgrain/specs/SG-000108.json`. The
+record itself granted no authority and admitted no dependency. The frozen
+SG-000074 command line in `crates/qdral-browser-host/src/argv.rs` stays
+unchanged. Implementation progress is tracked at the end of this record.
 
 ## Evidence
 
@@ -69,8 +69,12 @@ upgrades, and the drift check above gives the same assurance.
 
 ### SG-000074 argv amendment
 
-This is the explicit authority delta of the implementation PR.
-`ALLOWED_FLAGS` gains exactly six entries. `FORBIDDEN_FLAGS` is unchanged:
+This is the explicit authority delta of the implementation. It is made
+without widening the SG-000074 path: `ALLOWED_FLAGS` and `assert_argv_clean`
+stay frozen and keep refusing every flag below. A separate, exact worker-launch
+builder (`build_worker_argv`) emits the frozen flags plus exactly these six,
+and `assert_worker_argv_exact` accepts only that argv. `FORBIDDEN_FLAGS` is
+unchanged:
 `--remote-debugging-port`, `--remote-debugging-address`, `--enable-automation`
 and `--disable-component-update` stay forbidden.
 
@@ -141,7 +145,9 @@ into a working proxy, which resolves names itself and so skips layer 1 too.
 Before every launch, the host reads the mandatory policy keys for the
 verified engine's family:
 - `HKLM` and `HKCU\Software\Policies\Microsoft\Edge` for Edge;
-- `HKLM` and `HKCU\Software\Policies\Google\Chrome` for Chrome.
+- `HKLM` and `HKCU\Software\Policies\Google\Chrome` and
+  `\Software\Policies\Chromium` for the Chromium family (Google Chrome reads
+  the first, Chromium builds the second).
 
 It refuses to launch, with a typed error, when **any** mandatory policy
 value or subkey is present. This is simpler, and fails closed better, than
@@ -242,3 +248,29 @@ absent from the shipped binaries. No runtime configuration may enable it.
   within SG-000074's job process limit.
 - **Hostname hygiene.** Names with numeric, hex or wildcard labels, or
   containing separators, are refused.
+
+## Implementation progress
+
+**Slice 1: host-side confinement contract** (`crates/qdral-browser-host/src/confinement.rs`).
+- `AdmittedDestination::admit(url, resolver)` is the only public
+  constructor. It runs the existing `validate_navigation`, which resolves the
+  name and pins its lowest public address with `select_public_address`. So
+  every pin comes from the host's own resolution of that name. It then
+  re-checks https, port 443 and `is_public_address`, and applies the stricter
+  hostname hygiene.
+- `resolver_rules`, `proxy_bypass_list` and `build_worker_argv` emit the
+  six flags with the exact values in the table above.
+- `assert_worker_argv_exact` refuses any argv that differs element for
+  element from the host-built one.
+- `assert_no_managed_policy` with `RegistryPolicySource` reads the Edge, Chrome or
+  Chromium mandatory policy keys in HKLM and HKCU, both registry views, with
+  `KEY_READ` only. It refuses on any value or subkey, and fails closed when
+  a key is unreadable or the platform is not Windows.
+- The SG-000074 `build_argv` and `assert_argv_clean` are unchanged and still
+  refuse every confinement flag (a unit test proves this).
+- The fixture pin constructor is compiled only into unit tests.
+- No launch path uses this module yet, so the slice grants no authority.
+
+**Native check of the emitted format (Edge 155).** An IPv4 pin and a
+bracketed IPv6 pin (`MAP six.example [::1]:<port>`) each reached only their
+fixture. Unmapped names failed with `ERR_PROXY_CONNECTION_FAILED`.
