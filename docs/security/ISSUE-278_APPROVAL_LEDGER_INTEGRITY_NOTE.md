@@ -58,7 +58,11 @@ lock and otherwise report the last verified view.
   (four-process race test: exactly one consumption succeeds).
 - Before trusting the file again, a broker re-reads its last verified line.
   A ledger that shrinks, disappears or is replaced (even by one of the same
-  length) under a live broker poisons it.
+  length) under a live broker poisons it. That broker stays fail-closed until
+  its process restarts (unless the replacement is a recovery chain, which it
+  adopts); a restart accepts whatever verifiable ledger is then on disk,
+  which is the tail-rollback residual risk below. `qdral approvals recover`
+  is only for a ledger that fails verification.
 - Lock contention past 5 seconds, and I/O errors such as a sharing
   violation from backup or antivirus software, report a transient error.
   They are never treated as corruption.
@@ -84,20 +88,23 @@ and `qdral approvals recover`:
    lock and refuses a ledger that verifies, is busy, or is merely unreadable
    (an unreadable ledger may verify, so it is never quarantined); on
    Windows it also refuses a read-only ledger file, which cannot be replaced
-   or flushed, before creating any file;
+   or flushed, before creating any recovery file;
 2. writes and syncs a new chain to `approval-history.jsonl.recovering-<ms>`,
    starting with a non-authorizing `Unavailable` record that names the
    quarantine file and the old ledger's SHA-256;
 3. preserves the original bytes at
    `approval-history.jsonl.quarantine-<ms>-<sha256 prefix>` as a hard link
-   (or, where links are unsupported, an owner-only copy into a new file),
+   (or, where links are unsupported, a copy into a new file: owner-only on
+   Unix; on Windows it inherits the state directory's ACL),
    flushed, synced and hash-checked against the original; an existing file at
    that name is never replaced, and the evidence is never rewritten;
 4. replaces the ledger with the staged chain in one rename.
 
 The ledger path is never absent. A failure or crash before step 4 leaves the
 original ledger in place (with at most a staged file and a quarantine copy,
-which uninstall keeps by default and removes on purge), and the staged file
+which uninstall keeps by default and removes on purge; with a
+`QDRAL_APPROVAL_HISTORY_PATH` override outside the install root, uninstall
+does not touch them), and the staged file
 is removed on ordinary failures. No earlier approval carries over, so every
 operation needs a fresh approval. Running
 brokers adopt the new ledger within their next transaction without a

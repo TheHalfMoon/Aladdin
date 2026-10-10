@@ -64,7 +64,9 @@ fn approval_history(path: &Path) -> Check {
     use qdral_approval::ApprovalLedgerStatus;
     let inspection = qdral_approval::inspect_approval_ledger(path);
     match inspection.status {
-        ApprovalLedgerStatus::Missing => check("approval_history", CheckStatus::Pass, "no records yet"),
+        ApprovalLedgerStatus::Missing => {
+            check("approval_history", CheckStatus::Pass, "no records yet")
+        }
         ApprovalLedgerStatus::Verified => check(
             "approval_history",
             CheckStatus::Pass,
@@ -73,10 +75,7 @@ fn approval_history(path: &Path) -> Check {
         ApprovalLedgerStatus::Corrupt => check(
             "approval_history",
             CheckStatus::Fail,
-            format!(
-                "the approval ledger fails verification, so approvals are blocked; run `qdral approvals recover` ({})",
-                inspection.detail
-            ),
+            format!("approvals are blocked: {}", inspection.detail),
         ),
         ApprovalLedgerStatus::Busy => check(
             "approval_history",
@@ -91,7 +90,9 @@ fn approval_history(path: &Path) -> Check {
     }
 }
 
-/// Runs every check with the approval ledger at its layout-relative path.
+/// Runs every check with the approval ledger at its layout-relative path
+/// (tests only; the CLI passes the brokers' ledger path).
+#[cfg(test)]
 pub fn run(layout: &Layout, platform: &dyn Platform) -> DoctorReport {
     run_with_approval_history(
         layout,

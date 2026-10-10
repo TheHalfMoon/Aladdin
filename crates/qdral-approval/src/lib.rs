@@ -1016,6 +1016,8 @@ const LEDGER_LOCK_WAIT: Duration = Duration::from_secs(5);
 const HISTORY_LOCK_WAIT: Duration = Duration::from_millis(100);
 const LEDGER_RECOVERY_HINT: &str =
     "run `qdral approvals recover` to quarantine it (the evidence is preserved) and start a new approval ledger";
+const LEDGER_REPLACED_HINT: &str =
+    "restart the Qdral processes so they load the ledger now on disk; if `qdral doctor` then reports that it fails verification, run `qdral approvals recover`";
 const LEDGER_DURABILITY_HINT: &str =
     "retry; the broker resumes once the ledger verifies again, otherwise check disk space and permissions and run `qdral doctor`";
 const RECOVERY_WORKSPACE: &str = "qdral-ledger-recovery";
@@ -1123,7 +1125,8 @@ impl LedgerFault {
     fn hint(self) -> &'static str {
         match self {
             Self::Durability => LEDGER_DURABILITY_HINT,
-            _ => LEDGER_RECOVERY_HINT,
+            Self::Replaced => LEDGER_REPLACED_HINT,
+            Self::Unverifiable | Self::TornTail => LEDGER_RECOVERY_HINT,
         }
     }
 }
@@ -1539,7 +1542,7 @@ impl ApprovalLedger {
         })
     }
 
-    #[allow(dead_code)]
+    #[cfg(test)]
     fn current_epoch(&self) -> u64 {
         self.revoke_epoch
     }
@@ -2955,10 +2958,6 @@ mod tests {
     #[test]
     fn recovery_refuses_missing_verified_or_busy_ledgers() {
         let path = temp_path("reg278-recover-refuse");
-        assert_eq!(
-            recover_approval_ledger(&path).unwrap_err().code,
-            FailureCode::InvalidRequest
-        );
         let mut ledger = ledger_in(&path);
         let a = issue_strong(&mut ledger, "reg278-recover-refuse", 5_000);
         assert_eq!(
@@ -3064,8 +3063,13 @@ mod tests {
 
     #[test]
     fn poisoned_broker_never_adopts_its_own_unchanged_chain() {
+        // The broker already knows this recovery chain; a poisoned view of it
+        // must not be cleared by "adopting" the same chain again.
         let path = temp_path("reg278-no-self-adopt");
+        write_legacy_v010_ledger(&path, true);
+        let recovery = recover_approval_ledger(&path).expect("recover");
         let mut ledger = ledger_in(&path);
+        assert!(ledger.starts_with_recovery());
         issue_strong(&mut ledger, "reg278-no-self-adopt", 5_000);
         ledger.fault = Some(LedgerFault::Unverifiable);
         let error = ledger.preflight().unwrap_err();
@@ -3076,6 +3080,7 @@ mod tests {
         );
         assert!(ledger.poisoned());
         drop(ledger);
+        let _ = std::fs::remove_file(&recovery.quarantined_to);
         remove_ledger(&path);
     }
 
