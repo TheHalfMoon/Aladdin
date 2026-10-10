@@ -204,7 +204,8 @@ export function parseResolverRules(value: string): string[] | null {
     const [, name = "", address = ""] = match;
     if (!isAdmittedHost(name) || names.includes(name)) return null;
     const v6 = /^\[(.+)\]$/.exec(address);
-    if (v6 ? !isIPv6(v6[1] ?? "") : !isIPv4(address)) return null;
+    // No zone index: the host never emits one.
+    if (address.includes("%") || (v6 ? !isIPv6(v6[1] ?? "") : !isIPv4(address))) return null;
     names.push(name);
   }
   return names;

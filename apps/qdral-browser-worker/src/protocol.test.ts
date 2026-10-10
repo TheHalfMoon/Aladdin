@@ -134,6 +134,7 @@ test("resolver rules and bypass list must equal the host grammar exactly", () =>
     ["MAP example.com 2606:2800::1:443, MAP * ~NOTFOUND", "example.com;<-loopback>"],
     ["MAP example.com 999.1.1.1:443, MAP * ~NOTFOUND", "example.com;<-loopback>"],
     ["MAP example.com [::ffff:zz]:443, MAP * ~NOTFOUND", "example.com;<-loopback>"],
+    ["MAP example.com [fe80::1%eth0]:443, MAP * ~NOTFOUND", "example.com;<-loopback>"],
     ["MAP Example.com 93.184.215.14:443, MAP * ~NOTFOUND", "Example.com;<-loopback>"],
     ["MAP a.123 93.184.215.14:443, MAP * ~NOTFOUND", "a.123;<-loopback>"],
     ["MAP example.com 93.184.215.14:443, MAP example.com 93.184.215.15:443, MAP * ~NOTFOUND", "example.com;example.com;<-loopback>"],
