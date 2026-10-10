@@ -274,3 +274,30 @@ absent from the shipped binaries. No runtime configuration may enable it.
 **Native check of the emitted format (Edge 155).** An IPv4 pin and a
 bracketed IPv6 pin (`MAP six.example [::1]:<port>`) each reached only their
 fixture. Unmapped names failed with `ERR_PROXY_CONNECTION_FAILED`.
+
+**Slice 2a: private worker package** (`apps/qdral-browser-worker`). It is standalone, like `apps/web`, so the identity-pinned npm workspaces stay unchanged.
+- **Dependency.** `playwright-core` is exactly 1.63.0, with the admitted integrity. It is the only production package in the lockfile, has no install script and no runtime dependencies. All of this is checked mechanically against `dependency_admission`.
+- **Protocol.** SG-000074 framing (u32 LE length + JSON, 64 KiB) with a closed generation-1 vocabulary:
+  - host → worker: `hello`, `launch {engine, profile_dir, argv, env}`, `ping`, `shutdown`;
+  - worker → host: `hello`, `launched`, `pong`, `bye`, `error {code}`.
+  Unknown frames or fields are violations.
+- **Launch check (defense in depth).** The worker re-checks the launch frame against this contract:
+  - the frozen flags and the profile;
+  - each resolver entry, parsed with the host grammar: an admitted-host name, an IPv4 or bracketed IPv6 pin, `:443`, and `MAP * ~NOTFOUND` last;
+  - a bypass list exactly equal to those names in order, followed by `<-loopback>`;
+  - the fixed proxy, WebRTC and QUIC values, and the blank page;
+  - engine and environment allowlists, and absolute paths without dot segments.
+
+  Address class stays the host's policy, because test builds pin fixtures to loopback. The worker then hands the argv to Playwright unchanged, with `ignoreDefaultArgs: true`. There is at most one engine per worker. Any violation, refusal, unexpected error, broken pipe, engine exit or end of input closes the engine.
+- **Console isolation.** The global console is replaced by one that writes only to stderr. Verified: `console.dir`, `table`, `trace` and `log` put 0 bytes on stdout.
+- **Native smoke run (Edge 155, local).** `dist/main.js` went through `hello` → `launch` → `ping` → `shutdown` with exit 0. The OS reported one browser process with the host argv, with no debugging port and no `--enable-automation`. No engine process was left after shutdown.
+
+- **CI.** The root `npm test` runs the worker's install (`npm ci --ignore-scripts`), typecheck and tests. Both Node jobs, ubuntu and windows, therefore cover it without a workflow change. A dedicated `npm audit` of the worker lockfile in the supply-chain job is **pending**: it needs a workflow edit, which the current push token cannot make (no `workflow` scope). Until then the audit is a local check (0 vulnerabilities), and the lockfile admits only `playwright-core`, which has no dependencies.
+
+**Findings that bind slice 2b:**
+- The OS command line quotes arguments that contain spaces (the resolver rules), so the host must parse it with `CommandLineToArgvW` rules before the element-for-element comparison.
+- Node acts on `NODE_OPTIONS` (verified with `--require`) before any worker code runs. The host must therefore build the worker environment from an allowlist and never inherit it; the worker's own refusal is only a second line.
+- Inspector activation: evaluate `--disable-sigusr1`. It exists only from Node 22.14 / 23.7. Whether it also closes the Windows activation path (`process._debugProcess`) is unproven. If it is adopted, raise the worker's minimum Node version in the spec. Prove with a native probe that the inspector cannot be activated (no listener appears).
+- Service workers: Playwright's `serviceWorkers: "block"` only replaces `navigator.serviceWorker.register` with an init script, so page script may be able to bypass it. Block service workers by engine or protocol means, and prove it with a native probe.
+- Worker environment allowlist: also exclude the OpenSSL start-up variables (`OPENSSL_CONF`, `OPENSSL_MODULES`, `OPENSSL_ENGINES`, `SSL_CERT_FILE`, `SSL_CERT_DIR`). The worker refuses them as a second line.
+- Release packaging (A2): the `playwright-core` NOTICE, the SBOM entry and provenance enter the release with the packaged worker. Packaging strips the `node_modules/.bin` link to the Playwright CLI, which is never exposed.
