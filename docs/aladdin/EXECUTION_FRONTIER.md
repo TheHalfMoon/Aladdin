@@ -1,0 +1,49 @@
+# Aladdin execution frontier
+
+Status: EXECUTION FRONTIER (a working summary that mirrors grain state; it does not set it — canonical grain state lives in `.specgrain/` and `docs/canonical/`). Update this file whenever a grain merges, blocks, or the next grain changes. It serves implementation; it grants no authority. Planning detail lives in the adopted documents listed below; evidence lives in PRs, issues and CI runs.
+
+Last verified: 2026-10-10 · main `50982e7f9587df97a1282a26d3c3ce038190da37`.
+
+## Adopted decisions
+
+The founder adopted the Sol app-first revision of the Opus plan on 2026-10-09. Where Sol and Opus differ, Sol governs. Adoption sets direction only: every capability still needs its own grain, review and qualification.
+
+| Area | Decision | Source |
+|---|---|---|
+| Authority | `qdrald` stays the sole local authority; no peer policy daemon; cloud and UI never mint approvals | ARCHITECTURE.md |
+| Windows app | WPF for Windows v1 (PR #282 foundation); authenticated private app API; reversal only on the stated measured criteria | UI_UX_AND_APP_SIZE_BUDGET.md |
+| Browser | Constrained Playwright-core worker behind existing browser contracts; dedicated installed-browser profile; no public CDP, no generic evaluate; Rust CDP deferred | ARCHITECTURE.md, SOURCE_REUSE_MATRIX.md |
+| MCP | Keep the 40-tool Node edge, OAuth and pairing; no rewrite | ALADDIN_MASTER_PLAN.md (D7) |
+| Multi-device | Existing identity/OAuth/outbound relay first; per-target grants; no LAN/QUIC prerequisite; `qdral-relay/1` frames frozen | MULTI_DEVICE_ARCHITECTURE.md |
+| Aladdin AI | All inference, orchestration and speech on founder-controlled servers; Core needs no founder inference; Reliance optional until ablations; no third-party per-token pilot | ALADDIN_AI_SERVER_ARCHITECTURE.md |
+| Pricing | Deferred; cost telemetry and caps instead of billing milestones | INFRASTRUCTURE_AND_UNIT_ECONOMICS.md |
+| Delivery order | F0 read-only app → F1 approval integrity → F2 local report task → F3 real browser task → F4 Core MVP qualification; then F5 Windows Core, F6 two targets, F7 AI and voice, F8 scale | IMPLEMENTATION_ROADMAP.md |
+
+## Grain status
+
+| Grain | Status | Evidence / blocker |
+|---|---|---|
+| F1 · #278 approval ledger repair | MERGED, QUALIFIED | PR #286 → `1edfa20`; exact-head CI `38027857177`, post-merge CI `38028514439`; review evidence on #286 and the #278 closeout comment; #278 closed. Residual risks (tail rollback, lock bypass, path aliases) in `docs/security/ISSUE-278_APPROVAL_LEDGER_INTEGRITY_NOTE.md` |
+| Git 2.56 compatibility | MERGED | PR #287 → `50982e7`: governed git and git tests work with Git for Windows 2.56 |
+| F0 · WPF read-only shell | IMPLEMENTED as preview (PR #282, draft); NOT QUALIFIED | Builds with the in-box .NET Framework compiler; needs truthful runtime status, async bounded I/O and native UI Automation tests |
+| F0 · app API (status/events/tasks) | NOT IMPLEMENTED | Next executable grain |
+| F2 · local report task | NOT IMPLEMENTED | Needs F0 + F1 |
+| F3 · Playwright browser worker | NOT IMPLEMENTED | Fixtures and read-only adapter may start; live browser mutations need their own approved grain |
+| F4 · Core MVP qualification | NOT STARTED | F2 + F3, one real MCP client, installer < 400 MB |
+| SG-000096 privileged shell (#260) | NOT ACTIVATED | #278 prerequisite removed; remaining T02–T05 grains and their own reviews still required; Full User shell stays unarmed |
+| F5–F8 | NOT STARTED | See roadmap dependencies |
+
+## Next executable grain
+
+1. F0: authenticated read-only app API in `qdrald` plus WPF shell wiring from PR #282 (async bounded I/O, truthful daemon status from `qdral status --json`, native UI Automation tests).
+2. F3 preparation: owned PDF fixture site, artifact checker, Playwright-core worker skeleton (read-only navigation first).
+3. F2: first local report task through the kernel with create-only approval and an independent checker.
+
+## Review pathway
+
+Alibaba OpenCodeReview runs in **delegation mode** (founder decision, 2026-10-10) until a working OCR-managed provider is available: `ocr delegate preview` + `ocr delegate rule` per exact range, fresh-context reviewers, re-review of every head delta, evidence posted on each PR. OCR-managed runs on the current host are UNPROVEN. Jev runs in CI (hunk coverage) and locally (bounded judgments); PStack review and close-out judges run before merge.
+
+## Known gates outside engineering
+
+- Founder: production release decision, signing/distribution, hosted AI infrastructure budget, written model and Firecrawl rights records.
+- External: real hosted inference, second and third Windows machines for multi-device journeys.
