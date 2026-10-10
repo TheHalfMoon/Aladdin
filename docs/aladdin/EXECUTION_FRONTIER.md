@@ -28,7 +28,7 @@ The founder adopted the Sol app-first revision of the Opus plan on 2026-10-09. W
 | F0 · WPF read-only shell | MERGED (first slice) | PR #282 → `37a1a0f`: truthful runtime status from the runtime's JSON, bounded non-blocking I/O, accessibility ids, native UI Automation E2E (13/13 against a real install; evidence on PR #282). Open: idle memory higher than expected (#288) |
 | F0 · app API (status/events/tasks) | NOT IMPLEMENTED | Next executable grain |
 | F2 · local report task | NOT IMPLEMENTED | Needs F0 + F1 |
-| F3 · Playwright browser worker | GRAIN ACTIVATING (SG-000108, #289, tracking #290) | Parallel with SG-000096 by founder decision (2026-10-10); `playwright-core` 1.63.0 selected; open design questions on engine attachment and resolved-address enforcement; implementation not started |
+| F3 · Playwright browser worker | GRAIN ACTIVATING (SG-000108, #289, tracking #290) | Parallel with SG-000096 by founder decision (2026-10-10); `playwright-core` 1.63.0 selected; engine-attachment and address-enforcement decisions proposed in `docs/security/SG-000108_ENGINE_ATTACHMENT_DECISION.md`; implementation not started |
 | F4 · Core MVP qualification | NOT STARTED | F2 + F3, one real MCP client, installer < 400 MB |
 | SG-000096 privileged shell (#260) | NOT ACTIVATED | #278 prerequisite removed; remaining T02–T05 grains and their own reviews still required; Full User shell stays unarmed |
 | F5–F8 | NOT STARTED | See roadmap dependencies |
