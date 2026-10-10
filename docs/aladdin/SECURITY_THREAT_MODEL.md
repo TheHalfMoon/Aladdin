@@ -49,7 +49,7 @@ Keep the security repair minimal in product scope: one writer, one durable event
 
 The public [follow-up on the sentinel prototype](https://github.com/TheHalfMoon/Aladdin/issues/278#issuecomment-6073712808) correctly distinguishes its Python behavior tests and synthetic patch-order checks from Rust/Windows qualification. The candidate archive is not available in this checkout; it was not independently compiled or accepted here. A create_new claim only serializes cooperating brokers reaching the same filesystem identity, and pathname cleanup can race replacement. Crashes leave stale claims; do not automatically steal/delete them. Require protected parent/ledger handle identity, ACL/reparse checks, bounded loading and explicit recovery.
 
-Workspace Cargo.toml declares Rust MSRV 1.82; the actual reproduction host used1.97.1. The issue notes std File::lock stabilized in1.89, so native LockFileEx or a reviewed MSRV-compatible implementation is required unless a separate toolchain change is authorized. Running on the newer host does not qualify MSRV. Preserve candidate limitations instead of treating its model8/8 or synthetic patch checks as a production fix.
+Workspace Cargo.toml declares Rust MSRV 1.82; the actual reproduction host used 1.97.1. The issue notes std File::lock stabilized in 1.89, so native LockFileEx or a reviewed MSRV-compatible implementation is required unless a separate toolchain change is authorized. Running on the newer host does not qualify MSRV. Preserve candidate limitations instead of treating its model 8/8 or synthetic patch checks as a production fix.
 
 ## Qualification matrix still required
 

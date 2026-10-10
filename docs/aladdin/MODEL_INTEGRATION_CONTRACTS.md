@@ -112,7 +112,7 @@ Rollout after independent qualification: shadow mode (minimized proposals logged
 | Latency (card) | 8 ms warm on RTX 4090 per question | Not reported |
 | Precision note | bf16 recommended | fp16 recommended; bf16 changed answers on 0.8% text and 1.7% audio rows |
 
-The founder reports direct permission to use/rebrand the models; retain the written scope and distinguish it from public licensing. Public LFM v1 has conditional commercial rights and a US$10M threshold; review its exact entity/boundary wording and any direct-grant override before distribution. See ALADDIN_AI_SERVER_ARCHITECTURE.md for pinned source revisions and serving assessment.
+The founder reports direct permission to use/rebrand the models; retain the written scope and distinguish it from public licensing. No model is redistributed, rebranded or publicly deployed until the written grant is on file and verified. Public LFM v1 has conditional commercial rights and a US$10M threshold; review its exact entity/boundary wording and any direct-grant override before distribution. See ALADDIN_AI_SERVER_ARCHITECTURE.md for pinned source revisions and serving assessment.
 
 A d1 service needs a pinned audited custom adapter around model.system_one/system_one_batch, not a generic chat-completion endpoint. Vendor warm latency excludes end-to-end network/queue/prefill qualification. Reliance is optional pending ablations; all inference is server-side.
 

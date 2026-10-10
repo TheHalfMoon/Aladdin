@@ -4,7 +4,7 @@ Status: ADOPTED planning direction (founder decision, 2026-10-09; Sol revision g
 
 ## Priority and current limits
 
-No complete Aladdin user journey, head-to-head competitor task, toolkit startup/RAM, full installer or GPU throughput benchmark was run here. Actual measurements are the approval tests, WPF build/self-tests and offline arithmetic. The first benchmark priority is a small native Windows acceptance harness with independent final-state checkers for the five journeys in the `IMPLEMENTATION_ROADMAP.md`. Broad leaderboard programs follow working functionality.
+No complete Aladdin user journey, head-to-head competitor task, toolkit startup/RAM, full installer or GPU throughput benchmark was run here. Actual measurements are the approval tests, WPF build/self-tests and offline arithmetic. The first benchmark priority is a small native Windows acceptance harness with independent final-state checkers for the five journeys in `IMPLEMENTATION_ROADMAP.md`. Broad leaderboard programs follow working functionality.
 
 Keep security outcomes beside task time: faster unauthorized completion is failure. Report attempted tasks, verified success, unknowns, blocked capabilities and interventions. Do not exclude timeout/failure tasks after seeing results; successful-only latency can reward unreliable systems.
 

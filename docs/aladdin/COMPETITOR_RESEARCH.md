@@ -6,7 +6,7 @@ Status: ADOPTED planning direction (founder decision, 2026-10-09; Sol revision g
 
 | Product / evidence | What to learn, present Aladdin gap, and comparison limit |
 |---|---|
-| Desktop Commander, source+installed0.2.52 | Broad files/search/edit/terminal sessions are implemented in source and ahead of Aladdin's unarmed shell breadth. Preserve convenience with enforced Aladdin boundaries; compare same MCP planner/config and authorized scope. Generic eval is not an established exploit. |
+| Desktop Commander, source+installed 0.2.52 | Broad files/search/edit/terminal sessions are implemented in source and ahead of Aladdin's unarmed shell breadth. Preserve convenience with enforced Aladdin boundaries; compare same MCP planner/config and authorized scope. Generic eval is not an established exploit. |
 | [TinyFish current docs](https://docs.tinyfish.ai) | Five surfaces: Agent, Research, Search, Fetch and remote Browser with Playwright/CDP; context profiles are documented. Aladdin is behind in complete browser research workflows. Hosted service has costs/egress; do not treat MIT AgentQL examples as the engine. |
 | [Claude computer use](https://platform.claude.com/docs/en/agents-and-tools/tool-use/computer-use-tool) | Model plans, client executes; current batched toolset and developer approval hooks are documented. Borrow bounded failure handling; compare executor separately from model. Structured companion tools can exist, so pixels-only generalization is incomplete. |
 | [OpenAI computer API](https://developers.openai.com/api/docs/guides/tools-computer-use) | Ordered actions/client executor and Playwright reference integration; structured tool ecosystem is separate. Aladdin can be an execution adapter, but account/client interoperability must be tested. |

@@ -80,7 +80,7 @@ Use MEASURED RESULT only for an actual run; SOURCE-DOCUMENTED CLAIM for vendor s
 
 ## Adoption and next work
 
-The founder adopted this revised direction on 2026-10-09; it is merged as planning only. Update 2026-10-10: #278 is repaired by PR #286 (merged as `main@1edfa20`, post-merge CI green, issue closed). Design, qualification evidence and residual risks: `docs/security/ISSUE-278_APPROVAL_LEDGER_INTEGRITY_NOTE.md`. (Historical text at review time: keep #283 draft and #278 open.) No production source, permissions, CI, canonical state, models or infrastructure were changed by this review.
+The founder adopted this revised direction on 2026-10-09; it is adopted as planning only (merged through PR #283). Update 2026-10-10: #278 is repaired by PR #286 (merged as `main@1edfa20`, post-merge CI green, issue closed). Design, qualification evidence and residual risks: `docs/security/ISSUE-278_APPROVAL_LEDGER_INTEGRITY_NOTE.md`. (Historical text at review time: keep #283 draft and #278 open.) No production source, permissions, CI, canonical state, models or infrastructure were changed by this review.
 
 Next three executable packets at review time (current next grains: `EXECUTION_FRONTIER.md`): (1) #278 isolated security repair (done, PR #286) with durable one-writer append and full fault tests; (2) WPF read-only app API/timeline and truthful daemon status, correcting UI-blocking I/O; (3) narrow live-browser adapter behind existing contracts with real download and denial fixtures. Packet 2 can develop read-only functionality independently; packet 3's mutations wait for qualified ledger repair and authorized grain sequencing. See `IMPLEMENTATION_ROADMAP.md` for estimates and exact exit tests.
 

@@ -1,12 +1,12 @@
 # Aladdin execution frontier
 
-Status: CANONICAL EXECUTION FRONTIER. Update this file whenever a grain merges, blocks, or the next grain changes. It serves implementation; it grants no authority. Planning detail lives in the adopted documents listed below; evidence lives in PRs, issues and CI runs.
+Status: EXECUTION FRONTIER (a working summary that mirrors grain state; it does not set it — canonical grain state lives in `.specgrain/` and `docs/canonical/`). Update this file whenever a grain merges, blocks, or the next grain changes. It serves implementation; it grants no authority. Planning detail lives in the adopted documents listed below; evidence lives in PRs, issues and CI runs.
 
 Last verified: 2026-10-10 · main `50982e7f9587df97a1282a26d3c3ce038190da37`.
 
 ## Adopted decisions
 
-The founder adopted the Sol app-first revision of the Opus plan on 2026-10-09 (standing engineering authorization in the founder's directive of that date). Where Sol and Opus differ, Sol governs. Adoption sets direction only: every capability still needs its own grain, review and qualification.
+The founder adopted the Sol app-first revision of the Opus plan on 2026-10-09. Where Sol and Opus differ, Sol governs. Adoption sets direction only: every capability still needs its own grain, review and qualification.
 
 | Area | Decision | Source |
 |---|---|---|
@@ -23,7 +23,7 @@ The founder adopted the Sol app-first revision of the Opus plan on 2026-10-09 (s
 
 | Grain | Status | Evidence / blocker |
 |---|---|---|
-| F1 · #278 approval ledger repair | MERGED, QUALIFIED | PR #286 → `1edfa20`, post-merge CI green; #278 closed. Residual risks (tail rollback, lock bypass, path aliases) in `docs/security/ISSUE-278_APPROVAL_LEDGER_INTEGRITY_NOTE.md` |
+| F1 · #278 approval ledger repair | MERGED, QUALIFIED | PR #286 → `1edfa20`; exact-head CI `38027857177`, post-merge CI `38028514439`; review evidence on #286 and the #278 closeout comment; #278 closed. Residual risks (tail rollback, lock bypass, path aliases) in `docs/security/ISSUE-278_APPROVAL_LEDGER_INTEGRITY_NOTE.md` |
 | Git 2.56 compatibility | MERGED | PR #287 → `50982e7`: governed git and git tests work with Git for Windows 2.56 |
 | F0 · WPF read-only shell | IMPLEMENTED as preview (PR #282, draft); NOT QUALIFIED | Builds with the in-box .NET Framework compiler; needs truthful runtime status, async bounded I/O and native UI Automation tests |
 | F0 · app API (status/events/tasks) | NOT IMPLEMENTED | Next executable grain |
