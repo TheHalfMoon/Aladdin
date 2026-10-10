@@ -274,3 +274,19 @@ absent from the shipped binaries. No runtime configuration may enable it.
 **Native check of the emitted format (Edge 155).** An IPv4 pin and a
 bracketed IPv6 pin (`MAP six.example [::1]:<port>`) each reached only their
 fixture. Unmapped names failed with `ERR_PROXY_CONNECTION_FAILED`.
+
+**Slice 2a: private worker package** (`apps/qdral-browser-worker`). It is standalone, like `apps/web`, so the identity-pinned npm workspaces stay unchanged.
+- **Dependency.** `playwright-core` is exactly 1.63.0, with the admitted integrity. It is the only production package in the lockfile, has no install script and no runtime dependencies. All of this is checked mechanically against `dependency_admission`.
+- **Protocol.** SG-000074 framing (u32 LE length + JSON, 64 KiB) with a closed generation-1 vocabulary:
+  - host → worker: `hello`, `launch {engine, profile_dir, argv, env}`, `ping`, `shutdown`;
+  - worker → host: `hello`, `launched`, `pong`, `bye`, `error {code}`.
+  Unknown frames or fields are violations.
+- **Launch check (defense in depth).** The worker re-checks the launch frame against this contract and hands the argv to Playwright unchanged with `ignoreDefaultArgs: true`. There is at most one engine per worker, and any violation, refusal, engine exit or end of input closes the engine.
+- **Native smoke run (Edge 155, local).** `dist/main.js` went through `hello` → `launch` → `ping` → `shutdown` with exit 0. The OS reported one browser process with the host argv, with no debugging port and no `--enable-automation`. No engine process was left after shutdown.
+
+- **CI.** The root `npm test` runs the worker's install (`npm ci --ignore-scripts`), typecheck and tests. Both Node jobs, ubuntu and windows, therefore cover it without a workflow change. A dedicated `npm audit` of the worker lockfile in the supply-chain job is **pending**: it needs a workflow edit, which the current push token cannot make (no `workflow` scope). Until then the audit is a local check (0 vulnerabilities), and the lockfile admits only `playwright-core`, which has no dependencies.
+
+**Findings that bind slice 2b:**
+- The OS command line quotes arguments that contain spaces (the resolver rules), so the host must parse it with `CommandLineToArgvW` rules before the element-for-element comparison.
+- Node acts on `NODE_OPTIONS` (verified with `--require`) before any worker code runs. The host must therefore build the worker environment from an allowlist and never inherit it; the worker's own refusal is only a second line.
+- The launcher passes `--disable-sigusr1` so that a signal cannot start the Node inspector, whose listener the design forbids.

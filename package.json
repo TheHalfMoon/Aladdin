@@ -9,9 +9,10 @@
   "scripts": {
     "build": "npm run build --workspace @qdral/mcp && npm run build --workspace @qdral/relay",
     "typecheck": "npm run typecheck --workspace @qdral/mcp && npm run build --workspace @qdral/mcp && npm run typecheck --workspace @qdral/relay",
-    "test": "npm run test --workspace @qdral/mcp && npm run test --workspace @qdral/relay",
+    "test": "npm run test --workspace @qdral/mcp && npm run test --workspace @qdral/relay && npm run browser-worker:test",
     "web:typecheck": "npm --prefix apps/web run typecheck",
     "web:test": "npm --prefix apps/web run test",
-    "web:build": "npm --prefix apps/web run build"
+    "web:build": "npm --prefix apps/web run build",
+    "browser-worker:test": "npm ci --prefix apps/qdral-browser-worker --ignore-scripts && npm --prefix apps/qdral-browser-worker run typecheck && npm --prefix apps/qdral-browser-worker test"
   }
 }
