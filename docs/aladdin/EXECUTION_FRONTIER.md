@@ -2,7 +2,7 @@
 
 Status: EXECUTION FRONTIER (a working summary that mirrors grain state; it does not set it — canonical grain state lives in `.specgrain/` and `docs/canonical/`). Update this file whenever a grain merges, blocks, or the next grain changes. It serves implementation; it grants no authority. Planning detail lives in the adopted documents listed below; evidence lives in PRs, issues and CI runs.
 
-Last verified: 2026-10-10 · main `50982e7f9587df97a1282a26d3c3ce038190da37`.
+Last verified: 2026-10-10 · main `37a1a0f9f3e530d6fdef998301f975752f8c991a`.
 
 ## Adopted decisions
 
@@ -25,18 +25,18 @@ The founder adopted the Sol app-first revision of the Opus plan on 2026-10-09. W
 |---|---|---|
 | F1 · #278 approval ledger repair | MERGED, QUALIFIED | PR #286 → `1edfa20`; exact-head CI `38027857177`, post-merge CI `38028514439`; review evidence on #286 and the #278 closeout comment; #278 closed. Residual risks (tail rollback, lock bypass, path aliases) in `docs/security/ISSUE-278_APPROVAL_LEDGER_INTEGRITY_NOTE.md` |
 | Git 2.56 compatibility | MERGED | PR #287 → `50982e7`: governed git and git tests work with Git for Windows 2.56 |
-| F0 · WPF read-only shell | IMPLEMENTED as preview (PR #282, draft); NOT QUALIFIED | Builds with the in-box .NET Framework compiler; needs truthful runtime status, async bounded I/O and native UI Automation tests |
+| F0 · WPF read-only shell | MERGED (first slice) | PR #282 → `37a1a0f`: truthful runtime status from the runtime's JSON, bounded non-blocking I/O, accessibility ids, native UI Automation E2E (13/13 against a real install; evidence on PR #282). Open: idle memory higher than expected (#288) |
 | F0 · app API (status/events/tasks) | NOT IMPLEMENTED | Next executable grain |
 | F2 · local report task | NOT IMPLEMENTED | Needs F0 + F1 |
-| F3 · Playwright browser worker | NOT IMPLEMENTED | Fixtures and read-only adapter may start; live browser mutations need their own approved grain |
+| F3 · Playwright browser worker | GRAIN ACTIVATING (SG-000108, #289, tracking #290) | Parallel with SG-000096 by founder decision (2026-10-10); `playwright-core` 1.63.0 selected; open design questions on engine attachment and resolved-address enforcement; implementation not started |
 | F4 · Core MVP qualification | NOT STARTED | F2 + F3, one real MCP client, installer < 400 MB |
 | SG-000096 privileged shell (#260) | NOT ACTIVATED | #278 prerequisite removed; remaining T02–T05 grains and their own reviews still required; Full User shell stays unarmed |
 | F5–F8 | NOT STARTED | See roadmap dependencies |
 
 ## Next executable grain
 
-1. F0: authenticated read-only app API in `qdrald` plus WPF shell wiring from PR #282 (async bounded I/O, truthful daemon status from `qdral status --json`, native UI Automation tests).
-2. F3 preparation: owned PDF fixture site, artifact checker, Playwright-core worker skeleton (read-only navigation first).
+1. F3 / SG-000108: dependency admission, closed host-worker IPC, read-only live navigation and observation on the verified engine, then the PDF download journey.
+2. F0 next slice: authenticated read-only app API in `qdrald` (status/events/tasks) and WPF wiring; memory investigation (#288).
 3. F2: first local report task through the kernel with create-only approval and an independent checker.
 
 ## Review pathway
