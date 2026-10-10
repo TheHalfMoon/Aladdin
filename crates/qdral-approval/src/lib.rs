@@ -1034,6 +1034,7 @@ fn acquire_ledger_lock(path: &Path, wait: Duration) -> Result<std::fs::File, App
 }
 
 /// Why the writer lock was not obtained.
+#[derive(Debug)]
 enum LockFailure {
     /// Another broker held it for the whole wait.
     Busy(ApprovalError),
@@ -1886,7 +1887,8 @@ fn recover_approval_ledger_with_wait(
                 .and_then(|()| sync_parent_dir(path))
                 .map_err(|error| {
                     ApprovalError::unavailable(format!(
-                        "install the recovered approval ledger (the original is unchanged): {error}"
+                        "install the recovered approval ledger (the original is unchanged; its quarantine copy {} is kept): {error}",
+                        quarantined_to.display()
                     ))
                 })
         });
@@ -1914,26 +1916,37 @@ fn preserve_quarantine(
             "preserve the approval ledger for quarantine (the original is unchanged): {error}"
         ))
     };
-    if std::fs::hard_link(path, quarantined_to).is_err() {
-        std::fs::copy(path, quarantined_to).map_err(failed)?;
+    match std::fs::hard_link(path, quarantined_to) {
+        // The link shares the original's already written data.
+        Ok(()) => {}
+        // Never replace whatever already exists at the quarantine name.
+        Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
+            return Err(failed(error));
+        }
+        // Links unsupported here (for example FAT or some network shares).
+        Err(_) => copy_into_new_file(path, quarantined_to).map_err(failed)?,
     }
-    let kept = std::fs::read(quarantined_to)
-        .and_then(|bytes| {
-            // Flushing needs write access on Windows; nothing is written.
-            std::fs::OpenOptions::new()
-                .write(true)
-                .open(quarantined_to)?
-                .sync_all()?;
-            sync_parent_dir(quarantined_to)?;
-            Ok(bytes)
-        })
-        .map_err(failed)?;
+    sync_parent_dir(quarantined_to).map_err(failed)?;
+    let kept = std::fs::read(quarantined_to).map_err(failed)?;
     if hex_lower(&Sha256::digest(&kept)) != sha256 {
+        // Only this attempt's own link or copy is removed, never the original.
+        let _ = std::fs::remove_file(quarantined_to);
         return Err(ApprovalError::unavailable(
             "the quarantined approval ledger does not match the original; the original is unchanged",
         ));
     }
     Ok(())
+}
+
+/// Copies `from` into `to`, which must not exist yet, and flushes the copy.
+fn copy_into_new_file(from: &Path, to: &Path) -> std::io::Result<()> {
+    let mut source = std::fs::File::open(from)?;
+    let mut target = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(to)?;
+    std::io::copy(&mut source, &mut target)?;
+    target.sync_all()
 }
 
 fn record_checksum(record: &StoredRecord) -> String {
@@ -3337,7 +3350,22 @@ mod tests {
         let error = preserve_quarantine(&path, &quarantine, "0000").unwrap_err();
         assert_eq!(error.code, FailureCode::ApprovalUnavailable);
         assert_eq!(std::fs::read(&path).unwrap(), b"original\n");
-        let _ = std::fs::remove_file(&quarantine);
+        assert!(!quarantine.exists(), "a mismatched quarantine is removed");
+        std::fs::write(&quarantine, b"older evidence\n").unwrap();
+        assert!(
+            preserve_quarantine(&path, &quarantine, "0000").is_err(),
+            "an existing file at the quarantine name is never replaced"
+        );
+        assert_eq!(std::fs::read(&quarantine).unwrap(), b"older evidence\n");
+        std::fs::remove_file(&quarantine).unwrap();
+        let copy = path.with_extension("copy-test");
+        copy_into_new_file(&path, &copy).expect("copy into a new file");
+        assert_eq!(std::fs::read(&copy).unwrap(), b"original\n");
+        assert!(
+            copy_into_new_file(&path, &copy).is_err(),
+            "never overwrites"
+        );
+        let _ = std::fs::remove_file(&copy);
         let digest = hex_lower(&Sha256::digest(b"original\n"));
         preserve_quarantine(&path, &quarantine, &digest).expect("matching quarantine");
         assert_eq!(std::fs::read(&quarantine).unwrap(), b"original\n");
@@ -3357,6 +3385,95 @@ mod tests {
         assert!(inspection.detail.contains("busy"), "{}", inspection.detail);
         drop(holder);
         drop(ledger);
+        remove_ledger(&path);
+    }
+
+    #[test]
+    fn unopenable_lock_is_reported_unreadable_not_busy() {
+        let path = temp_path("ocr-lock-io");
+        let mut ledger = ledger_in(&path);
+        issue_strong(&mut ledger, "ocr-lock-io", 5_000);
+        drop(ledger);
+        let lock = approval_ledger_lock_path(&path);
+        std::fs::remove_file(&lock).unwrap();
+        std::fs::create_dir(&lock).unwrap();
+        let inspection = inspect_approval_ledger(&path);
+        assert_eq!(inspection.status, ApprovalLedgerStatus::Unreadable);
+        assert!(inspection.detail.contains("lock"), "{}", inspection.detail);
+        std::fs::remove_dir(&lock).unwrap();
+        remove_ledger(&path);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn transient_error_while_resuming_keeps_the_durability_fault() {
+        use std::os::windows::fs::OpenOptionsExt as _;
+        let path = temp_path("ocr-resume-transient");
+        let mut ledger = ledger_in(&path);
+        issue_strong(&mut ledger, "ocr-resume-transient", 5_000);
+        ledger.fault = Some(LedgerFault::Durability);
+        let exclusive = std::fs::OpenOptions::new()
+            .read(true)
+            .share_mode(0)
+            .open(&path)
+            .expect("exclusive open");
+        assert!(ledger.preflight().is_err());
+        assert_eq!(ledger.fault, Some(LedgerFault::Durability));
+        drop(exclusive);
+        ledger
+            .preflight()
+            .expect("resumes once the ledger is readable");
+        assert!(!ledger.poisoned());
+        drop(ledger);
+        remove_ledger(&path);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn failed_final_rename_keeps_the_original_and_removes_the_staged_chain() {
+        use std::os::windows::fs::OpenOptionsExt as _;
+        const FILE_SHARE_READ: u32 = 0x1;
+        const FILE_SHARE_WRITE: u32 = 0x2;
+        let path = temp_path("ocr-rename-fails");
+        let (_, original) = write_legacy_v010_ledger(&path, true);
+        // A process holding the ledger without delete sharing blocks the
+        // replacing rename but not reading or linking it.
+        let holder = std::fs::OpenOptions::new()
+            .read(true)
+            .share_mode(FILE_SHARE_READ | FILE_SHARE_WRITE)
+            .open(&path)
+            .expect("hold the ledger");
+        let error = recover_approval_ledger(&path).unwrap_err();
+        drop(holder);
+        assert_eq!(error.code, FailureCode::ApprovalUnavailable);
+        assert!(
+            error.message.contains("original is unchanged"),
+            "{}",
+            error.message
+        );
+        assert_eq!(std::fs::read(&path).unwrap(), original);
+        let dir = path.parent().unwrap();
+        let stem = path.file_name().unwrap().to_string_lossy().into_owned();
+        let leftovers: Vec<String> = std::fs::read_dir(dir)
+            .unwrap()
+            .filter_map(|entry| entry.ok())
+            .map(|entry| entry.file_name().to_string_lossy().into_owned())
+            .filter(|name| name.starts_with(&format!("{stem}.")))
+            .collect();
+        assert!(
+            !leftovers.iter().any(|name| name.contains(".recovering-")),
+            "{leftovers:?}"
+        );
+        for name in leftovers
+            .iter()
+            .filter(|name| name.contains(".quarantine-"))
+        {
+            assert_eq!(std::fs::read(dir.join(name)).unwrap(), original);
+            std::fs::remove_file(dir.join(name)).unwrap();
+        }
+        let recovery = recover_approval_ledger(&path).expect("recovery succeeds once released");
+        assert_eq!(std::fs::read(&recovery.quarantined_to).unwrap(), original);
+        let _ = std::fs::remove_file(&recovery.quarantined_to);
         remove_ledger(&path);
     }
 
