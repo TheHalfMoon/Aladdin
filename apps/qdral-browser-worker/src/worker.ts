@@ -43,24 +43,23 @@ export class Worker {
     private readonly finish: (exitCode: number) => void
   ) {}
 
-  get currentState(): WorkerState {
-    return this.state;
-  }
-
-  /// Frames are handled strictly in arrival order.
+  /// Frames are handled strictly in arrival order. An unexpected error in
+  /// any step fails the worker closed instead of breaking the queue.
   receive(raw: unknown): Promise<void> {
-    this.queue = this.queue.then(() => this.handle(raw));
-    return this.queue;
+    return this.enqueue(() => this.handle(raw));
   }
 
-  /// A transport-level violation (bad length, non-JSON) or end of input.
+  /// A transport-level violation (bad length, non-JSON, broken pipe).
   violation(): Promise<void> {
-    this.queue = this.queue.then(() => this.fail("protocol_violation"));
-    return this.queue;
+    return this.enqueue(() => this.fail("protocol_violation"));
   }
 
   endOfInput(): Promise<void> {
-    this.queue = this.queue.then(() => this.close(0, null));
+    return this.enqueue(() => this.close(0, null));
+  }
+
+  private enqueue(step: () => Promise<void>): Promise<void> {
+    this.queue = this.queue.then(step).catch(() => this.fail("protocol_violation"));
     return this.queue;
   }
 
@@ -106,7 +105,7 @@ export class Worker {
         session.onUnexpectedExit(() => {
           if (this.session === session) {
             this.session = null;
-            this.queue = this.queue.then(() => this.fail("engine_exited"));
+            void this.enqueue(() => this.fail("engine_exited"));
           }
         });
         this.send({ frame: "launched" });
@@ -122,6 +121,8 @@ export class Worker {
   private async close(exitCode: number, last: WorkerFrame | null): Promise<void> {
     if (this.state === "closed") return;
     this.state = "closed";
+    // From here on nothing can throw out of close: the engine is closed best
+    // effort and the worker always finishes exactly once.
     const session = this.session;
     this.session = null;
     if (session) {
@@ -131,7 +132,10 @@ export class Worker {
         // The engine is gone either way; the host's Job Object reaps it.
       }
     }
-    if (last) this.send(last);
-    this.finish(exitCode);
+    try {
+      if (last) this.send(last);
+    } finally {
+      this.finish(exitCode);
+    }
   }
 }

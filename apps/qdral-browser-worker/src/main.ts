@@ -1,9 +1,10 @@
 // SG-000108 worker entry point: stdio framing around `Worker`, with the
 // engine launched by playwright-core exactly as the host specified.
 //
-// stdout carries frames only; every console method writes to stderr so that
-// no library output can corrupt the channel.
+// stdout carries frames only: the global console is replaced by one whose
+// every method writes to stderr, so no library output can corrupt the channel.
 
+import { Console } from "node:console";
 import { chromium } from "playwright-core";
 import { refusedWorkerVariables } from "./environment.js";
 import { encodeFrame, FrameDecoder, ProtocolViolation, type WorkerFrame } from "./protocol.js";
@@ -15,14 +16,7 @@ if (refused.length > 0) {
   process.exit(2);
 }
 
-const toStderr = (...parts: unknown[]): void => {
-  process.stderr.write(`${parts.map(String).join(" ")}\n`);
-};
-// Redirect (not use) every console output method: stdout is the frame
-// channel and nothing else may write to it.
-for (const method of ["log", "info", "debug", "warn"] as const) {
-  console[method] = toStderr;
-}
+globalThis.console = new Console({ stdout: process.stderr, stderr: process.stderr });
 
 const playwrightLauncher: Launcher = {
   async launch(spec: LaunchSpec): Promise<EngineSession> {
@@ -69,6 +63,10 @@ function finish(exitCode: number): void {
 
 const worker = new Worker(playwrightLauncher, send, finish);
 const decoder = new FrameDecoder();
+
+// A broken pipe in either direction ends the worker; the engine is closed.
+process.stdin.on("error", () => void worker.violation());
+process.stdout.on("error", () => void worker.violation());
 
 process.stdin.on("data", (chunk: Buffer) => {
   let frames: unknown[];

@@ -37,7 +37,9 @@ test("length bounds and non-JSON bodies are violations before buffering", () => 
 
 test("the host vocabulary is closed and exact", () => {
   assert.deepEqual(parseHostFrame({ frame: "hello", generation: 1 }), { frame: "hello", generation: 1 });
-  assert.deepEqual(parseHostFrame(validLaunch()), validLaunch());
+  const parsed = parseHostFrame(validLaunch());
+  assert.deepEqual(JSON.parse(JSON.stringify(parsed)), validLaunch());
+  assert.equal(parsed.frame === "launch" && Object.getPrototypeOf(parsed.env), null);
   for (const raw of [
     null,
     [],
@@ -105,4 +107,65 @@ test("a launch frame must match the SG-000108 confinement contract", () => {
   for (const [index, reason] of refusals.entries()) {
     assert.equal(typeof reason, "string", `case ${index} was accepted`);
   }
+});
+
+test("resolver rules and bypass list must equal the host grammar exactly", () => {
+  const withArgs = (resolver: string, bypass: string) => {
+    const launch = validLaunch();
+    launch.argv[9] = `--host-resolver-rules=${resolver}`;
+    launch.argv[11] = `--proxy-bypass-list=${bypass}`;
+    return launchRefusal(launch);
+  };
+  // Accepted: several destinations, IPv4 and bracketed IPv6 pins, names in order.
+  assert.equal(
+    withArgs(
+      "MAP example.com 93.184.215.14:443, MAP docs.example.org [2606:2800:21f:cb07:6820:80da:af6b:8b2c]:443, MAP * ~NOTFOUND",
+      "example.com;docs.example.org;<-loopback>"
+    ),
+    null
+  );
+  const refused: Array<[string, string]> = [
+    // Reviewer-demonstrated bypasses of the previous shape-only check.
+    ["MAP example.com 93.184.215.14:443, MAP * ~NOTFOUND", "10.0.0.0/8;example.com;<-loopback>"],
+    ["MAP *.com 10.0.0.1:80, MAP * ~NOTFOUND", "*.com;<-loopback>"],
+    ["MAP example.com 93.184.215.14:443, EXCLUDE evil.example, MAP * ~NOTFOUND", "example.com;<-loopback>"],
+    // Wrong port, unbracketed IPv6, bad address, bad or duplicate names.
+    ["MAP example.com 93.184.215.14:8443, MAP * ~NOTFOUND", "example.com;<-loopback>"],
+    ["MAP example.com 2606:2800::1:443, MAP * ~NOTFOUND", "example.com;<-loopback>"],
+    ["MAP example.com 999.1.1.1:443, MAP * ~NOTFOUND", "example.com;<-loopback>"],
+    ["MAP example.com [::ffff:zz]:443, MAP * ~NOTFOUND", "example.com;<-loopback>"],
+    ["MAP Example.com 93.184.215.14:443, MAP * ~NOTFOUND", "Example.com;<-loopback>"],
+    ["MAP a.123 93.184.215.14:443, MAP * ~NOTFOUND", "a.123;<-loopback>"],
+    ["MAP example.com 93.184.215.14:443, MAP example.com 93.184.215.15:443, MAP * ~NOTFOUND", "example.com;example.com;<-loopback>"],
+    // Missing or extra catch-all, empty map.
+    ["MAP example.com 93.184.215.14:443", "example.com;<-loopback>"],
+    ["MAP * ~NOTFOUND", "<-loopback>"],
+    ["MAP example.com 93.184.215.14:443, MAP * ~NOTFOUND, MAP evil.example 10.0.0.1:443", "example.com;<-loopback>"],
+    // Bypass list not exactly the mapped names in order.
+    ["MAP a.example 93.184.215.14:443, MAP b.example 93.184.215.14:443, MAP * ~NOTFOUND", "b.example;a.example;<-loopback>"],
+    ["MAP example.com 93.184.215.14:443, MAP * ~NOTFOUND", "example.com;evil.example;<-loopback>"],
+    ["MAP example.com 93.184.215.14:443, MAP * ~NOTFOUND", "example.com"],
+    ["MAP example.com 93.184.215.14:443, MAP * ~NOTFOUND", "example.com;<-loopback>;<local>"]
+  ];
+  for (const [resolver, bypass] of refused) {
+    assert.equal(typeof withArgs(resolver, bypass), "string", `${resolver} | ${bypass}`);
+  }
+  const tooMany = Array.from({ length: 17 }, (_, i) => `MAP h${i}.example 93.184.215.14:443`);
+  assert.equal(
+    typeof withArgs([...tooMany, "MAP * ~NOTFOUND"].join(", "), [...tooMany.map((_, i) => `h${i}.example`), "<-loopback>"].join(";")),
+    "string"
+  );
+});
+
+test("paths with dot segments are refused and invalid UTF-8 is a violation", () => {
+  for (const profile of ["C:\\x\\..", "C:\\x\\.\\y", "C:\\x\\\\y", "C:\\x\\..\\y"]) {
+    const launch = validLaunch();
+    launch.profile_dir = profile;
+    launch.argv[7] = `--user-data-dir=${profile}`;
+    assert.equal(typeof launchRefusal(launch), "string", profile);
+  }
+  const body = Buffer.from([0x7b, 0x22, 0x66, 0xff, 0x22, 0x7d]);
+  const prefix = Buffer.alloc(4);
+  prefix.writeUInt32LE(body.length, 0);
+  assert.throws(() => new FrameDecoder().push(Buffer.concat([prefix, body])), ProtocolViolation);
 });

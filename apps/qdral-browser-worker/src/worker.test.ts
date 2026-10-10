@@ -152,3 +152,23 @@ test("a shutdown queued behind a slow launch closes the launched engine", async 
   assert.deepEqual(exits, [0]);
   assert.equal(engine.closed, 1);
 });
+
+test("an unexpected error in a step fails the worker closed exactly once", async () => {
+  const engine = new FakeEngine();
+  const exits: number[] = [];
+  let sends = 0;
+  const worker = new Worker(
+    { launch: async () => engine },
+    () => {
+      sends++;
+      if (sends === 3) throw new Error("broken pipe");
+    },
+    (code) => exits.push(code)
+  );
+  await worker.receive({ frame: "hello", generation: 1 });
+  await worker.receive(validLaunch());
+  await worker.receive({ frame: "ping", nonce: "boom" });
+  await worker.receive({ frame: "ping", nonce: "after" });
+  assert.deepEqual(exits, [1]);
+  assert.equal(engine.closed, 1);
+});

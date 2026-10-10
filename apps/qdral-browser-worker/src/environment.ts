@@ -9,7 +9,23 @@
 // fail loudly. Names are compared case-insensitively, as on Windows.
 
 const REFUSED_PREFIXES = ["NODE_", "PLAYWRIGHT_", "PW_", "ELECTRON_"];
-const REFUSED_NAMES = ["DEBUG", "DEBUG_COLORS", "DEBUG_FD", "UV_THREADPOOL_SIZE", "SSLKEYLOGFILE", "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "NO_PROXY"];
+const REFUSED_NAMES = [
+  "DEBUG",
+  "DEBUG_COLORS",
+  "DEBUG_FD",
+  "UV_THREADPOOL_SIZE",
+  "SSLKEYLOGFILE",
+  "HTTP_PROXY",
+  "HTTPS_PROXY",
+  "ALL_PROXY",
+  "NO_PROXY",
+  // OpenSSL reads these at startup (configuration, providers, trust roots).
+  "OPENSSL_CONF",
+  "OPENSSL_MODULES",
+  "OPENSSL_ENGINES",
+  "SSL_CERT_FILE",
+  "SSL_CERT_DIR"
+];
 
 /// Names of refused variables present in `env` (empty when clean).
 export function refusedWorkerVariables(env: Record<string, string | undefined>): string[] {

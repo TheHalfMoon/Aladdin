@@ -7,6 +7,8 @@
 // are protocol violations. The host remains the authority: everything the
 // worker checks here is defense in depth against a host bug.
 
+import { isIPv4, isIPv6 } from "node:net";
+
 export const WORKER_PROTOCOL_GENERATION = 1;
 export const WORKER_IDENTITY = "qdral-browser-worker";
 export const MAX_FRAME_BYTES = 64 * 1024;
@@ -16,6 +18,8 @@ export const MAX_ARG_BYTES = 8192;
 export const MAX_PATH_BYTES = 1024;
 export const MAX_ENV_ENTRIES = 16;
 export const MAX_ENV_VALUE_BYTES = 4096;
+/// Mirrors MAX_ADMITTED_DESTINATIONS in the Rust host.
+export const MAX_ADMITTED_DESTINATIONS = 16;
 
 /// Engine environment keys the host may pass (its scrubbed environment).
 export const ENGINE_ENV_ALLOWLIST: readonly string[] = ["SystemRoot", "SystemDrive", "PATH", "TEMP", "TMP", "LANG"];
@@ -70,6 +74,8 @@ export function encodeFrame(value: WorkerFrame | HostFrame): Buffer {
 /// length bound is enforced before the body is buffered.
 export class FrameDecoder {
   private buffered: Buffer = Buffer.alloc(0);
+  // Invalid UTF-8 is a violation, as in the Rust host (no replacement).
+  private readonly utf8 = new TextDecoder("utf-8", { fatal: true });
 
   push(chunk: Buffer): unknown[] {
     this.buffered = Buffer.concat([this.buffered, chunk]);
@@ -81,8 +87,14 @@ export class FrameDecoder {
         throw new ProtocolViolation("frame length out of bounds");
       }
       if (this.buffered.length < 4 + length) return frames;
-      const body = this.buffered.subarray(4, 4 + length).toString("utf8");
+      const bytes = this.buffered.subarray(4, 4 + length);
       this.buffered = this.buffered.subarray(4 + length);
+      let body: string;
+      try {
+        body = this.utf8.decode(bytes);
+      } catch {
+        throw new ProtocolViolation("frame is not valid UTF-8");
+      }
       try {
         frames.push(JSON.parse(body) as unknown);
       } catch {
@@ -151,7 +163,8 @@ export function parseHostFrame(raw: unknown): HostFrame {
       if (!isPlainObject(raw.env)) throw new ProtocolViolation("env is not an object");
       const entries = Object.entries(raw.env);
       if (entries.length > MAX_ENV_ENTRIES) throw new ProtocolViolation("env has too many entries");
-      const env: Record<string, string> = {};
+      // A null prototype: no key (including "__proto__") is special.
+      const env: Record<string, string> = Object.create(null) as Record<string, string>;
       for (const [key, value] of entries) {
         env[key] = boundedString(value, MAX_ENV_VALUE_BYTES, `env ${key}`);
       }
@@ -162,17 +175,54 @@ export function parseHostFrame(raw: unknown): HostFrame {
   }
 }
 
+/// Mirrors validate_admitted_host in the Rust host: lowercase ASCII LDH, two
+/// or more labels of 1..=63 bytes, at most 253 bytes, no label starting or
+/// ending with a hyphen, and a last label that is not numeric or 0x-prefixed.
+export function isAdmittedHost(host: string): boolean {
+  if (host.length === 0 || host.length > 253 || !/^[a-z0-9.-]+$/.test(host)) return false;
+  const labels = host.split(".");
+  if (labels.length < 2) return false;
+  for (const label of labels) {
+    if (label.length === 0 || label.length > 63 || label.startsWith("-") || label.endsWith("-")) return false;
+  }
+  const last = labels[labels.length - 1] ?? "";
+  return !/^[0-9]+$/.test(last) && !last.startsWith("0x");
+}
+
+/// Parse the resolver rules into admitted names, in order, or null when the
+/// value is not exactly `MAP <name> <ipv4|[ipv6]>:443, …, MAP * ~NOTFOUND`.
+/// Address class is the host's policy (test builds pin fixtures to loopback);
+/// the worker checks the grammar so nothing else can be smuggled in.
+export function parseResolverRules(value: string): string[] | null {
+  const entries = value.split(", ");
+  if (entries.pop() !== "MAP * ~NOTFOUND") return null;
+  if (entries.length === 0 || entries.length > MAX_ADMITTED_DESTINATIONS) return null;
+  const names: string[] = [];
+  for (const entry of entries) {
+    const match = /^MAP ([^ ]+) ([^ ]+):443$/.exec(entry);
+    if (!match) return null;
+    const [, name = "", address = ""] = match;
+    if (!isAdmittedHost(name) || names.includes(name)) return null;
+    const v6 = /^\[(.+)\]$/.exec(address);
+    if (v6 ? !isIPv6(v6[1] ?? "") : !isIPv4(address)) return null;
+    names.push(name);
+  }
+  return names;
+}
+
+function isAbsoluteWindowsPath(path: string): boolean {
+  if (!/^[A-Za-z]:\\/.test(path) || path.includes("/")) return false;
+  // No empty, "." or ".." segments anywhere.
+  return path.slice(3).split("\\").every((segment) => segment !== "" && segment !== "." && segment !== "..");
+}
+
 /// Defense-in-depth check of a launch frame against the SG-000108 contract.
 /// Returns a reason when the frame must be refused, otherwise null.
 export function launchRefusal(launch: Extract<HostFrame, { frame: "launch" }>): string | null {
-  if (!/^[A-Za-z]:\\/.test(launch.engine) || launch.engine.includes("\\..\\") || launch.engine.includes("/")) {
-    return "engine path is not an absolute Windows path";
-  }
+  if (!isAbsoluteWindowsPath(launch.engine)) return "engine path is not an absolute Windows path";
   const leaf = launch.engine.split("\\").pop()?.toLowerCase();
   if (leaf !== "msedge.exe" && leaf !== "chrome.exe") return "engine is not a supported browser executable";
-  if (!/^[A-Za-z]:\\/.test(launch.profile_dir) || launch.profile_dir.includes("\\..\\")) {
-    return "profile directory is not an absolute Windows path";
-  }
+  if (!isAbsoluteWindowsPath(launch.profile_dir)) return "profile directory is not an absolute Windows path";
   for (const key of Object.keys(launch.env)) {
     if (!ENGINE_ENV_ALLOWLIST.includes(key)) return `engine environment key ${key} is not allowed`;
   }
@@ -186,12 +236,12 @@ export function launchRefusal(launch: Extract<HostFrame, { frame: "launch" }>): 
   const [profile, pipe, resolver, proxy, bypass, webrtc, quic, initial] = rest;
   if (profile !== `--user-data-dir=${launch.profile_dir}`) return "argv profile differs from the launch profile";
   if (pipe !== PIPE) return "argv lacks the debugging pipe";
-  if (!resolver?.startsWith("--host-resolver-rules=MAP ") || !resolver.endsWith(", MAP * ~NOTFOUND")) {
-    return "argv resolver rules are not a pinned map ending in MAP * ~NOTFOUND";
-  }
+  const resolverPrefix = "--host-resolver-rules=";
+  const names = resolver?.startsWith(resolverPrefix) ? parseResolverRules(resolver.slice(resolverPrefix.length)) : null;
+  if (names === null) return "argv resolver rules are not an exact pinned map ending in MAP * ~NOTFOUND";
   if (proxy !== NO_ROUTE_PROXY) return "argv proxy is not the no-route proxy";
-  if (!bypass?.startsWith("--proxy-bypass-list=") || !bypass.endsWith(";<-loopback>") || bypass.includes("*")) {
-    return "argv bypass list is not an exact list ending in <-loopback>";
+  if (bypass !== `--proxy-bypass-list=${[...names, "<-loopback>"].join(";")}`) {
+    return "argv bypass list is not exactly the admitted names followed by <-loopback>";
   }
   if (webrtc !== WEBRTC_POLICY) return "argv lacks the WebRTC UDP policy";
   if (quic !== DISABLE_QUIC) return "argv lacks the QUIC refusal";
