@@ -1,4 +1,4 @@
-use qdral_contracts::FailureCode;
+pub use qdral_contracts::FailureCode;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, HashSet};
@@ -768,14 +768,31 @@ impl ApprovalBroker for LocalApprovalBroker {
         match attestation {
             Ok(attestation) => {
                 if attestation.nonce != prompt.nonce || attestation.digest != prompt.digest {
-                    let _ = ledger.record_decision(
+                    let recorded = ledger.record_decision(
                         prompt,
                         RecordedDecision::Unavailable,
                         PresenceOutcome::Unavailable,
                         method,
                     );
-                    return Err(ApprovalError::unavailable(
-                        "revoke presence result does not match the request; revoke fails closed",
+                    return Err(with_recording(
+                        ApprovalError::unavailable(
+                            "revoke presence result does not match the request; revoke fails closed",
+                        ),
+                        recorded,
+                    ));
+                }
+                if attestation.method != method {
+                    let recorded = ledger.record_decision(
+                        prompt,
+                        RecordedDecision::Unavailable,
+                        PresenceOutcome::Unavailable,
+                        method,
+                    );
+                    return Err(with_recording(
+                        ApprovalError::unavailable(
+                            "revoke presence method mismatch; revoke fails closed",
+                        ),
+                        recorded,
                     ));
                 }
                 let record = ledger.record_revoke(prompt, &attestation.method)?;
@@ -792,8 +809,8 @@ impl ApprovalBroker for LocalApprovalBroker {
                     PresenceOutcome::Denied => RecordedDecision::Denied,
                     _ => RecordedDecision::Unavailable,
                 };
-                let _ = ledger.record_decision(prompt, decision, outcome, method);
-                Err(error.into())
+                let recorded = ledger.record_decision(prompt, decision, outcome, method);
+                Err(with_recording(error.into(), recorded))
             }
         }
     }
@@ -802,7 +819,7 @@ impl ApprovalBroker for LocalApprovalBroker {
 impl LocalApprovalBroker {
     /// Verifies the ledger before any person is prompted. The ledger mutex
     /// and the cross-process lock are released while the person decides.
-    fn preflight(&self) -> Result<u64, ApprovalError> {
+    fn preflight(&self) -> Result<PromptView, ApprovalError> {
         self.ledger
             .lock()
             .map_err(|_| ApprovalError::unavailable("approval ledger is unavailable"))?
@@ -810,7 +827,7 @@ impl LocalApprovalBroker {
     }
 
     fn request_soft_token(&self, prompt: &ApprovalPrompt) -> Result<ApprovedToken, ApprovalError> {
-        let prompt_epoch = self.preflight()?;
+        let prompt_view = self.preflight()?;
         let decision = platform_prompt(prompt);
         let mut ledger = self
             .ledger
@@ -823,7 +840,7 @@ impl LocalApprovalBroker {
                     RecordedDecision::Approved,
                     PresenceOutcome::SoftApproved,
                     "soft-button",
-                    Some(prompt_epoch),
+                    Some(&prompt_view),
                 )?;
                 Ok(ApprovedToken {
                     record_id: record.id.clone(),
@@ -837,22 +854,25 @@ impl LocalApprovalBroker {
                 })
             }
             Ok(ApprovalDecision::Denied) => {
-                let _ = ledger.record_decision(
+                let recorded = ledger.record_decision(
                     prompt,
                     RecordedDecision::Denied,
                     PresenceOutcome::Denied,
                     "soft-button",
                 );
-                Err(ApprovalError::denied("local user denied the operation"))
+                Err(with_recording(
+                    ApprovalError::denied("local user denied the operation"),
+                    recorded,
+                ))
             }
             Err(error) => {
-                let _ = ledger.record_decision(
+                let recorded = ledger.record_decision(
                     prompt,
                     RecordedDecision::Unavailable,
                     PresenceOutcome::Unavailable,
                     "soft-button",
                 );
-                Err(error)
+                Err(with_recording(error, recorded))
             }
         }
     }
@@ -861,7 +881,7 @@ impl LocalApprovalBroker {
         &self,
         prompt: &ApprovalPrompt,
     ) -> Result<ApprovedToken, ApprovalError> {
-        let prompt_epoch = self.preflight()?;
+        let prompt_view = self.preflight()?;
         let lease = InputLeaseGuard::suspend_for_presence();
         if !lease.is_suspended() {
             return Err(ApprovalError::unavailable(
@@ -883,25 +903,31 @@ impl LocalApprovalBroker {
         match attestation {
             Ok(attestation) => {
                 if attestation.nonce != prompt.nonce || attestation.digest != prompt.digest {
-                    let _ = ledger.record_decision(
+                    let recorded = ledger.record_decision(
                         prompt,
                         RecordedDecision::Unavailable,
                         PresenceOutcome::Unavailable,
                         method,
                     );
-                    return Err(ApprovalError::unavailable(
-                        "strong presence result does not match the approved request; STRONG approval fails closed",
+                    return Err(with_recording(
+                        ApprovalError::unavailable(
+                            "strong presence result does not match the approved request; STRONG approval fails closed",
+                        ),
+                        recorded,
                     ));
                 }
                 if attestation.method != method {
-                    let _ = ledger.record_decision(
+                    let recorded = ledger.record_decision(
                         prompt,
                         RecordedDecision::Unavailable,
                         PresenceOutcome::Unavailable,
                         method,
                     );
-                    return Err(ApprovalError::unavailable(
-                        "strong presence method mismatch; STRONG approval fails closed",
+                    return Err(with_recording(
+                        ApprovalError::unavailable(
+                            "strong presence method mismatch; STRONG approval fails closed",
+                        ),
+                        recorded,
                     ));
                 }
                 let record = ledger.record_prompted_decision(
@@ -909,7 +935,7 @@ impl LocalApprovalBroker {
                     RecordedDecision::Approved,
                     PresenceOutcome::VerifiedStrong,
                     &attestation.method,
-                    Some(prompt_epoch),
+                    Some(&prompt_view),
                 )?;
                 Ok(ApprovedToken {
                     record_id: record.id.clone(),
@@ -933,10 +959,28 @@ impl LocalApprovalBroker {
                     PresenceOutcome::Denied => RecordedDecision::Denied,
                     _ => RecordedDecision::Unavailable,
                 };
-                let _ = ledger.record_decision(prompt, decision, outcome, method);
-                Err(error.into())
+                let recorded = ledger.record_decision(prompt, decision, outcome, method);
+                Err(with_recording(error.into(), recorded))
             }
         }
+    }
+}
+
+/// Keeps the decision's own error and notes when the decision itself could
+/// not be recorded, so the audit gap is visible to the caller.
+fn with_recording(
+    error: ApprovalError,
+    recorded: Result<StoredRecord, ApprovalError>,
+) -> ApprovalError {
+    match recorded {
+        Ok(_) => error,
+        Err(failure) => ApprovalError {
+            code: error.code,
+            message: format!(
+                "{}; the decision was not recorded: {}",
+                error.message, failure.message
+            ),
+        },
     }
 }
 
@@ -969,13 +1013,16 @@ fn validate_prompt(prompt: &ApprovalPrompt) -> Result<(), ApprovalError> {
 /// How long one ledger transaction waits for another Qdral process to finish
 /// its own transaction before the ledger is reported busy (never corrupt).
 const LEDGER_LOCK_WAIT: Duration = Duration::from_secs(5);
+const HISTORY_LOCK_WAIT: Duration = Duration::from_millis(100);
 const LEDGER_RECOVERY_HINT: &str =
     "run `qdral approvals recover` to quarantine it (the evidence is preserved) and start a new approval ledger";
+const LEDGER_DURABILITY_HINT: &str =
+    "retry; the broker resumes once the ledger verifies again, otherwise check disk space and permissions and run `qdral doctor`";
 const RECOVERY_WORKSPACE: &str = "qdral-ledger-recovery";
 const RECOVERY_METHOD: &str = "ledger-recovery";
 
 /// Sidecar file whose OS lock serializes ledger transactions across
-/// processes. The ledger itself is never locked, so readers are not blocked.
+/// processes. The ledger file itself is never locked.
 pub fn approval_ledger_lock_path(path: &Path) -> PathBuf {
     let mut name = path.file_name().unwrap_or_default().to_os_string();
     name.push(".lock");
@@ -988,12 +1035,18 @@ fn acquire_ledger_lock(path: &Path, wait: Duration) -> Result<std::fs::File, App
         if let Some(parent) = lock_path.parent() {
             std::fs::create_dir_all(parent)?;
         }
-        std::fs::OpenOptions::new()
-            .read(true)
-            .write(true)
-            .create(true)
-            .truncate(false)
-            .open(&lock_path)
+        let mut options = std::fs::OpenOptions::new();
+        options.read(true).write(true).create(true).truncate(false);
+        // Without FILE_SHARE_DELETE the lock file cannot be deleted (and a
+        // second, unrelated lock file created) while any broker holds it.
+        #[cfg(windows)]
+        {
+            use std::os::windows::fs::OpenOptionsExt as _;
+            const FILE_SHARE_READ: u32 = 0x1;
+            const FILE_SHARE_WRITE: u32 = 0x2;
+            options.share_mode(FILE_SHARE_READ | FILE_SHARE_WRITE);
+        }
+        options.open(&lock_path)
     })();
     let lock = opened.map_err(|error| {
         ApprovalError::unavailable(format!("approval ledger lock is unavailable: {error}"))
@@ -1043,6 +1096,20 @@ impl LedgerFault {
             Self::Durability => "an approval ledger write failed, so its durability is unknown",
         }
     }
+
+    fn hint(self) -> &'static str {
+        match self {
+            Self::Durability => LEDGER_DURABILITY_HINT,
+            _ => LEDGER_RECOVERY_HINT,
+        }
+    }
+}
+
+/// The chain and revoke epoch a person's prompt was shown under.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct PromptView {
+    genesis: Option<String>,
+    epoch: u64,
 }
 
 #[derive(Debug)]
@@ -1104,19 +1171,53 @@ impl ApprovalLedger {
         &mut self,
         operation: impl FnOnce(&mut Self) -> Result<T, ApprovalError>,
     ) -> Result<T, ApprovalError> {
-        let _lock = acquire_ledger_lock(&self.path, self.lock_wait)?;
-        if self.poisoned() && !self.adopt_recovered() {
+        self.transact_waiting(self.lock_wait, operation)
+    }
+
+    fn transact_waiting<T>(
+        &mut self,
+        wait: Duration,
+        operation: impl FnOnce(&mut Self) -> Result<T, ApprovalError>,
+    ) -> Result<T, ApprovalError> {
+        let _lock = acquire_ledger_lock(&self.path, wait)?;
+        if self.poisoned() && !self.resume() {
             self.ensure_ready()?;
         }
-        self.refresh()?;
+        if let Err(error) = self.refresh() {
+            // A ledger replaced by recovery is adopted within this transaction.
+            if !(self.poisoned() && self.adopt_recovered()) {
+                return Err(error);
+            }
+        }
         operation(self)
     }
 
     /// Checks the ledger before a person is asked to decide, so nobody is
     /// prompted for an approval the broker could not record. Returns the
-    /// revoke epoch the prompt is shown under.
-    fn preflight(&mut self) -> Result<u64, ApprovalError> {
-        self.transact(|ledger| Ok(ledger.revoke_epoch))
+    /// chain and revoke epoch the prompt is shown under.
+    fn preflight(&mut self) -> Result<PromptView, ApprovalError> {
+        self.transact(|ledger| {
+            Ok(PromptView {
+                genesis: ledger.genesis.clone(),
+                epoch: ledger.revoke_epoch,
+            })
+        })
+    }
+
+    /// Clears a poisoned state when that is provably safe (the caller holds
+    /// the lock). After an uncertain write, the unknown record either landed
+    /// whole and verifies (it is applied like any other) or never landed (it
+    /// was never acknowledged), so the broker continues once the file still
+    /// extends its last verified line and verifies. Otherwise only a chain
+    /// started by `qdral approvals recover` can be adopted.
+    fn resume(&mut self) -> bool {
+        if self.fault == Some(LedgerFault::Durability) {
+            self.fault = None;
+            if self.refresh().is_ok() {
+                return true;
+            }
+        }
+        self.adopt_recovered()
     }
 
     /// Lets a poisoned broker continue after `qdral approvals recover`
@@ -1147,8 +1248,9 @@ impl ApprovalLedger {
     fn ensure_ready(&self) -> Result<(), ApprovalError> {
         match self.fault {
             Some(fault) => Err(ApprovalError::unavailable(format!(
-                "{}; no approval can be granted; {LEDGER_RECOVERY_HINT}",
-                fault.describe()
+                "{}; no approval can be granted; {}",
+                fault.describe(),
+                fault.hint()
             ))),
             None => Ok(()),
         }
@@ -1204,8 +1306,7 @@ impl ApprovalLedger {
         if appended.last() != Some(&b'\n') {
             return Err(self.poison(LedgerFault::TornTail));
         }
-        let appended = appended.to_vec();
-        let Ok(text) = std::str::from_utf8(&appended) else {
+        let Ok(text) = std::str::from_utf8(appended) else {
             return Err(self.poison(LedgerFault::Unverifiable));
         };
         let mut last_line = self.last_line.clone();
@@ -1291,16 +1392,17 @@ impl ApprovalLedger {
         self.record_prompted_decision(prompt, decision, presence_outcome, presence_method, None)
     }
 
-    /// Records a person's decision. When `prompt_epoch` is the revoke epoch
-    /// the prompt was shown under and an emergency revoke happened while the
-    /// person decided, an approval is recorded as unavailable and refused.
+    /// Records a person's decision. When `prompt_view` is the chain and
+    /// revoke epoch the prompt was shown under and an emergency revoke or a
+    /// recovery happened while the person decided, an approval is recorded as
+    /// unavailable and refused.
     fn record_prompted_decision(
         &mut self,
         prompt: &ApprovalPrompt,
         decision: RecordedDecision,
         presence_outcome: PresenceOutcome,
         presence_method: &str,
-        prompt_epoch: Option<u64>,
+        prompt_view: Option<&PromptView>,
     ) -> Result<StoredRecord, ApprovalError> {
         if prompt.approval_class == ApprovalClass::Strong
             && presence_outcome == PresenceOutcome::SoftApproved
@@ -1316,7 +1418,9 @@ impl ApprovalLedger {
                 ));
             }
             let revoked_meanwhile = decision == RecordedDecision::Approved
-                && prompt_epoch.is_some_and(|epoch| epoch != ledger.revoke_epoch);
+                && prompt_view.is_some_and(|view| {
+                    view.epoch != ledger.revoke_epoch || view.genesis != ledger.genesis
+                });
             let (decision, presence_outcome) = if revoked_meanwhile {
                 (RecordedDecision::Unavailable, PresenceOutcome::Unavailable)
             } else {
@@ -1508,24 +1612,38 @@ impl ApprovalLedger {
             .map_err(|error| ApprovalError::unavailable(format!("serialize approval: {error}")))?;
         serialized.push(b'\n');
         let created = self.verified_len == 0;
-        let persist = (|| -> std::io::Result<()> {
-            let mut file = std::fs::OpenOptions::new()
-                .create(true)
-                .append(true)
-                .open(&self.path)?;
+        // Nothing was written if the file cannot be opened: transient.
+        let mut file = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&self.path)
+            .map_err(|error| {
+                ApprovalError::unavailable(format!(
+                    "approval ledger is temporarily unwritable; retry shortly: {error}"
+                ))
+            })?;
+        let persist = (|| -> std::io::Result<u64> {
             file.write_all(&serialized)?;
             file.sync_all()?;
             if created {
                 sync_parent_dir(&self.path)?;
             }
-            Ok(())
+            Ok(file.metadata()?.len())
         })();
-        if let Err(error) = persist {
-            let refused = self.poison(LedgerFault::Durability);
-            return Err(ApprovalError::unavailable(format!(
-                "{}: {error}",
-                refused.message
-            )));
+        match persist {
+            Err(error) => {
+                let refused = self.poison(LedgerFault::Durability);
+                return Err(ApprovalError::unavailable(format!(
+                    "{}: {error}",
+                    refused.message
+                )));
+            }
+            // Any other writer (a bypassed or replaced lock) shows up as
+            // extra bytes; never acknowledge an append that was not alone.
+            Ok(len) if len != self.verified_len + serialized.len() as u64 => {
+                return Err(self.poison(LedgerFault::Replaced));
+            }
+            Ok(_) => {}
         }
         if !self.apply(record.clone()) {
             return Err(self.poison(LedgerFault::Unverifiable));
@@ -1536,8 +1654,9 @@ impl ApprovalLedger {
     }
 
     fn history(&mut self, limit: usize) -> Vec<ApprovalRecordSummary> {
-        // A busy or failed refresh still reports the last verified view.
-        let _ = self.transact(|_| Ok(()));
+        // History is best effort: it waits briefly for the writer lock and a
+        // busy or failed refresh still reports the last verified view.
+        let _ = self.transact_waiting(HISTORY_LOCK_WAIT, |_| Ok(()));
         let bound = limit.clamp(1, 200);
         self.records
             .values()
@@ -1585,39 +1704,46 @@ pub enum ApprovalLedgerStatus {
     Verified,
     /// The ledger fails verification; approvals stay blocked until recovery.
     Corrupt,
-    /// Another Qdral process held the writer lock for the whole wait, or the
-    /// file was temporarily unreadable; retry.
+    /// Another Qdral process held the writer lock for the whole wait; retry.
     Busy,
+    /// The ledger or its lock could not be read; `detail` says why.
+    Unreadable,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ApprovalLedgerInspection {
     pub status: ApprovalLedgerStatus,
     pub verified_records: usize,
+    /// The underlying error for `Corrupt`, `Busy` and `Unreadable`.
+    pub detail: String,
 }
 
 /// Verifies the ledger without changing it (only the sidecar lock may be
 /// created).
 pub fn inspect_approval_ledger(path: &Path) -> ApprovalLedgerInspection {
     let mut ledger = ApprovalLedger::empty(path.to_path_buf());
-    if !path.exists() {
-        return ApprovalLedgerInspection {
-            status: ApprovalLedgerStatus::Missing,
-            verified_records: 0,
-        };
+    let inspection = |status, verified_records, detail: String| ApprovalLedgerInspection {
+        status,
+        verified_records,
+        detail,
+    };
+    match path.try_exists() {
+        Ok(false) => return inspection(ApprovalLedgerStatus::Missing, 0, String::new()),
+        Ok(true) => {}
+        Err(error) => {
+            return inspection(ApprovalLedgerStatus::Unreadable, 0, error.to_string());
+        }
     }
-    let status = match acquire_ledger_lock(path, ledger.lock_wait) {
-        Err(_) => ApprovalLedgerStatus::Busy,
+    let (status, detail) = match acquire_ledger_lock(path, ledger.lock_wait) {
+        Err(error) if error.message.contains("busy") => (ApprovalLedgerStatus::Busy, error.message),
+        Err(error) => (ApprovalLedgerStatus::Unreadable, error.message),
         Ok(_lock) => match ledger.refresh() {
-            Ok(()) => ApprovalLedgerStatus::Verified,
-            Err(_) if ledger.poisoned() => ApprovalLedgerStatus::Corrupt,
-            Err(_) => ApprovalLedgerStatus::Busy,
+            Ok(()) => (ApprovalLedgerStatus::Verified, String::new()),
+            Err(error) if ledger.poisoned() => (ApprovalLedgerStatus::Corrupt, error.message),
+            Err(error) => (ApprovalLedgerStatus::Unreadable, error.message),
         },
     };
-    ApprovalLedgerInspection {
-        status,
-        verified_records: ledger.records.len(),
-    }
+    inspection(status, ledger.records.len(), detail)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1632,7 +1758,9 @@ pub struct ApprovalLedgerRecovery {
 /// rewritten), and a new chain starts with a non-authorizing record that
 /// names the quarantined file and its SHA-256. No earlier approval is carried
 /// over, so every operation needs a fresh approval afterwards. A verified,
-/// missing or busy ledger is refused.
+/// missing, busy or merely unreadable ledger is refused. The new chain is
+/// written and synced to a temporary file first and then renamed into place,
+/// so a crash leaves either the original or both files, never a lost record.
 pub fn recover_approval_ledger(path: &Path) -> Result<ApprovalLedgerRecovery, ApprovalError> {
     recover_approval_ledger_with_wait(path, LEDGER_LOCK_WAIT)
 }
@@ -1641,17 +1769,29 @@ fn recover_approval_ledger_with_wait(
     path: &Path,
     wait: Duration,
 ) -> Result<ApprovalLedgerRecovery, ApprovalError> {
+    let missing = || ApprovalError::invalid("there is no approval ledger to recover");
+    let exists = |path: &Path| {
+        path.try_exists().map_err(|error| {
+            ApprovalError::unavailable(format!("approval ledger is unreadable: {error}"))
+        })
+    };
+    // Checked before taking the lock so nothing is created when there is
+    // nothing to recover, and again under the lock.
+    if !exists(path)? {
+        return Err(missing());
+    }
     let _lock = acquire_ledger_lock(path, wait)?;
-    if !path.exists() {
-        return Err(ApprovalError::invalid(
-            "there is no approval ledger to recover",
-        ));
+    if !exists(path)? {
+        return Err(missing());
     }
     let mut current = ApprovalLedger::empty(path.to_path_buf());
-    if current.refresh().is_ok() {
-        return Err(ApprovalError::invalid(
+    match current.refresh() {
+        Ok(()) => return Err(ApprovalError::invalid(
             "the approval ledger verifies; recovery is only for a ledger that fails verification",
-        ));
+        )),
+        // Unreadable is not corrupt: never quarantine a ledger that may verify.
+        Err(error) if !current.poisoned() => return Err(error),
+        Err(_) => {}
     }
     let bytes = std::fs::read(path).map_err(|error| {
         ApprovalError::unavailable(format!("read approval ledger for quarantine: {error}"))
@@ -1665,12 +1805,10 @@ fn recover_approval_ledger_with_wait(
             "approval ledger quarantine path already exists; retry",
         ));
     }
-    std::fs::rename(path, &quarantined_to)
-        .and_then(|()| sync_parent_dir(path))
-        .map_err(|error| {
-            ApprovalError::unavailable(format!("quarantine approval ledger: {error}"))
-        })?;
-    let mut fresh = ApprovalLedger::empty(path.to_path_buf());
+    let mut staged_name = path.file_name().unwrap_or_default().to_os_string();
+    staged_name.push(format!(".recovering-{}", now_ms()));
+    let staged = path.with_file_name(staged_name);
+    let mut fresh = ApprovalLedger::empty(staged.clone());
     let (id, decided_at) = fresh.unique_record_id("rcv");
     let mut record = StoredRecord {
         schema: LEDGER_SCHEMA.to_owned(),
@@ -1700,6 +1838,15 @@ fn recover_approval_ledger_with_wait(
     };
     record.checksum = record_checksum(&record);
     fresh.append(record)?;
+    std::fs::rename(path, &quarantined_to)
+        .and_then(|()| std::fs::rename(&staged, path))
+        .and_then(|()| sync_parent_dir(path))
+        .map_err(|error| {
+            ApprovalError::unavailable(format!(
+                "quarantine approval ledger (the original is at {} if it was moved): {error}",
+                quarantined_to.display()
+            ))
+        })?;
     Ok(ApprovalLedgerRecovery {
         quarantined_to,
         quarantined_sha256: sha256,
@@ -2612,6 +2759,7 @@ mod tests {
             ApprovalLedgerInspection {
                 status: ApprovalLedgerStatus::Verified,
                 verified_records: 1,
+                detail: String::new(),
             }
         );
 
@@ -2707,7 +2855,7 @@ mod tests {
         let path = temp_path("reg278-revoke-race");
         let mut ledger = ledger_in(&path);
         let prompt = strong_prompt_with("reg278-pending", 5_000);
-        let prompt_epoch = ledger.preflight().expect("preflight");
+        let prompt_view = ledger.preflight().expect("preflight");
         // Another process revokes while the person is still deciding.
         let mut other = ledger_in(&path);
         other
@@ -2719,7 +2867,7 @@ mod tests {
                 RecordedDecision::Approved,
                 PresenceOutcome::VerifiedStrong,
                 "test",
-                Some(prompt_epoch),
+                Some(&prompt_view),
             )
             .unwrap_err();
         assert_eq!(error.code, FailureCode::ApprovalDenied);
@@ -2770,9 +2918,13 @@ mod tests {
         let path = temp_path("reg278-no-self-adopt");
         let mut ledger = ledger_in(&path);
         issue_strong(&mut ledger, "reg278-no-self-adopt", 5_000);
-        ledger.fault = Some(LedgerFault::Durability);
+        ledger.fault = Some(LedgerFault::Unverifiable);
         let error = ledger.preflight().unwrap_err();
-        assert!(error.message.contains("durability"), "{}", error.message);
+        assert!(
+            error.message.contains("does not verify"),
+            "{}",
+            error.message
+        );
         assert!(ledger.poisoned());
         drop(ledger);
         remove_ledger(&path);
@@ -2835,6 +2987,210 @@ mod tests {
         ledger
             .consume(&token_from(&a), &strong_expectation(&a), 5_100)
             .expect("consumption succeeds once the file is readable");
+        drop(ledger);
+        remove_ledger(&path);
+    }
+
+    #[test]
+    fn open_failure_before_writing_is_transient_not_poison() {
+        let path = temp_path("ocr-open-failure");
+        let mut ledger = ledger_in(&path);
+        let a = issue_strong(&mut ledger, "ocr-open-failure-a", 5_000);
+        let mut permissions = std::fs::metadata(&path).expect("metadata").permissions();
+        permissions.set_readonly(true);
+        std::fs::set_permissions(&path, permissions.clone()).expect("read-only");
+        let error = ledger
+            .consume(&token_from(&a), &strong_expectation(&a), 5_100)
+            .unwrap_err();
+        assert_eq!(error.code, FailureCode::ApprovalUnavailable);
+        assert!(
+            error.message.contains("temporarily unwritable"),
+            "{}",
+            error.message
+        );
+        assert!(
+            !ledger.poisoned(),
+            "nothing was written, so nothing is uncertain"
+        );
+        #[allow(clippy::permissions_set_readonly_false)]
+        permissions.set_readonly(false);
+        std::fs::set_permissions(&path, permissions).expect("writable");
+        ledger
+            .consume(&token_from(&a), &strong_expectation(&a), 5_100)
+            .expect("consumption succeeds once the file is writable");
+        drop(ledger);
+        remove_ledger(&path);
+    }
+
+    #[test]
+    fn uncertain_write_resumes_only_while_the_chain_still_verifies() {
+        let path = temp_path("ocr-uncertain");
+        let mut ledger = ledger_in(&path);
+        issue_strong(&mut ledger, "ocr-uncertain-a", 5_000);
+        ledger.fault = Some(LedgerFault::Durability);
+        let error = ledger.ensure_ready().unwrap_err();
+        assert!(
+            !error.message.contains("approvals recover"),
+            "{}",
+            error.message
+        );
+        let b = issue_strong(&mut ledger, "ocr-uncertain-b", 5_100);
+        assert!(!ledger.poisoned(), "an intact chain lets the broker resume");
+        ledger
+            .consume(&token_from(&b), &strong_expectation(&b), 5_200)
+            .expect("consume after resuming");
+
+        // The uncertain write landed torn: the broker stays fail-closed.
+        ledger.fault = Some(LedgerFault::Durability);
+        let mut file = std::fs::OpenOptions::new()
+            .append(true)
+            .open(&path)
+            .expect("open");
+        use std::io::Write as _;
+        file.write_all(b"{\"torn\":").expect("torn tail");
+        drop(file);
+        let torn = ledger.preflight().unwrap_err();
+        assert!(torn.message.contains("incomplete"), "{}", torn.message);
+        assert!(ledger.poisoned());
+        drop(ledger);
+        remove_ledger(&path);
+    }
+
+    #[test]
+    fn recovery_during_an_open_prompt_refuses_the_approval() {
+        let path = temp_path("ocr-recovery-race");
+        let mut ledger = ledger_in(&path);
+        let prompt = strong_prompt_with("ocr-pending", 5_000);
+        let prompt_view = ledger.preflight().expect("preflight");
+        // Meanwhile another process revokes, the ledger tears and is recovered.
+        let mut other = ledger_in(&path);
+        other
+            .record_revoke(&strong_prompt_with("ocr-revoke", 5_010), "test")
+            .expect("revoke");
+        drop(other);
+        let mut file = std::fs::OpenOptions::new()
+            .append(true)
+            .open(&path)
+            .expect("open");
+        use std::io::Write as _;
+        file.write_all(b"{\"torn\":").expect("torn tail");
+        drop(file);
+        let recovery = recover_approval_ledger(&path).expect("recover");
+        let error = ledger
+            .record_prompted_decision(
+                &prompt,
+                RecordedDecision::Approved,
+                PresenceOutcome::VerifiedStrong,
+                "test",
+                Some(&prompt_view),
+            )
+            .unwrap_err();
+        assert_eq!(error.code, FailureCode::ApprovalDenied);
+        assert_eq!(
+            ledger.revoke_epoch, 0,
+            "the recovered chain restarts at epoch 0"
+        );
+        drop(ledger);
+        let _ = std::fs::remove_file(&recovery.quarantined_to);
+        remove_ledger(&path);
+    }
+
+    #[test]
+    fn healthy_broker_adopts_a_recovered_ledger_in_one_transaction() {
+        let path = temp_path("ocr-adopt-once");
+        let mut live = ledger_in(&path);
+        issue_strong(&mut live, "ocr-adopt-once-a", 5_000);
+        let mut file = std::fs::OpenOptions::new()
+            .append(true)
+            .open(&path)
+            .expect("open");
+        use std::io::Write as _;
+        file.write_all(b"{\"torn\":").expect("torn tail");
+        drop(file);
+        let recovery = recover_approval_ledger(&path).expect("recover");
+        assert!(!live.poisoned(), "this broker never saw the torn tail");
+        let b = issue_strong(&mut live, "ocr-adopt-once-b", 6_000);
+        live.consume(&token_from(&b), &strong_expectation(&b), 6_100)
+            .expect("the first transaction after recovery already succeeds");
+        drop(live);
+        let _ = std::fs::remove_file(&recovery.quarantined_to);
+        remove_ledger(&path);
+    }
+
+    #[test]
+    fn append_is_never_acknowledged_when_another_writer_appended() {
+        let path = temp_path("ocr-second-writer");
+        let mut ledger = ledger_in(&path);
+        let a = issue_strong(&mut ledger, "ocr-second-writer-a", 5_000);
+        let marker = ledger
+            .check_consumable(&token_from(&a), &strong_expectation(&a), 5_100)
+            .expect("consumable");
+        // A writer that bypassed the lock appends the same transition first.
+        let mut file = std::fs::OpenOptions::new()
+            .append(true)
+            .open(&path)
+            .expect("open");
+        use std::io::Write as _;
+        let mut line = serde_json::to_vec(&marker).expect("serialize");
+        line.push(b'\n');
+        file.write_all(&line).expect("rival append");
+        drop(file);
+        let error = ledger.append(marker).unwrap_err();
+        assert_eq!(error.code, FailureCode::ApprovalUnavailable);
+        assert!(
+            ledger.poisoned(),
+            "an append that was not alone is never acknowledged"
+        );
+        assert!(!ledger.consumed.contains(&a.nonce));
+        drop(ledger);
+        remove_ledger(&path);
+    }
+
+    #[test]
+    fn recover_with_nothing_to_recover_creates_nothing() {
+        let dir = temp_path("ocr-nothing").with_extension("");
+        let path = dir.join("approval-history.jsonl");
+        assert_eq!(
+            recover_approval_ledger(&path).unwrap_err().code,
+            FailureCode::InvalidRequest
+        );
+        assert!(!dir.exists(), "no directory or lock file is created");
+        assert_eq!(
+            inspect_approval_ledger(&path).status,
+            ApprovalLedgerStatus::Missing
+        );
+        assert!(!dir.exists());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn held_lock_file_cannot_be_deleted_and_unreadable_ledger_is_not_quarantined() {
+        use std::os::windows::fs::OpenOptionsExt as _;
+        let path = temp_path("ocr-windows-lock");
+        let mut ledger = ledger_in(&path);
+        issue_strong(&mut ledger, "ocr-windows-lock", 5_000);
+        let holder = acquire_ledger_lock(&path, Duration::ZERO).expect("hold the writer lock");
+        assert!(
+            std::fs::remove_file(approval_ledger_lock_path(&path)).is_err(),
+            "a held lock file cannot be deleted and replaced"
+        );
+        drop(holder);
+
+        let exclusive = std::fs::OpenOptions::new()
+            .read(true)
+            .share_mode(0)
+            .open(&path)
+            .expect("exclusive open");
+        let inspection = inspect_approval_ledger(&path);
+        assert_eq!(inspection.status, ApprovalLedgerStatus::Unreadable);
+        assert!(!inspection.detail.is_empty());
+        assert!(recover_approval_ledger(&path).is_err());
+        drop(exclusive);
+        assert!(path.exists(), "an unreadable ledger is never quarantined");
+        assert_eq!(
+            inspect_approval_ledger(&path).status,
+            ApprovalLedgerStatus::Verified
+        );
         drop(ledger);
         remove_ledger(&path);
     }

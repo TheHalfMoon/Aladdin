@@ -28,8 +28,14 @@ that does not verify end to end grants nothing.
   out-of-sequence revoke epoch, or a second consumption poisons the broker.
   An invalid suffix never yields a usable valid-prefix history.
 - An append is acknowledged only after `write_all` and `sync_all` succeed (and
-  on Unix after the new file's directory entry is synced). Any append error
-  poisons the broker without retrying, because durability is then unknown.
+  on Unix after the new file's directory entry is synced), and only if the
+  file grew by exactly that record, so a second writer is never
+  acknowledged. Failing to open the file means nothing was written, which is
+  transient. A failed write or sync poisons the broker without retrying,
+  because durability is then unknown. That broker resumes on its next
+  transaction only if the file still extends its last verified line and
+  verifies: the uncertain record then either landed whole (and is applied)
+  or never landed (and was never acknowledged).
 - A poisoned broker refuses every grant and consumption, and is checked
   before any person is prompted, so nobody approves an action that cannot be
   recorded.
@@ -42,7 +48,10 @@ consume) takes an exclusive OS lock on the sidecar
 `approval-history.jsonl.lock`, verifies and applies every byte other
 processes appended since its last view, decides, appends durably, and
 releases the lock. The lock is never held while a person decides, and the OS
-releases it when a holder dies.
+releases it when a holder dies. On Windows the lock file is opened without
+delete sharing, so it cannot be deleted and replaced by an unrelated lock
+file while a transaction holds it. History reads wait at most 100 ms for the
+lock and otherwise report the last verified view.
 
 - A token consumed in one process is denied in every other process
   (four-process race test: exactly one consumption succeeds).
@@ -52,9 +61,12 @@ releases it when a holder dies.
 - Lock contention past 5 seconds, and I/O errors such as a sharing
   violation from backup or antivirus software, report a transient error.
   They are never treated as corruption.
-- The broker records the revoke epoch when a prompt opens. If an emergency
-  revoke (from any process) happens while the person decides, an approval
-  is recorded as unavailable and refused.
+- The broker records the chain identity (its first record) and the revoke
+  epoch when a prompt opens. If an emergency revoke or a recovery (from any
+  process) happens while the person decides, an approval is recorded as
+  unavailable and refused.
+- When a denial or unavailable decision cannot be recorded, the returned
+  error says so, so the audit gap is visible.
 
 ## Recovery and upgrade from v0.1.0
 
@@ -66,18 +78,22 @@ once. After upgrade such a broker fails closed and its error names the
 v0.1.0 upgrade as the expected cause. `qdral doctor` reports the failure
 and `qdral approvals recover`:
 
-1. takes the writer lock and refuses a ledger that is missing, verifies, or
-   is busy;
-2. renames the ledger byte for byte to
+1. refuses a missing ledger without creating anything, then takes the writer
+   lock and refuses a ledger that verifies, is busy, or is merely unreadable
+   (an unreadable ledger may verify, so it is never quarantined);
+2. writes and syncs a new chain to `approval-history.jsonl.recovering-<ms>`,
+   starting with a non-authorizing `Unavailable` record that names the
+   quarantine file and the old ledger's SHA-256;
+3. renames the ledger byte for byte to
    `approval-history.jsonl.quarantine-<ms>-<sha256 prefix>` (never deleted
-   or rewritten);
-3. starts a new chain with a non-authorizing `Unavailable` record naming the
-   quarantined file and its SHA-256.
+   or rewritten), then renames the staged chain into place.
 
-No earlier approval carries over, so every operation needs a fresh approval.
-Running brokers adopt the new ledger on their next transaction without a
-restart, but only when the new chain differs from the one they knew,
-starts with the recovery record, and verifies completely.
+A crash leaves either the original ledger, or the quarantine plus the staged
+chain; uninstall keeps both by default and removes them on purge. No earlier
+approval carries over, so every operation needs a fresh approval. Running
+brokers adopt the new ledger within their next transaction without a
+restart, but only when the new chain differs from the one they knew, starts
+with the recovery record, and verifies completely.
 
 A torn final line (a crash mid-append) also fails closed and requires
 recovery, although such a line was never acknowledged. This is deliberate:
@@ -120,7 +136,15 @@ Unit and process tests in `crates/qdral-approval/src/lib.rs`:
 `live_broker_adopts_a_recovered_ledger_without_restart`,
 `poisoned_broker_never_adopts_its_own_unchanged_chain`,
 `legacy_v010_interleaved_consumption_fails_closed_with_upgrade_guidance`,
-`sharing_violation_is_transient_and_never_corruption` (Windows). Lifecycle:
+`sharing_violation_is_transient_and_never_corruption` (Windows),
+`open_failure_before_writing_is_transient_not_poison`,
+`uncertain_write_resumes_only_while_the_chain_still_verifies`,
+`recovery_during_an_open_prompt_refuses_the_approval`,
+`healthy_broker_adopts_a_recovered_ledger_in_one_transaction`,
+`append_is_never_acknowledged_when_another_writer_appended`,
+`recover_with_nothing_to_recover_creates_nothing`,
+`held_lock_file_cannot_be_deleted_and_unreadable_ledger_is_not_quarantined`
+(Windows). Lifecycle:
 `approval_history_check_verifies_the_chain_not_just_json`,
 `approvals_recover_quarantines_only_an_unverifiable_ledger`,
 `purge_removes_data_only_when_requested`, and packaged Windows release

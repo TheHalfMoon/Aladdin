@@ -104,14 +104,18 @@ impl Layout {
             self.root.join("trust.jsonl"),
             self.root.join("browser-profile"),
         ];
-        // Approval ledgers quarantined by `qdral approvals recover` (#278).
+        // Approval ledgers quarantined by `qdral approvals recover` (#278),
+        // and a new chain staged by a recovery that was interrupted.
         if let Ok(entries) = std::fs::read_dir(&self.root) {
             let mut quarantined: Vec<PathBuf> = entries
                 .filter_map(|entry| entry.ok().map(|entry| entry.path()))
                 .filter(|path| {
                     path.file_name()
                         .and_then(|name| name.to_str())
-                        .is_some_and(|name| name.starts_with("approval-history.jsonl.quarantine-"))
+                        .is_some_and(|name| {
+                            name.starts_with("approval-history.jsonl.quarantine-")
+                                || name.starts_with("approval-history.jsonl.recovering-")
+                        })
                 })
                 .collect();
             quarantined.sort();
@@ -289,6 +293,32 @@ mod tests {
                 ));
             }
         }
+    }
+
+    #[test]
+    fn quarantined_ledgers_are_retained_children_only() {
+        let root = temp_dir("retained-quarantine").join("Qdral");
+        fs::create_dir_all(root.join("approval-history.jsonl.quarantine-nested")).unwrap();
+        let kept = root.join("approval-history.jsonl.quarantine-1-abcdef012345");
+        fs::write(&kept, b"{}\n").unwrap();
+        let staged = root.join("approval-history.jsonl.recovering-1");
+        fs::write(&staged, b"{}\n").unwrap();
+        fs::write(root.join("unrelated.jsonl.quarantine-1"), b"{}\n").unwrap();
+        let layout = Layout::new(&root);
+        let retained = layout.retained_data();
+        assert!(retained.contains(&kept));
+        assert!(retained.contains(&staged));
+        assert!(!retained.contains(&root.join("unrelated.jsonl.quarantine-1")));
+        for kept in &retained {
+            assert_eq!(kept.parent(), Some(root.as_path()));
+            layout.ensure_beneath_root(kept).unwrap();
+            for removed in layout.executable_state() {
+                assert!(!qdral_policy::protected_state::paths_overlap(
+                    kept, &removed
+                ));
+            }
+        }
+        let _ = fs::remove_dir_all(root.parent().unwrap());
     }
 
     #[test]

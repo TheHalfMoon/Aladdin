@@ -73,17 +73,40 @@ fn approval_history(path: &Path) -> Check {
         ApprovalLedgerStatus::Corrupt => check(
             "approval_history",
             CheckStatus::Fail,
-            "the approval ledger fails verification, so approvals are blocked; run `qdral approvals recover`",
+            format!(
+                "the approval ledger fails verification, so approvals are blocked; run `qdral approvals recover` ({})",
+                inspection.detail
+            ),
         ),
         ApprovalLedgerStatus::Busy => check(
             "approval_history",
             CheckStatus::Warn,
-            "the approval ledger was busy or temporarily unreadable; rerun doctor",
+            "another Qdral process held the approval ledger; rerun doctor",
+        ),
+        ApprovalLedgerStatus::Unreadable => check(
+            "approval_history",
+            CheckStatus::Fail,
+            format!("the approval ledger cannot be read: {}", inspection.detail),
         ),
     }
 }
 
+/// Runs every check with the approval ledger at its layout-relative path.
 pub fn run(layout: &Layout, platform: &dyn Platform) -> DoctorReport {
+    run_with_approval_history(
+        layout,
+        platform,
+        &layout.root.join("approval-history.jsonl"),
+    )
+}
+
+/// Runs every check, verifying the approval ledger at `approval_path` (the
+/// CLI passes the brokers' `default_approval_history_path`).
+pub fn run_with_approval_history(
+    layout: &Layout,
+    platform: &dyn Platform,
+    approval_path: &Path,
+) -> DoctorReport {
     let mut checks = Vec::new();
 
     checks.push(match platform.windows_build() {
@@ -299,11 +322,7 @@ pub fn run(layout: &Layout, platform: &dyn Platform) -> DoctorReport {
         )
     });
 
-    // The same override the brokers and `qdral approvals recover` honor.
-    let approval_path = std::env::var_os("QDRAL_APPROVAL_HISTORY_PATH")
-        .map(std::path::PathBuf::from)
-        .unwrap_or_else(|| layout.root.join("approval-history.jsonl"));
-    checks.push(approval_history(&approval_path));
+    checks.push(approval_history(approval_path));
     for (name, file) in [("trust_state", "trust.jsonl"), ("audit_log", "audit.jsonl")] {
         let path = layout.root.join(file);
         checks.push(if !path.exists() {
@@ -572,12 +591,7 @@ mod tests {
         assert_eq!(approval_history(&path).status, CheckStatus::Pass);
         std::fs::create_dir_all(&layout.root).unwrap();
         // Well-formed JSON that is not a verifiable approval chain.
-        std::fs::write(
-            &path,
-            b"{\"schema\":\"qdral-approval-ledger-v3\"}
-",
-        )
-        .unwrap();
+        std::fs::write(&path, b"{\"schema\":\"qdral-approval-ledger-v3\"}\n").unwrap();
         let corrupt = approval_history(&path);
         assert_eq!(corrupt.status, CheckStatus::Fail);
         assert!(corrupt.detail.contains("qdral approvals recover"));

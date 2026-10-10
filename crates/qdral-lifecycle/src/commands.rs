@@ -375,7 +375,12 @@ pub fn doctor(args: &mut Args) -> Result<Output, LifecycleError> {
     args.finish()?;
     let layout = Layout::for_current_user()?;
     let platform = host_platform();
-    let report = doctor::run(&layout, platform.as_ref());
+    // The exact ledger the brokers and `qdral approvals recover` use.
+    let report = doctor::run_with_approval_history(
+        &layout,
+        platform.as_ref(),
+        &qdral_approval::default_approval_history_path(),
+    );
     let mut human = String::new();
     for check in &report.checks {
         let mark = match check.status {
@@ -476,19 +481,26 @@ pub fn approvals(args: &mut Args) -> Result<Output, LifecycleError> {
 /// one. Runs locally, without the daemon, under the ledger's writer lock.
 fn approvals_recover(path: &std::path::Path) -> Result<Output, LifecycleError> {
     let recovery = qdral_approval::recover_approval_ledger(path).map_err(|error| {
-        LifecycleError::state(format!("approval ledger recovery: {}", error.message))
+        let message = format!("approval ledger recovery: {}", error.message);
+        // "Nothing to recover" is a state; busy and I/O failures are retryable.
+        match error.code {
+            qdral_approval::FailureCode::InvalidRequest => LifecycleError::state(message),
+            _ => LifecycleError::new(qdral_lifecycle::ErrorKind::Io, message),
+        }
     })?;
+    // Quarantine already happened: never fail (or panic) while reporting it.
+    let quarantined_to = recovery.quarantined_to.to_string_lossy().into_owned();
     Ok(Output {
         exit_code: 0,
         human: format!(
             "Approval ledger quarantined to {} ({} bytes, sha256 {}).\nA new ledger was started; earlier approvals no longer authorize anything, so request fresh approvals. Running Qdral processes switch to the new ledger on their next approval.\n",
-            recovery.quarantined_to.display(),
+            quarantined_to,
             recovery.quarantined_bytes,
             recovery.quarantined_sha256
         ),
         json: json!({
             "ok": true,
-            "quarantined_to": recovery.quarantined_to,
+            "quarantined_to": quarantined_to,
             "quarantined_bytes": recovery.quarantined_bytes,
             "quarantined_sha256": recovery.quarantined_sha256,
         }),
