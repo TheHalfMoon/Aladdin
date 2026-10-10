@@ -214,7 +214,7 @@ impl GitProvider {
 
         command
             .env("GIT_CONFIG_NOSYSTEM", "1")
-            .env("GIT_CONFIG_GLOBAL", null_device())
+            .env("GIT_CONFIG_GLOBAL", NULL_GIT_CONFIG)
             .env("GIT_TERMINAL_PROMPT", "0")
             .env("GIT_PAGER", "cat")
             .env("GIT_EDITOR", null_device())
@@ -347,7 +347,20 @@ fn copy_env_if_present(command: &mut Command, name: &str) {
     }
 }
 
-// Git for Windows maps `/dev/null` to the null device; Git 2.56 rejects `NUL`.
+/// Value for `GIT_CONFIG_GLOBAL` that makes git read no global config. Git
+/// for Windows maps `/dev/null` to the null device for files it opens itself,
+/// and 2.56 rejects `NUL` here. Use it only for config: commands such as
+/// `GIT_EDITOR` and files opened by libcurl do not get that mapping.
+pub(crate) const NULL_GIT_CONFIG: &str = "/dev/null";
+
+/// Null device for editor/ssh commands, which must never resolve to a file
+/// that could be created (`/dev/null` would resolve to `C:\dev\null`).
+#[cfg(windows)]
+fn null_device() -> OsString {
+    OsString::from("NUL")
+}
+
+#[cfg(not(windows))]
 fn null_device() -> OsString {
     OsString::from("/dev/null")
 }
@@ -373,7 +386,7 @@ mod tests {
             .args(args)
             .current_dir(cwd)
             .env("GIT_CONFIG_NOSYSTEM", "1")
-            .env("GIT_CONFIG_GLOBAL", null_device())
+            .env("GIT_CONFIG_GLOBAL", NULL_GIT_CONFIG)
             .status()
             .expect("start git test helper");
         assert!(status.success(), "git helper failed: {args:?}");
@@ -407,10 +420,35 @@ mod tests {
             origins
                 .stdout
                 .lines()
-                .all(|line| line.contains(".git/config") || line.starts_with("command line:")),
+                .all(|line| line.starts_with("file:.git/config")
+                    || line.starts_with("command line:")),
             "only repository and command-line config may apply:\n{}",
             origins.stdout
         );
+
+        // A real global config that git would otherwise read (control run)
+        // is ignored under NULL_GIT_CONFIG.
+        let home = temp_root("decoy-home");
+        fs::write(home.join(".gitconfig"), "[decoy]\n\tleaked = yes\n").unwrap();
+        let read_global = |isolated: bool| {
+            let mut command = Command::new("git");
+            command
+                .args(["config", "--global", "--get", "decoy.leaked"])
+                .current_dir(&root)
+                .env("HOME", &home)
+                .env("USERPROFILE", &home)
+                .env("GIT_CONFIG_NOSYSTEM", "1");
+            if isolated {
+                command.env("GIT_CONFIG_GLOBAL", NULL_GIT_CONFIG);
+            } else {
+                command.env_remove("GIT_CONFIG_GLOBAL");
+            }
+            let output = command.output().expect("run git");
+            String::from_utf8_lossy(&output.stdout).trim().to_owned()
+        };
+        assert_eq!(read_global(false), "yes", "control: git reads the decoy");
+        assert_eq!(read_global(true), "", "NULL_GIT_CONFIG ignores it");
+        let _ = fs::remove_dir_all(home);
         let _ = fs::remove_dir_all(root);
     }
 

@@ -772,8 +772,8 @@ impl GitProvider {
     ) -> Result<(), GitProviderError> {
         let resolve_value = format!("+{}:{}:{}", destination.hostname, destination.port, pinned);
         let refspec = format!("{source}:{dest}");
-        // Git for Windows maps `/dev/null`; Git 2.56 rejects `NUL`.
-        let cookie_file = "/dev/null";
+        // libcurl opens this path itself and has no `/dev/null` mapping.
+        let cookie_file = if cfg!(windows) { "NUL" } else { "/dev/null" };
         let args = vec![
             "-c".to_owned(),
             "protocol.https.allow=always".to_owned(),
@@ -833,7 +833,7 @@ impl GitProvider {
         copy_fetch_env(&mut command);
         command
             .env("GIT_CONFIG_NOSYSTEM", "1")
-            .env("GIT_CONFIG_GLOBAL", null_fetch_device())
+            .env("GIT_CONFIG_GLOBAL", crate::NULL_GIT_CONFIG)
             .env("GIT_TERMINAL_PROMPT", "0")
             .env("GIT_PAGER", "cat")
             .env("GIT_EDITOR", null_fetch_device())
@@ -941,7 +941,12 @@ fn copy_fetch_env(command: &mut std::process::Command) {
     command.env("no_proxy", "*");
 }
 
-// Git for Windows maps `/dev/null` to the null device; Git 2.56 rejects `NUL`.
+#[cfg(windows)]
+fn null_fetch_device() -> std::ffi::OsString {
+    std::ffi::OsString::from("NUL")
+}
+
+#[cfg(not(windows))]
 fn null_fetch_device() -> std::ffi::OsString {
     std::ffi::OsString::from("/dev/null")
 }
