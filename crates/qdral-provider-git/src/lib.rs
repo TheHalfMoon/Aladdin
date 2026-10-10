@@ -214,7 +214,7 @@ impl GitProvider {
 
         command
             .env("GIT_CONFIG_NOSYSTEM", "1")
-            .env("GIT_CONFIG_GLOBAL", null_device())
+            .env("GIT_CONFIG_GLOBAL", NULL_GIT_CONFIG)
             .env("GIT_TERMINAL_PROMPT", "0")
             .env("GIT_PAGER", "cat")
             .env("GIT_EDITOR", null_device())
@@ -347,6 +347,15 @@ fn copy_env_if_present(command: &mut Command, name: &str) {
     }
 }
 
+/// Value for `GIT_CONFIG_GLOBAL` that makes git read no global config. Git
+/// for Windows maps `/dev/null` to the null device for files it opens itself,
+/// and 2.56 rejects `NUL` here. Use it only for config: commands such as
+/// `GIT_EDITOR` and files opened by libcurl do not get that mapping.
+pub(crate) const NULL_GIT_CONFIG: &str = "/dev/null";
+
+/// Null device for editor/ssh commands, which must never resolve to a file
+/// that could be created (`/dev/null` would resolve to `\dev\null` on the
+/// current drive).
 #[cfg(windows)]
 fn null_device() -> OsString {
     OsString::from("NUL")
@@ -378,7 +387,7 @@ mod tests {
             .args(args)
             .current_dir(cwd)
             .env("GIT_CONFIG_NOSYSTEM", "1")
-            .env("GIT_CONFIG_GLOBAL", null_device())
+            .env("GIT_CONFIG_GLOBAL", NULL_GIT_CONFIG)
             .status()
             .expect("start git test helper");
         assert!(status.success(), "git helper failed: {args:?}");
@@ -393,6 +402,68 @@ mod tests {
         git(&root, &["add", "a.txt"]);
         git(&root, &["commit", "-m", "initial"]);
         root
+    }
+
+    #[test]
+    fn provider_git_reads_no_global_or_system_config() {
+        // Git 2.56 for Windows rejects `NUL` as GIT_CONFIG_GLOBAL; the
+        // isolated invocation must still run and see no user configuration.
+        let root = repository();
+        let provider = GitProvider::new(&root).unwrap();
+        let global = provider
+            .run_git_raw(&root, &["config", "--global", "--list"])
+            .expect("isolated git accepts its null global config");
+        assert_eq!(global.stdout.trim(), "");
+        let origins = provider
+            .run_git_raw(&root, &["config", "--list", "--show-origin"])
+            .expect("list effective config");
+        assert!(
+            origins
+                .stdout
+                .lines()
+                .all(|line| line.starts_with("file:.git/config")
+                    || line.starts_with("command line:")),
+            "only repository and command-line config may apply:\n{}",
+            origins.stdout
+        );
+
+        // A real global config that git would otherwise read (control run)
+        // is ignored under NULL_GIT_CONFIG.
+        let home = temp_root("decoy-home");
+        fs::write(home.join(".gitconfig"), "[decoy]\n\tleaked = yes\n").unwrap();
+        let read_global = |isolated: bool| {
+            let mut command = Command::new("git");
+            command
+                .args(["config", "--global", "--get", "decoy.leaked"])
+                .current_dir(&root)
+                .env("HOME", &home)
+                .env("USERPROFILE", &home)
+                .env("GIT_CONFIG_NOSYSTEM", "1");
+            if isolated {
+                command.env("GIT_CONFIG_GLOBAL", NULL_GIT_CONFIG);
+            } else {
+                command.env_remove("GIT_CONFIG_GLOBAL");
+            }
+            let output = command.output().expect("run git");
+            (
+                output.status.code(),
+                String::from_utf8_lossy(&output.stdout).trim().to_owned(),
+            )
+        };
+        assert_eq!(
+            read_global(false),
+            (Some(0), String::from("yes")),
+            "control: git reads the decoy"
+        );
+        // Exit 1 is "key not found": git accepted the value and found nothing
+        // (exit 128 would mean it rejected the value, as 2.56 does for NUL).
+        assert_eq!(
+            read_global(true),
+            (Some(1), String::new()),
+            "NULL_GIT_CONFIG ignores it"
+        );
+        let _ = fs::remove_dir_all(home);
+        let _ = fs::remove_dir_all(root);
     }
 
     #[test]
