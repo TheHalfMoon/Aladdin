@@ -4,6 +4,7 @@
 mod actuation;
 mod argv;
 mod capture;
+mod confinement;
 mod coordinates;
 mod discovery;
 mod error;
@@ -30,6 +31,11 @@ pub use capture::{
     CaptureGeometry, CaptureLease, CaptureProcess, CaptureScope, CaptureTarget, CaptureWindow,
     InvalidationEvent, MAX_CAPTURE_BYTES, MAX_CAPTURE_DPI, MAX_CAPTURE_FRAMES, MAX_CAPTURE_HEIGHT,
     MAX_CAPTURE_LEASE_MS, MAX_CAPTURE_RATE_PER_MINUTE, MAX_CAPTURE_WIDTH, MIN_CAPTURE_DPI,
+};
+pub use confinement::{
+    assert_no_managed_policy, assert_worker_argv_exact, build_worker_argv, policy_keys,
+    proxy_bypass_list, resolver_rules, validate_admitted_host, AdmittedDestination, PolicyHive,
+    PolicyKeyState, PolicySource, RegistryPolicySource, MAX_ADMITTED_DESTINATIONS,
 };
 pub use coordinates::{
     arbitrary_drag, clipboard_typing, execute_one, hotkey_press, input_stream, proposal_digest,

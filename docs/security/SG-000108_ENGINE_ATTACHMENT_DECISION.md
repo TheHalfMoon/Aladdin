@@ -242,3 +242,26 @@ absent from the shipped binaries. No runtime configuration may enable it.
   within SG-000074's job process limit.
 - **Hostname hygiene.** Names with numeric, hex or wildcard labels, or
   containing separators, are refused.
+
+## Implementation progress
+
+**Slice 1: host-side confinement contract** (`crates/qdral-browser-host/src/confinement.rs`).
+- `AdmittedDestination::from_validated` admits only output of the existing
+  `validate_navigation`: https, port 443, a public pin re-checked with
+  `is_public_address`, and the stricter hostname hygiene.
+- `resolver_rules`, `proxy_bypass_list` and `build_worker_argv` emit the
+  six flags with the exact values in the table above.
+- `assert_worker_argv_exact` refuses any argv that differs element for
+  element from the host-built one.
+- `assert_no_managed_policy` with `RegistryPolicySource` reads the Edge or
+  Chrome mandatory policy key in HKLM and HKCU, both registry views, with
+  `KEY_READ` only. It refuses on any value or subkey, and fails closed when
+  a key is unreadable or the platform is not Windows.
+- The SG-000074 `build_argv` and `assert_argv_clean` are unchanged and still
+  refuse every confinement flag (a unit test proves this).
+- The fixture pin constructor is compiled only into unit tests.
+- No launch path uses this module yet, so the slice grants no authority.
+
+**Native check of the emitted format (Edge 155).** An IPv4 pin and a
+bracketed IPv6 pin (`MAP six.example [::1]:<port>`) each reached only their
+fixture. Unmapped names failed with `ERR_PROXY_CONNECTION_FAILED`.
