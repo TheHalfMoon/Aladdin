@@ -190,10 +190,19 @@ test("SG-000094 and SG-000095 are closed and SG-000096 is the only active P20 gr
   // SG-000108 (ALADDIN-F3) runs in parallel by founder decision (issue #290)
   // and is outside DESKAL-P20; no other grain may be open.
   assert.deepEqual(open.sort(), ["SG-000096", "SG-000108"]);
-  const sg108 = readJson<{ program: string; state: string; planning_issue: number }>(".specgrain/specs/SG-000108.json");
+  const sg108 = readJson<{
+    program: string;
+    state: string;
+    planning_issue: number;
+    authority_delta: { activation: string; privileged: string; ui_input: string };
+  }>(".specgrain/specs/SG-000108.json");
   assert.equal(sg108.program, "ALADDIN-F3");
   assert.equal(sg108.state, "GRAIN");
   assert.equal(sg108.planning_issue, 290);
+  // The parallel activation grants nothing by itself.
+  for (const key of ["activation", "privileged", "ui_input"] as const) {
+    assert.ok(sg108.authority_delta[key].startsWith("None."), key);
+  }
 
   const sg94 = readJson<{
     state: string;

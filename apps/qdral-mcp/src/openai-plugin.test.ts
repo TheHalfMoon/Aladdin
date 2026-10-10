@@ -199,12 +199,13 @@ test("authorization metadata advertises only what the relay implements", () => {
   assert.equal(metadata.authorization_response_iss_parameter_supported, true);
 });
 
-test("at most one grain is active and no later grain is activated ahead of it", () => {
+test("at most one grain is active (or the founder-approved SG-000096/SG-000108 pair) and no later grain is activated ahead of it", () => {
   const dir = join(repo, ".specgrain", "specs");
   const specs = readdirSync(dir).filter((name) => /^SG-\d{6}\.json$/.test(name)).sort();
   const active = specs.filter((name) => (JSON.parse(readFileSync(join(dir, name), "utf8")) as { state: string }).state !== "CLOSED");
   // The only lawful parallel pair is SG-000096 with SG-000108, by the founder
-  // decision recorded canonically under issue #290.
+  // decision recorded canonically under issue #290. Remove this pin when
+  // either grain closes.
   if (active.length === 2) {
     assert.deepEqual(active, ["SG-000096.json", "SG-000108.json"], `parallel active grains: ${active.join(", ")}`);
     const current = readFileSync(join(repo, "docs", "canonical", "CURRENT.md"), "utf8");
