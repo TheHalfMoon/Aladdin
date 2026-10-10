@@ -402,12 +402,7 @@ fn real_https_qualification_against_pinned_public_source() {
     let _ = std::fs::remove_dir_all(root);
 }
 
-#[cfg(windows)]
-fn null_device() -> &'static str {
-    "NUL"
-}
-
-#[cfg(not(windows))]
+// Git for Windows maps `/dev/null` to the null device; Git 2.56 rejects `NUL`.
 fn null_device() -> &'static str {
     "/dev/null"
 }
