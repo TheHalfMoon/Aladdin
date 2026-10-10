@@ -1,76 +1,52 @@
-# Benchmark and End-to-End Plan (Proposed)
+# Minimum evidence for a useful, fast Aladdin
 
-Status: PROPOSED PLANNING ONLY. No benchmark has been run. All results sections are empty by design until measured.
+Status: independent planning review, 2026-10-09. PROPOSED, NOT ADOPTED. No implementation or authority change. Evidence baseline: PR #283 at `87bc9d6a69b6c5b5dc415ee6e30ee0fcb60d8985`, PR #282 at `10540885f3c52bd0c0d2f00cc23e3cafe067fe36`.
 
-## 1. Principles
+## Priority and current limits
 
-1. Measure products, not models: the same planner model must drive each competitor where possible, so differences come from the execution layer.
-2. Independent verification: task success is judged by a checker that inspects final machine state, not by any agent's self-report.
-3. Same conditions: identical VM image, screen resolution, DPI, locale, network, permissions, and time budget.
-4. Pin everything: benchmark revision, task list hash, model revisions, competitor versions, and harness commit.
-5. Publish failures and unknowns alongside successes.
+No complete Aladdin user journey, head-to-head competitor task, toolkit startup/RAM, full installer or GPU throughput benchmark was run here. Actual measurements are the approval tests, WPF build/self-tests and offline arithmetic. The first benchmark priority is a small native Windows acceptance harness with independent final-state checkers for the five journeys in the fast-track report. Broad leaderboard programs follow working functionality.
 
-## 2. Suites
+Keep security outcomes beside task time: faster unauthorized completion is failure. Report attempted tasks, verified success, unknowns, blocked capabilities and interventions. Do not exclude timeout/failure tasks after seeing results; successful-only latency can reward unreliable systems.
 
-| Suite | Purpose | Notes |
+## Minimum qualification ladder
+
+| Stage | Required evidence | Gate |
 |---|---|---|
-| Aladdin Native Windows Suite (ANWS) | Primary product benchmark: Explorer, Notepad, Settings (non-protected pages), Office (where licensed), VS Code, Windows Terminal, Edge, Chrome, file and Git workflows | Built from SG-000095 disposable-window fixtures; locked test split; Arabic-UI subset |
-| OSWorld-Verified (Windows subset where available) | External comparability | Near saturation for frontier models (trackers report about 85 to 86% versus about 72% human); useful for regressions, not differentiation |
-| OSWorld 2.0 (XLANG Lab) | Long-horizon stress | 108 tasks, checkpoint-graded; authors report under 21% binary completion for all systems at 500 steps; pin the release and budget |
-| Browser suite | Structured web extraction and forms | Owned test sites plus WebMCP-enabled fixtures; no live third-party accounts |
-| Multi-device suite | Two to four Windows VMs | Placement, handoff, file transfer, disconnects, revocation |
-| Adversarial suite | Prompt injection, fake approval overlays, protected surfaces, stale targets, PID reuse, DPI changes | Pass means zero unauthorized side effects |
-| Voice suite | Arabic, English, code-switched commands | WER, intent accuracy, end-to-end task success, latency |
+| Security repair | Existing27 + three regression tests, all-event persistence/restart/concurrency/migration fault matrix | Zero unauthorized dispatch in tested cases; fail closed on ambiguous state |
+| Local file/report | Known input/output fixtures, denied and approved save, content/path identity drift | Independent bytes/value/hash checker; no out-of-scope writes |
+| Browser | Navigation/search/PDF plus iframe/shadow/stale ref/crash/egress denial fixtures | Correct artifact and bounded network/file behavior |
+| Windows app/client | Actual visible native session, one real supported MCP client, stop/takeover/unknown handling | Non-admin, keyboard/Narrator, no fabricated state or self-approval |
+| Three-machine remote | A controls B/C with distinct grants, encrypted permitted transfer and drop/revoke tests | Hash-verified copy, no cross-target authority |
+| AI/voice | Five routing ablations, cold/warm/concurrency/runtime-memory and bilingual speech corpus | Server-only AI, tenant isolation, local consent and artifact checker |
+| Release | Clean install, signature/update/recovery, complete size/process-tree measurements | Installed app/dependencies <400 MB, documented cache and prerequisites |
 
-cua-bench (MIT) may be wrapped as a runner if its Windows support suffices; otherwise build a thin harness over the existing fixtures.
+Native Windows coverage: pinned Windows11 build, non-admin account, installed Edge/Chrome versions, exact app/adapter revisions, locale, 100/150/200% DPI, second monitor with negative origin, font/text scaling, physical input interruption and protected-surface negatives. Initial compact tasks need fewer applications than a full ANWS suite; add coverage as capabilities are activated.
 
-## 3. Metrics
+## Metrics and sampling
 
-| Metric | Definition |
+Instrument monotonic timestamps from intent through observation/proposal/approval/dispatch/postcondition. Report complete-task wall time p50/p95 including timeout/unknown rates, and separately system execution time versus human consent dwell. Also first useful result, wrong target, model calls, screenshot bytes/count, DOM/AX bytes/truncation, retries, recovery, cancel/lease/input-release time, process cleanup, task cost and aggregate idle/peak working set/private bytes.
+
+Cost per verified task = total spend on all attempted tasks including failures divided by verified successes; separately report warm idle, load/start, storage and egress. No successes means undefined/infinite, not zero. GPU-seconds must state whether amortized batch cost or request elapsed time. Voice: onset-to-partial, end-of-speech-to-first-response/audio and time-to-verified-task, WER/intent error/code-switch accuracy and barge-in cancellation. Startup: cold/warm launch-to-interactive and daemon/worker readiness separately.
+
+Use paired repeated runs across tasks, randomize execution order, pin model/template/tool environment and log censored timeouts. Pre-register task list and checker; report confidence intervals and enough samples for a meaningful p95. Three runs alone are not a significance guarantee. Zero observed unauthorized effects in N trials is evidence for those fixtures, not universal proof. Predefine failure handling and statistical comparison before leaderboard claims.
+
+## What makes tasks faster
+
+| Lever | Qualification experiment and safety condition |
 |---|---|
-| Verified success rate | Fraction of tasks whose checker passes; reported overall, by application type, and by task length bucket |
-| First useful action latency | Time from task submission to first executed state-changing or information-returning action |
-| Action latency p50/p95 | Proposal received on device to execution completed |
-| End-to-end time p50/p95 | Submission to verified completion |
-| Screenshots per task | Count of captures leaving the device |
-| Hala One requests per task; Reliance decisions per task | Model call counts |
-| GPU cost per verified task | Sum of model costs / verified successes |
-| Wrong-target actions | Actions whose executed target differs from the intended target |
-| Unnecessary actions | Actions not needed by the minimal reference trajectory |
-| Recovery rate | Tasks that hit a failure and still complete |
-| Human intervention frequency | Approvals plus takeovers per task (approvals reported separately; they are a feature, not a failure) |
-| Remote connection time | Pairing-to-first-command and reconnect times |
-| Multi-device overhead | Extra time versus the same tasks on one device |
-| Install size and memory | Per `UI_UX_AND_APP_SIZE_BUDGET.md` |
+| Tool selection/direct APIs | Deterministic router vs Hala-only; measure saved calls and routing failures; policy always rechecked |
+| Browser locators/AX | Same tasks structured vs screenshots, bounded subtrees and explicit omitted counts; stale refs denied |
+| UIA/native actions | Same target via semantic vs authorized input; compare wrong-target/postcondition failures |
+| Model calls | Five AI ablations; selective Reliance and multi-question batches, no safety dependency |
+| Screenshots/crops | Resolution/crop sweep with locked accuracy checker; exclude protected/secret content before egress |
+| DOM observations | Incremental revision-bound diff vs full snapshot; prove missing-information recovery |
+| Process sessions | Reuse owned authorized session, bounded paginated output; no stale lease/session inheritance |
+| Waiting | Event/state-driven waits vs sleep/poll; bounded deadlines and trusted postconditions |
+| Safe batching | Batch reads; mutation transactions only when explicitly authorized, checked and interruptible |
+| Transfers | Bounded chunking/hash-resume, local commit reconciliation; do not retry unknown writes |
+| Recovery/verification | Independent checker and targeted re-observation; model prediction never substituted for observation |
+| Voice | Push-to-talk/streaming vs full clips; no voice consent and cancellation independent of cloud |
+| Startup/cold workers | Lazy optional modules and warm/cold worker tests; measured spend vs readiness |
 
-## 4. Competitor configurations
 
-| Product | Configuration |
-|---|---|
-| Aladdin | Safe and Full User profiles separately; planner = Hala One, and separately a BYO frontier model |
-| Desktop Commander | Same BYO frontier model via MCP |
-| Claude computer use | Reference loop with `computer_toolset_20260801` on the same VM |
-| OpenAI computer use | Reference loop with the `computer` tool on the same VM |
-| UFO2 | Default Windows configuration with the same frontier model where supported |
-| TinyFish | Browser suite only, BYO account, same task inputs |
-
-Vendor terms must permit benchmarking; check each provider's terms before publishing results.
-
-## 5. What it takes to claim "faster" or "more accurate"
-
-A claim "Aladdin is more accurate than X on Y" is allowed only if all hold:
-
-1. Same suite revision, same task set, same environment image, same planner model (or both products' best documented configuration, disclosed).
-2. At least 3 independent runs; report mean and 95% confidence interval; the difference is statistically significant (paired test across tasks).
-3. Independent checker and raw logs published.
-4. No task excluded after seeing results.
-
-"Faster" requires the same conditions on end-to-end p50 and p95 time, with success held equal or better.
-
-## 6. Native Windows E2E gates per release
-
-- Full ANWS on Windows 11 (non-admin user), 100% and 150% DPI, two monitors with negative origin.
-- Adversarial suite: zero unauthorized side effects.
-- Kill switch: all leases revoked and held keys released within 1 second.
-- No orphan processes after cancel, crash, or revoke.
-- Size and memory budgets met.
+Competitor assessment and primary links are in COMPETITOR_RESEARCH.md. No superiority claim is qualified.
