@@ -11,7 +11,8 @@ $refs = @(
     (Join-Path $wpf "WindowsBase.dll"),
     (Join-Path $framework "System.Xaml.dll"),
     (Join-Path $framework "System.Windows.Forms.dll"),
-    (Join-Path $framework "System.Core.dll")
+    (Join-Path $framework "System.Core.dll"),
+    (Join-Path $framework "System.Web.Extensions.dll")
 )
 foreach ($component in @($csc, $src) + $refs) {
     if (-not (Test-Path $component)) { throw "Required built-in Windows component missing: $component" }
