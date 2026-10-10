@@ -1917,8 +1917,9 @@ fn preserve_quarantine(
         ))
     };
     match std::fs::hard_link(path, quarantined_to) {
-        // The link shares the original's already written data.
-        Ok(()) => {}
+        // The link shares the original's data, which may not be on disk yet
+        // (for example after an edit outside the broker): flush it.
+        Ok(()) => flush_existing_file(quarantined_to).map_err(failed)?,
         // Never replace whatever already exists at the quarantine name.
         Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
             return Err(failed(error));
@@ -1930,23 +1931,55 @@ fn preserve_quarantine(
     let kept = std::fs::read(quarantined_to).map_err(failed)?;
     if hex_lower(&Sha256::digest(&kept)) != sha256 {
         // Only this attempt's own link or copy is removed, never the original.
-        let _ = std::fs::remove_file(quarantined_to);
-        return Err(ApprovalError::unavailable(
-            "the quarantined approval ledger does not match the original; the original is unchanged",
-        ));
+        let kept_note = match std::fs::remove_file(quarantined_to) {
+            Ok(()) => String::new(),
+            Err(error) => format!(
+                "; the mismatched file {} could not be removed: {error}",
+                quarantined_to.display()
+            ),
+        };
+        return Err(ApprovalError::unavailable(format!(
+            "the quarantined approval ledger does not match the original; the original is unchanged{kept_note}"
+        )));
     }
     Ok(())
 }
 
-/// Copies `from` into `to`, which must not exist yet, and flushes the copy.
+/// Flushes an existing file's data to disk without writing to it.
+fn flush_existing_file(path: &Path) -> std::io::Result<()> {
+    // FlushFileBuffers needs write access on Windows; a read-only file
+    // cannot be flushed this way and is accepted as already written.
+    #[cfg(windows)]
+    {
+        match std::fs::OpenOptions::new().write(true).open(path) {
+            Ok(file) => file.sync_all(),
+            Err(error) if error.kind() == std::io::ErrorKind::PermissionDenied => Ok(()),
+            Err(error) => Err(error),
+        }
+    }
+    #[cfg(not(windows))]
+    {
+        std::fs::File::open(path)?.sync_all()
+    }
+}
+
+/// Copies `from` into `to`, which must not exist yet, flushes the copy and
+/// gives it the source's permissions. A partial copy is removed.
 fn copy_into_new_file(from: &Path, to: &Path) -> std::io::Result<()> {
     let mut source = std::fs::File::open(from)?;
+    let permissions = source.metadata()?.permissions();
     let mut target = std::fs::OpenOptions::new()
         .write(true)
         .create_new(true)
         .open(to)?;
-    std::io::copy(&mut source, &mut target)?;
-    target.sync_all()
+    let copied = std::io::copy(&mut source, &mut target)
+        .and_then(|_| target.sync_all())
+        .and_then(|()| std::fs::set_permissions(to, permissions));
+    if copied.is_err() {
+        drop(target);
+        let _ = std::fs::remove_file(to);
+    }
+    copied
 }
 
 fn record_checksum(record: &StoredRecord) -> String {
@@ -3365,7 +3398,13 @@ mod tests {
             copy_into_new_file(&path, &copy).is_err(),
             "never overwrites"
         );
+        assert_eq!(std::fs::read(&copy).unwrap(), b"original\n");
+        assert_eq!(
+            std::fs::metadata(&copy).unwrap().permissions(),
+            std::fs::metadata(&path).unwrap().permissions()
+        );
         let _ = std::fs::remove_file(&copy);
+        flush_existing_file(&path).expect("flush an existing file");
         let digest = hex_lower(&Sha256::digest(b"original\n"));
         preserve_quarantine(&path, &quarantine, &digest).expect("matching quarantine");
         assert_eq!(std::fs::read(&quarantine).unwrap(), b"original\n");
