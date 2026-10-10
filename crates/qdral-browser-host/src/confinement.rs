@@ -300,6 +300,7 @@ pub fn assert_no_managed_policy(
 /// Combine the 64-bit and 32-bit registry views of one key: a populated
 /// or unreadable view decides (first one wins), otherwise any empty view
 /// makes the key empty, otherwise it is absent.
+#[cfg(any(windows, test))]
 fn merge_views(views: &[PolicyKeyState]) -> PolicyKeyState {
     let mut state = PolicyKeyState::Absent;
     for view in views {
