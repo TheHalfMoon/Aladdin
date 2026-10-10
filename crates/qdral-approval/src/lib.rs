@@ -1030,6 +1030,26 @@ pub fn approval_ledger_lock_path(path: &Path) -> PathBuf {
 }
 
 fn acquire_ledger_lock(path: &Path, wait: Duration) -> Result<std::fs::File, ApprovalError> {
+    try_ledger_lock(path, wait).map_err(LockFailure::into_error)
+}
+
+/// Why the writer lock was not obtained.
+enum LockFailure {
+    /// Another broker held it for the whole wait.
+    Busy(ApprovalError),
+    /// The lock file could not be opened or locked.
+    Io(ApprovalError),
+}
+
+impl LockFailure {
+    fn into_error(self) -> ApprovalError {
+        match self {
+            Self::Busy(error) | Self::Io(error) => error,
+        }
+    }
+}
+
+fn try_ledger_lock(path: &Path, wait: Duration) -> Result<std::fs::File, LockFailure> {
     let lock_path = approval_ledger_lock_path(path);
     let opened = (|| -> std::io::Result<std::fs::File> {
         if let Some(parent) = lock_path.parent() {
@@ -1049,7 +1069,9 @@ fn acquire_ledger_lock(path: &Path, wait: Duration) -> Result<std::fs::File, App
         options.open(&lock_path)
     })();
     let lock = opened.map_err(|error| {
-        ApprovalError::unavailable(format!("approval ledger lock is unavailable: {error}"))
+        LockFailure::Io(ApprovalError::unavailable(format!(
+            "approval ledger lock is unavailable: {error}"
+        )))
     })?;
     let deadline = Instant::now() + wait;
     loop {
@@ -1060,14 +1082,14 @@ fn acquire_ledger_lock(path: &Path, wait: Duration) -> Result<std::fs::File, App
                 std::thread::sleep(Duration::from_millis(10));
             }
             Err(fs4::TryLockError::WouldBlock) => {
-                return Err(ApprovalError::unavailable(
+                return Err(LockFailure::Busy(ApprovalError::unavailable(
                     "approval ledger is busy in another Qdral process; retry shortly",
-                ))
+                )))
             }
             Err(fs4::TryLockError::Error(error)) => {
-                return Err(ApprovalError::unavailable(format!(
+                return Err(LockFailure::Io(ApprovalError::unavailable(format!(
                     "approval ledger lock failed: {error}"
-                )))
+                ))))
             }
         }
     }
@@ -1213,8 +1235,14 @@ impl ApprovalLedger {
     fn resume(&mut self) -> bool {
         if self.fault == Some(LedgerFault::Durability) {
             self.fault = None;
-            if self.refresh().is_ok() {
-                return true;
+            match self.refresh() {
+                Ok(()) => return true,
+                // Transient: still uncertain, keep the accurate guidance.
+                Err(_) if self.fault.is_none() => {
+                    self.fault = Some(LedgerFault::Durability);
+                    return false;
+                }
+                Err(_) => {}
             }
         }
         self.adopt_recovered()
@@ -1230,19 +1258,23 @@ impl ApprovalLedger {
         if fresh.refresh().is_err() || fresh.genesis == self.genesis {
             return false;
         }
-        let starts_with_recovery = fresh
-            .records
+        let starts_with_recovery = fresh.starts_with_recovery();
+        if starts_with_recovery {
+            *self = fresh;
+        }
+        starts_with_recovery
+    }
+
+    /// Whether this chain was started by `qdral approvals recover`.
+    fn starts_with_recovery(&self) -> bool {
+        self.records
             .values()
             .find(|record| record.prev_checksum == "GENESIS")
             .is_some_and(|record| {
                 record.workspace_id == RECOVERY_WORKSPACE
                     && record.presence_method == RECOVERY_METHOD
                     && record.decision == RecordedDecision::Unavailable
-            });
-        if starts_with_recovery {
-            *self = fresh;
-        }
-        starts_with_recovery
+            })
     }
 
     fn ensure_ready(&self) -> Result<(), ApprovalError> {
@@ -1419,7 +1451,11 @@ impl ApprovalLedger {
             }
             let revoked_meanwhile = decision == RecordedDecision::Approved
                 && prompt_view.is_some_and(|view| {
-                    view.epoch != ledger.revoke_epoch || view.genesis != ledger.genesis
+                    // A chain that appeared on an empty ledger is a change only
+                    // when recovery started it.
+                    let chain_changed = view.genesis != ledger.genesis
+                        && (view.genesis.is_some() || ledger.starts_with_recovery());
+                    view.epoch != ledger.revoke_epoch || chain_changed
                 });
             let (decision, presence_outcome) = if revoked_meanwhile {
                 (RecordedDecision::Unavailable, PresenceOutcome::Unavailable)
@@ -1452,7 +1488,7 @@ impl ApprovalLedger {
             let record = ledger.append(record)?;
             if revoked_meanwhile {
                 return Err(ApprovalError::denied(
-                    "an emergency revoke happened while this approval was pending; request a fresh approval",
+                    "an emergency revoke or ledger recovery happened while this approval was pending; request a fresh approval",
                 ));
             }
             Ok(record)
@@ -1638,8 +1674,8 @@ impl ApprovalLedger {
                     refused.message
                 )));
             }
-            // Any other writer (a bypassed or replaced lock) shows up as
-            // extra bytes; never acknowledge an append that was not alone.
+            // A concurrent append by a writer that bypassed or replaced the
+            // lock shows up as extra bytes; such an append is not acknowledged.
             Ok(len) if len != self.verified_len + serialized.len() as u64 => {
                 return Err(self.poison(LedgerFault::Replaced));
             }
@@ -1734,9 +1770,9 @@ pub fn inspect_approval_ledger(path: &Path) -> ApprovalLedgerInspection {
             return inspection(ApprovalLedgerStatus::Unreadable, 0, error.to_string());
         }
     }
-    let (status, detail) = match acquire_ledger_lock(path, ledger.lock_wait) {
-        Err(error) if error.message.contains("busy") => (ApprovalLedgerStatus::Busy, error.message),
-        Err(error) => (ApprovalLedgerStatus::Unreadable, error.message),
+    let (status, detail) = match try_ledger_lock(path, ledger.lock_wait) {
+        Err(LockFailure::Busy(error)) => (ApprovalLedgerStatus::Busy, error.message),
+        Err(LockFailure::Io(error)) => (ApprovalLedgerStatus::Unreadable, error.message),
         Ok(_lock) => match ledger.refresh() {
             Ok(()) => (ApprovalLedgerStatus::Verified, String::new()),
             Err(error) if ledger.poisoned() => (ApprovalLedgerStatus::Corrupt, error.message),
@@ -1753,14 +1789,17 @@ pub struct ApprovalLedgerRecovery {
     pub quarantined_bytes: u64,
 }
 
-/// Recovers a ledger that fails verification. The original file is renamed,
-/// byte for byte, to a quarantine path for forensics (never deleted or
-/// rewritten), and a new chain starts with a non-authorizing record that
-/// names the quarantined file and its SHA-256. No earlier approval is carried
-/// over, so every operation needs a fresh approval afterwards. A verified,
-/// missing, busy or merely unreadable ledger is refused. The new chain is
-/// written and synced to a temporary file first and then renamed into place,
-/// so a crash leaves either the original or both files, never a lost record.
+/// Recovers a ledger that fails verification. The original bytes are kept
+/// at a quarantine path for forensics (never deleted or rewritten), and a new
+/// chain starts with a non-authorizing record that names the quarantine file
+/// and its SHA-256. No earlier approval is carried over, so every operation
+/// needs a fresh approval afterwards. A verified, missing, busy or merely
+/// unreadable ledger is refused.
+///
+/// The ledger path is never absent: the new chain is written and synced to a
+/// staged file, the quarantine is a hard link to (or a verified copy of) the
+/// original, and the staged chain then replaces the ledger in one rename. A
+/// failure at any step leaves the original ledger in place.
 pub fn recover_approval_ledger(path: &Path) -> Result<ApprovalLedgerRecovery, ApprovalError> {
     recover_approval_ledger_with_wait(path, LEDGER_LOCK_WAIT)
 }
@@ -1837,21 +1876,64 @@ fn recover_approval_ledger_with_wait(
         checksum: String::new(),
     };
     record.checksum = record_checksum(&record);
-    fresh.append(record)?;
-    std::fs::rename(path, &quarantined_to)
-        .and_then(|()| std::fs::rename(&staged, path))
-        .and_then(|()| sync_parent_dir(path))
-        .map_err(|error| {
-            ApprovalError::unavailable(format!(
-                "quarantine approval ledger (the original is at {} if it was moved): {error}",
-                quarantined_to.display()
-            ))
-        })?;
+    let swapped = fresh
+        .append(record)
+        .and_then(|_| preserve_quarantine(path, &quarantined_to, &sha256))
+        .and_then(|()| {
+            // Replaces the ledger in one step (MoveFileEx with replace on
+            // Windows, rename(2) elsewhere); the quarantine keeps the bytes.
+            std::fs::rename(&staged, path)
+                .and_then(|()| sync_parent_dir(path))
+                .map_err(|error| {
+                    ApprovalError::unavailable(format!(
+                        "install the recovered approval ledger (the original is unchanged): {error}"
+                    ))
+                })
+        });
+    if let Err(error) = swapped {
+        let _ = std::fs::remove_file(&staged);
+        return Err(error);
+    }
     Ok(ApprovalLedgerRecovery {
         quarantined_to,
         quarantined_sha256: sha256,
         quarantined_bytes: bytes.len() as u64,
     })
+}
+
+/// Keeps the ledger's current bytes at `quarantined_to` without moving the
+/// ledger: a hard link, or a copy where links are unsupported. Either way the
+/// quarantine must hash to `sha256` before the ledger is replaced.
+fn preserve_quarantine(
+    path: &Path,
+    quarantined_to: &Path,
+    sha256: &str,
+) -> Result<(), ApprovalError> {
+    let failed = |error: std::io::Error| {
+        ApprovalError::unavailable(format!(
+            "preserve the approval ledger for quarantine (the original is unchanged): {error}"
+        ))
+    };
+    if std::fs::hard_link(path, quarantined_to).is_err() {
+        std::fs::copy(path, quarantined_to).map_err(failed)?;
+    }
+    let kept = std::fs::read(quarantined_to)
+        .and_then(|bytes| {
+            // Flushing needs write access on Windows; nothing is written.
+            std::fs::OpenOptions::new()
+                .write(true)
+                .open(quarantined_to)?
+                .sync_all()?;
+            sync_parent_dir(quarantined_to)?;
+            Ok(bytes)
+        })
+        .map_err(failed)?;
+    if hex_lower(&Sha256::digest(&kept)) != sha256 {
+        return Err(ApprovalError::unavailable(
+            "the quarantined approval ledger does not match the original; the original is unchanged",
+        ));
+    }
+    Ok(())
 }
 
 fn record_checksum(record: &StoredRecord) -> String {
@@ -3191,6 +3273,89 @@ mod tests {
             inspect_approval_ledger(&path).status,
             ApprovalLedgerStatus::Verified
         );
+        drop(ledger);
+        remove_ledger(&path);
+    }
+
+    #[test]
+    fn first_record_during_a_prompt_on_an_empty_ledger_is_not_a_chain_change() {
+        let path = temp_path("ocr-first-record");
+        let mut ledger = ledger_in(&path);
+        let prompt = strong_prompt_with("ocr-first-pending", 5_000);
+        let prompt_view = ledger.preflight().expect("preflight");
+        assert_eq!(prompt_view.genesis, None);
+        let mut other = ledger_in(&path);
+        issue_strong(&mut other, "ocr-first-other", 5_010);
+        drop(other);
+        let record = ledger
+            .record_prompted_decision(
+                &prompt,
+                RecordedDecision::Approved,
+                PresenceOutcome::VerifiedStrong,
+                "test",
+                Some(&prompt_view),
+            )
+            .expect("an ordinary first record is not a revoke or recovery");
+        assert_eq!(record.decision, RecordedDecision::Approved);
+        drop(ledger);
+        remove_ledger(&path);
+    }
+
+    #[test]
+    fn recovery_keeps_the_ledger_path_present_and_leaves_no_staged_file() {
+        let path = temp_path("ocr-recovery-swap");
+        let (_, original) = write_legacy_v010_ledger(&path, true);
+        let recovery = recover_approval_ledger(&path).expect("recover");
+        assert!(path.exists());
+        assert_eq!(std::fs::read(&recovery.quarantined_to).unwrap(), original);
+        let dir = path.parent().unwrap();
+        let stem = path.file_name().unwrap().to_string_lossy().into_owned();
+        let staged: Vec<_> = std::fs::read_dir(dir)
+            .unwrap()
+            .filter_map(|entry| entry.ok())
+            .filter(|entry| {
+                entry
+                    .file_name()
+                    .to_string_lossy()
+                    .starts_with(&format!("{stem}.recovering-"))
+            })
+            .collect();
+        assert!(staged.is_empty(), "the staged chain was renamed into place");
+        assert_eq!(
+            inspect_approval_ledger(&path).status,
+            ApprovalLedgerStatus::Verified
+        );
+        let _ = std::fs::remove_file(&recovery.quarantined_to);
+        remove_ledger(&path);
+    }
+
+    #[test]
+    fn quarantine_preservation_refuses_a_mismatched_copy_and_keeps_the_original() {
+        let path = temp_path("ocr-preserve");
+        std::fs::write(&path, b"original\n").unwrap();
+        let quarantine = path.with_extension("quarantine-test");
+        let error = preserve_quarantine(&path, &quarantine, "0000").unwrap_err();
+        assert_eq!(error.code, FailureCode::ApprovalUnavailable);
+        assert_eq!(std::fs::read(&path).unwrap(), b"original\n");
+        let _ = std::fs::remove_file(&quarantine);
+        let digest = hex_lower(&Sha256::digest(b"original\n"));
+        preserve_quarantine(&path, &quarantine, &digest).expect("matching quarantine");
+        assert_eq!(std::fs::read(&quarantine).unwrap(), b"original\n");
+        assert_eq!(std::fs::read(&path).unwrap(), b"original\n");
+        let _ = std::fs::remove_file(&quarantine);
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn inspection_reports_lock_contention_as_busy() {
+        let path = temp_path("ocr-inspect-busy");
+        let mut ledger = ledger_in(&path);
+        issue_strong(&mut ledger, "ocr-inspect-busy", 5_000);
+        let holder = acquire_ledger_lock(&path, Duration::ZERO).expect("hold the writer lock");
+        let inspection = inspect_approval_ledger(&path);
+        assert_eq!(inspection.status, ApprovalLedgerStatus::Busy);
+        assert!(inspection.detail.contains("busy"), "{}", inspection.detail);
+        drop(holder);
         drop(ledger);
         remove_ledger(&path);
     }

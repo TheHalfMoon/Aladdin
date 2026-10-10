@@ -29,8 +29,9 @@ that does not verify end to end grants nothing.
   An invalid suffix never yields a usable valid-prefix history.
 - An append is acknowledged only after `write_all` and `sync_all` succeed (and
   on Unix after the new file's directory entry is synced), and only if the
-  file grew by exactly that record, so a second writer is never
-  acknowledged. Failing to open the file means nothing was written, which is
+  file grew by exactly that record, so a concurrent append by a writer that
+  bypassed or replaced the lock is never acknowledged (a same-length
+  rewrite of earlier bytes is outside this check; see residual risk). Failing to open the file means nothing was written, which is
   transient. A failed write or sync poisons the broker without retrying,
   because durability is then unknown. That broker resumes on its next
   transaction only if the file still extends its last verified line and
@@ -64,7 +65,8 @@ lock and otherwise report the last verified view.
 - The broker records the chain identity (its first record) and the revoke
   epoch when a prompt opens. If an emergency revoke or a recovery (from any
   process) happens while the person decides, an approval is recorded as
-  unavailable and refused.
+  unavailable and refused. An ordinary first record written by another
+  process on a previously empty ledger is not a chain change.
 - When a denial or unavailable decision cannot be recorded, the returned
   error says so, so the audit gap is visible.
 
@@ -84,13 +86,17 @@ and `qdral approvals recover`:
 2. writes and syncs a new chain to `approval-history.jsonl.recovering-<ms>`,
    starting with a non-authorizing `Unavailable` record that names the
    quarantine file and the old ledger's SHA-256;
-3. renames the ledger byte for byte to
-   `approval-history.jsonl.quarantine-<ms>-<sha256 prefix>` (never deleted
-   or rewritten), then renames the staged chain into place.
+3. preserves the original bytes at
+   `approval-history.jsonl.quarantine-<ms>-<sha256 prefix>` as a hard link
+   (or, where links are unsupported, a copy), synced and hash-checked against
+   the original, never deleted or rewritten;
+4. replaces the ledger with the staged chain in one rename.
 
-A crash leaves either the original ledger, or the quarantine plus the staged
-chain; uninstall keeps both by default and removes them on purge. No earlier
-approval carries over, so every operation needs a fresh approval. Running
+The ledger path is never absent. A failure or crash before step 4 leaves the
+original ledger in place (with at most a staged file and a quarantine copy,
+which uninstall keeps by default and removes on purge), and the staged file
+is removed on ordinary failures. No earlier approval carries over, so every
+operation needs a fresh approval. Running
 brokers adopt the new ledger within their next transaction without a
 restart, but only when the new chain differs from the one they knew, starts
 with the recovery record, and verifies completely.
@@ -113,6 +119,10 @@ a caller; that same-user, write-capable attacker is outside the current
 threat model. Full anti-rollback protection requires an external trust anchor
 (for example a monotonic counter or a sealed tip held outside the ledger
 directory) and is **not** claimed here.
+
+The same boundary applies to a writer that ignores the lock: a concurrent
+append is detected, but a same-length rewrite of earlier bytes made outside
+the lock before this broker's next append is not.
 
 Nonces come from a non-cryptographic hash of process id, clock, counter and
 digest. Approval tokens stay inside the broker process, so this is not an
@@ -144,7 +154,11 @@ Unit and process tests in `crates/qdral-approval/src/lib.rs`:
 `append_is_never_acknowledged_when_another_writer_appended`,
 `recover_with_nothing_to_recover_creates_nothing`,
 `held_lock_file_cannot_be_deleted_and_unreadable_ledger_is_not_quarantined`
-(Windows). Lifecycle:
+(Windows),
+`first_record_during_a_prompt_on_an_empty_ledger_is_not_a_chain_change`,
+`recovery_keeps_the_ledger_path_present_and_leaves_no_staged_file`,
+`quarantine_preservation_refuses_a_mismatched_copy_and_keeps_the_original`,
+`inspection_reports_lock_contention_as_busy`. Lifecycle:
 `approval_history_check_verifies_the_chain_not_just_json`,
 `approvals_recover_quarantines_only_an_unverifiable_ledger`,
 `purge_removes_data_only_when_requested`, and packaged Windows release
