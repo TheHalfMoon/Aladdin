@@ -1,0 +1,109 @@
+{
+  "id": "SG-000108",
+  "title": "Live isolated browser engine (Playwright-core worker)",
+  "program": "ALADDIN-F3",
+  "state": "GRAIN",
+  "risk": "high",
+  "created": "2026-10-10",
+  "base": "37a1a0f9f3e530d6fdef998301f975752f8c991a",
+  "dependencies": [
+    "SG-000074",
+    "SG-000075",
+    "SG-000076",
+    "SG-000077",
+    "SG-000078",
+    "SG-000079"
+  ],
+  "planning_issue": 279,
+  "objective": "Give the existing isolated browser host (SG-000074..SG-000079) a real engine: a constrained Playwright-core worker that drives the installed, verified Edge/Chrome in the Deskal-owned profile, so that already-qualified navigation, observation, actuation and transfer policies act on live pages. First journey: open a controlled site, find a dated report, download the exact PDF into the approved workspace folder and independently verify it. This implements roadmap increment F3 of the adopted plan (docs/aladdin/IMPLEMENTATION_ROADMAP.md).",
+  "scope": {
+    "include": [
+      "Activate the SG-000108 contract only; the engine, dependency, tools and authority changes require separately exact-head qualified implementation PRs.",
+      "Admit exactly playwright-core 1.63.0 (Apache-2.0, zero runtime dependencies; npm integrity sha512-rYCsBF/M5HjUch52bbtVONEFjv6Xu8sm8h72dNlR5bzIE1fvC/bxgspzkjSfU+MweEMmPM8KJebG6nnyxo5mCg==, gitHead 1b025d7e20a026371cd5f98ba0cdce48892737c8) as a pinned, lockfile-recorded dependency of a separate private worker process, run on the same pinned Node runtime the MCP edge already ships with. No bundled browser download: the worker connects only to the engine the host verified and launched.",
+      "Worker transport: private anonymous-pipe IPC with the Rust host using a closed, versioned frame vocabulary that extends the SG-000074 protocol generation; no TCP/HTTP listener, no remote-debugging port exposed beyond the host-owned pipe, no generic CDP passthrough.",
+      "Every navigation, redirect, frame, popup, worker, subresource and download decision is made by the existing qdral-browser-host navigation policy (SG-000075) before the worker acts, and re-checked on the worker's network interception (route) for actual traffic; page content never becomes policy.",
+      "Observation uses Playwright accessibility/aria snapshots mapped onto the SG-000076 bounded, redacted, generation-bound node identity model; caller-supplied selectors are never authority.",
+      "Actuation (SG-000077) and transfers (SG-000078) reuse their existing typed shapes; downloads are staged, size/type-checked, digest-recorded and committed create-only inside the approved workspace destination; uploads stay limited to SG-000025/SG-000078-recorded sources.",
+      "Exposure follows SG-000079: the live tool set changes only through an explicit, reviewed profile update recorded in discovery, documentation, OAuth scope tables and runtime together.",
+      "Test fixtures: an owned controlled fixture site with a dated report list and a known PDF, plus redirect, iframe, shadow-DOM, stale-reference, oversized and forbidden-destination fixtures, served only to the test harness; an independent artifact checker verifies destination bytes, SHA-256 and absence of out-of-scope writes.",
+      "TesterArmy E2E (tester-army/e2e) for browser-facing journeys where its engines support the case, ending in deterministic assertions; native Windows UI Automation tests for anything shown in the WPF app."
+    ],
+    "exclude": [
+      "Arbitrary JavaScript evaluation, page.evaluate with model- or caller-supplied code, browser_run_code-style tools, generic CDP or DevTools access.",
+      "Attaching to, reading cookies from, or exporting state of the user's personal signed-in browser profile (SG-000100 territory).",
+      "Bundled browser binaries, runtime npx/@latest installs, or downloads at startup.",
+      "Network egress outside the SG-000075 policy, private/loopback/metadata destinations (except the test-only fixture origin, which is never reachable from production configuration), and proxy behavior.",
+      "Remote browser control, relay mapping, and Aladdin AI integration (later increments)."
+    ]
+  },
+  "authority_delta": {
+    "activation": "None. This packet authorizes implementing and proving SG-000108; it adds no executable, dependency, tool, listener or authority.",
+    "browser": "Proposed only: after qualification, live navigation, bounded observation, typed actuation and staged create-only downloads in the isolated Deskal browser profile on the verified installed engine, exactly within the already-closed SG-000075..SG-000079 policies.",
+    "network": "Proposed only: browser traffic limited to SG-000075-admitted public HTTPS destinations; no new listener; the worker reaches the engine only through the host-owned pipe.",
+    "filesystem": "Proposed only: create-only commits of staged downloads inside the approved workspace destination; no other file writes besides the isolated profile directory already owned by the host.",
+    "process": "One additional supervised worker process (pinned Node runtime) owned by the host, terminated with the host; no other process authority.",
+    "approval": "Unchanged rules: consequential actions and downloads require the existing local approval broker (repaired by #286) with exact digest binding; nothing in the browser mints or reuses approvals.",
+    "privileged": "None. SG-000096 Full User shell remains unarmed and independent; no elevation, remote full control or personal-profile access.",
+    "secrets": "No credentials, cookies or session material leave the profile; password and secret fields stay redacted in observations, logs and evidence."
+  },
+  "invariants": [
+    "The Rust host remains the policy authority: the worker never decides navigation, download or exposure on its own and refuses any frame outside the closed vocabulary.",
+    "No code path evaluates caller-, model- or page-supplied script; Playwright APIs are called only with host-constructed typed arguments.",
+    "Every observation and action is bound to exact page, document and node generations; stale or foreign identities fail closed and require re-observation.",
+    "Downloads are never opened, executed or extracted; commit is create-only and reconciled after uncertainty instead of retried blindly.",
+    "The worker, the engine and their descendants are supervised and terminated with the host (Job Object kill-on-close); a crashed worker yields a typed failure, never a fabricated success.",
+    "The production configuration cannot reach the test fixture origin; fixture allowances are test-only and asserted absent in release qualification.",
+    "SG-000096 and SG-000108 touch disjoint authority (process/shell vs isolated browser) and may proceed in parallel by founder decision of 2026-10-10; neither grain may widen the other's surface."
+  ],
+  "acceptance": [
+    {
+      "id": "A1",
+      "claim": "Activation is authority-neutral on base 37a1a0f9f3e530d6fdef998301f975752f8c991a (main after #282), records the founder decision to run in parallel with SG-000096, and imports no code."
+    },
+    {
+      "id": "A2",
+      "claim": "playwright-core 1.63.0 is admitted with exact integrity, license notice, SBOM entry and provenance; the lockfile delta matches exactly; no other package is added; release payload and installed size are measured."
+    },
+    {
+      "id": "A3",
+      "claim": "Host-to-worker IPC is closed and versioned; unknown frames, script evaluation, generic CDP and caller selectors are rejected by construction and by negative tests."
+    },
+    {
+      "id": "A4",
+      "claim": "Live navigation on the verified installed engine obeys every SG-000075 rule against real traffic (redirect widening, downgrade, rebinding, private/loopback/metadata, frames/popups/workers), proven with fixtures."
+    },
+    {
+      "id": "A5",
+      "claim": "Bounded observation over real pages including shadow DOM and iframes maps onto SG-000076 identities with redaction, ceilings and generation checks."
+    },
+    {
+      "id": "A6",
+      "claim": "First journey passes end to end on native Windows: open the controlled site, select the latest report by declared date, obtain approval, download the exact PDF create-only into the approved folder, and the independent checker verifies bytes and SHA-256; forbidden redirects, oversized files, path traversal and existing-file conflicts are refused; cancellation, timeout and worker crash produce typed outcomes and no partial commit."
+    },
+    {
+      "id": "A7",
+      "claim": "Exposure, discovery, documentation and OAuth scope tables agree mechanically for any tool added; remote mapping stays disabled."
+    },
+    {
+      "id": "A8",
+      "claim": "Exact-head CI, genuine Jev, Alibaba OpenCodeReview delegation with manual exclusions, PStack review and close-out, native Windows evidence and TesterArmy browser evidence are recorded; normal merge and post-merge CI."
+    }
+  ],
+  "review": {
+    "diffcipline": true,
+    "jev_semantic_review": true,
+    "alibaba_open_code_review": "delegation mode per standing founder decision (2026-10-10) with manual review of excluded files",
+    "security_review": true,
+    "exact_head_ci": true,
+    "native_windows": true,
+    "donor_provenance": true,
+    "release_artifact_qualification": true
+  },
+  "successor_requirements": {
+    "sg_000100": "Personal or signed-in user-browser control stays out of SG-000108 and requires its own grain.",
+    "sg_000101": "Firecrawl-derived extraction may build on the SG-000108 engine only after its written rights grant is verified.",
+    "sg_000106": "The worker enters the release payload only with unified packaging, license notices, SBOM and signed provenance."
+  },
+  "activation_note": "No dependency, worker, tool or authority change in this activation packet. Separate implementation and closeout PRs must qualify their exact heads; activation CI alone proves nothing about the engine.",
+  "done_when": "A real Windows user journey downloads and verifies a public PDF through the isolated browser under the existing policies and approval broker, with every denial path proven, the dependency admitted with provenance, and remote, personal-profile and script-evaluation surfaces still absent."
+}
