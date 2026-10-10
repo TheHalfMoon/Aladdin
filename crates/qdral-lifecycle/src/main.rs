@@ -59,6 +59,8 @@ Local MCP (no tunnel required):
 
 Approvals:
   qdral approvals [--limit <n>]           Show recent approval decisions.
+  qdral approvals recover                 Quarantine an approval ledger that fails
+                                          verification and start a new one.
   qdral emergency-revoke                  Invalidate all pending approvals, Full User
       desktop control, and every remote session lease (Windows Hello).
 
