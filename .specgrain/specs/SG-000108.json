@@ -75,7 +75,7 @@
       "question": "Actual-traffic enforcement of SG-000075",
       "status": "PROPOSED, pending security review",
       "record": "docs/security/SG-000108_ENGINE_ATTACHMENT_DECISION.md",
-      "decision": "Three fail-closed layers: host-pinned, port-pinned resolution (MAP <name> <select_public_address pin>:443 for each admitted name, then MAP * ~NOTFOUND); no route for IP literals or unmapped names (--proxy-server=http://0.0.0.0:9 with an exact --proxy-bypass-list of admitted names plus <-loopback>; zero accepts by hostile listeners on port 9); and the SG-000075 policy route, with service workers blocked and WebSocket denied. WebRTC UDP, which otherwise bypasses the first two layers, is refused with --webrtc-ip-handling-policy=disable_non_proxied_udp, and QUIC with --disable-quic. The host refuses to launch when any Edge proxy, DNS, WebRTC or QUIC policy is present."
+      "decision": "Three fail-closed layers: host-pinned, port-pinned resolution (MAP <name> <select_public_address pin>:443 for each admitted name, then MAP * ~NOTFOUND); no route for IP literals or unmapped names (--proxy-server=http://0.0.0.0:9 with an exact --proxy-bypass-list of admitted names plus <-loopback>; zero accepts by hostile listeners on port 9); and the SG-000075 policy route, with service workers blocked and WebSocket denied. WebRTC UDP, which otherwise bypasses the first two layers, is refused with --webrtc-ip-handling-policy=disable_non_proxied_udp, and QUIC with --disable-quic. The host refuses to launch when any mandatory Edge or Chrome policy (HKLM or HKCU) is present, and release qualification re-runs the layer probes on the installed engine."
     }
   ],
   "invariants": [

@@ -108,8 +108,8 @@ launch preconditions below.
 2. **No route for IP literals or unmapped names.** The host sets
    `--proxy-server=http://0.0.0.0:9` and
    `--proxy-bypass-list=<admitted names>;<-loopback>`.
-   - Only admitted names connect directly, and only to their pinned address
-     and port.
+   - Only admitted names connect directly. Their address and port come from
+     the layer 1 pin (`:443`), not from the bypass list.
    - Everything else, IPv4 and IPv6 literals included, goes to `0.0.0.0:9`,
      which accepted no connection even with listeners bound to `0.0.0.0:9`,
      `127.0.0.1:9` and `[::]:9`.
@@ -134,13 +134,25 @@ launch preconditions below.
 
 Permission-gated page APIs stay denied by `permission_allowed`.
 
-**Launch precondition: no managed policy.** Managed Edge policy outranks
-command-line settings. A machine proxy policy would turn layer 2 into a
-working proxy, which resolves names itself and so skips layer 1 too. The
-host therefore reads `HKLM` and `HKCU\Software\Policies\Microsoft\Edge`
-before every launch. It refuses to launch, with a typed error, when any
-proxy, DNS, WebRTC or QUIC policy is present. Release qualification
-additionally runs the layer 1 and 2 probes against the installed engine.
+**Launch precondition: no mandatory policy.** Managed browser policy
+outranks command-line settings. A machine proxy policy would turn layer 2
+into a working proxy, which resolves names itself and so skips layer 1 too.
+
+Before every launch, the host reads the mandatory policy keys for the
+verified engine's family:
+- `HKLM` and `HKCU\Software\Policies\Microsoft\Edge` for Edge;
+- `HKLM` and `HKCU\Software\Policies\Google\Chrome` for Chrome.
+
+It refuses to launch, with a typed error, when **any** mandatory policy
+value or subkey is present. This is simpler, and fails closed better, than
+keeping lists of proxy, DNS, WebRTC and QUIC policy names.
+`Recommended` subkeys do not override command-line settings, but the first
+slice refuses them as well.
+
+Cloud-managed policy that is cached locally outside these keys is a
+hypothesis to test. Release qualification therefore also runs the layer 1
+and 2 probes against the installed engine, which catches any override in
+effect whatever its source.
 
 ### Hostname and value hygiene
 
@@ -219,10 +231,10 @@ absent from the shipped binaries. No runtime configuration may enable it.
 - **WebRTC.** STUN and TURN (UDP and TCP) yield zero packets and zero
   connections.
 - **QUIC and WebTransport.** An HTTPS fixture shows no QUIC and a refused
-  WebTransport session.
+  WebTransport session, both to an admitted name and to an unmapped name.
 - **Service workers and WebSocket.** A service worker registration and a
   WebSocket connection are refused.
-- **Policy precondition.** A test registry hive with a proxy policy makes the
+- **Policy precondition.** A test registry hive with any mandatory Edge or Chrome policy makes the
   launch refuse.
 - **Supervision.** The engine is a descendant of the worker inside the host
   job; killing the host leaves no engine process; the pipe handles are not
