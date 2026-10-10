@@ -14,7 +14,7 @@
 use crate::argv::{ALLOWED_FLAGS, FORBIDDEN_FLAGS, INITIAL_URL};
 use crate::discovery::EngineKind;
 use crate::error::HostError;
-use crate::navigation::{is_public_address, NavigationTarget};
+use crate::navigation::{is_public_address, validate_navigation, DnsResolver, NavigationTarget};
 use std::net::IpAddr;
 use std::path::Path;
 
@@ -50,10 +50,17 @@ pub struct AdmittedDestination {
 }
 
 impl AdmittedDestination {
-    /// Admit a destination that already passed `validate_navigation`.
-    /// The name must also satisfy the stricter rule-string hygiene, and
-    /// the pin must still be public.
-    pub fn from_validated(target: &NavigationTarget, pin: IpAddr) -> Result<Self, HostError> {
+    /// Admit a destination: run the SG-000075 `validate_navigation` for the
+    /// URL, which resolves the name and pins its lowest public address with
+    /// `select_public_address`, then apply the stricter rule-string hygiene.
+    /// This is the only public constructor, so every pin comes from the
+    /// host's own resolution of that name.
+    pub fn admit(url: &str, resolver: &impl DnsResolver) -> Result<Self, HostError> {
+        let (target, pin) = validate_navigation(url, resolver)?;
+        Self::checked(&target, pin)
+    }
+
+    fn checked(target: &NavigationTarget, pin: IpAddr) -> Result<Self, HostError> {
         if target.scheme != "https" || target.port != PINNED_PORT {
             return Err(HostError::Invalid(
                 "admitted destination must be https on port 443".into(),
@@ -212,6 +219,8 @@ pub fn assert_worker_argv_exact(
     profile_dir: &Path,
     destinations: &[AdmittedDestination],
 ) -> Result<(), HostError> {
+    // The exact comparison below already refuses these; this pass only
+    // names the forbidden flag in the error.
     for arg in argv {
         let flag = arg.split('=').next().unwrap_or(arg);
         if FORBIDDEN_FLAGS.contains(&flag) {
@@ -253,7 +262,11 @@ pub trait PolicySource {
 pub fn policy_keys(kind: EngineKind) -> &'static [&'static str] {
     match kind {
         EngineKind::Edge => &["SOFTWARE\\Policies\\Microsoft\\Edge"],
-        EngineKind::Chromium => &["SOFTWARE\\Policies\\Google\\Chrome"],
+        // Google Chrome reads Google\Chrome; Chromium builds read Chromium.
+        EngineKind::Chromium => &[
+            "SOFTWARE\\Policies\\Google\\Chrome",
+            "SOFTWARE\\Policies\\Chromium",
+        ],
     }
 }
 
@@ -284,6 +297,21 @@ pub fn assert_no_managed_policy(
     Ok(())
 }
 
+/// Combine the 64-bit and 32-bit registry views of one key: a populated
+/// or unreadable view decides (first one wins), otherwise any empty view
+/// makes the key empty, otherwise it is absent.
+fn merge_views(views: &[PolicyKeyState]) -> PolicyKeyState {
+    let mut state = PolicyKeyState::Absent;
+    for view in views {
+        match view {
+            PolicyKeyState::Absent => {}
+            PolicyKeyState::Empty => state = PolicyKeyState::Empty,
+            decisive => return *decisive,
+        }
+    }
+    state
+}
+
 /// The production registry policy source: both registry views of each key
 /// are read with `KEY_READ` only; nothing is written or changed.
 #[derive(Debug, Default, Clone, Copy)]
@@ -297,7 +325,7 @@ impl PolicySource for RegistryPolicySource {
 
 #[cfg(windows)]
 mod registry {
-    use super::{PolicyHive, PolicyKeyState};
+    use super::{merge_views, PolicyHive, PolicyKeyState};
     use windows_sys::Win32::Foundation::{ERROR_FILE_NOT_FOUND, ERROR_SUCCESS};
     use windows_sys::Win32::System::Registry::{
         RegCloseKey, RegOpenKeyExW, RegQueryInfoKeyW, HKEY, HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE,
@@ -309,19 +337,10 @@ mod registry {
             PolicyHive::LocalMachine => HKEY_LOCAL_MACHINE,
             PolicyHive::CurrentUser => HKEY_CURRENT_USER,
         };
-        let mut state = PolicyKeyState::Absent;
-        for view in [KEY_WOW64_64KEY, KEY_WOW64_32KEY] {
-            match view_state(root, subkey, view) {
-                PolicyKeyState::Absent => {}
-                PolicyKeyState::Empty => {
-                    if state == PolicyKeyState::Absent {
-                        state = PolicyKeyState::Empty;
-                    }
-                }
-                worse => return worse,
-            }
-        }
-        state
+        merge_views(&[
+            view_state(root, subkey, KEY_WOW64_64KEY),
+            view_state(root, subkey, KEY_WOW64_32KEY),
+        ])
     }
 
     fn view_state(root: HKEY, subkey: &str, view: u32) -> PolicyKeyState {
@@ -387,8 +406,19 @@ mod tests {
     use std::net::{Ipv4Addr, Ipv6Addr};
     use std::path::PathBuf;
 
+    /// Index of the first confinement flag: the frozen flags, then the profile.
+    const FIRST_CONFINEMENT: usize = ALLOWED_FLAGS.len() + 1;
+
+    struct FakeDns(Vec<IpAddr>);
+
+    impl DnsResolver for FakeDns {
+        fn resolve(&self, _host: &str, _port: u16) -> Result<Vec<IpAddr>, HostError> {
+            Ok(self.0.clone())
+        }
+    }
+
     fn admitted(url: &str, pin: IpAddr) -> AdmittedDestination {
-        AdmittedDestination::from_validated(&parse_navigation_url(url).unwrap(), pin).unwrap()
+        AdmittedDestination::admit(url, &FakeDns(vec![pin])).unwrap()
     }
 
     fn public_v4() -> IpAddr {
@@ -438,7 +468,7 @@ mod tests {
     fn legacy_sg000074_argv_still_refuses_every_confinement_flag() {
         let destinations = vec![admitted("https://example.com/", public_v4())];
         let argv = build_worker_argv(&profile(), &destinations).unwrap();
-        for arg in &argv[8..argv.len() - 1] {
+        for arg in &argv[FIRST_CONFINEMENT..argv.len() - 1] {
             let legacy = vec![
                 "--headless".to_string(),
                 "--user-data-dir=C:\\deskal\\profile".to_string(),
@@ -454,7 +484,7 @@ mod tests {
         let good = build_worker_argv(&profile(), &destinations).unwrap();
         let mut cases: Vec<Vec<String>> = Vec::new();
         // Each confinement flag removed, value-stripped, or re-valued.
-        for index in 8..good.len() - 1 {
+        for index in FIRST_CONFINEMENT..good.len() - 1 {
             let mut removed = good.clone();
             removed.remove(index);
             cases.push(removed);
@@ -496,7 +526,7 @@ mod tests {
         reordered.swap(9, 10);
         cases.push(reordered);
         let mut other_profile = good.clone();
-        other_profile[7] =
+        other_profile[FIRST_CONFINEMENT - 1] =
             "--user-data-dir=C:\\Users\\me\\AppData\\Local\\Microsoft\\Edge\\User Data".into();
         cases.push(other_profile);
         for case in &cases {
@@ -562,19 +592,16 @@ mod tests {
             "fd00:ec2::254".parse().unwrap(),
             "::ffff:127.0.0.1".parse().unwrap(),
         ] {
-            assert!(
-                AdmittedDestination::from_validated(&target, pin).is_err(),
-                "{pin}"
-            );
+            assert!(AdmittedDestination::checked(&target, pin).is_err(), "{pin}");
         }
         let literal = parse_navigation_url("https://93.184.215.14/").unwrap();
-        assert!(AdmittedDestination::from_validated(&literal, public_v4()).is_err());
+        assert!(AdmittedDestination::checked(&literal, public_v4()).is_err());
         let mut other_port = target.clone();
         other_port.port = 8443;
-        assert!(AdmittedDestination::from_validated(&other_port, public_v4()).is_err());
+        assert!(AdmittedDestination::checked(&other_port, public_v4()).is_err());
         let mut plain = target;
         plain.scheme = "http".into();
-        assert!(AdmittedDestination::from_validated(&plain, public_v4()).is_err());
+        assert!(AdmittedDestination::checked(&plain, public_v4()).is_err());
     }
 
     #[test]
@@ -600,6 +627,71 @@ mod tests {
         assert!(
             AdmittedDestination::fixture("127.0.0.1", IpAddr::V4(Ipv4Addr::LOCALHOST)).is_err()
         );
+    }
+
+    #[test]
+    fn admission_pins_the_lowest_public_address_of_the_name_itself() {
+        let mixed = FakeDns(vec![
+            IpAddr::V4(Ipv4Addr::new(10, 0, 0, 7)),
+            "2606:2800:21f:cb07:6820:80da:af6b:8b2c".parse().unwrap(),
+            IpAddr::V4(Ipv4Addr::new(93, 184, 215, 14)),
+            IpAddr::V4(Ipv4Addr::LOCALHOST),
+        ]);
+        let destination = AdmittedDestination::admit("https://example.com/", &mixed).unwrap();
+        assert_eq!(
+            destination.pin(),
+            crate::navigation::select_public_address(&mixed.0).unwrap()
+        );
+        assert!(is_public_address(&destination.pin()));
+        for (url, dns) in [
+            (
+                "https://example.com/",
+                FakeDns(vec![IpAddr::V4(Ipv4Addr::LOCALHOST)]),
+            ),
+            ("https://example.com/", FakeDns(vec![])),
+            ("http://example.com/", FakeDns(vec![public_v4()])),
+            ("https://example.com:8443/", FakeDns(vec![public_v4()])),
+            ("https://169.254.169.254/", FakeDns(vec![public_v4()])),
+            ("https://93.184.215.14/", FakeDns(vec![public_v4()])),
+        ] {
+            assert!(AdmittedDestination::admit(url, &dns).is_err(), "{url}");
+        }
+        // The SG-000075 parser normalizes case; the rule string is lowercase.
+        let upper = AdmittedDestination::admit("https://Example.COM/", &FakeDns(vec![public_v4()]))
+            .unwrap();
+        assert_eq!(upper.host(), "example.com");
+    }
+
+    #[test]
+    fn mapped_public_ipv6_pins_are_bracketed() {
+        let mapped: IpAddr = "::ffff:93.184.215.14".parse().unwrap();
+        if is_public_address(&mapped) {
+            let rules = resolver_rules(&[admitted("https://example.com/", mapped)]).unwrap();
+            assert_eq!(
+                rules,
+                "MAP example.com [::ffff:93.184.215.14]:443, MAP * ~NOTFOUND"
+            );
+        } else {
+            assert!(
+                AdmittedDestination::admit("https://example.com/", &FakeDns(vec![mapped])).is_err()
+            );
+        }
+    }
+
+    #[test]
+    fn registry_views_merge_fail_closed() {
+        use PolicyKeyState::*;
+        assert_eq!(merge_views(&[Absent, Absent]), Absent);
+        assert_eq!(merge_views(&[Empty, Absent]), Empty);
+        assert_eq!(merge_views(&[Absent, Empty]), Empty);
+        for decisive in [Populated, Unreadable] {
+            for other in [Absent, Empty, Populated, Unreadable] {
+                assert_ne!(merge_views(&[decisive, other]), Absent);
+                assert_ne!(merge_views(&[decisive, other]), Empty);
+                assert_ne!(merge_views(&[other, decisive]), Absent);
+                assert_ne!(merge_views(&[other, decisive]), Empty);
+            }
+        }
     }
 
     struct FakePolicy(Vec<(PolicyHive, &'static str, PolicyKeyState)>);
@@ -641,6 +733,17 @@ mod tests {
                 )
                 .is_err());
             }
+        }
+        for hive in [PolicyHive::LocalMachine, PolicyHive::CurrentUser] {
+            assert!(assert_no_managed_policy(
+                EngineKind::Chromium,
+                &FakePolicy(vec![(
+                    hive,
+                    "SOFTWARE\\Policies\\Chromium",
+                    PolicyKeyState::Populated
+                )])
+            )
+            .is_err());
         }
         // A Chrome policy does not bind Edge, and vice versa.
         assert!(assert_no_managed_policy(
