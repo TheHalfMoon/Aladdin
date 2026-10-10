@@ -177,7 +177,7 @@ test("P20 subsystem ownership and sequence have no gap", () => {
   assert.equal(plan.includes("SG-000108"), false);
 });
 
-test("SG-000094 and SG-000095 are closed and SG-000096 alone is active", () => {
+test("SG-000094 and SG-000095 are closed and SG-000096 is the only active P20 grain", () => {
   const specDir = join(repo, ".specgrain", "specs");
   const specs = readdirSync(specDir).filter((name) => /^SG-\d{6}\.json$/.test(name));
   const open: string[] = [];
@@ -187,7 +187,13 @@ test("SG-000094 and SG-000095 are closed and SG-000096 alone is active", () => {
       open.push(spec.id);
     }
   }
-  assert.deepEqual(open, ["SG-000096"]);
+  // SG-000108 (ALADDIN-F3) runs in parallel by founder decision (issue #290)
+  // and is outside DESKAL-P20; no other grain may be open.
+  assert.deepEqual(open.sort(), ["SG-000096", "SG-000108"]);
+  const sg108 = readJson<{ program: string; state: string; planning_issue: number }>(".specgrain/specs/SG-000108.json");
+  assert.equal(sg108.program, "ALADDIN-F3");
+  assert.equal(sg108.state, "GRAIN");
+  assert.equal(sg108.planning_issue, 290);
 
   const sg94 = readJson<{
     state: string;
