@@ -375,7 +375,12 @@ pub fn doctor(args: &mut Args) -> Result<Output, LifecycleError> {
     args.finish()?;
     let layout = Layout::for_current_user()?;
     let platform = host_platform();
-    let report = doctor::run(&layout, platform.as_ref());
+    // The exact ledger the brokers and `qdral approvals recover` use.
+    let report = doctor::run_with_approval_history(
+        &layout,
+        platform.as_ref(),
+        &qdral_approval::default_approval_history_path(),
+    );
     let mut human = String::new();
     for check in &report.checks {
         let mark = match check.status {
@@ -403,6 +408,10 @@ pub fn doctor(args: &mut Args) -> Result<Output, LifecycleError> {
 }
 
 pub fn approvals(args: &mut Args) -> Result<Output, LifecycleError> {
+    if args.flag("recover") {
+        args.finish()?;
+        return approvals_recover(&qdral_approval::default_approval_history_path());
+    }
     let limit = match args.value("--limit")? {
         Some(value) => value
             .parse::<u64>()
@@ -465,6 +474,36 @@ pub fn approvals(args: &mut Args) -> Result<Output, LifecycleError> {
         exit_code: 0,
         human,
         json: json!({"ok": true, "approvals": result}),
+    })
+}
+
+/// Quarantines an approval ledger that fails verification and starts a new
+/// one. Runs locally, without the daemon, under the ledger's writer lock.
+fn approvals_recover(path: &std::path::Path) -> Result<Output, LifecycleError> {
+    let recovery = qdral_approval::recover_approval_ledger(path).map_err(|error| {
+        let message = format!("approval ledger recovery: {}", error.message);
+        // "Nothing to recover" is a state; busy and I/O failures are retryable.
+        match error.code {
+            qdral_approval::FailureCode::InvalidRequest => LifecycleError::state(message),
+            _ => LifecycleError::new(qdral_lifecycle::ErrorKind::Io, message),
+        }
+    })?;
+    // Quarantine already happened: never fail (or panic) while reporting it.
+    let quarantined_to = recovery.quarantined_to.to_string_lossy().into_owned();
+    Ok(Output {
+        exit_code: 0,
+        human: format!(
+            "Approval ledger quarantined to {} ({} bytes, sha256 {}).\nA new ledger was started; earlier approvals no longer authorize anything, so request fresh approvals. Running Qdral processes switch to the new ledger on their next approval.\n",
+            quarantined_to,
+            recovery.quarantined_bytes,
+            recovery.quarantined_sha256
+        ),
+        json: json!({
+            "ok": true,
+            "quarantined_to": quarantined_to,
+            "quarantined_bytes": recovery.quarantined_bytes,
+            "quarantined_sha256": recovery.quarantined_sha256,
+        }),
     })
 }
 
@@ -926,4 +965,28 @@ pub fn self_check(args: &mut Args) -> Result<Output, LifecycleError> {
         human: format!("Qdral {} verified by CLI {cli}.\n", state.active.version),
         json: json!({"ok": true, "active": state.active.version, "cli": cli}),
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn approvals_recover_quarantines_only_an_unverifiable_ledger() {
+        let path = std::env::temp_dir()
+            .join(format!(
+                "qdral-approvals-recover-{}",
+                qdral_lifecycle::nonce()
+            ))
+            .join("approval-history.jsonl");
+        assert!(approvals_recover(&path).is_err(), "nothing to recover");
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(&path, b"{\"torn\":").unwrap();
+        let output = approvals_recover(&path).expect("recover");
+        assert_eq!(output.exit_code, 0);
+        let quarantined = output.json["quarantined_to"].as_str().unwrap();
+        assert_eq!(std::fs::read(quarantined).unwrap(), b"{\"torn\":");
+        assert!(output.human.contains("request fresh approvals"));
+        assert!(approvals_recover(&path).is_err(), "the new ledger verifies");
+    }
 }
