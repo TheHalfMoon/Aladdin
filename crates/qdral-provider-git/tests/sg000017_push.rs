@@ -782,12 +782,7 @@ fn sg000015_mutation_and_sg000016_fetch_regressions_remain_green() {
     let _ = std::fs::remove_dir_all(base);
 }
 
-#[cfg(windows)]
-fn null_device() -> &'static str {
-    "NUL"
-}
-
-#[cfg(not(windows))]
+// Git for Windows maps `/dev/null` to the null device; Git 2.56 rejects `NUL`.
 fn null_device() -> &'static str {
     "/dev/null"
 }

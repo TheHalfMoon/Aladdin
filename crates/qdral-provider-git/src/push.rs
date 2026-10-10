@@ -534,6 +534,7 @@ pub fn build_child_env(askpass: Option<&Path>) -> Vec<(String, String)> {
     env
 }
 
+// libcurl opens this path itself and has no `/dev/null` mapping.
 #[cfg(windows)]
 fn push_cookie_file() -> &'static str {
     "NUL"
@@ -1002,7 +1003,7 @@ fn run_push_raw(
     }
     command
         .env("GIT_CONFIG_NOSYSTEM", "1")
-        .env("GIT_CONFIG_GLOBAL", null_push_device())
+        .env("GIT_CONFIG_GLOBAL", crate::NULL_GIT_CONFIG)
         .env("GIT_TERMINAL_PROMPT", "0")
         .env("GIT_PAGER", "cat")
         .env("GIT_EDITOR", null_push_device())
