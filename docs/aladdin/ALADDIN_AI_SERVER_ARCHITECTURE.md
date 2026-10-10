@@ -1,6 +1,6 @@
 # Aladdin AI: founder hosting, optional decision model
 
-Status: independent planning review, 2026-10-09. PROPOSED, NOT ADOPTED. No implementation or authority change. Evidence baseline: PR #283 at `87bc9d6a69b6c5b5dc415ee6e30ee0fcb60d8985`, PR #282 at `10540885f3c52bd0c0d2f00cc23e3cafe067fe36`.
+Status: ADOPTED planning direction (founder decision, 2026-10-09; Sol revision governs where it differs from the Opus baseline). Grants no authority: every capability still needs its own grain, review and qualification. Current execution state: `EXECUTION_FRONTIER.md`. Evidence baseline of this revision: PR #283 at `87bc9d6a69b6c5b5dc415ee6e30ee0fcb60d8985`, PR #282 at `10540885f3c52bd0c0d2f00cc23e3cafe067fe36`.
 
 ## Decision
 
@@ -22,7 +22,7 @@ These are SOURCE-DOCUMENTED CLAIMS. d1's advertised warm 8 ms on RTX4090 is not 
 
 A3B active parameters do not mean 3B resident weights. Rough BF16 weight floor for 35B is 70 GB decimal (about 65 GiB), FP8 about 35 GB, before KV cache, vision activations, allocator, batching and runtime overhead. These are ESTIMATES. An 80 GB GPU may fit constrained BF16 workloads; maximum context/concurrency is unproven. Separate released quantized checkpoints need exact licensing, configuration, runtime and quality qualification. Do not assume a 262K config makes that deployment feasible.
 
-The founder reports direct permission to use and rebrand the models. That report is not independently verified and is not rejected because the public license has conditions. Retain written grant covering legal entities, exact base/checkpoint/derivatives, hosted use, commercial redistribution, rebranding, notices, duration and any revenue-condition override. Public Liquid LFM v1 defines a $10m threshold and conditional commercial permission; its equality wording warrants review before approaching the threshold. Do not replace it with an unconditional Apache or precise boundary claim. Preserve attribution to H Company/Qwen and Liquid AI regardless of product branding.
+The founder reports direct permission to use and rebrand the models. No model is redistributed, rebranded or publicly deployed until the written grant is on file and verified. That report is not independently verified and is not rejected because the public license has conditions. Retain written grant covering legal entities, exact base/checkpoint/derivatives, hosted use, commercial redistribution, rebranding, notices, duration and any revenue-condition override. Public Liquid LFM v1 defines a $10m threshold and conditional commercial permission; its equality wording warrants review before approaching the threshold. Do not replace it with an unconditional Apache or precise boundary claim. Preserve attribution to H Company/Qwen and Liquid AI regardless of product branding.
 
 ## Minimal serving and proposal contract
 

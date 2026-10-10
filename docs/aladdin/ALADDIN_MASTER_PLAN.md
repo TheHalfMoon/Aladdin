@@ -1,6 +1,6 @@
 # Aladdin master plan — independent Sol revision
 
-Status: independent planning review, 2026-10-09. PROPOSED, NOT ADOPTED. No implementation or authority change. Evidence baseline: PR #283 at `87bc9d6a69b6c5b5dc415ee6e30ee0fcb60d8985`, PR #282 at `10540885f3c52bd0c0d2f00cc23e3cafe067fe36`.
+Status: ADOPTED planning direction (founder decision, 2026-10-09; Sol revision governs where it differs from the Opus baseline). Grants no authority: every capability still needs its own grain, review and qualification. Current execution state: `EXECUTION_FRONTIER.md`. Evidence baseline of this revision: PR #283 at `87bc9d6a69b6c5b5dc415ee6e30ee0fcb60d8985`, PR #282 at `10540885f3c52bd0c0d2f00cc23e3cafe067fe36`.
 
 ## Judgment
 
@@ -40,7 +40,7 @@ The live active [main ruleset](https://github.com/TheHalfMoon/Aladdin/rules/2445
 | E5 MEASURED RESULT | PR282 verification compiled a 22,016-byte WPF executable and passed router/layout self-tests. No visible GUI automation, installer, RAM, startup or user-journey qualification was performed. |
 | E6 VERIFIED FACT | Twelve public donor source checkouts, licenses and exact HEADs independently read; inventory in reuse matrix. Main snapshots of Playwright are prerelease, not selected production dependency pins. |
 | E7 SOURCE-DOCUMENTED CLAIM | Holo4/d1 model cards, Liquid license, Chrome debugging-profile guidance, RunPod billing docs; serving and vendor scores are not Aladdin measurements. |
-| E8 MEASURED RESULT | Original unit_economics.py executes offline and reproduces tables. At its assumptions, reserved GPU cost is $1,584/month and API-equivalent Hala cost $1.2375/subscriber; crossover is 1,280 subscribers, not 300. This comparison is illustrative and not the permitted AI pilot. |
+| E8 MEASURED RESULT | Original unit_economics.py executes offline and reproduces tables. At its assumptions, reserved GPU cost is $1,584/month and API-equivalent Hala cost $1.2375/subscriber; crossover is 1,280 subscribers, not 300. This comparison is illustrative only; no third-party AI pilot is planned or permitted. |
 | E9 BLOCKED CAPABILITY | REA doctor invocation exits 1: compiled runtime missing. Opus's timings, OOM and analysis artifact remain secondary execution evidence; installed Desktop Commander 0.2.52 and source patterns were independently inspected. |
 | E10 VERIFIED FACT / limitation | Authorized private donor code and tests were inspected. Private revision/file evidence is kept in the local reuse-matrix appendix and excluded from public publication. No private code imported. |
 
@@ -80,9 +80,22 @@ Use MEASURED RESULT only for an actual run; SOURCE-DOCUMENTED CLAIM for vendor s
 
 ## Adoption and next work
 
-Adopt the revised direction as planning only after founder and normal governance review. Keep #283 draft and #278 open. No production source, permissions, CI, canonical state, models or infrastructure were changed by this review.
+The founder adopted this revised direction on 2026-10-09; it is merged as planning only. Update 2026-10-10: #278 is repaired by PR #286 (merged as `main@1edfa20`, post-merge CI green, issue closed). Design, qualification evidence and residual risks: `docs/security/ISSUE-278_APPROVAL_LEDGER_INTEGRITY_NOTE.md`. (Historical text at review time: keep #283 draft and #278 open.) No production source, permissions, CI, canonical state, models or infrastructure were changed by this review.
 
-Next three executable packets: (1) #278 isolated security repair with durable one-writer append and full fault tests; (2) WPF read-only app API/timeline and truthful daemon status, correcting UI-blocking I/O; (3) narrow live-browser adapter behind existing contracts with real download and denial fixtures. Packet 2 can develop read-only functionality independently; packet 3's mutations wait for qualified ledger repair and authorized grain sequencing. See fast-track report for estimates and exact exit tests.
+Next three executable packets at review time (current next grains: `EXECUTION_FRONTIER.md`): (1) #278 isolated security repair (done, PR #286) with durable one-writer append and full fault tests; (2) WPF read-only app API/timeline and truthful daemon status, correcting UI-blocking I/O; (3) narrow live-browser adapter behind existing contracts with real download and denial fixtures. Packet 2 can develop read-only functionality independently; packet 3's mutations wait for qualified ledger repair and authorized grain sequencing. See `IMPLEMENTATION_ROADMAP.md` for estimates and exact exit tests.
+
+## Open decisions
+
+| Decision | Owner | Where discussed |
+|---|---|---|
+| Whether approvals should be invalidated on broker restart, or a trust anchor added against tail rollback | Founder + security review | SECURITY_THREAT_MODEL.md; residual risk in the #278 note |
+| Whether relay-blind (end-to-end) encryption is required before confidential transfer | Founder + security review | MULTI_DEVICE_ARCHITECTURE.md |
+| Code signing and distribution channel for releases | Founder | IMPLEMENTATION_ROADMAP.md (F4) |
+| Retention of screen/audio observations for Aladdin AI | Founder (privacy) | ALADDIN_AI_SERVER_ARCHITECTURE.md |
+| Tauri reversal (only on the stated measured conditions) | Founder | UI_UX_AND_APP_SIZE_BUDGET.md |
+| Written rights grants for Firecrawl and the Hala/Reliance models | Founder + counsel | SOURCE_REUSE_MATRIX.md, ALADDIN_AI_SERVER_ARCHITECTURE.md |
+| Trademark/naming clearance | Founder + counsel | OPUS_TO_SOL_CHANGELOG.md (D14) |
+| Whether a Rust PTY engine should replace the authorized SG-000096 terminal donor | Founder | IMPLEMENTATION_ROADMAP.md (WP04) |
 
 ## Revision provenance
 

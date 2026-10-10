@@ -1,6 +1,6 @@
 # Aladdin MVP fast track
 
-Status: independent planning review, 2026-10-09. PROPOSED, NOT ADOPTED. No implementation or authority change. Evidence baseline: PR #283 at `87bc9d6a69b6c5b5dc415ee6e30ee0fcb60d8985`, PR #282 at `10540885f3c52bd0c0d2f00cc23e3cafe067fe36`.
+Status: ADOPTED planning direction (founder decision, 2026-10-09; Sol revision governs where it differs from the Opus baseline). Grants no authority: every capability still needs its own grain, review and qualification. Current execution state: `EXECUTION_FRONTIER.md`. Evidence baseline of this revision: PR #283 at `87bc9d6a69b6c5b5dc415ee6e30ee0fcb60d8985`, PR #282 at `10540885f3c52bd0c0d2f00cc23e3cafe067fe36`.
 
 ## Roadmap A: Opus's graph, fairly assessed
 
@@ -15,7 +15,7 @@ Effort bands are relative ESTIMATES: S small contained adapter/test work; M seve
 | Increment | Dependency / effort | Working milestone and exit test |
 |---|---|---|
 | F0 read-only app now | PR282 review, small authenticated app API; M | App reports real daemon/capabilities, bounded folder reads and actual events; responsive I/O and visible native keyboard/accessibility tests. No mutations, fabricated chat or model dependencies. |
-| F1 approval integrity | Independent security grain; M, fault behavior may enlarge scope | All #278 regressions and fault/migration tests pass; independent Windows review; approved normal merge. No dependent privilege activated earlier. |
+| F1 approval integrity (DONE: PR #286, `main@1edfa20`) | Independent security grain; M, fault behavior may enlarge scope | All #278 regressions and fault/migration tests pass; independent Windows review; approved normal merge. No dependent privilege activated earlier. |
 | F2 first local report task | F0 + F1, existing workspace provider, minimal task records; M | Test planner or one qualified MCP client reads known figures, proposes approved create-only report and independent checker validates saved bytes/hash. Reject overwrite/out-of-scope/stale source. |
 | F3 real browser task | Existing contracts + approved grain + F1 before mutations; M/L | Constrained Playwright worker navigates controlled site, downloads exact PDF to approved folder, preserves policy and verifies artifact. Browser work need not depend on full shell. |
 | F4 Core MVP qualification | F2 + F3 + existing SG096 terminal progress; M | One supported external client transcript, real app timeline/stop/takeover, native journey tests, clean signed/attested packaging and full installed app <400 MB. Truthfully label unarmed terminal capabilities until SG096 activation passes. |
@@ -90,6 +90,6 @@ Acceptance: Arabic/English/code-switched fixture commands with known intent, fou
 
 ## Next three implementation packets
 
-1. **Security owner, #278, M:** repair one-writer durable ledger/restart semantics; three regression tests plus fault/migration/rollback matrix; no new capability. Exit only after independent exact-head governance and Windows qualification.
+1. **Security owner, #278, M (DONE via PR #286; see `EXECUTION_FRONTIER.md`):** repair one-writer durable ledger/restart semantics; three regression tests plus fault/migration/rollback matrix; no new capability. Exit only after independent exact-head governance and Windows qualification.
 2. **App/API owner, PR282 follow-up, M:** authenticated read-only status/event API, compact WPF shell, async bounded folder/CLI I/O, timeline/stop state presentation; tests for unavailable daemon, huge folder, stalled process, keyboard/Narrator and event gap. No approval minting.
 3. **Browser owner, narrow adopted grain, M/L:** wrap stable Playwright-core to navigate one owned site and download one fixture PDF through existing contracts; security denials, stale target/crash/stop and artifact checker. Prepare fixtures/adapter independently; mutations wait for packet1 and the authorized grain frontier.

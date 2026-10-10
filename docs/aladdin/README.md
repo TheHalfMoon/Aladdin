@@ -1,6 +1,6 @@
 # Aladdin proposed planning package — independent revision
 
-Status: independent planning review, 2026-10-09. PROPOSED, NOT ADOPTED. No implementation or authority change. Evidence baseline: PR #283 at `87bc9d6a69b6c5b5dc415ee6e30ee0fcb60d8985`, PR #282 at `10540885f3c52bd0c0d2f00cc23e3cafe067fe36`.
+Status: ADOPTED planning direction (founder decision, 2026-10-09; Sol revision governs where it differs from the Opus baseline). Grants no authority: every capability still needs its own grain, review and qualification. Current execution state: `EXECUTION_FRONTIER.md`. Evidence baseline of this revision: PR #283 at `87bc9d6a69b6c5b5dc415ee6e30ee0fcb60d8985`, PR #282 at `10540885f3c52bd0c0d2f00cc23e3cafe067fe36`.
 
 This package revises the Opus proposal without canonical adoption, permission expansion, donor import or production implementation. Original author history remains at the reviewed baseline. The founder has deferred pricing and requires all Aladdin AI inference/orchestration/voice on founder servers. Core remains independent.
 
@@ -15,10 +15,10 @@ This package revises the Opus proposal without canonical adoption, permission ex
 | Founder AI, model/runtime/voice/hosting ablations | ALADDIN_AI_SERVER_ARCHITECTURE.md |
 | Proposed model request/proposal schemas | MODEL_INTEGRATION_CONTRACTS.md |
 | WPF decision, app tests, full size criteria | UI_UX_AND_APP_SIZE_BUDGET.md |
-| #278 independent validation and repair gates | SECURITY_THREAT_MODEL.md |
+| #278 independent validation and repair gates (repaired by PR #286) | SECURITY_THREAT_MODEL.md |
 | Minimum native benchmark evidence | BENCHMARK_AND_E2E_PLAN.md |
 | Pricing-deferred cost assumptions | INFRASTRUCTURE_AND_UNIT_ECONOMICS.md, tools/unit_economics.py |
 | Two roadmaps, all25 packet dispositions, five journeys | IMPLEMENTATION_ROADMAP.md |
 | Decision rationale and scope | OPUS_TO_SOL_CHANGELOG.md |
 
-Original PR283 exact-head checks passed11/11; Jev reviewed15/15 hunks; Alibaba reviewed one eligible script and excluded14 Markdown files. The original-head result does not qualify this amendment head. Genuine reviews, manual exclusions, exact-head CI, resolved threads and founder adoption remain required before an approved normal merge. #278 stays open. Native visible product E2E, complete installer/RAM/startup, model inference and remote journeys remain unmeasured.
+Original PR283 exact-head checks passed 11/11; Jev reviewed 15/15 hunks; Alibaba reviewed one eligible script and excluded 14 Markdown files. The original-head result does not qualify this amendment head. Genuine reviews, manual exclusions, exact-head CI, resolved threads and founder adoption remain required before an approved normal merge. #278 stays open. Native visible product E2E, complete installer/RAM/startup, model inference and remote journeys remain unmeasured.

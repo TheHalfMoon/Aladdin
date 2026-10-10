@@ -1,8 +1,12 @@
 # Approval integrity and new attack surfaces
 
-Status: independent planning review, 2026-10-09. PROPOSED, NOT ADOPTED. No implementation or authority change. Evidence baseline: PR #283 at `87bc9d6a69b6c5b5dc415ee6e30ee0fcb60d8985`, PR #282 at `10540885f3c52bd0c0d2f00cc23e3cafe067fe36`.
+Status: ADOPTED planning direction (founder decision, 2026-10-09; Sol revision governs where it differs from the Opus baseline). Grants no authority: every capability still needs its own grain, review and qualification. Current execution state: `EXECUTION_FRONTIER.md`. Evidence baseline of this revision: PR #283 at `87bc9d6a69b6c5b5dc415ee6e30ee0fcb60d8985`, PR #282 at `10540885f3c52bd0c0d2f00cc23e3cafe067fe36`.
 
 ## Independent verdict on #278
+
+Update 2026-10-10: #278 is repaired by PR #286 (merged as `main@1edfa20`, post-merge CI green, issue closed). Design, qualification evidence and residual risks: `docs/security/ISSUE-278_APPROVAL_LEDGER_INTEGRITY_NOTE.md`. The repair answers the qualification matrix below: one durable event transaction path under a per-transaction cross-process lock; strict verification of every event; fail-closed handling of torn, replaced or unverifiable ledgers; explicit evidence-preserving recovery (`qdral approvals recover`); prompts bound to chain identity and revoke epoch. Restart model chosen: approvals are not invalidated by a broker restart (they expire after five minutes); a fresh broker cannot detect deletion of a complete valid tail without an external anchor, which remains a documented residual risk.
+
+The historical verdict follows.
 
 CONFIRMED library integrity defects. Restart replay and record loss are reproduced, and two live broker instances can accept one token. Keep #278 open and prohibit new token-holding/session/remote privileges until an independently qualified repair. No production repair was made in this planning task.
 
@@ -45,7 +49,7 @@ Keep the security repair minimal in product scope: one writer, one durable event
 
 The public [follow-up on the sentinel prototype](https://github.com/TheHalfMoon/Aladdin/issues/278#issuecomment-6073712808) correctly distinguishes its Python behavior tests and synthetic patch-order checks from Rust/Windows qualification. The candidate archive is not available in this checkout; it was not independently compiled or accepted here. A create_new claim only serializes cooperating brokers reaching the same filesystem identity, and pathname cleanup can race replacement. Crashes leave stale claims; do not automatically steal/delete them. Require protected parent/ledger handle identity, ACL/reparse checks, bounded loading and explicit recovery.
 
-Workspace Cargo.toml declares Rust MSRV1.82; the actual reproduction host used1.97.1. The issue notes std File::lock stabilized in1.89, so native LockFileEx or a reviewed MSRV-compatible implementation is required unless a separate toolchain change is authorized. Running on the newer host does not qualify MSRV. Preserve candidate limitations instead of treating its model8/8 or synthetic patch checks as a production fix.
+Workspace Cargo.toml declares Rust MSRV 1.82; the actual reproduction host used1.97.1. The issue notes std File::lock stabilized in1.89, so native LockFileEx or a reviewed MSRV-compatible implementation is required unless a separate toolchain change is authorized. Running on the newer host does not qualify MSRV. Preserve candidate limitations instead of treating its model8/8 or synthetic patch checks as a production fix.
 
 ## Qualification matrix still required
 

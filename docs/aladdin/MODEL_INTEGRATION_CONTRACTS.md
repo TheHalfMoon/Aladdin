@@ -1,6 +1,8 @@
 # Hala One and Reliance — Integration Contracts (Proposed)
 
-Status: PROPOSED PLANNING ONLY. Neither model is deployed by this work. The founder owns fine-tuning, datasets, experiments, and checkpoints. This document specifies only interfaces, data specifications for later founder use, evaluation, serving targets, and rollout rules.
+Status: ADOPTED planning direction (founder decision, 2026-10-09; Sol revision governs where it differs from the Opus baseline). Grants no authority: every capability still needs its own grain, review and qualification. Current execution state: `EXECUTION_FRONTIER.md`. Evidence baseline of this revision: PR #283 at `87bc9d6a69b6c5b5dc415ee6e30ee0fcb60d8985`, PR #282 at `10540885f3c52bd0c0d2f00cc23e3cafe067fe36`.
+
+Scope: PROPOSED CONTRACTS ONLY. Neither model is deployed by this work. The founder owns fine-tuning, datasets, experiments, and checkpoints. This document specifies only interfaces, data specifications for later founder use, evaluation, serving targets, and rollout rules.
 
 ## 1. Common rules
 
@@ -11,7 +13,7 @@ Status: PROPOSED PLANNING ONLY. Neither model is deployed by this work. The foun
 
 ## 2. Hala One (vision-language planner)
 
-### 2.1 Base model facts (DOCUMENTED on the model card, 2026-10-09)
+### 2.1 Base model facts (SOURCE-DOCUMENTED CLAIM on the model card, 2026-10-09)
 
 | Item | Value |
 |---|---|
@@ -74,7 +76,7 @@ Device-side normalization: maps to existing typed operations (`desktop_element_i
 | p95 step latency | <= 3.0 s |
 | Cold start (serverless) | Measure startup/loading/queue and warm-worker spend before choosing policy |
 | Throughput | Measure GPU-seconds per step at batch sizes 1, 8, 32 |
-| Cost per step | <= US$0.001 at expected utilization (see economics) |
+| Cost per step | <= US$0.001 at expected utilization (UNPROVEN ASSUMPTION; depends on deferred pricing and separately authorized hosting) |
 
 Engineering levers: prefix caching for stable system and task context, image downscale to the smallest size that preserves accuracy (measure 1024, 1280, 1568 long edge), FP8 weights for inference only (validate accuracy delta), speculative decoding if supported, short structured outputs.
 
@@ -86,7 +88,7 @@ Engineering levers: prefix caching for stable system and task context, image dow
 - Negative data: sensitive targets that must yield `abstain` or `ask_user` (password fields, payment confirms, UAC, security settings).
 - Training/serving skew risks: image resolution, coordinate spaces, accessibility tree formatting, history length; freeze these in a versioned `prompt_template_revision`.
 
-### 2.6 Acceptance criteria for a Hala One release
+### 2.6 Acceptance criteria for a Hala One release (hypothesis; requires separate hosting and rollout authorization)
 
 1. Native Windows E2E suite success rate at least the incumbent's minus 0 points (no regression), measured on the locked set.
 2. Zero proposals that target protected surfaces in the adversarial set (they must abstain).
@@ -98,7 +100,7 @@ Rollout after independent qualification: shadow mode (minimized proposals logged
 
 ## 3. Reliance (decision model)
 
-### 3.1 Base model facts (DOCUMENTED)
+### 3.1 Base model facts (SOURCE-DOCUMENTED CLAIM)
 
 | Item | d1-3B | d1-omni-600M |
 |---|---|---|

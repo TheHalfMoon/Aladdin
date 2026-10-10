@@ -1,6 +1,6 @@
 # Aladdin improved architecture
 
-Status: independent planning review, 2026-10-09. PROPOSED, NOT ADOPTED. No implementation or authority change. Evidence baseline: PR #283 at `87bc9d6a69b6c5b5dc415ee6e30ee0fcb60d8985`, PR #282 at `10540885f3c52bd0c0d2f00cc23e3cafe067fe36`.
+Status: ADOPTED planning direction (founder decision, 2026-10-09; Sol revision governs where it differs from the Opus baseline). Grants no authority: every capability still needs its own grain, review and qualification. Current execution state: `EXECUTION_FRONTIER.md`. Evidence baseline of this revision: PR #283 at `87bc9d6a69b6c5b5dc415ee6e30ee0fcb60d8985`, PR #282 at `10540885f3c52bd0c0d2f00cc23e3cafe067fe36`.
 
 ## Preferred design
 
@@ -64,7 +64,7 @@ For comparative browser options, see the source-reuse matrix and implementation 
 
 ## Preserved source inventory (Opus, baseline attributed)
 
-The following inventory is retained from Opus at main61e664b. Source inspection supports the main capability/gap distinctions; line counts and release/build measurements are attributed to the original session rather than independently remeasured. The original categorical production-reachability row is a source inventory, not installed-release E2E proof.
+The following inventory is retained from Opus at main `61e664b`. Source inspection supports the main capability/gap distinctions; line counts and release/build measurements are attributed to the original session rather than independently remeasured. The original categorical production-reachability row is a source inventory, not installed-release E2E proof.
 
 ## 1. Current-code inventory (what exists today)
 
@@ -74,7 +74,7 @@ Opus reports source reading at the base revision. Line counts include tests.
 |---|---|---:|---|---|---|
 | Authority daemon | `crates/qdrald` | 13,011 | Rust | VERIFIED, production-reachable | Single policy and dispatch kernel; MCP edge talks to it over stdio JSON (`apps/qdral-mcp/src/kernel.ts`). |
 | Policy | `crates/qdral-policy` | 17,679 | Rust | VERIFIED | Workspace, executable registry, FullControlLease (`full_control.rs`, `full_control_store.rs`), remote session leases, per-SG policy modules. |
-| Approval broker and ledger | `crates/qdral-approval` | 2,293 | Rust | VERIFIED, DEFECT REPRODUCED | SOFT dialog via `MessageBoxW`; STRONG via Windows Hello `UserConsentVerifier`; append-only JSONL ledger with SHA-256 chain. Issue #278 reproduced (see `SECURITY_THREAT_MODEL.md`). |
+| Approval broker and ledger | `crates/qdral-approval` | 2,293 | Rust | VERIFIED (Opus, at 61e664b); DEFECT REPRODUCED, since REPAIRED by PR #286 | SOFT dialog via `MessageBoxW`; STRONG via Windows Hello `UserConsentVerifier`; append-only JSONL ledger with SHA-256 chain. Issue #278 reproduced (see `SECURITY_THREAT_MODEL.md`). |
 | UIA provider and registry | `crates/qdral-provider-uia` | 14,542 | Rust | VERIFIED | Typed process/window/element identities, generations, protected-surface exclusion, invoke/value/select/toggle/scroll, frames, proposals, coordinates, input leases, interruption epoch. |
 | Windows Computer Host | `apps/deskal-computer-host` | 3,768 | Go | VERIFIED, size UNMEASURED | Private stdio host derived from Open Computer Use: `list_windows`, `observe_window`, `capture_window`, `cursor_position`, `semantic_action`, `window_action`, `input_move/click/drag/scroll/type_text/key/hotkey`. No listener. |
 | Process provider | `crates/qdral-provider-process` | 4,788 | Rust | VERIFIED (Safe), SG-000096 in progress | Registered, hash-pinned executables; AppContainer and Job Object primitives; Full User shell not armed. |
@@ -99,9 +99,9 @@ Documentation drift (VERIFIED): `README.md` lists 31 tools; the code exposes 40.
 | Implemented | Authority kernel, approvals, workspace FS, Git, clipboard, HTTPS fetch, UIA semantic actions, window capture, bounded raw input under Full User, device identity, pairing, OAuth, relay, lifecycle, release supply chain. |
 | Production-reachable | Local: all 40 tools (desktop actions require a locally granted Full User lease). Remote: the 26-tool `core` profile only. |
 | Test-only or contract-only | Browser DOM observation and actuation (template data), browser host (supervision only), remote full control (contract and lease isolation only). |
-| Blocked by governance | Full User shell and interactive sessions (SG-000096 T02 to T05, gated by #278), Full Admin, Persistent Admin, remote full control, browser profile expansion. |
+| Blocked by governance | Full User shell and interactive sessions (SG-000096 T02 to T05; the #278 gate is cleared by PR #286, activation still requires its own grains), Full Admin, Persistent Admin, remote full control, browser profile expansion. |
 | Exists but not integrated | Browser host supervision is not connected to any DOM engine; Go host is not in any published release. |
 | Duplicated (apparent; confirm in CU-01) | `qdral-browser-host` exports its own coordinate/input-lease (`src/coordinates.rs`) and capture (`src/capture.rs`) contracts, while `qdral-provider-uia` owns frames, proposals, coordinates, and input leases for the desktop. Before adding browser actuation, decide one owner for coordinate and capture identity (recommended: the UIA registry for desktop surfaces, the browser engine only for in-page DOM targets). |
-| Extend directly | UIA registry, approval broker (after #278), FullControlLease, process provider, relay, device identity. |
+| Extend directly | UIA registry, approval broker (repaired by PR #286), FullControlLease, process provider, relay, device identity. |
 | Replace | Browser provider snapshot/actuation internals (replace the template with a constrained Playwright worker behind the same contracts). |
 | Preserve as compatibility interface | `qdral` CLI, `qdrald`, `@qdral/*`, `QDRAL_*`, `qdral.*` OAuth scopes, storage paths, MCP name `qdral`, tool names, failure-code vocabulary. |

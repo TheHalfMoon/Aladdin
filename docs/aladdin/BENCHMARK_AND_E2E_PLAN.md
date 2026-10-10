@@ -1,10 +1,10 @@
 # Minimum evidence for a useful, fast Aladdin
 
-Status: independent planning review, 2026-10-09. PROPOSED, NOT ADOPTED. No implementation or authority change. Evidence baseline: PR #283 at `87bc9d6a69b6c5b5dc415ee6e30ee0fcb60d8985`, PR #282 at `10540885f3c52bd0c0d2f00cc23e3cafe067fe36`.
+Status: ADOPTED planning direction (founder decision, 2026-10-09; Sol revision governs where it differs from the Opus baseline). Grants no authority: every capability still needs its own grain, review and qualification. Current execution state: `EXECUTION_FRONTIER.md`. Evidence baseline of this revision: PR #283 at `87bc9d6a69b6c5b5dc415ee6e30ee0fcb60d8985`, PR #282 at `10540885f3c52bd0c0d2f00cc23e3cafe067fe36`.
 
 ## Priority and current limits
 
-No complete Aladdin user journey, head-to-head competitor task, toolkit startup/RAM, full installer or GPU throughput benchmark was run here. Actual measurements are the approval tests, WPF build/self-tests and offline arithmetic. The first benchmark priority is a small native Windows acceptance harness with independent final-state checkers for the five journeys in the fast-track report. Broad leaderboard programs follow working functionality.
+No complete Aladdin user journey, head-to-head competitor task, toolkit startup/RAM, full installer or GPU throughput benchmark was run here. Actual measurements are the approval tests, WPF build/self-tests and offline arithmetic. The first benchmark priority is a small native Windows acceptance harness with independent final-state checkers for the five journeys in the `IMPLEMENTATION_ROADMAP.md`. Broad leaderboard programs follow working functionality.
 
 Keep security outcomes beside task time: faster unauthorized completion is failure. Report attempted tasks, verified success, unknowns, blocked capabilities and interventions. Do not exclude timeout/failure tasks after seeing results; successful-only latency can reward unreliable systems.
 
@@ -12,7 +12,7 @@ Keep security outcomes beside task time: faster unauthorized completion is failu
 
 | Stage | Required evidence | Gate |
 |---|---|---|
-| Security repair | Existing27 + three regression tests, all-event persistence/restart/concurrency/migration fault matrix | Zero unauthorized dispatch in tested cases; fail closed on ambiguous state |
+| Security repair | Existing 27 + three regression tests, all-event persistence/restart/concurrency/migration fault matrix | Zero unauthorized dispatch in tested cases; fail closed on ambiguous state |
 | Local file/report | Known input/output fixtures, denied and approved save, content/path identity drift | Independent bytes/value/hash checker; no out-of-scope writes |
 | Browser | Navigation/search/PDF plus iframe/shadow/stale ref/crash/egress denial fixtures | Correct artifact and bounded network/file behavior |
 | Windows app/client | Actual visible native session, one real supported MCP client, stop/takeover/unknown handling | Non-admin, keyboard/Narrator, no fabricated state or self-approval |

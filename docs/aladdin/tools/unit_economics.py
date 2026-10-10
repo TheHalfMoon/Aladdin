@@ -19,10 +19,12 @@ def estimate(a):
     for key in ("month_hours", "warm_gpu_hour", "min_warm_gpus",
                 "gpu_seconds_per_step", "steps_per_task",
                 "historical_api_step", "historical_steps_per_account"):
-        if a[key] <= 0:
-            raise ValueError(key + " must be positive")
-    if not 0 < a["utilization"] <= 1:
+        if not math.isfinite(a[key]) or a[key] <= 0:
+            raise ValueError(key + " must be a positive finite number")
+    if not math.isfinite(a["utilization"]) or not 0 < a["utilization"] <= 1:
         raise ValueError("utilization must be in (0, 1]")
+    if a["min_warm_gpus"] != int(a["min_warm_gpus"]):
+        raise ValueError("min_warm_gpus must be a whole number")
     seconds = a["month_hours"] * 3600
     capacity = seconds * a["utilization"] / a["gpu_seconds_per_step"]
     warm = a["month_hours"] * a["warm_gpu_hour"] * a["min_warm_gpus"]
@@ -35,8 +37,8 @@ def estimate(a):
 
 
 def cost_at_load(steps, a):
-    if steps < 0:
-        raise ValueError("steps must be nonnegative")
+    if not math.isfinite(steps) or steps < 0:
+        raise ValueError("steps must be a nonnegative finite number")
     e = estimate(a)
     workers = max(a["min_warm_gpus"], math.ceil(steps / e["steps_per_gpu_month_assumed"]))
     return workers, workers * a["month_hours"] * a["warm_gpu_hour"]
