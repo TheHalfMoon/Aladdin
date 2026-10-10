@@ -82,14 +82,17 @@ and `qdral approvals recover`:
 
 1. refuses a missing ledger without creating anything, then takes the writer
    lock and refuses a ledger that verifies, is busy, or is merely unreadable
-   (an unreadable ledger may verify, so it is never quarantined);
+   (an unreadable ledger may verify, so it is never quarantined); on
+   Windows it also refuses a read-only ledger file, which cannot be replaced
+   or flushed, before creating any file;
 2. writes and syncs a new chain to `approval-history.jsonl.recovering-<ms>`,
    starting with a non-authorizing `Unavailable` record that names the
    quarantine file and the old ledger's SHA-256;
 3. preserves the original bytes at
    `approval-history.jsonl.quarantine-<ms>-<sha256 prefix>` as a hard link
-   (or, where links are unsupported, a copy), synced and hash-checked against
-   the original, never deleted or rewritten;
+   (or, where links are unsupported, an owner-only copy into a new file),
+   flushed, synced and hash-checked against the original; an existing file at
+   that name is never replaced, and the evidence is never rewritten;
 4. replaces the ledger with the staged chain in one rename.
 
 The ledger path is never absent. A failure or crash before step 4 leaves the
@@ -158,7 +161,11 @@ Unit and process tests in `crates/qdral-approval/src/lib.rs`:
 `first_record_during_a_prompt_on_an_empty_ledger_is_not_a_chain_change`,
 `recovery_keeps_the_ledger_path_present_and_leaves_no_staged_file`,
 `quarantine_preservation_refuses_a_mismatched_copy_and_keeps_the_original`,
-`inspection_reports_lock_contention_as_busy`. Lifecycle:
+`inspection_reports_lock_contention_as_busy`,
+`read_only_ledger_is_refused_before_any_recovery_file_is_created` (Windows),
+`failed_final_rename_keeps_the_original_and_removes_the_staged_chain`
+(Windows), `unopenable_lock_is_reported_unreadable_not_busy`,
+`transient_error_while_resuming_keeps_the_durability_fault` (Windows). Lifecycle:
 `approval_history_check_verifies_the_chain_not_just_json`,
 `approvals_recover_quarantines_only_an_unverifiable_ledger`,
 `purge_removes_data_only_when_requested`, and packaged Windows release

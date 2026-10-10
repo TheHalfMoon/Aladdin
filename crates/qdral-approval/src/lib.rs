@@ -1833,6 +1833,21 @@ fn recover_approval_ledger_with_wait(
         Err(error) if !current.poisoned() => return Err(error),
         Err(_) => {}
     }
+    // Windows cannot replace (or flush) a read-only file; refuse before any
+    // file is created so the operator can clear the attribute and retry.
+    #[cfg(windows)]
+    {
+        let read_only = std::fs::metadata(path)
+            .map(|metadata| metadata.permissions().readonly())
+            .map_err(|error| {
+                ApprovalError::unavailable(format!("approval ledger is unreadable: {error}"))
+            })?;
+        if read_only {
+            return Err(ApprovalError::unavailable(
+                "the approval ledger file is read-only; clear its read-only attribute and run recovery again",
+            ));
+        }
+    }
     let bytes = std::fs::read(path).map_err(|error| {
         ApprovalError::unavailable(format!("read approval ledger for quarantine: {error}"))
     })?;
@@ -1919,7 +1934,14 @@ fn preserve_quarantine(
     match std::fs::hard_link(path, quarantined_to) {
         // The link shares the original's data, which may not be on disk yet
         // (for example after an edit outside the broker): flush it.
-        Ok(()) => flush_existing_file(quarantined_to).map_err(failed)?,
+        Ok(()) => {
+            if let Err(error) = flush_existing_file(quarantined_to) {
+                let note = remove_own_file(quarantined_to);
+                return Err(ApprovalError::unavailable(format!(
+                    "flush the approval ledger quarantine (the original is unchanged{note}): {error}"
+                )));
+            }
+        }
         // Never replace whatever already exists at the quarantine name.
         Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
             return Err(failed(error));
@@ -1931,55 +1953,54 @@ fn preserve_quarantine(
     let kept = std::fs::read(quarantined_to).map_err(failed)?;
     if hex_lower(&Sha256::digest(&kept)) != sha256 {
         // Only this attempt's own link or copy is removed, never the original.
-        let kept_note = match std::fs::remove_file(quarantined_to) {
-            Ok(()) => String::new(),
-            Err(error) => format!(
-                "; the mismatched file {} could not be removed: {error}",
-                quarantined_to.display()
-            ),
-        };
+        let note = remove_own_file(quarantined_to);
         return Err(ApprovalError::unavailable(format!(
-            "the quarantined approval ledger does not match the original; the original is unchanged{kept_note}"
+            "the quarantined approval ledger does not match the original; the original is unchanged{note}"
         )));
     }
     Ok(())
 }
 
-/// Flushes an existing file's data to disk without writing to it.
-fn flush_existing_file(path: &Path) -> std::io::Result<()> {
-    // FlushFileBuffers needs write access on Windows; a read-only file
-    // cannot be flushed this way and is accepted as already written.
-    #[cfg(windows)]
-    {
-        match std::fs::OpenOptions::new().write(true).open(path) {
-            Ok(file) => file.sync_all(),
-            Err(error) if error.kind() == std::io::ErrorKind::PermissionDenied => Ok(()),
-            Err(error) => Err(error),
-        }
-    }
-    #[cfg(not(windows))]
-    {
-        std::fs::File::open(path)?.sync_all()
+/// Removes a link or copy this recovery attempt created, describing any file
+/// that had to be left behind.
+fn remove_own_file(path: &Path) -> String {
+    match std::fs::remove_file(path) {
+        Ok(()) => String::new(),
+        Err(error) => format!("; {} could not be removed: {error}", path.display()),
     }
 }
 
-/// Copies `from` into `to`, which must not exist yet, flushes the copy and
-/// gives it the source's permissions. A partial copy is removed.
+/// Flushes an existing file's data to disk without writing to it.
+fn flush_existing_file(path: &Path) -> std::io::Result<()> {
+    // FlushFileBuffers needs a write handle on Windows (read-only ledgers are
+    // refused before recovery starts); fsync works on a read-only descriptor.
+    #[cfg(windows)]
+    let file = std::fs::OpenOptions::new().write(true).open(path)?;
+    #[cfg(not(windows))]
+    let file = std::fs::File::open(path)?;
+    file.sync_all()
+}
+
+/// Copies `from` into `to`, which must not exist yet, and flushes the copy.
+/// On Unix the copy is created owner-only, never more readable than needed.
+/// A partial copy is removed, and the error names it if that fails.
 fn copy_into_new_file(from: &Path, to: &Path) -> std::io::Result<()> {
     let mut source = std::fs::File::open(from)?;
-    let permissions = source.metadata()?.permissions();
-    let mut target = std::fs::OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(to)?;
-    let copied = std::io::copy(&mut source, &mut target)
-        .and_then(|_| target.sync_all())
-        .and_then(|()| std::fs::set_permissions(to, permissions));
-    if copied.is_err() {
-        drop(target);
-        let _ = std::fs::remove_file(to);
+    let mut options = std::fs::OpenOptions::new();
+    options.write(true).create_new(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt as _;
+        options.mode(0o600);
     }
-    copied
+    let mut target = options.open(to)?;
+    let copied = std::io::copy(&mut source, &mut target).and_then(|_| target.sync_all());
+    if let Err(error) = copied {
+        drop(target);
+        let note = remove_own_file(to);
+        return Err(std::io::Error::new(error.kind(), format!("{error}{note}")));
+    }
+    Ok(())
 }
 
 fn record_checksum(record: &StoredRecord) -> String {
@@ -3399,10 +3420,12 @@ mod tests {
             "never overwrites"
         );
         assert_eq!(std::fs::read(&copy).unwrap(), b"original\n");
-        assert_eq!(
-            std::fs::metadata(&copy).unwrap().permissions(),
-            std::fs::metadata(&path).unwrap().permissions()
-        );
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt as _;
+            let mode = std::fs::metadata(&copy).unwrap().permissions().mode();
+            assert_eq!(mode & 0o077, 0, "the copy is owner-only: {mode:o}");
+        }
         let _ = std::fs::remove_file(&copy);
         flush_existing_file(&path).expect("flush an existing file");
         let digest = hex_lower(&Sha256::digest(b"original\n"));
@@ -3440,6 +3463,37 @@ mod tests {
         assert_eq!(inspection.status, ApprovalLedgerStatus::Unreadable);
         assert!(inspection.detail.contains("lock"), "{}", inspection.detail);
         std::fs::remove_dir(&lock).unwrap();
+        remove_ledger(&path);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn read_only_ledger_is_refused_before_any_recovery_file_is_created() {
+        let path = temp_path("ocr-read-only");
+        let (_, original) = write_legacy_v010_ledger(&path, true);
+        let mut permissions = std::fs::metadata(&path).unwrap().permissions();
+        permissions.set_readonly(true);
+        std::fs::set_permissions(&path, permissions.clone()).unwrap();
+        let error = recover_approval_ledger(&path).unwrap_err();
+        assert!(error.message.contains("read-only"), "{}", error.message);
+        let dir = path.parent().unwrap();
+        let stem = path.file_name().unwrap().to_string_lossy().into_owned();
+        let leftovers: Vec<String> = std::fs::read_dir(dir)
+            .unwrap()
+            .filter_map(|entry| entry.ok())
+            .map(|entry| entry.file_name().to_string_lossy().into_owned())
+            .filter(|name| {
+                name.starts_with(&format!("{stem}.quarantine-"))
+                    || name.starts_with(&format!("{stem}.recovering-"))
+            })
+            .collect();
+        assert!(leftovers.is_empty(), "{leftovers:?}");
+        assert_eq!(std::fs::read(&path).unwrap(), original);
+        #[allow(clippy::permissions_set_readonly_false)]
+        permissions.set_readonly(false);
+        std::fs::set_permissions(&path, permissions).unwrap();
+        let recovery = recover_approval_ledger(&path).expect("recovers once writable");
+        let _ = std::fs::remove_file(&recovery.quarantined_to);
         remove_ledger(&path);
     }
 
