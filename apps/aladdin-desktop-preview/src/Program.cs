@@ -66,8 +66,12 @@ namespace Aladdin.DesktopPreview
         internal const int MaxOutputChars = 256 * 1024;
 
         /// Runs a child with both streams drained concurrently (so a full pipe can
-        /// never deadlock it), a bounded amount of output kept, and the whole
-        /// process tree killed on timeout.
+        /// never deadlock it) and a bounded amount of output kept. The child is
+        /// placed in a kill-on-close Job Object: on timeout the job is terminated,
+        /// and any descendants still alive when the query ends are killed with it.
+        /// Processes the child starts before it joins the job (a few
+        /// milliseconds after start) are not covered; if no job can be created,
+        /// only the direct child is killed on timeout.
         internal static CliResult Run(string fileName, string[] arguments, int timeoutMs, string localAppData)
         {
             CliResult result = new CliResult();
@@ -264,7 +268,7 @@ namespace Aladdin.DesktopPreview
         /// `C:\...` only: no UNC share (`\\host\share`), no drive-relative path.
         internal static bool IsDriveQualified(string path)
         {
-            return !string.IsNullOrEmpty(path) && path.Length >= 3 && char.IsLetter(path[0])
+            return !string.IsNullOrEmpty(path) && path.Length >= 3 && ((path[0] >= 'A' && path[0] <= 'Z') || (path[0] >= 'a' && path[0] <= 'z'))
                 && path[1] == ':' && (path[2] == '\\' || path[2] == '/');
         }
 
@@ -397,9 +401,14 @@ namespace Aladdin.DesktopPreview
         /// Lists at most MaxEntries names without materializing the directory.
         internal static string List(string folder, CancellationToken cancel)
         {
+            return List(Directory.EnumerateFileSystemEntries(folder), cancel);
+        }
+
+        internal static string List(IEnumerable<string> entries, CancellationToken cancel)
+        {
             List<string> names = new List<string>();
             bool more = false;
-            foreach (string entry in Directory.EnumerateFileSystemEntries(folder))
+            foreach (string entry in entries)
             {
                 cancel.ThrowIfCancellationRequested();
                 if (names.Count == MaxEntries) { more = true; break; }
@@ -412,17 +421,24 @@ namespace Aladdin.DesktopPreview
         /// Gives up waiting after `limit` even if the file system never returns
         /// (for example a stalled network share); the abandoned enumeration is
         /// cancelled and its result ignored.
-        internal static async Task<string> ListWithin(string folder, TimeSpan limit)
+        internal static Task<string> ListWithin(string folder, TimeSpan limit)
+        {
+            return ListWithin(token => List(folder, token), limit);
+        }
+
+        internal static async Task<string> ListWithin(Func<CancellationToken, string> list, TimeSpan limit)
         {
             CancellationTokenSource cancel = new CancellationTokenSource();
-            Task<string> work = Task.Run(() => List(folder, cancel.Token));
+            // A dedicated thread: a hung enumeration must not hold a pool thread.
+            Task<string> work = Task.Factory.StartNew(() => list(cancel.Token), cancel.Token,
+                TaskCreationOptions.LongRunning, TaskScheduler.Default);
             Task finished = await Task.WhenAny(work, Task.Delay(limit));
             if (finished != work)
             {
                 cancel.Cancel();
                 // Observe the abandoned task's outcome so it can never surface later.
                 Task observed = work.ContinueWith(t => { var ignored = t.Exception; cancel.Dispose(); });
-                return "Listing this folder took too long and was stopped. No changes were made.";
+                return "Listing this folder took too long, so Aladdin stopped waiting for it. No changes were made.";
             }
             cancel.Dispose();
             try { return await work; }
@@ -784,7 +800,14 @@ namespace Aladdin.DesktopPreview
             CliResult stalled = BoundedProcess.Run(Path.Combine(Environment.SystemDirectory, "cmd.exe"), new[] { "/c", "ping -n 30 127.0.0.1 >nul" }, 1500, null);
             expect(stalled.TimedOut && clock.ElapsedMilliseconds < 8000, "stalled child times out");
             Thread.Sleep(500);
-            bool grandchildAlive = Process.GetProcessesByName("PING").Any(p => { try { return p.StartTime >= started; } catch (Exception) { return false; } });
+            bool grandchildAlive = false;
+            foreach (Process ping in Process.GetProcessesByName("PING"))
+            {
+                using (ping)
+                {
+                    try { grandchildAlive |= ping.StartTime >= started; } catch (Exception) { }
+                }
+            }
             expect(!grandchildAlive, "timed-out child's own children are killed");
             // A child that floods stdout and stderr never deadlocks and is bounded.
             CliResult flood = BoundedProcess.Run(Path.Combine(Environment.SystemDirectory, "cmd.exe"),
@@ -807,6 +830,14 @@ namespace Aladdin.DesktopPreview
                 expect(cancelled, "folder preview honors cancellation");
                 expect(FolderPreview.ListWithin(dir, TimeSpan.FromSeconds(10)).Result.Contains("more not shown"), "bounded listing completes within its limit");
                 expect(FolderPreview.ListWithin(Path.Combine(dir, "missing"), TimeSpan.FromSeconds(10)).Result.StartsWith("Unable to list"), "listing failure is reported");
+                // An enumeration whose first step never returns (a stalled network share).
+                using (ManualResetEventSlim never = new ManualResetEventSlim(false))
+                {
+                    Stopwatch hung = Stopwatch.StartNew();
+                    string late = FolderPreview.ListWithin(token => { never.Wait(TimeSpan.FromSeconds(30)); return "never"; }, TimeSpan.FromMilliseconds(500)).Result;
+                    expect(late.Contains("stopped waiting") && hung.ElapsedMilliseconds < 5000, "hung enumeration is abandoned at the limit");
+                    never.Set();
+                }
             }
             finally { try { Directory.Delete(dir, true); } catch (Exception) { } }
 
@@ -826,10 +857,17 @@ namespace Aladdin.DesktopPreview
             if (args.Length == 1 && args[0] == "--ui-self-test") { MainWindow window = new MainWindow(); if (window.Content == null) return 2; Console.WriteLine("Aladdin WPF layout construction: PASS"); return 0; }
             System.Windows.Application app = new System.Windows.Application();
             // A bug must never take the window down silently; report and continue.
+            bool reported = false;
             app.DispatcherUnhandledException += (sender, e) => {
                 e.Handled = true;
-                MainWindow main = app.MainWindow as MainWindow;
-                if (main != null) main.ReportInternalError();
+                if (reported) return;
+                reported = true;
+                try
+                {
+                    MainWindow main = app.MainWindow as MainWindow;
+                    if (main != null) main.ReportInternalError();
+                }
+                catch (Exception) { }
             };
             app.Run(new MainWindow());
             return 0;

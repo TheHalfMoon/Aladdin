@@ -96,8 +96,10 @@ try {
     $refused = WaitFor { TranscriptTexts $window | Where-Object { $_.StartsWith("Not executed. Aladdin AI is not connected.", [StringComparison]::Ordinal) } | Select-Object -First 1 } 5000
     Check "shell-like text is refused, not executed" ($null -ne $refused) "$refused"
     Start-Sleep -Milliseconds 1500
+    # Direct children still alive, plus Calculator (Windows 11 launches it through a broker).
     $children = @(Get-CimInstance Win32_Process -Filter "ParentProcessId = $($process.Id)" | Where-Object { $_.CreationDate -ge $refusedAt })
-    Check "no process was started by the refused text" ($children.Count -eq 0) (($children | ForEach-Object { $_.Name }) -join ", ")
+    $calculators = @(Get-Process -Name "calc", "CalculatorApp" -ErrorAction SilentlyContinue | Where-Object { $_.StartTime -ge $refusedAt })
+    Check "no process was started by the refused text" ($children.Count -eq 0 -and $calculators.Count -eq 0) ((@($children | ForEach-Object { $_.Name }) + @($calculators | ForEach-Object { $_.Name })) -join ", ")
 
     if ($expectInstalled) {
         SendCommand $window "doctor"
