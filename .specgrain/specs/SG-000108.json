@@ -20,8 +20,8 @@
     "include": [
       "Activate the SG-000108 contract only; the engine, dependency, tools and authority changes require separately exact-head qualified implementation PRs.",
       "Admit exactly playwright-core 1.63.0 (dependency facts under `dependency_admission`) as a pinned, lockfile-recorded dependency of a separate private worker process. The worker runs on Node.js 20+; today the release requires a separately installed Node.js (no runtime is shipped), so the worker inherits that prerequisite until a signed, pinned Node runtime is admitted under SG-000106. No bundled browser download: the worker drives only the engine the host verified.",
-      "Worker transport: private anonymous-pipe IPC with the Rust host using a closed, versioned frame vocabulary that extends the SG-000074 protocol generation (an explicit authority delta of the implementation PR, since SG-000074 currently has no capability frames); no TCP/HTTP listener, no remote-debugging port or address, no generic CDP passthrough. How the engine is launched and attached is an open question (see `open_questions`).",
-      "Every navigation, redirect, frame, popup, worker, subresource and download decision is made by the existing qdral-browser-host navigation policy (SG-000075) before the worker acts; actual traffic is enforced by a mechanism that sees resolved addresses (see `open_questions`), not by URL interception alone; service workers are blocked and WebSocket traffic is explicitly mediated or denied; page content never becomes policy.",
+      "Worker transport: private anonymous-pipe IPC with the Rust host using a closed, versioned frame vocabulary that extends the SG-000074 protocol generation (an explicit authority delta of the implementation PR, since SG-000074 currently has no capability frames); no TCP/HTTP listener, no remote-debugging port or address, no generic CDP passthrough. Engine launch and attachment follow `decisions` (pipe, host-built argv, OS command-line verification).",
+      "Every navigation, redirect, frame, popup, worker, subresource and download decision is made by the existing qdral-browser-host navigation policy (SG-000075) before the worker acts; actual traffic is enforced by host-pinned resolution and a no-route proxy for everything else (see `decisions`), not by URL interception alone; WebRTC is limited to proxied transport; service workers are blocked and WebSocket traffic is explicitly mediated or denied; page content never becomes policy.",
       "Observation uses Playwright accessibility/aria snapshots mapped onto the SG-000076 bounded, redacted, generation-bound node identity model; caller-supplied selectors are never authority.",
       "Actuation (SG-000077) and transfers (SG-000078) reuse their existing typed shapes; downloads are staged, size/type-checked, digest-recorded and committed create-only inside the approved workspace destination; uploads stay limited to SG-000025/SG-000078-recorded sources.",
       "Exposure follows SG-000079: the live tool set changes only through an explicit, reviewed profile update recorded in discovery, documentation, OAuth scope tables and runtime together.",
@@ -61,10 +61,22 @@
     "alternatives_considered": "A Rust CDP client (deferred in docs/aladdin/ARCHITECTURE.md until measurements justify it); the whole @playwright/mcp package (rejected as a second edge in docs/aladdin/SOURCE_REUSE_MATRIX.md); playwright-core 1.64.0 (too recent)."
   },
   "open_questions": [
-    "Engine launch and attachment: (a) the worker launches the verified engine through Playwright with --remote-debugging-pipe and an explicit flag list (requires amending SG-000074's frozen argv contract: Playwright defaults such as --enable-automation must be removed or justified), or (b) the host keeps launching the engine and hands the debugging pipe to the worker (no public Playwright API; would need a reviewed adapter). Decide in the first implementation PR with security review; record which process owns the engine in the Job Object.",
-    "Actual-traffic enforcement of SG-000075 (rebinding, private/loopback/metadata denial): candidates are host-resolved address pinning passed to the engine (for example host resolver rules per navigation) with re-resolution checks, or another mechanism that sees resolved addresses. URL interception alone is insufficient. A4 depends on this decision.",
     "Engine compatibility: playwright-core 1.63.0 against the installed Edge/Chrome versions verified by the host; the supported version window and refusal of unsupported engines.",
     "TesterArmy E2E: exact version, engines and network behavior; it must run only against the controlled fixture origin and must not require a paid or external service."
+  ],
+  "decisions": [
+    {
+      "question": "Engine launch and attachment",
+      "status": "PROPOSED, pending security review",
+      "record": "docs/security/SG-000108_ENGINE_ATTACHMENT_DECISION.md",
+      "decision": "Option (a): the worker launches the host-verified engine with playwright-core launchPersistentContext over --remote-debugging-pipe and ignoreDefaultArgs: true, using exactly the argv, profile and scrubbed environment built by the host; the host then verifies the engine's OS-reported command line, parent and Job Object membership. SG-000074's ALLOWED_FLAGS gains --remote-debugging-pipe and three host-valued flags; FORBIDDEN_FLAGS is unchanged."
+    },
+    {
+      "question": "Actual-traffic enforcement of SG-000075",
+      "status": "PROPOSED, pending security review",
+      "record": "docs/security/SG-000108_ENGINE_ATTACHMENT_DECISION.md",
+      "decision": "Three layers: host-pinned resolution (--host-resolver-rules mapping each admitted name to its select_public_address pin, then MAP * ~NOTFOUND); no route for IP literals or unmapped names (--proxy-server=http://0.0.0.0:9 with an exact --proxy-bypass-list of admitted names plus <-loopback>); and the SG-000075 policy gate in the worker's context route, with service workers blocked and WebSocket denied. --webrtc-ip-handling-policy=disable_non_proxied_udp is required because WebRTC UDP otherwise bypasses the first two layers."
+    }
   ],
   "invariants": [
     "The Rust host remains the policy authority: the worker never decides navigation, download or exposure on its own and refuses any frame outside the closed vocabulary.",
@@ -86,11 +98,11 @@
     },
     {
       "id": "A3",
-      "claim": "Host-to-worker IPC is closed and versioned; unknown frames, script evaluation, generic CDP and caller selectors are rejected by construction and by negative tests; the open question on engine launch and attachment is resolved with any SG-000074 argv/protocol change recorded as an explicit authority delta."
+      "claim": "Host-to-worker IPC is closed and versioned; unknown frames, script evaluation, generic CDP and caller selectors are rejected by construction and by negative tests; the engine runs with exactly the host-built argv of the engine-attachment decision, verified against the OS-reported command line, and the SG-000074 argv change is recorded as an explicit authority delta."
     },
     {
       "id": "A4",
-      "claim": "Live navigation on the verified installed engine obeys every SG-000075 rule against real traffic (redirect widening, downgrade, rebinding, private/loopback/metadata, frames/popups/workers, service workers blocked, WebSocket mediated or denied), proven with fixtures, using the resolved-address enforcement mechanism chosen for the open question."
+      "claim": "Live navigation on the verified installed engine obeys every SG-000075 rule against real traffic (redirect widening, downgrade, rebinding, private/loopback/metadata, frames/popups/workers, service workers blocked, WebSocket denied, WebRTC UDP refused), proven with fixtures; the resolver-pinning and no-route layers are each proven with the policy route disabled by a test-only hook."
     },
     {
       "id": "A5",
