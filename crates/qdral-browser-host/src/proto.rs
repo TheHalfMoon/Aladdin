@@ -22,7 +22,9 @@ pub const PROTOCOL_GENERATION: u32 = 1;
 pub enum HostRequest {
     Hello { generation: u32 },
     Ping { nonce: String },
-    Shutdown,
+    // Empty struct variants: serde ignores unknown fields on unit variants
+    // of an internally tagged enum even with deny_unknown_fields.
+    Shutdown {},
 }
 
 /// Closed host reply vocabulary.
@@ -31,7 +33,7 @@ pub enum HostRequest {
 pub enum HostReply {
     Hello { generation: u32, host: String },
     Pong { nonce: String },
-    Bye,
+    Bye {},
     Error { code: String },
 }
 
@@ -84,6 +86,30 @@ pub fn write_frame<T: Serialize, W: Write>(writer: &mut W, value: &T) -> Result<
 mod tests {
     use super::*;
     use std::io::Cursor;
+
+    #[test]
+    fn field_free_frames_refuse_unknown_fields_and_keep_their_wire_form() {
+        // serde ignores unknown fields on unit variants of an internally
+        // tagged enum even with deny_unknown_fields, so these frames are
+        // empty struct variants.
+        let request = |text: &str| serde_json::from_str::<HostRequest>(text);
+        let reply = |text: &str| serde_json::from_str::<HostReply>(text);
+        assert_eq!(
+            request(r#"{"frame":"shutdown"}"#).unwrap(),
+            HostRequest::Shutdown {}
+        );
+        assert!(request(r#"{"frame":"shutdown","x":1}"#).is_err());
+        assert_eq!(reply(r#"{"frame":"bye"}"#).unwrap(), HostReply::Bye {});
+        assert!(reply(r#"{"frame":"bye","x":1}"#).is_err());
+        assert_eq!(
+            serde_json::to_string(&HostRequest::Shutdown {}).unwrap(),
+            r#"{"frame":"shutdown"}"#
+        );
+        assert_eq!(
+            serde_json::to_string(&HostReply::Bye {}).unwrap(),
+            r#"{"frame":"bye"}"#
+        );
+    }
 
     #[test]
     fn frames_round_trip_and_reject_unknown() {
