@@ -72,11 +72,11 @@ impl LiveHost {
             mut stdin,
             mut stdout,
         } = self;
-        let _ = write_frame(&mut stdin, &HostRequest::Shutdown);
+        let _ = write_frame(&mut stdin, &HostRequest::Shutdown {});
         let deadline = Instant::now() + Duration::from_secs(2);
         while child.is_alive() && Instant::now() < deadline {
             match decode_frame::<HostReply, _>(&mut stdout) {
-                Ok(HostReply::Bye) => break,
+                Ok(HostReply::Bye {}) => break,
                 Ok(_) => continue,
                 Err(_) => break,
             }

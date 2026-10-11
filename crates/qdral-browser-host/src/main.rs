@@ -141,8 +141,8 @@ fn serve(host_id: String, engine_child: SupervisedChild) -> Result<(), String> {
                 }
                 write_reply(&mut output, &HostReply::Pong { nonce })?;
             }
-            HostRequest::Shutdown => {
-                let _ = write_reply(&mut output, &HostReply::Bye);
+            HostRequest::Shutdown {} => {
+                let _ = write_reply(&mut output, &HostReply::Bye {});
                 let _ = engine_child.shutdown();
                 return Ok(());
             }
