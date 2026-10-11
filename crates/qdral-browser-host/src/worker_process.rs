@@ -493,7 +493,11 @@ fn read_member(handle: &OwnedHandle, pid: u32) -> Result<JobProcess, HostError> 
     let image = PathBuf::from(String::from_utf16_lossy(&image[..size as usize]));
     let mut buffer = vec![0u64; 8192];
     let mut needed = 0u32;
+    // Bounded: a size that does not grow (or a persistent mismatch) fails
+    // closed instead of retrying forever.
+    let mut attempts = 0;
     loop {
+        attempts += 1;
         let bytes = std::mem::size_of_val(buffer.as_slice()) as u32;
         // SAFETY: buffer and size describe `buffer`; the API writes a
         // UNICODE_STRING followed by its characters.
@@ -506,7 +510,12 @@ fn read_member(handle: &OwnedHandle, pid: u32) -> Result<JobProcess, HostError> 
                 &mut needed,
             )
         };
-        if status == STATUS_INFO_LENGTH_MISMATCH && (needed as usize) <= 1 << 20 {
+        let current = std::mem::size_of_val(buffer.as_slice());
+        if status == STATUS_INFO_LENGTH_MISMATCH
+            && attempts < 4
+            && (needed as usize) > current
+            && (needed as usize) <= 1 << 20
+        {
             buffer = vec![0u64; (needed as usize).div_ceil(8) + 1];
             continue;
         }
@@ -517,11 +526,17 @@ fn read_member(handle: &OwnedHandle, pid: u32) -> Result<JobProcess, HostError> 
         }
         break;
     }
-    // SAFETY: the buffer starts with the UNICODE_STRING the API wrote, whose
-    // Buffer points into `buffer` and holds `Length` bytes.
-    let text = unsafe {
-        let string = &*(buffer.as_ptr() as *const UNICODE_STRING);
-        std::slice::from_raw_parts(string.Buffer, string.Length as usize / 2)
+    // SAFETY: the buffer starts with the UNICODE_STRING the API wrote (the
+    // u64 buffer satisfies its alignment).
+    let string = unsafe { &*(buffer.as_ptr() as *const UNICODE_STRING) };
+    let text: &[u16] = if string.Buffer.is_null() || string.Length == 0 {
+        // An empty command line may come with a null Buffer, which must not
+        // reach from_raw_parts.
+        &[]
+    } else {
+        // SAFETY: a non-null Buffer points into `buffer` and holds `Length`
+        // bytes of UTF-16.
+        unsafe { std::slice::from_raw_parts(string.Buffer, string.Length as usize / 2) }
     };
     let argv = split_command_line(text)?;
     Ok(JobProcess { pid, image, argv })

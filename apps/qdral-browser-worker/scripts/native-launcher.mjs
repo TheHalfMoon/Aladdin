@@ -39,6 +39,10 @@ const result = spawnSync(
     env: { ...process.env, QDRAL_SG108_NODE: process.execPath, QDRAL_SG108_WORKER_MAIN: main }
   }
 );
+if (result.error) {
+  process.stderr.write(`browser-launcher:native: could not run cargo: ${result.error.message}\n`);
+  process.exit(1);
+}
 process.stdout.write(result.stdout ?? "");
 if (result.status !== 0) {
   process.exit(result.status ?? 1);

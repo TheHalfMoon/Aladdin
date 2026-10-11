@@ -192,6 +192,13 @@ fn a_crashed_worker_is_detected_contained_and_restartable() {
         "the engine outlived its worker"
     );
     // The same profile can be used again once the crashed lifetime is gone.
+    // Windows releases the dead engine's exclusive profile lock a moment
+    // after the job empties (0.2-4.4 s observed); relaunching earlier makes
+    // the new engine exit, so wait (bounded) for the release first.
+    assert!(
+        wait_for_profile_lock_release(&profile, Duration::from_secs(30)),
+        "the crashed engine's profile lock was never released"
+    );
     let mut again =
         launch_worker(&spec(&profile, true), &Policy(PolicyKeyState::Absent)).expect("relaunch");
     again.ping("restarted").expect("ping after restart");
@@ -203,6 +210,33 @@ fn a_crashed_worker_is_detected_contained_and_restartable() {
         "a restarted member survived"
     );
     assert_profile_gone(report.profile_removed, &profile);
+}
+
+/// Wait until Chromium's exclusive `lockfile` in `profile` is gone or can
+/// be opened with no sharing, i.e. no process (or kernel mapping) holds it.
+fn wait_for_profile_lock_release(profile: &Path, timeout: Duration) -> bool {
+    use std::os::windows::fs::OpenOptionsExt;
+    let lock = profile.join("lockfile");
+    let started = Instant::now();
+    loop {
+        let free = !lock.exists()
+            || std::fs::OpenOptions::new()
+                .write(true)
+                .share_mode(0)
+                .open(&lock)
+                .is_ok();
+        if free {
+            eprintln!(
+                "SG108-DIAG profile lock released after {:?}",
+                started.elapsed()
+            );
+            return true;
+        }
+        if started.elapsed() >= timeout {
+            return false;
+        }
+        std::thread::sleep(Duration::from_millis(100));
+    }
 }
 
 /// The launcher must have removed the profile within its own budget. A
