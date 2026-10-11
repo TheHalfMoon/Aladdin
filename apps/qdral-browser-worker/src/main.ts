@@ -4,6 +4,7 @@
 // stdout carries frames only: the global console is replaced by one whose
 // every method writes to stderr, so no library output can corrupt the channel.
 
+import { denyServiceWorkerScripts } from "./service-workers.js";
 import { Console } from "node:console";
 import { chromium } from "playwright-core";
 import { refusedWorkerVariables, startupRefusal } from "./environment.js";
@@ -35,12 +36,15 @@ const playwrightLauncher: Launcher = {
       env: spec.env,
       headless: true,
       acceptDownloads: false,
-      serviceWorkers: "block",
+      // "allow" keeps service-worker requests visible to routing;
+      // denyServiceWorkerScripts then refuses every registration (#301).
+      serviceWorkers: "allow",
       handleSIGINT: false,
       handleSIGTERM: false,
       handleSIGHUP: false,
       timeout: 30_000
     });
+    await denyServiceWorkerScripts(context);
     let closing = false;
     return {
       async close() {

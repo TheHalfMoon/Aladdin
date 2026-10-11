@@ -23,6 +23,7 @@ import { fileURLToPath } from "node:url";
 import { chromium, type BrowserContext } from "playwright-core";
 import { splitWindowsCommandLine } from "./cmdline.js";
 import { KNOWN_GAPS } from "./gaps.js";
+import { denyServiceWorkerScripts } from "./service-workers.js";
 import { encodeFrame, FrameDecoder, launchRefusal, type HostFrame, type WorkerFrame } from "./protocol.js";
 
 const EDGE_CANDIDATES = [
@@ -651,22 +652,38 @@ nativeTest(
   KNOWN_GAPS.webTransport
 );
 
-nativeTest(
-  "the service-worker block holds against prototype registration",
-  async (t) => {
-    const tls = tlsFixture(t);
-    const fixture = await httpsFixture(t, tls);
-    const profile = profileFor(t, "native-sw");
-    // The production worker launches with serviceWorkers: "block" (main.ts).
-    const context = await launchDirect(t, profile, confinedHttpsArgv(profile, tls.spki), { serviceWorkers: "block" });
-    const page = await context.newPage();
-    await page.goto("https://fixture.test/sw", { timeout: 15_000 });
-    await page.waitForFunction(() => document.title.includes("proto:"), undefined, { timeout: 15_000 });
-    await new Promise((resolve) => setTimeout(resolve, 1_000));
-    const registered = await page.evaluate(async () => (await navigator.serviceWorker.getRegistrations()).length);
-    await page.close();
-    assert.deepEqual(fixture.hits.filter((hit) => hit.endsWith(".js")), [], "a service-worker script was fetched");
-    assert.equal(registered, 0, "a service worker registered");
-  },
-  KNOWN_GAPS.serviceWorkers
-);
+nativeTest("the worker's service-worker denial refuses every registration, and the control registers", async (t) => {
+  const tls = tlsFixture(t);
+  const fixture = await httpsFixture(t, tls);
+  const scripts = (): string[] => fixture.hits.filter((hit) => hit.endsWith(".js"));
+
+  // Exactly the production configuration (main.ts): serviceWorkers "allow"
+  // plus denyServiceWorkerScripts. The page tries direct and prototype
+  // registration.
+  const profile = profileFor(t, "native-sw");
+  const context = await launchDirect(t, profile, confinedHttpsArgv(profile, tls.spki), { serviceWorkers: "allow" });
+  await denyServiceWorkerScripts(context);
+  const page = await context.newPage();
+  await page.goto("https://fixture.test/sw", { timeout: 15_000 });
+  await page.waitForFunction(() => document.title.includes("proto:"), undefined, { timeout: 15_000 });
+  const outcome = await page.title();
+  await new Promise((resolve) => setTimeout(resolve, 1_000));
+  const registered = await page.evaluate(async () => (await navigator.serviceWorker.getRegistrations()).length);
+  await page.close();
+  assert.match(outcome, /^direct:TypeError proto:TypeError$/, outcome);
+  assert.equal(registered, 0, "a service worker registered");
+  assert.deepEqual(scripts(), [], "a service-worker script reached the fixture");
+
+  // Positive control: the same configuration without the denial route
+  // registers the worker and fetches its scripts.
+  const controlProfile = profileFor(t, "native-sw-control");
+  const control = await launchDirect(t, controlProfile, confinedHttpsArgv(controlProfile, tls.spki), {
+    serviceWorkers: "allow"
+  });
+  const controlPage = await control.newPage();
+  await controlPage.goto("https://fixture.test/sw", { timeout: 15_000 });
+  await controlPage.waitForFunction(() => document.title.includes("proto:"), undefined, { timeout: 15_000 });
+  assert.match(await controlPage.title(), /proto:ok/);
+  assert.ok(await waitFor(() => scripts().length > 0, 10_000), "the control fetched no service-worker script");
+  await controlPage.close();
+});
