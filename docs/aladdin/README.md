@@ -10,6 +10,7 @@ This package revises the Opus proposal; the founder adopted it as planning direc
 | Judgment, scores, evidence, A–O answers | ALADDIN_MASTER_PLAN.md |
 | Execution ownership and app API | ARCHITECTURE.md |
 | Exact public donor pins, Firecrawl permission, admission | SOURCE_REUSE_MATRIX.md |
+| WebMCP and native web extraction: founder decisions, donor pins, reuse matrix and slice plan | WEB_CAPABILITIES_DECISION.md |
 | Competitor layers and current primary sources | COMPETITOR_RESEARCH.md |
 | Historical REA provenance and independent limits | REA_INVESTIGATION_REPORT.md |
 | Controller plus two targets | MULTI_DEVICE_ARCHITECTURE.md |
