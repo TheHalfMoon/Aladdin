@@ -297,7 +297,7 @@ fixture. Unmapped names failed with `ERR_PROXY_CONNECTION_FAILED`.
 **Findings that bind slice 2b:**
 - The OS command line quotes arguments that contain spaces (the resolver rules), so the host must parse it with `CommandLineToArgvW` rules before the element-for-element comparison.
 - Node acts on `NODE_OPTIONS` (verified with `--require`) before any worker code runs. The host must therefore build the worker environment from an allowlist and never inherit it; the worker's own refusal is only a second line.
-- Inspector activation: **decided and enforced by the worker in slice 2b-i**. The worker refuses to start (exit 2, nothing on stdout) unless Node is 22.14+ and it was started with `--disable-sigusr1` (`startupRefusal`, with tests). The slice 2b-ii launcher passes the flag and reports the browser as typed unavailable when the worker refuses.
+- Inspector activation: **decided and enforced by the worker in slice 2b-i**. The worker refuses to start (exit 2, nothing on stdout) unless Node is 22.14+ and its Node options are exactly `--disable-sigusr1` (`startupRefusal`, with tests). A later `--no-disable-sigusr1` would otherwise re-enable activation (verified), and no `--inspect*`, `--require` or `--import` may accompany the flag. The slice 2b-ii launcher passes the flag and reports the browser as typed unavailable when the worker refuses.
 - Service workers: Playwright's `serviceWorkers: "block"` only replaces `navigator.serviceWorker.register` with an init script, so page script may be able to bypass it. Block service workers by engine or protocol means, and prove it with a native probe.
 - Worker environment allowlist: also exclude the OpenSSL start-up variables (`OPENSSL_CONF`, `OPENSSL_MODULES`, `OPENSSL_ENGINES`, `SSL_CERT_FILE`, `SSL_CERT_DIR`). The worker refuses them as a second line.
 - Release packaging (A2): the `playwright-core` NOTICE, the SBOM entry and provenance enter the release with the packaged worker. Packaging strips the `node_modules/.bin` link to the Playwright CLI, which is never exposed.
@@ -334,6 +334,8 @@ fixture. Unmapped names failed with `ERR_PROXY_CONNECTION_FAILED`.
 - TURN over UDP;
 - QUIC and WebTransport, and the service-worker block (these need an HTTPS fixture);
 - the managed-policy refusal on a test hive;
+- DNS-rebinding resistance with a fixture resolver whose answers change;
+- refusal of a second browser-process engine in the job;
 - the job process limit;
 - whether pipe handles are inherited.
 

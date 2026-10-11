@@ -54,6 +54,11 @@ export function startupRefusal(execArgv: readonly string[], nodeVersion: string)
   if (major < needMajor || (major === needMajor && minor < needMinor)) {
     return `Node ${nodeVersion} is older than ${needMajor}.${needMinor}`;
   }
-  if (!execArgv.includes("--disable-sigusr1")) return "Node was not started with --disable-sigusr1";
+  // Exactly this one flag: a later --no-disable-sigusr1 would re-enable
+  // activation (verified natively), and no --inspect*, --require, --import or
+  // other Node option may accompany it.
+  if (execArgv.length !== 1 || execArgv[0] !== "--disable-sigusr1") {
+    return "Node must be started with exactly --disable-sigusr1";
+  }
   return null;
 }

@@ -353,26 +353,31 @@ nativeTest("WebRTC sends no UDP and opens no TURN connection, and the probe dete
     .flat()
     .find((address) => address && address.family === "IPv4" && !address.internal)?.address;
   assert.ok(lan, "a non-loopback IPv4 address is required for the LAN STUN case");
-  const udp = createSocket("udp4");
-  let packets = 0;
-  udp.on("message", () => packets++);
-  // Bound on every interface, so both the loopback and the LAN target can
-  // be observed.
-  await new Promise<void>((resolve) => udp.bind(0, "0.0.0.0", () => resolve()));
-  t.after(() => new Promise<void>((resolve) => udp.close(() => resolve())));
-  const udpPort = (udp.address() as { port: number }).port;
+  // One STUN trap per target address, so the control proves each target is
+  // individually observable.
+  const packets: Record<"loopback" | "lan", number> = { loopback: 0, lan: 0 };
+  const trap = async (key: "loopback" | "lan", address: string): Promise<number> => {
+    const socket = createSocket("udp4");
+    socket.on("message", () => packets[key]++);
+    await new Promise<void>((resolve) => socket.bind(0, address, () => resolve()));
+    t.after(() => new Promise<void>((resolve) => socket.close(() => resolve())));
+    return (socket.address() as { port: number }).port;
+  };
+  const loopbackPort = await trap("loopback", "127.0.0.1");
+  const lanPort = await trap("lan", lan);
   let tcpConnections = 0;
   const fixture = createHttpServer((_request, response) => response.end("<p>fixture</p>"));
   fixture.on("connection", () => tcpConnections++);
   await listen(t, fixture, FIXTURE_PORT, "127.0.0.1");
-  const servers = [`stun:127.0.0.1:${udpPort}`, `stun:${lan}:${udpPort}`, `turn:127.0.0.1:${FIXTURE_PORT}?transport=tcp`];
+  const servers = [`stun:127.0.0.1:${loopbackPort}`, `stun:${lan}:${lanPort}`, `turn:127.0.0.1:${FIXTURE_PORT}?transport=tcp`];
 
   const gather = async (label: string, adjust: (arg: string) => string) => {
     const profile = profileFor(t, `native-rtc-${label}`);
     const context = await launchDirect(t, profile, confinedArgv(profile, FIXTURE).map(adjust));
     const page = await context.newPage();
     await page.goto("http://fixture.test/", { waitUntil: "commit" });
-    packets = 0;
+    packets.loopback = 0;
+    packets.lan = 0;
     const tcpBefore = tcpConnections;
     const candidates = await page.evaluate(async (urls: string[]) => {
       const types: string[] = [];
@@ -397,18 +402,21 @@ nativeTest("WebRTC sends no UDP and opens no TURN connection, and the probe dete
       return types;
     }, servers);
     await new Promise((resolve) => setTimeout(resolve, 300));
-    const result = { candidates, packets, tcp: tcpConnections - tcpBefore };
+    const result = { candidates, packets: { ...packets }, tcp: tcpConnections - tcpBefore };
     await context.close();
     return result;
   };
 
   const confined = await gather("confined", (arg) => arg);
-  assert.deepEqual(confined, { candidates: [], packets: 0, tcp: 0 }, "WebRTC must gather nothing and send nothing");
+  assert.deepEqual(confined, { candidates: [], packets: { loopback: 0, lan: 0 }, tcp: 0 }, "WebRTC must gather nothing and send nothing");
   // Positive control: the same probe with the default WebRTC policy (outside
   // the contract) does gather candidates and reach the STUN listener, so the
   // empty result above is not an artifact of headless Edge or the timing.
   const control = await gather("control", (arg) => (arg === WEBRTC_POLICY ? "--webrtc-ip-handling-policy=default" : arg));
-  assert.ok(control.candidates.length > 0 && control.packets > 0, `control gathered nothing: ${JSON.stringify(control)}`);
+  assert.ok(
+    control.candidates.length > 0 && control.packets.loopback > 0 && control.packets.lan > 0,
+    `control did not reach both STUN traps: ${JSON.stringify(control)}`
+  );
 });
 
 nativeTest("a same-user process cannot activate the worker's inspector when it runs with --disable-sigusr1", async (t) => {

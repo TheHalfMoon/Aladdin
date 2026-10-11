@@ -40,7 +40,17 @@ test("startupRefusal requires Node 22.14+ and --disable-sigusr1", () => {
     assert.equal(typeof startupRefusal(["--disable-sigusr1"], version), "string", version);
   }
   assert.equal(typeof startupRefusal([], "v24.19.0"), "string");
-  assert.equal(typeof startupRefusal(["--disable-sigusr1=false"], "v24.19.0"), "string");
+  for (const execArgv of [
+    ["--disable-sigusr1=false"],
+    ["--disable-sigusr1", "--no-disable-sigusr1"],
+    ["--no-disable-sigusr1", "--disable-sigusr1"],
+    ["--disable-sigusr1", "--inspect=127.0.0.1:0"],
+    ["--disable-sigusr1", "--require", "evil.js"],
+    ["--disable-sigusr1", "--import", "data:text/javascript,0"],
+    ["--disable-sigusr1", "--disable-sigusr1"]
+  ]) {
+    assert.equal(typeof startupRefusal(execArgv, "v24.19.0"), "string", execArgv.join(" "));
+  }
 });
 
 test("the worker refuses to start without --disable-sigusr1", async () => {
@@ -48,6 +58,14 @@ test("the worker refuses to start without --disable-sigusr1", async () => {
   assert.equal(result.code, 2);
   assert.equal(result.stdout.length, 0);
   assert.match(result.stderr, /--disable-sigusr1/);
+});
+
+test("a negated or extra Node flag makes the worker refuse to start", async () => {
+  for (const flags of [["--disable-sigusr1", "--no-disable-sigusr1"], ["--disable-sigusr1", "--inspect=127.0.0.1:0"]]) {
+    const result = await run(flags, null);
+    assert.equal(result.code, 2, flags.join(" "));
+    assert.equal(result.stdout.length, 0);
+  }
 });
 
 test("with --disable-sigusr1 the worker answers hello and ends cleanly at end of input", async () => {
