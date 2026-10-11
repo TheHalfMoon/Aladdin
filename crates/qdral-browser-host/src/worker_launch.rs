@@ -222,12 +222,15 @@ fn switch_name(arg: &str) -> Option<String> {
 }
 
 /// The process type Chromium derives from a command line: switches end at a
-/// bare `--`, the last `type` switch in any accepted spelling wins, and an
-/// absent or empty value means the browser process (`None`).
+/// bare `--` or at `--single-argument` (after which Chromium on Windows reads
+/// the rest as one plain argument; matched here in any spelling, which can
+/// only turn a process into a browser and so fails closed), the last `type`
+/// switch in any accepted spelling wins, and an absent or empty value means
+/// the browser process (`None`).
 fn chromium_process_type(argv: &[String]) -> Option<String> {
     let mut kind = None;
     for arg in argv.iter().skip(1) {
-        if arg == "--" {
+        if arg == "--" || switch_name(arg).as_deref() == Some("single-argument") {
             break;
         }
         if switch_name(arg).as_deref() == Some("type") {
@@ -729,6 +732,13 @@ mod tests {
             vec![EDGE, "--type=", "--user-data-dir=C:\\q"],
             vec![EDGE, "--", "--type=renderer", "--user-data-dir=C:\\q"],
             vec![EDGE, "-type=renderer", "-type=", "--user-data-dir=C:\\q"],
+            vec![
+                EDGE,
+                "--single-argument",
+                "--type=renderer",
+                "--user-data-dir=C:\\q",
+            ],
+            vec![EDGE, "/Single-Argument", "--type=renderer"],
         ] {
             let mut disguised = healthy();
             disguised.push(process(17, EDGE, &argv));
