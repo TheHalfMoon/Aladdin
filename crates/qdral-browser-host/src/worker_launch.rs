@@ -36,7 +36,8 @@ pub struct JobProcess {
 }
 
 /// Worker protocol generation (apps/qdral-browser-worker/src/protocol.ts).
-pub const WORKER_PROTOCOL_GENERATION: u32 = 1;
+/// Generation 2 adds the slice-3a navigation frames.
+pub const WORKER_PROTOCOL_GENERATION: u32 = 2;
 /// Worker identity reported in its hello.
 pub const WORKER_IDENTITY: &str = "qdral-browser-worker";
 /// The only Node option the worker accepts (inspector activation refused).
@@ -47,6 +48,15 @@ pub const WORKER_HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(15);
 pub const WORKER_LAUNCH_TIMEOUT: Duration = Duration::from_secs(60);
 pub const WORKER_REPLY_TIMEOUT: Duration = Duration::from_secs(10);
 pub const WORKER_SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(10);
+/// Upper bound for one navigation, including every route decision.
+pub const WORKER_NAVIGATION_TIMEOUT: Duration = Duration::from_secs(45);
+
+/// A completed top-level navigation.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NavigationOutcome {
+    pub url: String,
+    pub status: u16,
+}
 
 /// Everything the launcher needs; every path must be absolute. `node` and
 /// `worker_main` must come from Deskal's install records, never from a
@@ -71,6 +81,11 @@ pub struct WorkerLaunch {
     pub temp_dir: PathBuf,
     /// Destinations admitted into this engine lifetime.
     pub destinations: Vec<AdmittedDestination>,
+    /// Test builds only: a fixture certificate's SPKI hash the engine
+    /// trusts. The worker accepts it only with loopback fixture pins.
+    #[cfg(test)]
+    #[cfg_attr(not(windows), allow(dead_code))]
+    pub(crate) test_trusted_spki: Option<String>,
 }
 
 /// How supervision ended.
@@ -102,6 +117,14 @@ pub(crate) enum WorkerRequest<'a> {
     Ping {
         nonce: &'a str,
     },
+    Navigate {
+        nav_id: u64,
+        url: &'a str,
+    },
+    RouteDecision {
+        request_id: u64,
+        allow: bool,
+    },
     Shutdown,
 }
 
@@ -109,13 +132,35 @@ pub(crate) enum WorkerRequest<'a> {
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(tag = "frame", rename_all = "snake_case", deny_unknown_fields)]
 pub(crate) enum WorkerReply {
-    Hello { generation: u32, worker: String },
+    Hello {
+        generation: u32,
+        worker: String,
+    },
     // Empty struct variants: serde ignores unknown fields on unit
     // variants of an internally tagged enum even with deny_unknown_fields.
     Launched {},
-    Pong { nonce: String },
+    Pong {
+        nonce: String,
+    },
     Bye {},
-    Error { code: String },
+    RouteRequest {
+        request_id: u64,
+        kind: String,
+        url: String,
+        origin: String,
+    },
+    Navigated {
+        nav_id: u64,
+        url: String,
+        status: u16,
+    },
+    NavigationFailed {
+        nav_id: u64,
+        reason: String,
+    },
+    Error {
+        code: String,
+    },
 }
 
 /// Map a worker error code onto the typed vocabulary.
@@ -126,6 +171,23 @@ pub(crate) fn reply_error(code: &str) -> HostError {
         "launch_failed" | "engine_exited" => {
             HostError::Unavailable(UnavailableReason::LaunchFailed)
         }
+        _ => HostError::Unavailable(UnavailableReason::ProtocolViolation),
+    }
+}
+
+/// Test builds only: the fixture certificate trust flag.
+#[cfg(test)]
+#[cfg_attr(not(windows), allow(dead_code))]
+pub(crate) fn test_certificate_flag(spki: &str) -> String {
+    format!("--ignore-certificate-errors-spki-list={spki}")
+}
+
+/// Map a worker navigation failure onto the typed vocabulary.
+#[cfg(any(windows, test))]
+pub(crate) fn navigation_failure(reason: &str) -> HostError {
+    match reason {
+        "denied" => HostError::Invalid("navigation denied by the browser policy".into()),
+        "timeout" | "failed" | "busy" => HostError::Unavailable(UnavailableReason::LaunchFailed),
         _ => HostError::Unavailable(UnavailableReason::ProtocolViolation),
     }
 }
@@ -361,10 +423,12 @@ pub use fallback::{launch_worker, BrowserWorker};
 mod platform {
     use super::*;
     use crate::proto::{decode_frame, write_frame};
+    use crate::worker_navigation::{NavigationPolicy, RouteKind};
     use crate::worker_process::{spawn, WorkerProcess};
     use std::fs::File;
     use std::io::BufReader;
     use std::sync::mpsc::{self, Receiver, RecvTimeoutError};
+    use std::time::Instant;
 
     /// A supervised browser worker. Dropping it terminates the job and
     /// removes an ephemeral profile.
@@ -379,6 +443,9 @@ mod platform {
         profile: Option<PathBuf>,
         browser_pid: u32,
         finished: bool,
+        policy: NavigationPolicy,
+        next_nav: u64,
+        last_request: u64,
     }
 
     /// Launch the worker and its engine, or fail closed with a typed error
@@ -390,7 +457,13 @@ mod platform {
         validate_launch(spec)?;
         assert_no_managed_policy(spec.engine.kind(), policy)
             .map_err(|_| HostError::Unavailable(UnavailableReason::ManagedPolicy))?;
-        let argv = build_worker_argv(&spec.profile_dir, &spec.destinations)?;
+        #[allow(unused_mut)] // mutated in test builds only
+        let mut argv = build_worker_argv(&spec.profile_dir, &spec.destinations)?;
+        #[cfg(test)]
+        if let Some(spki) = &spec.test_trusted_spki {
+            // Before the trailing blank page, where the worker expects it.
+            argv.insert(argv.len() - 1, test_certificate_flag(spki));
+        }
         let env = worker_environment(&spec.temp_dir);
         let worker_args = worker_node_args(&spec.worker_main);
         let (process, pipes) = spawn(&spec.node, &worker_args, &env)?;
@@ -417,6 +490,9 @@ mod platform {
             profile: spec.ephemeral_profile.then(|| spec.profile_dir.clone()),
             browser_pid: 0,
             finished: false,
+            policy: NavigationPolicy::new(&spec.destinations),
+            next_nav: 0,
+            last_request: 0,
         };
         worker.handshake(spec)?;
         Ok(worker)
@@ -431,6 +507,42 @@ mod platform {
         /// The next reply within `timeout`. A worker that exits with code 2
         /// before answering refused its runtime (typed unsupported runtime).
         fn reply(&mut self, timeout: Duration) -> Result<WorkerReply, HostError> {
+            let deadline = Instant::now() + timeout;
+            loop {
+                let remaining = deadline.saturating_duration_since(Instant::now());
+                match self.next_frame(remaining)? {
+                    WorkerReply::RouteRequest {
+                        request_id,
+                        kind,
+                        url,
+                        origin,
+                    } => self.answer_route(request_id, &kind, &url, &origin)?,
+                    reply => return Ok(reply),
+                }
+            }
+        }
+
+        /// Decide one forwarded engine request with the SG-000075 policy.
+        /// Request ids must increase strictly; an unknown kind is refused.
+        fn answer_route(
+            &mut self,
+            request_id: u64,
+            kind: &str,
+            url: &str,
+            origin: &str,
+        ) -> Result<(), HostError> {
+            if request_id <= self.last_request {
+                return Err(HostError::Unavailable(UnavailableReason::ProtocolViolation));
+            }
+            self.last_request = request_id;
+            let allow = match RouteKind::parse(kind) {
+                Some(kind) => self.policy.decide(kind, url, origin).is_ok(),
+                None => false,
+            };
+            self.send(&WorkerRequest::RouteDecision { request_id, allow })
+        }
+
+        fn next_frame(&mut self, timeout: Duration) -> Result<WorkerReply, HostError> {
             match self.replies.recv_timeout(timeout) {
                 Ok(Ok(WorkerReply::Error { code })) => Err(reply_error(&code)),
                 Ok(Ok(reply)) => Ok(reply),
@@ -518,6 +630,43 @@ mod platform {
             }
         }
 
+        /// Navigate the primary page to an admitted HTTPS URL. Every request
+        /// the engine makes meanwhile is decided here by the SG-000075
+        /// policy; the outcome is typed.
+        pub fn navigate(&mut self, url: &str) -> Result<NavigationOutcome, HostError> {
+            self.policy.begin(url)?;
+            self.next_nav += 1;
+            let nav_id = self.next_nav;
+            self.send(&WorkerRequest::Navigate { nav_id, url })?;
+            match self.reply(WORKER_NAVIGATION_TIMEOUT)? {
+                WorkerReply::Navigated {
+                    nav_id: done,
+                    url: committed,
+                    status,
+                } if done == nav_id => {
+                    self.policy.commit(&committed)?;
+                    Ok(NavigationOutcome {
+                        url: committed,
+                        status,
+                    })
+                }
+                WorkerReply::NavigationFailed {
+                    nav_id: done,
+                    reason,
+                } if done == nav_id => {
+                    #[cfg(test)]
+                    eprintln!("SG108-DIAG navigation {url} failed: {reason}");
+                    Err(navigation_failure(&reason))
+                }
+                other => {
+                    #[cfg(test)]
+                    eprintln!("SG108-DIAG navigation {url} unexpected reply: {other:?}");
+                    let _ = other;
+                    Err(HostError::Unavailable(UnavailableReason::ProtocolViolation))
+                }
+            }
+        }
+
         /// Graceful shutdown with a forced fallback: ask the worker to stop,
         /// wait for `bye` and its exit, then terminate the job regardless and
         /// confirm it is empty, then remove an ephemeral profile.
@@ -574,6 +723,13 @@ mod fallback {
                 job_empty: true,
                 profile_removed: true,
             }
+        }
+
+        /// API parity: no worker ever exists off Windows.
+        pub fn navigate(&mut self, _url: &str) -> Result<NavigationOutcome, HostError> {
+            Err(HostError::Unavailable(
+                UnavailableReason::UnsupportedRuntime,
+            ))
         }
     }
 
@@ -789,11 +945,81 @@ mod tests {
     }
 
     #[test]
+    fn navigation_frames_match_the_typescript_vocabulary() {
+        let json = |request: &WorkerRequest<'_>| serde_json::to_string(request).unwrap();
+        assert_eq!(
+            json(&WorkerRequest::Navigate {
+                nav_id: 3,
+                url: "https://fixture.test/a"
+            }),
+            r#"{"frame":"navigate","nav_id":3,"url":"https://fixture.test/a"}"#
+        );
+        assert_eq!(
+            json(&WorkerRequest::RouteDecision {
+                request_id: 9,
+                allow: false
+            }),
+            r#"{"frame":"route_decision","request_id":9,"allow":false}"#
+        );
+        let reply = |text: &str| serde_json::from_str::<WorkerReply>(text);
+        assert_eq!(
+            reply(r#"{"frame":"route_request","request_id":1,"kind":"frame","url":"https://x.test/","origin":"https://fixture.test"}"#).unwrap(),
+            WorkerReply::RouteRequest {
+                request_id: 1,
+                kind: "frame".into(),
+                url: "https://x.test/".into(),
+                origin: "https://fixture.test".into()
+            }
+        );
+        assert_eq!(
+            reply(
+                r#"{"frame":"navigated","nav_id":3,"url":"https://fixture.test/a","status":200}"#
+            )
+            .unwrap(),
+            WorkerReply::Navigated {
+                nav_id: 3,
+                url: "https://fixture.test/a".into(),
+                status: 200
+            }
+        );
+        assert_eq!(
+            reply(r#"{"frame":"navigation_failed","nav_id":3,"reason":"denied"}"#).unwrap(),
+            WorkerReply::NavigationFailed {
+                nav_id: 3,
+                reason: "denied".into()
+            }
+        );
+        // Unknown fields, negative ids and out-of-range statuses are refused.
+        assert!(reply(r#"{"frame":"navigated","nav_id":3,"url":"u","status":200,"x":1}"#).is_err());
+        assert!(reply(
+            r#"{"frame":"route_request","request_id":-1,"kind":"frame","url":"u","origin":""}"#
+        )
+        .is_err());
+        assert!(reply(r#"{"frame":"navigated","nav_id":3,"url":"u","status":70000}"#).is_err());
+        // Failure reasons map onto the typed vocabulary.
+        assert!(matches!(
+            navigation_failure("denied"),
+            HostError::Invalid(_)
+        ));
+        for reason in ["timeout", "failed", "busy"] {
+            assert!(matches!(
+                navigation_failure(reason),
+                HostError::Unavailable(UnavailableReason::LaunchFailed)
+            ));
+        }
+        assert!(matches!(
+            navigation_failure("other"),
+            HostError::Unavailable(UnavailableReason::ProtocolViolation)
+        ));
+        assert_eq!(WORKER_NAVIGATION_TIMEOUT, Duration::from_secs(45));
+    }
+
+    #[test]
     fn worker_frames_match_the_typescript_vocabulary() {
         let json = |request: &WorkerRequest<'_>| serde_json::to_string(request).unwrap();
         assert_eq!(
-            json(&WorkerRequest::Hello { generation: 1 }),
-            r#"{"frame":"hello","generation":1}"#
+            json(&WorkerRequest::Hello { generation: 2 }),
+            r#"{"frame":"hello","generation":2}"#
         );
         assert_eq!(json(&WorkerRequest::Shutdown), r#"{"frame":"shutdown"}"#);
         assert_eq!(
@@ -859,6 +1085,7 @@ mod tests {
         // Built from temp_dir so the path is absolute on every platform.
         let engine = Engine::for_tests(base.join("msedge.exe"), crate::discovery::EngineKind::Edge);
         let spec = |node: PathBuf, main: PathBuf| WorkerLaunch {
+            test_trusted_spki: None,
             node,
             worker_main: main,
             engine: engine.clone(),

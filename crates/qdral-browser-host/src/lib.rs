@@ -20,6 +20,7 @@ mod supervise;
 mod transfers;
 mod uia;
 mod worker_launch;
+mod worker_navigation;
 #[cfg(windows)]
 mod worker_process;
 
@@ -103,6 +104,8 @@ pub use uia::{
 };
 pub use worker_launch::{
     classify_job, launch_worker, worker_environment, worker_node_args, BrowserWorker, JobProcess,
-    ShutdownReport, WorkerLaunch, WORKER_HANDSHAKE_TIMEOUT, WORKER_IDENTITY, WORKER_LAUNCH_TIMEOUT,
-    WORKER_NODE_OPTION, WORKER_PROTOCOL_GENERATION, WORKER_REPLY_TIMEOUT, WORKER_SHUTDOWN_TIMEOUT,
+    NavigationOutcome, ShutdownReport, WorkerLaunch, WORKER_HANDSHAKE_TIMEOUT, WORKER_IDENTITY,
+    WORKER_LAUNCH_TIMEOUT, WORKER_NAVIGATION_TIMEOUT, WORKER_NODE_OPTION,
+    WORKER_PROTOCOL_GENERATION, WORKER_REPLY_TIMEOUT, WORKER_SHUTDOWN_TIMEOUT,
 };
+pub use worker_navigation::{NavigationPolicy, RouteKind};

@@ -54,6 +54,7 @@ fn temp_profile(label: &str) -> PathBuf {
 fn spec_with(main: PathBuf, profile: &Path, ephemeral: bool) -> WorkerLaunch {
     let (node, _) = prerequisites();
     WorkerLaunch {
+        test_trusted_spki: None,
         node,
         worker_main: main,
         engine: engine(),
@@ -689,4 +690,132 @@ fn the_registry_reader_sees_a_real_test_hive() {
     // SAFETY: deletes only the test hive.
     unsafe { RegDeleteTreeW(HKEY_CURRENT_USER, wide("SOFTWARE\\QdralTest").as_ptr()) };
     assert_eq!(state(), PolicyKeyState::Absent);
+}
+
+/// The test-only HTTPS fixture (apps/qdral-browser-worker/scripts/
+/// https-fixture.mjs): fixture.test and other.test on 127.0.0.1:443 with a
+/// throwaway certificate, logging every request it receives.
+struct HttpsFixture {
+    child: std::process::Child,
+    spki: String,
+    hits: std::sync::Arc<std::sync::Mutex<Vec<String>>>,
+}
+
+impl HttpsFixture {
+    fn start() -> Self {
+        use std::io::BufRead;
+        let (node, main) = prerequisites();
+        let app = main
+            .parent()
+            .and_then(Path::parent)
+            .expect("worker app directory");
+        let mut child = std::process::Command::new(node)
+            .arg(app.join("scripts").join("https-fixture.mjs"))
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::inherit())
+            .spawn()
+            .expect("start the HTTPS fixture");
+        let stdout = child.stdout.take().expect("fixture stdout");
+        let hits = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let (ready, spki) = mpsc::channel();
+        let log = hits.clone();
+        std::thread::spawn(move || {
+            for line in std::io::BufReader::new(stdout)
+                .lines()
+                .map_while(Result::ok)
+            {
+                if let Some(value) = line.strip_prefix("READY ") {
+                    let _ = ready.send(value.to_owned());
+                } else if let Some(hit) = line.strip_prefix("HIT ") {
+                    log.lock().expect("hits").push(hit.to_owned());
+                }
+            }
+        });
+        let spki = spki
+            .recv_timeout(Duration::from_secs(30))
+            .expect("the HTTPS fixture did not start");
+        Self { child, spki, hits }
+    }
+
+    fn hits(&self) -> Vec<String> {
+        self.hits.lock().expect("hits").clone()
+    }
+}
+
+impl Drop for HttpsFixture {
+    fn drop(&mut self) {
+        let _ = self.child.kill();
+        let _ = self.child.wait();
+    }
+}
+
+#[test]
+#[ignore = "requires the built browser worker and Edge; run by npm run browser-launcher:native"]
+fn the_host_decides_every_request_of_a_live_navigation() {
+    let fixture = HttpsFixture::start();
+    let profile = temp_profile("navigate");
+    let mut launch = spec(&profile, true);
+    let loopback = IpAddr::V4(Ipv4Addr::LOCALHOST);
+    launch.destinations = vec![
+        AdmittedDestination::fixture("fixture.test", loopback).expect("fixture.test"),
+        AdmittedDestination::fixture("other.test", loopback).expect("other.test"),
+    ];
+    launch.test_trusted_spki = Some(fixture.spki.clone());
+    let mut worker = launch_worker(&launch, &Policy(PolicyKeyState::Absent)).expect("launch");
+
+    // An admitted page loads and commits.
+    let landed = worker
+        .navigate("https://fixture.test/landing")
+        .expect("admitted navigation");
+    assert_eq!(
+        (landed.url.as_str(), landed.status),
+        ("https://fixture.test/landing", 200)
+    );
+    // A same-origin redirect is followed hop by hop.
+    let redirected = worker
+        .navigate("https://fixture.test/redirect-same")
+        .expect("same-origin redirect");
+    assert_eq!(redirected.url, "https://fixture.test/landing");
+    // Widening redirects, loops and over-long chains are refused (typed).
+    for url in [
+        "https://fixture.test/redirect-cross",
+        "https://fixture.test/loop-a",
+        "https://fixture.test/chain/0",
+    ] {
+        assert!(
+            matches!(worker.navigate(url), Err(HostError::Invalid(_))),
+            "{url} was not refused"
+        );
+    }
+    // A destination outside this lifetime is refused before anything is sent.
+    for url in [
+        "https://example.com/",
+        "http://fixture.test/",
+        "https://127.0.0.1/",
+    ] {
+        assert!(worker.navigate(url).is_err(), "{url} was not refused");
+    }
+    // Cross-origin frames, images and fetches are refused; same-origin
+    // resources load.
+    worker
+        .navigate("https://fixture.test/mixed")
+        .expect("mixed page");
+    std::thread::sleep(Duration::from_secs(2));
+    worker.ping("after-navigation").expect("ping");
+    let hits = fixture.hits();
+    let other: Vec<&String> = hits
+        .iter()
+        .filter(|hit| hit.starts_with("other.test"))
+        .collect();
+    assert!(other.is_empty(), "other.test was contacted: {other:?}");
+    for path in ["/pixel.png", "/frame", "/api"] {
+        assert!(
+            hits.contains(&format!("fixture.test {path}")),
+            "same-origin {path} did not load: {hits:?}"
+        );
+    }
+    let report = worker.shutdown();
+    assert!(report.job_empty, "the job did not empty");
+    assert_profile_gone(report.profile_removed, &profile);
 }

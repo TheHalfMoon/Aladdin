@@ -410,12 +410,39 @@ The fixture origin is served over TLS on 127.0.0.1:443, advertising `alt-svc: h3
 | Alt-Svc HTTP/3 upgrade under the confinement argv | **Holds.** 0 datagrams over two navigations; `--disable-quic` stops it. |
 | WebTransport to an IP literal | **Holds.** 0 datagrams; the no-route proxy refuses it. Control: without the confinement flags, the same attempt sends UDP. |
 | WebTransport to an admitted name | **Accepted residual risk (#300; founder decision 2026-10-11).** QUIC Initial packets reach the admitted name's pinned address directly, uninspected by the SG-000075 policy route. No engine switch disables it (`--disable-features=WebTransport`, `WebTransportOverHTTP3` and `--disable-blink-features=WebTransport` were all tested), and Playwright routing does not see it. The probe asserts the boundary that must hold: unadmitted names, unmapped public names and IP literals all fail with `WebTransportError`, and no datagram reaches the pin or the literal for those attempts. It logs the admitted-name datagram count as evidence. |
-| Service-worker denial | **Partly fixed (#301).** Playwright's `serviceWorkers: "block"` was bypassable through `ServiceWorkerContainer.prototype.register`, and with "block" the script fetch was invisible to routing. The worker now launches with `serviceWorkers: "allow"` and installs `denyServiceWorkerScripts` (`service-workers.ts`), which aborts every routed request carrying `Service-Worker: script`. Same-origin registration, direct or through the prototype, now fails (`TypeError`), with 0 registrations and no script fetched; the control without the route does register. **Still open:** a cross-site iframe (two admitted names) registers a worker whose script fetch never reaches routing. That case is a `todo` probe, and `KNOWN_GAPS.serviceWorkers` keeps the slice-3 gate closed until the slice-3a policy route refuses cross-origin frames and the probe passes. |
+| Service-worker denial | **Closed (#301).** The worker launches with `serviceWorkers: "allow"`, which keeps service-worker requests routable, and the route stack aborts every request carrying `Service-Worker: script`, so same-origin registration (direct or through the prototype) fails. A cross-site iframe could still register, because its script fetch never reaches routing. Since slice 3a, the policy route refuses cross-origin frames (`mediate_frame`), so that iframe never loads. A native probe asserts the frame was asked about and refused, `other.test` was never contacted, and no web service worker runs. A second probe pins the route order by running the stack with an allow-everything policy. |
 
-In these probes the no-route proxy refuses the IP literal and nothing leaves the admitted pin. The earlier HTTP-fixture probe covers unadmitted names. Both gaps stayed inside admitted destinations but evaded the policy route, which already denies the equivalent WebSocket traffic. #300 is now a founder-accepted residual risk. #301 is fixed for same-origin registration but stays listed in `KNOWN_GAPS` for the cross-site iframe case, so the slice-3 gate stays closed. This is enforced in code. `gaps.ts` lists the known gaps (`KNOWN_GAPS`), which the `todo` probes reference. While that list is non-empty, a conditional type makes `tsc` (build and typecheck) fail if `HostFrame` gains any frame name outside the launch vocabulary, however that frame is written. Named types, quoting, spacing and a widened `string` frame were each verified to fail. The gate covers frame names only: a field added to an existing frame is not caught by it, though `parseHostFrame`'s exact-key checks would have to change visibly for such a field to be accepted. `gaps.test.ts` mirrors the check at runtime (`parseHostFrame` rejects other frame names) and requires every gap to keep its `todo` probe.
+In these probes the no-route proxy refuses the IP literal and nothing leaves the admitted pin. The earlier HTTP-fixture probe covers unadmitted names. Both gaps stayed inside admitted destinations but evaded the policy route, which already denies the equivalent WebSocket traffic. #300 is now a founder-accepted residual risk. #301 is closed by slice 3a, so `KNOWN_GAPS` is empty and the gate is open. This is enforced in code. `gaps.ts` lists the known gaps (`KNOWN_GAPS`), which the `todo` probes reference. While that list is non-empty, a conditional type makes `tsc` (build and typecheck) fail if `HostFrame` gains any frame name outside the launch vocabulary, however that frame is written. Named types, quoting, spacing and a widened `string` frame were each verified to fail. The gate covers frame names only: a field added to an existing frame is not caught by it, though `parseHostFrame`'s exact-key checks would have to change visibly for such a field to be accepted. `gaps.test.ts` mirrors the check at runtime (`parseHostFrame` rejects other frame names) and requires every gap to keep its `todo` probe.
 
 **Still to be done in slice 2b-ii-b:**
 - revisiting #300 if Chromium gains an engine-level WebTransport kill switch;
 - a real public name pinned by the host reaching only its pin;
 - the job process limit under a heavy page;
 - the release packaging of the worker (NOTICE, SBOM, `.bin` strip).
+
+**Slice 3a: live navigation decided by the host.** Code: `worker_navigation.rs`; the worker's `routes.ts`, `redirect-guard.ts` and `routing.ts`; worker protocol generation 2.
+
+The host stays the authority. `navigate` first runs `NavigationPolicy::begin`, which requires an HTTPS URL on one of this lifetime's admitted names. Every request the engine then makes is described to the host as a `route_request` and continues only on an explicit allow. The policy is the existing SG-000075 code:
+- the first document must be the requested URL;
+- a page-initiated top-level navigation must stay on the committed origin;
+- redirects are checked by `RedirectChain` (same origin, at most 5 hops, no loops);
+- frames, popups, fetch and other subresources are checked by `mediate_*` (exact origin);
+- service workers are refused.
+
+The committed document must be on the origin the navigation began with.
+
+**Implementation findings:**
+- **Redirect hops are invisible to Playwright routes.** Chromium follows redirects internally, and an unasked hop to another admitted name was measured. The CDP `Fetch` domain does pause every hop (`redirectedRequestId`), so each page gets a Fetch guard that forwards exactly those hops as `redirect` queries.
+- **A refused navigation's error page commits late**, sometimes more than once, and interrupts the next navigation in the same page. Each host navigation therefore runs in a fresh page, guarded before it navigates, and the previous page is closed.
+- **Edge runs a built-in component extension service worker** (`chrome-extension://…`) even with `--disable-extensions`. It is not a page registration, and the probes count only web service workers.
+
+**Native end-to-end evidence:** the real host, worker and Edge run against a two-name HTTPS fixture (`scripts/https-fixture.mjs`, test only).
+- An admitted page loads, and a same-origin redirect commits.
+- A cross-origin redirect, a redirect loop and a 7-hop chain are refused, typed as denied.
+- Non-admitted, `http:` and IP-literal URLs are refused before anything is sent.
+- On a mixed page, the cross-origin iframe, image and fetch are refused, and the fixture logs **no** request to `other.test`, while the same-origin resources load.
+
+The test passed 3 of 3 runs locally.
+
+**Test-only certificate trust:** `WorkerLaunch.test_trusted_spki` exists only under `cfg(test)` and appends `--ignore-certificate-errors-spki-list`. The worker accepts that flag only when every admitted pin is loopback; production pins are never loopback. A governance test pins the flag to `cfg(test)` code.
+

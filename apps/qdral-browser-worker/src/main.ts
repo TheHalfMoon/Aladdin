@@ -4,12 +4,12 @@
 // stdout carries frames only: the global console is replaced by one whose
 // every method writes to stderr, so no library output can corrupt the channel.
 
-import { denyServiceWorkerScripts } from "./service-workers.js";
 import { Console } from "node:console";
-import { chromium } from "playwright-core";
+import { chromium, type Page } from "playwright-core";
 import { refusedWorkerVariables, startupRefusal } from "./environment.js";
 import { encodeFrame, FrameDecoder, ProtocolViolation, type WorkerFrame } from "./protocol.js";
-import { Worker, type EngineSession, type Launcher, type LaunchSpec } from "./worker.js";
+import { installRoutes } from "./routes.js";
+import { NavigationError, Worker, type EngineSession, type Launcher, type LaunchSpec, type RoutePolicy } from "./worker.js";
 
 const startup = startupRefusal(process.execArgv, process.version);
 if (startup !== null) {
@@ -25,7 +25,7 @@ if (refused.length > 0) {
 globalThis.console = new Console({ stdout: process.stderr, stderr: process.stderr });
 
 const playwrightLauncher: Launcher = {
-  async launch(spec: LaunchSpec): Promise<EngineSession> {
+  async launch(spec: LaunchSpec, policy: RoutePolicy): Promise<EngineSession> {
     // `ignoreDefaultArgs: true` keeps Playwright from adding any flag: the
     // engine receives exactly the host-built argv (which already carries the
     // profile, the pipe, and the blank page).
@@ -36,17 +36,38 @@ const playwrightLauncher: Launcher = {
       env: spec.env,
       headless: true,
       acceptDownloads: false,
-      // "allow" keeps service-worker requests visible to routing;
-      // denyServiceWorkerScripts then refuses every registration (#301).
+      // "allow" keeps service-worker requests visible to routing; the
+      // route stack refuses every registration (#301).
       serviceWorkers: "allow",
       handleSIGINT: false,
       handleSIGTERM: false,
       handleSIGHUP: false,
       timeout: 30_000
     });
-    await denyServiceWorkerScripts(context);
+    // Each host navigation runs in a fresh page: Chromium can commit an
+    // earlier refused navigation's error page late (even more than once),
+    // which would interrupt a navigation in the same page. The previous
+    // page is closed once the new one has its redirect guard.
+    let primary: Page = context.pages()[0] ?? (await context.newPage());
+    const routes = await installRoutes(context, () => primary, policy);
     let closing = false;
     return {
+      async navigate(url: string) {
+        const previous = primary;
+        const page = await context.newPage();
+        await routes.guardReady(page);
+        primary = page;
+        await previous.close().catch(() => {});
+        try {
+          const response = await page.goto(url, { timeout: 30_000, waitUntil: "load" });
+          return { url: page.url(), status: response?.status() ?? 0 };
+        } catch (error) {
+          const message = String((error as Error).message);
+          if (message.includes("ERR_BLOCKED_BY_CLIENT")) throw new NavigationError("denied");
+          if ((error as Error).name === "TimeoutError") throw new NavigationError("timeout");
+          throw new NavigationError("failed");
+        }
+      },
       async close() {
         closing = true;
         await context.close();

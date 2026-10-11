@@ -7,14 +7,12 @@
 
 import type { HostFrame } from "./protocol.js";
 
-// #300 is a founder-accepted residual risk (decision 2026-10-11, SG-000108
-// decision record) and is no longer listed. #301 is fixed for same-origin
-// registration (service-workers.ts) but a cross-site iframe can still
-// register; it closes when the slice-3a policy route refuses cross-origin
-// frames and the cross-site probe passes.
-export const KNOWN_GAPS = {
-  serviceWorkers: "known gap #301: a cross-site iframe can still register a service worker"
-} as const;
+// Empty: #300 is a founder-accepted residual risk (decision 2026-10-11) and
+// #301 is closed (same-origin registration refused by the route stack;
+// cross-site iframes refused by the slice-3a policy route; both proven by
+// native probes). Add an entry, with a todo probe that references it, for
+// any future known gap.
+export const KNOWN_GAPS = {} as const;
 
 /// The host frames the launch vocabulary allows while gaps remain.
 export const LAUNCH_VOCABULARY = ["hello", "launch", "ping", "shutdown"] as const;
