@@ -143,10 +143,15 @@ fn launch_verifies_the_job_and_shuts_down_without_residue() {
     );
     assert_eq!(worker.verify().expect("verify"), worker.browser_pid());
     worker.ping("native-1").expect("ping");
-    // Control for the machine-wide residue check: it sees the live engine.
+    // Control for the machine-wide residue check: it sees the verified
+    // browser process (by pid: discovery may pick Edge or Chrome).
+    let holders = processes_referencing(&profile);
+    let browser = worker.browser_pid().to_string();
     assert!(
-        processes_referencing(&profile).contains("msedge.exe"),
-        "the residue query does not see the running engine"
+        holders
+            .lines()
+            .any(|line| line.split(' ').next() == Some(browser.as_str())),
+        "the residue query does not see the running browser {browser}: {holders}"
     );
     let started = Instant::now();
     let report = worker.shutdown();
