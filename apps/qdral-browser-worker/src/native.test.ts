@@ -608,6 +608,14 @@ nativeTest("over HTTPS the confined engine sends no Alt-Svc QUIC and no WebTrans
     `--ignore-certificate-errors-spki-list=${tls.spki}`,
     "about:blank"
   ]);
+  // With QUIC enabled, the same two navigations upgrade to HTTP/3 through
+  // the Alt-Svc advertisement, so a zero count above is not vacuous.
+  for (const path of ["/first", "/second"]) {
+    const page = await control.newPage();
+    await page.goto(`https://fixture.test${path}`, { timeout: 15_000 });
+    await page.close();
+  }
+  assert.ok(await waitFor(() => fixture.admittedUdp() > 0, 10_000), "the control made no Alt-Svc QUIC attempt");
   await tryWebTransport(control, "https://127.0.0.1:4433/x");
   assert.ok(await waitFor(() => fixture.literalUdp() > 0, 10_000), "the control sent no UDP, so the probe proves nothing");
 });
