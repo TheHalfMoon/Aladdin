@@ -319,6 +319,10 @@ fn only_the_documented_ignored_tests_exist() {
                     || (relative == "crates/qdral-provider-network/tests/sg000064_live.rs"
                         && line.contains(
                             "performs one real HTTPS request; run with --ignored for live evidence",
+                        ))
+                    || (relative == "crates/qdral-browser-host/src/worker_launch_tests.rs"
+                        && line.contains(
+                            "requires the built browser worker and Edge; run by npm run browser-launcher:native",
                         ));
                 if !documented {
                     hits.push(format!("{}:{}: {}", relative, index + 1, line.trim()));

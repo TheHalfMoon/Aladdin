@@ -340,3 +340,60 @@ fixture. Unmapped names failed with `ERR_PROXY_CONNECTION_FAILED`.
 - whether pipe handles are inherited.
 
 **Local result (Windows 11, Edge 155):** all 25 worker tests pass, 5 of them native, and the run exits cleanly in about 45 s.
+
+**Slice 2b-ii-a: host launcher** (`crates/qdral-browser-host/src/worker_launch.rs`, `worker_process.rs`). The launch sequence:
+
+1. Validate the request. A missing Node or worker is typed `UnsupportedRuntime`; a missing engine is `NoEngine`.
+2. Apply the managed-policy precondition. Any policy, or an unreadable key, is typed `ManagedPolicy` and refuses before anything starts.
+3. Build the engine argv with `build_worker_argv`.
+4. Build the worker environment from an explicit allowlist (SystemRoot, SystemDrive, PATH=System32, TEMP, TMP). It is never inherited.
+5. Start Node with exactly `--disable-sigusr1` and the worker entry point:
+   - **suspended**, then assigned to a kill-on-close Job Object (the SG-000074 limit of 32 active processes), then resumed;
+   - with `DETACHED_PROCESS`, so there is no console and no `conhost.exe`;
+   - with inheritance restricted by `PROC_THREAD_ATTRIBUTE_HANDLE_LIST` to its stdin, stdout and a `NUL` stderr.
+6. Exchange `hello`, then `launch`, over the closed protocol with bounded waits (15 s handshake, 60 s launch). A worker that exits with code 2 before answering is typed `UnsupportedRuntime`; a silent worker is typed `LaunchFailed` and its job is terminated.
+7. **Verify the job** (`classify_job`):
+   - its only members are the worker, running with exactly its host-built arguments, and processes of the verified engine image;
+   - no member carries a forbidden flag, in any spelling Chromium accepts on Windows (`--`, `-` or `/` prefix, any case);
+   - exactly one browser process exists, where the process type is derived the way Chromium derives it: switches end at a bare `--` or at `--single-argument` (matched in any spelling, which fails closed), the last `type` switch in any accepted spelling wins, and an absent or empty value means the browser;
+   - that process's OS command line, read with `NtQueryInformationProcess` and split with `CommandLineToArgvW`, equals `[engine, …host argv]`;
+   - a member that cannot be inspected is accepted only if it has left the job in the meantime.
+
+The engine in a launch request is a `discovery::Engine`, so only an engine that discovery verified (kind, version, publisher) can be launched. `node` and the worker entry point must come from Deskal's install records.
+
+Verification runs once, when the launch completes. Afterwards, only the job limit and kill-on-close constrain the worker. The product caller must call `verify` again before any authority is granted for a navigation.
+
+Shutdown asks for `bye` and waits for exit 0. It then terminates the job regardless and confirms it is empty, and finally removes an ephemeral profile. Kill and drop take the same path without the exchange.
+
+**Native tests** (`worker_launch_tests.rs`, real Node worker and Edge 155). These are ignored in a plain `cargo test` with a documented reason. The root `npm test` runs them via `npm run browser-launcher:native`, so the **Node / windows-latest** job runs them. The runner fails unless exactly 12 tests run and pass, so a filter that matches nothing cannot pass vacuously. All 12 pass locally in two consecutive runs. On the first CI run, 10 of the then 11 passed on the hosted runner. The lifecycle test failed there because the runner carries Edge policies, which led to the split below.
+
+| Test | What it proves |
+|---|---|
+| Lifecycle | With no managed policy (a stand-in source), the job verifies and `ping` answers. Shutdown is graceful, the job empties, every recorded member dies, and the launcher removes the profile. |
+| Real registry precondition | On the actual machine, the launch happens exactly when the policy check passes, and is typed `ManagedPolicy` with nothing started exactly when it refuses. The log records which branch ran: GitHub's Windows runners carry Edge policies, this development host does not. |
+| Drop | Dropping supervision kills every member and removes the profile. |
+| Crash and restart | The killed worker is detected (`ping` fails) and the job empties. The same profile relaunches, answers `ping`, and shuts down clean. |
+| Host death | A separate host process is hard-killed with no destructor, and kill-on-close takes the worker, the browser and every helper down. |
+| Foreign or second browser | `PING.EXE`, then a second Edge browser process (started suspended, so it cannot exit or start helpers outside the job first), are assigned into the job. `verify` refuses each one, and the job still empties. |
+| Handle inheritance | An inheritable pipe that the host created reaches EOF as soon as the host closes its copy, so the worker and engine did not inherit it. Negative control: a process started without a handle list does inherit it. |
+| Silent worker | It is typed `LaunchFailed` after the handshake timeout, and its process is dead. |
+| Refused runtime | It is typed `UnsupportedRuntime`. |
+| Managed policy | `Populated` and `Unreadable` are typed `ManagedPolicy`, and nothing starts. |
+| Registry reader | A real test key under `HKCU\Software\QdralTest` is read as absent, then empty, then populated (by a value, and by a subkey alone), then absent. |
+
+**Findings:**
+- **Discovery defect (fixed here; SG-000074 path).** The engine version was probed by running `msedge.exe --version`. On Windows, Chromium prints no version for that, and instead hands the command to an already running browser session ("Opening in existing browser session."), so it can touch the user's personal profile. Discovery therefore always failed on Windows, which made SG-000074's `live_host_or_typed_unavailable_with_lifecycle` pass as "unavailable" without exercising the live host. The version is now read from the executable's version resource, without executing anything. On this host, discovery verifies Edge 155.0.4283.45 (publisher verified) and the SG-000074 live host launches.
+- **`conhost.exe`.** `CREATE_NO_WINDOW` still attaches a hidden console host to Node, which the job check correctly refused as a foreign process. `DETACHED_PROCESS` removes it.
+- **Kernel-held profile files.** After every job member is dead, Restart Manager has reported `System` (pid 4) briefly holding memory-mapped profile files. Under load this exceeded 10 s. No Edge or Node process outside the job held a profile in these runs. Removal now retries for up to 30 s and reports `profile_removed: false` if the files are still held. The tests fail unless the launcher itself reported removal; on failure they diagnose the held file and clean up.
+- **Profile lock after a crash.** Chromium's exclusive `lockfile` in the profile stays held for 0.2–4.4 s after every job member has exited. A relaunch on the same profile inside that window makes the new engine exit (typed `LaunchFailed`). The crash test now waits, with a bound, for the lock to be released before it relaunches. A fresh profile per lifetime, as production uses, avoids this entirely.
+- **No out-of-job residue.** At the end of every supervised native test, a machine-wide native process snapshot (Toolhelp, plus each process's OS command line) must find no inspectable process that still names the profile on its command line. A leftover engine of the same user is always inspectable; processes of other users or protected processes are skipped. A control confirms that the same query does see the engine while it runs.
+- **Known limitation: host death leaves the profile directory.** Kill-on-close takes the worker and the engine down, but nothing removes the ephemeral profile once the host itself has died. The sweep belongs with the product caller, which decides where profiles live. It is tracked in #298.
+- **Crash-session restore.** A profile reused after a crash restores the previous session (9 renderers instead of 2). Production must use a fresh ephemeral profile per lifetime, because reusing one carries state over. The launcher does not enforce this (`ephemeral_profile: false` is accepted, and the crash test reuses a profile on purpose), so the future product caller must.
+- **Unit variants in serde.** With `deny_unknown_fields`, serde still accepts unknown fields on unit variants of an internally tagged enum. The worker replies use empty struct variants instead. The SG-000074 host protocol (`proto.rs`: `Shutdown`, `Bye`) has the same looseness; it is tracked in #296.
+- **No crash-report uploads from a crash.** An abrupt worker kill leaves only Crashpad metadata (no report or dump), so a crash produces no upload candidate.
+
+**Still to be done in slice 2b-ii-b:**
+- HTTPS-fixture probes: QUIC, WebTransport, and the service-worker block;
+- a real public name pinned by the host reaching only its pin;
+- the job process limit under a heavy page;
+- the release packaging of the worker (NOTICE, SBOM, `.bin` strip).
