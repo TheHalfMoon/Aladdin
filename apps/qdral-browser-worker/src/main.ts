@@ -6,10 +6,15 @@
 
 import { Console } from "node:console";
 import { chromium } from "playwright-core";
-import { refusedWorkerVariables } from "./environment.js";
+import { refusedWorkerVariables, startupRefusal } from "./environment.js";
 import { encodeFrame, FrameDecoder, ProtocolViolation, type WorkerFrame } from "./protocol.js";
 import { Worker, type EngineSession, type Launcher, type LaunchSpec } from "./worker.js";
 
+const startup = startupRefusal(process.execArgv, process.version);
+if (startup !== null) {
+  process.stderr.write(`qdral-browser-worker: refused to start: ${startup}\n`);
+  process.exit(2);
+}
 const refused = refusedWorkerVariables(process.env);
 if (refused.length > 0) {
   process.stderr.write(`qdral-browser-worker: refused environment variables: ${refused.join(", ")}\n`);
