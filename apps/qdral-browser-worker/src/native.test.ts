@@ -22,7 +22,6 @@ import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { chromium, type BrowserContext } from "playwright-core";
 import { splitWindowsCommandLine } from "./cmdline.js";
-import { KNOWN_GAPS } from "./gaps.js";
 import { denyServiceWorkerScripts } from "./service-workers.js";
 import { encodeFrame, FrameDecoder, launchRefusal, type HostFrame, type WorkerFrame } from "./protocol.js";
 
@@ -638,19 +637,28 @@ nativeTest("over HTTPS the confined engine sends no Alt-Svc QUIC and no WebTrans
   assert.ok(await waitFor(() => fixture.literalUdp() > 0, 10_000), "the control sent no UDP, so the probe proves nothing");
 });
 
-nativeTest(
-  "WebTransport to an admitted name sends no UDP under confinement",
-  async (t) => {
-    const tls = tlsFixture(t);
-    const fixture = await httpsFixture(t, tls);
-    const profile = profileFor(t, "native-https-wt");
-    const context = await launchDirect(t, profile, confinedHttpsArgv(profile, tls.spki));
-    await tryWebTransport(context, "https://fixture.test/x");
-    await new Promise((resolve) => setTimeout(resolve, 700));
-    assert.equal(fixture.admittedUdp(), 0, "WebTransport sent QUIC to the admitted name's pinned address");
-  },
-  KNOWN_GAPS.webTransport
-);
+// Accepted residual risk #300 (founder decision 2026-10-11): WebTransport
+// to an admitted name reaches that name's host-pinned address, uninspected
+// by the policy route. The boundary that must hold: nothing beyond admitted
+// names. The admitted case is observed (not asserted absent) so a change in
+// engine behavior is visible in the log.
+nativeTest("WebTransport reaches nothing beyond admitted names under confinement", async (t) => {
+  const tls = tlsFixture(t);
+  const fixture = await httpsFixture(t, tls);
+  const profile = profileFor(t, "native-https-wt");
+  const context = await launchDirect(t, profile, confinedHttpsArgv(profile, tls.spki));
+  // Unadmitted names resolve nowhere (MAP * ~NOTFOUND); IP literals are
+  // refused by the no-route proxy.
+  for (const url of ["https://unmapped.test/x", "https://example.com/x", "https://127.0.0.1:4433/x"]) {
+    assert.equal(await tryWebTransport(context, url), "WebTransportError", url);
+  }
+  await new Promise((resolve) => setTimeout(resolve, 700));
+  assert.equal(fixture.literalUdp(), 0, "WebTransport reached an IP literal");
+  assert.equal(fixture.admittedUdp(), 0, "a non-admitted WebTransport attempt reached the admitted pin");
+  await tryWebTransport(context, "https://fixture.test/x");
+  await new Promise((resolve) => setTimeout(resolve, 700));
+  console.error(`SG108-EVIDENCE accepted residual #300: admitted-name WebTransport datagrams=${fixture.admittedUdp()}`);
+});
 
 nativeTest("the worker's service-worker denial refuses every registration, and the control registers", async (t) => {
   const tls = tlsFixture(t);

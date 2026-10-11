@@ -7,9 +7,10 @@
 
 import type { HostFrame } from "./protocol.js";
 
-export const KNOWN_GAPS = {
-  webTransport: "known gap #300: WebTransport bypasses the SG-000075 policy route to admitted names"
-} as const;
+// Empty: #301 is closed (service-workers.ts) and #300 is a founder-accepted
+// residual risk (decision 2026-10-11, SG-000108 decision record). Add an
+// entry, with a todo probe that references it, for any future known gap.
+export const KNOWN_GAPS = {} as const;
 
 /// The host frames the launch vocabulary allows while gaps remain.
 export const LAUNCH_VOCABULARY = ["hello", "launch", "ping", "shutdown"] as const;

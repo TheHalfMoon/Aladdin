@@ -184,6 +184,15 @@ absent from the shipped binaries. No runtime configuration may enable it.
 
 ## Residual risks (for review)
 
+- **WebTransport to admitted names (#300, accepted by the founder on
+  2026-10-11).** A page can open a WebTransport session, over QUIC on UDP,
+  to an admitted name. The traffic reaches only that name's host-pinned
+  address, because the resolver refuses unadmitted names and the no-route
+  proxy refuses IP literals. Its contents are not inspected by the SG-000075
+  policy route, which denies the equivalent WebSocket traffic. No Chromium
+  switch disables the API, and patching it out of pages and workers in
+  JavaScript has known bypass classes. Revisit if an engine-level measure
+  appears. The native probe enforces the boundary.
 - **Admitted host is hostile.** An admitted name pinned to its public address
   still serves whatever that host returns. Content is never policy (SG-000076
   redaction and SG-000077 approvals still apply).
@@ -400,13 +409,13 @@ The fixture origin is served over TLS on 127.0.0.1:443, advertising `alt-svc: h3
 |---|---|
 | Alt-Svc HTTP/3 upgrade under the confinement argv | **Holds.** 0 datagrams over two navigations; `--disable-quic` stops it. |
 | WebTransport to an IP literal | **Holds.** 0 datagrams; the no-route proxy refuses it. Control: without the confinement flags, the same attempt sends UDP. |
-| WebTransport to an admitted name | **Gap (#300).** QUIC Initial packets reach the name's pinned address directly, bypassing the SG-000075 policy route. Neither `--disable-features=WebTransport` nor `--disable-features=WebTransportOverHTTP3` stops it, and `--disable-blink-features=WebTransport` leaves the API defined in pages and workers. The switch results come from the manual runs recorded in #300. Tracked as a `todo` probe. |
+| WebTransport to an admitted name | **Accepted residual risk (#300; founder decision 2026-10-11).** QUIC Initial packets reach the admitted name's pinned address directly, uninspected by the SG-000075 policy route. No engine switch disables it (`--disable-features=WebTransport`, `WebTransportOverHTTP3` and `--disable-blink-features=WebTransport` were all tested), and Playwright routing does not see it. The probe asserts the boundary that must hold: unadmitted names, unmapped public names and IP literals all fail with `WebTransportError`, and no datagram reaches the pin or the literal for those attempts. It logs the admitted-name datagram count as evidence. |
 | Service-worker denial | **Closed (#301).** Playwright's `serviceWorkers: "block"` was bypassable through `ServiceWorkerContainer.prototype.register`, and with "block" the script fetch was invisible to routing. The worker now launches with `serviceWorkers: "allow"`, which keeps service-worker requests visible to routing, and installs `denyServiceWorkerScripts` (`service-workers.ts`) before any navigation. It aborts every request carrying `Service-Worker: script`. The probe runs exactly that configuration: direct and prototype registration both fail (`TypeError`), there are 0 registrations, and no script reaches the fixture. Control: without the route, the same page registers and the script is fetched. |
 
-In these probes the no-route proxy refuses the IP literal and nothing leaves the admitted pin. The earlier HTTP-fixture probe covers unadmitted names. Both gaps stay inside admitted destinations, but they evade the policy route, which already denies the equivalent WebSocket traffic. Both must be closed, or accepted as founder-reviewed residual risks, before slice 3 grants live navigation. This is enforced in code. `gaps.ts` lists the known gaps (`KNOWN_GAPS`), which the `todo` probes reference. While that list is non-empty, a conditional type makes `tsc` (build and typecheck) fail if `HostFrame` gains any frame name outside the launch vocabulary, however that frame is written. Named types, quoting, spacing and a widened `string` frame were each verified to fail. The gate covers frame names only: a field added to an existing frame is not caught by it, though `parseHostFrame`'s exact-key checks would have to change visibly for such a field to be accepted. `gaps.test.ts` mirrors the check at runtime (`parseHostFrame` rejects other frame names) and requires every gap to keep its `todo` probe.
+In these probes the no-route proxy refuses the IP literal and nothing leaves the admitted pin. The earlier HTTP-fixture probe covers unadmitted names. Both gaps stayed inside admitted destinations but evaded the policy route, which already denies the equivalent WebSocket traffic. #301 is now closed, and #300 is a founder-accepted residual risk, so the slice-3 gate is open (`KNOWN_GAPS` is empty). This is enforced in code. `gaps.ts` lists the known gaps (`KNOWN_GAPS`), which the `todo` probes reference. While that list is non-empty, a conditional type makes `tsc` (build and typecheck) fail if `HostFrame` gains any frame name outside the launch vocabulary, however that frame is written. Named types, quoting, spacing and a widened `string` frame were each verified to fail. The gate covers frame names only: a field added to an existing frame is not caught by it, though `parseHostFrame`'s exact-key checks would have to change visibly for such a field to be accepted. `gaps.test.ts` mirrors the check at runtime (`parseHostFrame` rejects other frame names) and requires every gap to keep its `todo` probe.
 
 **Still to be done in slice 2b-ii-b:**
-- closing #300 (an engine- or protocol-level measure, proven by its probe), or accepting it as a founder-reviewed residual risk;
+- revisiting #300 if Chromium gains an engine-level WebTransport kill switch;
 - a real public name pinned by the host reaching only its pin;
 - the job process limit under a heavy page;
 - the release packaging of the worker (NOTICE, SBOM, `.bin` strip).
