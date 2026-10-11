@@ -11,8 +11,10 @@
 import assert from "node:assert/strict";
 import { spawn, execFileSync, type ChildProcess } from "node:child_process";
 import { createSocket } from "node:dgram";
-import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { createHash, X509Certificate } from "node:crypto";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { createServer as createHttpServer, type Server } from "node:http";
+import { createServer as createHttpsServer } from "node:https";
 import { createServer as createTcpServer, connect, type Server as TcpServer } from "node:net";
 import { networkInterfaces, tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -20,6 +22,7 @@ import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { chromium, type BrowserContext } from "playwright-core";
 import { splitWindowsCommandLine } from "./cmdline.js";
+import { KNOWN_GAPS } from "./gaps.js";
 import { encodeFrame, FrameDecoder, launchRefusal, type HostFrame, type WorkerFrame } from "./protocol.js";
 
 const EDGE_CANDIDATES = [
@@ -94,8 +97,8 @@ class Cleanup {
   }
 }
 
-function nativeTest(name: string, body: (t: Cleanup) => Promise<void>): void {
-  test(name, { skip, timeout: 120_000 }, async () => {
+function nativeTest(name: string, body: (t: Cleanup) => Promise<void>, todo?: string): void {
+  test(name, { skip, todo, timeout: 120_000 }, async () => {
     const cleanup = new Cleanup();
     let failure: unknown = null;
     try {
@@ -240,14 +243,20 @@ function listen(t: Cleanup, server: Server | TcpServer, port: number, host: stri
   });
 }
 
-async function launchDirect(t: Cleanup, profile: string, args: string[]): Promise<BrowserContext> {
+async function launchDirect(
+  t: Cleanup,
+  profile: string,
+  args: string[],
+  options: { serviceWorkers?: "allow" | "block" } = {}
+): Promise<BrowserContext> {
   const context = await chromium.launchPersistentContext(profile, {
     executablePath: requireEngine(),
     ignoreDefaultArgs: true,
     args,
     env: cleanEnv(),
     headless: true,
-    timeout: 30_000
+    timeout: 30_000,
+    ...options
   });
   t.after(() => context.close());
   return context;
@@ -459,3 +468,205 @@ nativeTest("a same-user process cannot activate the worker's inspector when it r
   await new Promise((resolve) => setTimeout(resolve, 1500));
   assert.deepEqual({ before: controlBefore, after: await listening(9229) }, { before: false, after: true }, "the probe detects an activated inspector");
 });
+
+// ---------------------------------------------------------------------------
+// HTTPS fixture probes (slice 2b-ii-b). QUIC, WebTransport and the
+// service-worker block need a secure context, so the fixture origin is served
+// over TLS with a throwaway certificate that only these direct test launches
+// trust (--ignore-certificate-errors-spki-list). The production argv carries
+// no certificate flag.
+
+interface TlsFixture {
+  key: Buffer;
+  cert: Buffer;
+  spki: string;
+}
+
+/// A fresh self-signed certificate for fixture.test, made with the OpenSSL
+/// that ships with Git for Windows (present on GitHub's Windows runners).
+function tlsFixture(t: Cleanup): TlsFixture {
+  const candidates = ["C:\\Program Files\\Git\\usr\\bin\\openssl.exe", "C:\\Program Files\\Git\\mingw64\\bin\\openssl.exe"];
+  const openssl = candidates.find((path) => existsSync(path));
+  assert.ok(openssl, "OpenSSL (Git for Windows) is required for the HTTPS fixture");
+  const dir = mkdtempSync(join(tmpdir(), "sg108-tls-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  execFileSync(
+    openssl,
+    [
+      "req", "-x509", "-newkey", "ec", "-pkeyopt", "ec_paramgen_curve:prime256v1", "-nodes",
+      "-keyout", join(dir, "key.pem"), "-out", join(dir, "cert.pem"), "-days", "2",
+      "-subj", "/CN=fixture.test", "-addext", "subjectAltName=DNS:fixture.test"
+    ],
+    { stdio: "ignore" }
+  );
+  const cert = readFileSync(join(dir, "cert.pem"));
+  const der = new X509Certificate(cert).publicKey.export({ type: "spki", format: "der" });
+  return { key: readFileSync(join(dir, "key.pem")), cert, spki: createHash("sha256").update(der).digest("base64") };
+}
+
+const SERVICE_WORKER_PAGE = `<!doctype html><body><script>
+(async () => {
+  const results = [];
+  try { await navigator.serviceWorker.register("/sw-direct.js"); results.push("direct:ok"); }
+  catch (error) { results.push("direct:" + error.name); }
+  try { await ServiceWorkerContainer.prototype.register.call(navigator.serviceWorker, "/sw-proto.js"); results.push("proto:ok"); }
+  catch (error) { results.push("proto:" + error.name); }
+  document.title = results.join(" ");
+})();
+</script></body>`;
+
+/// The HTTPS fixture on 127.0.0.1:443 (advertising HTTP/3) and UDP listeners
+/// on 127.0.0.1:443 (the admitted name's pinned address) and 127.0.0.1:4433
+/// (reachable only as an IP literal) that count every datagram.
+async function httpsFixture(
+  t: Cleanup,
+  tls: TlsFixture
+): Promise<{ hits: string[]; admittedUdp: () => number; literalUdp: () => number }> {
+  const hits: string[] = [];
+  const server = createHttpsServer({ key: tls.key, cert: tls.cert }, (request, response) => {
+    const url = request.url ?? "";
+    hits.push(url);
+    response.setHeader("alt-svc", 'h3=":443"; ma=86400');
+    if (url.endsWith(".js")) {
+      response.setHeader("content-type", "text/javascript");
+      response.end("self.addEventListener('fetch', () => {});");
+      return;
+    }
+    response.setHeader("content-type", "text/html");
+    response.end(url === "/sw" ? SERVICE_WORKER_PAGE : "<p>secure fixture</p>");
+  });
+  await listen(t, server, FIXTURE_PORT, "127.0.0.1");
+  const counts = new Map<number, number>();
+  const socketErrors: Error[] = [];
+  for (const port of [FIXTURE_PORT, 4433]) {
+    counts.set(port, 0);
+    const udp = createSocket("udp4");
+    t.after(
+      () =>
+        new Promise<void>((resolve) => {
+          try {
+            udp.close(() => resolve());
+          } catch {
+            resolve(); // never bound, or already closed
+          }
+        })
+    );
+    udp.on("message", () => counts.set(port, (counts.get(port) ?? 0) + 1));
+    await new Promise<void>((resolve, reject) => {
+      udp.once("error", reject);
+      udp.bind(port, "127.0.0.1", () => {
+        udp.off("error", reject);
+        udp.on("error", (error) => socketErrors.push(error));
+        resolve();
+      });
+    });
+  }
+  t.after(() => assert.deepEqual(socketErrors, [], "a UDP listener failed"));
+  return { hits, admittedUdp: () => counts.get(FIXTURE_PORT) ?? 0, literalUdp: () => counts.get(4433) ?? 0 };
+}
+
+/// Try a WebTransport session from an open page; the outcome name only.
+async function tryWebTransport(context: BrowserContext, url: string): Promise<string> {
+  const page = await context.newPage();
+  try {
+    await page.goto("https://fixture.test/", { timeout: 15_000 });
+    return await page.evaluate(async (target) => {
+      try {
+        const transport = new WebTransport(target);
+        await Promise.race([
+          transport.ready,
+          new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 4_000))
+        ]);
+        return "open";
+      } catch (error) {
+        return (error as Error).name;
+      }
+    }, url);
+  } finally {
+    await page.close();
+  }
+}
+
+function confinedHttpsArgv(profile: string, spki: string): string[] {
+  return [...confinedArgv(profile, FIXTURE).slice(0, -1), `--ignore-certificate-errors-spki-list=${spki}`, "about:blank"];
+}
+
+nativeTest("over HTTPS the confined engine sends no Alt-Svc QUIC and no WebTransport to IP literals; the control does", async (t) => {
+  const tls = tlsFixture(t);
+  const fixture = await httpsFixture(t, tls);
+
+  const profile = profileFor(t, "native-https");
+  const context = await launchDirect(t, profile, confinedHttpsArgv(profile, tls.spki));
+  // Two navigations: the first learns the h3 Alt-Svc advertisement, the
+  // second would use HTTP/3 if --disable-quic did not hold.
+  for (const path of ["/first", "/second"]) {
+    const page = await context.newPage();
+    const response = await page.goto(`https://fixture.test${path}`, { timeout: 15_000 });
+    assert.equal(response?.status(), 200, path);
+    await page.close();
+  }
+  await new Promise((resolve) => setTimeout(resolve, 700));
+  assert.equal(fixture.admittedUdp(), 0, "Alt-Svc upgraded the confined engine to QUIC");
+  // An IP literal is refused by the no-route proxy. The outcome must be a
+  // WebTransport failure: a missing API would make the zero count vacuous.
+  assert.equal(await tryWebTransport(context, "https://127.0.0.1:4433/x"), "WebTransportError");
+  await new Promise((resolve) => setTimeout(resolve, 700));
+  assert.equal(fixture.literalUdp(), 0, "WebTransport reached an IP literal under confinement");
+
+  // Positive control: without the confinement flags (no proxy, QUIC on), the
+  // same WebTransport attempt sends UDP to the literal, so the probe detects it.
+  const controlProfile = profileFor(t, "native-https-control");
+  const control = await launchDirect(t, controlProfile, [
+    ...FROZEN,
+    `--user-data-dir=${controlProfile}`,
+    "--remote-debugging-pipe",
+    `--host-resolver-rules=MAP fixture.test 127.0.0.1:${FIXTURE_PORT}`,
+    "--enable-quic",
+    `--ignore-certificate-errors-spki-list=${tls.spki}`,
+    "about:blank"
+  ]);
+  // With QUIC enabled, the same two navigations upgrade to HTTP/3 through
+  // the Alt-Svc advertisement, so a zero count above is not vacuous.
+  for (const path of ["/first", "/second"]) {
+    const page = await control.newPage();
+    await page.goto(`https://fixture.test${path}`, { timeout: 15_000 });
+    await page.close();
+  }
+  assert.ok(await waitFor(() => fixture.admittedUdp() > 0, 10_000), "the control made no Alt-Svc QUIC attempt");
+  await tryWebTransport(control, "https://127.0.0.1:4433/x");
+  assert.ok(await waitFor(() => fixture.literalUdp() > 0, 10_000), "the control sent no UDP, so the probe proves nothing");
+});
+
+nativeTest(
+  "WebTransport to an admitted name sends no UDP under confinement",
+  async (t) => {
+    const tls = tlsFixture(t);
+    const fixture = await httpsFixture(t, tls);
+    const profile = profileFor(t, "native-https-wt");
+    const context = await launchDirect(t, profile, confinedHttpsArgv(profile, tls.spki));
+    await tryWebTransport(context, "https://fixture.test/x");
+    await new Promise((resolve) => setTimeout(resolve, 700));
+    assert.equal(fixture.admittedUdp(), 0, "WebTransport sent QUIC to the admitted name's pinned address");
+  },
+  KNOWN_GAPS.webTransport
+);
+
+nativeTest(
+  "the service-worker block holds against prototype registration",
+  async (t) => {
+    const tls = tlsFixture(t);
+    const fixture = await httpsFixture(t, tls);
+    const profile = profileFor(t, "native-sw");
+    // The production worker launches with serviceWorkers: "block" (main.ts).
+    const context = await launchDirect(t, profile, confinedHttpsArgv(profile, tls.spki), { serviceWorkers: "block" });
+    const page = await context.newPage();
+    await page.goto("https://fixture.test/sw", { timeout: 15_000 });
+    await page.waitForFunction(() => document.title.includes("proto:"), undefined, { timeout: 15_000 });
+    await new Promise((resolve) => setTimeout(resolve, 1_000));
+    const registered = await page.evaluate(async () => (await navigator.serviceWorker.getRegistrations()).length);
+    await page.close();
+    assert.deepEqual(fixture.hits.filter((hit) => hit.endsWith(".js")), [], "a service-worker script was fetched");
+    assert.equal(registered, 0, "a service worker registered");
+  },
+  KNOWN_GAPS.serviceWorkers
+);
