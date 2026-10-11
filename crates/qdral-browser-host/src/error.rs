@@ -18,6 +18,12 @@ pub enum UnavailableReason {
     LaunchFailed,
     /// The host channel carried malformed or unexpected frames.
     ProtocolViolation,
+    /// The worker runtime is missing, too old, or refused to start (it
+    /// requires Node.js 22.14+ run with exactly --disable-sigusr1).
+    UnsupportedRuntime,
+    /// A mandatory managed browser policy is present or unreadable; it would
+    /// outrank the confinement flags, so the engine is not launched.
+    ManagedPolicy,
 }
 
 impl fmt::Display for UnavailableReason {
@@ -27,6 +33,10 @@ impl fmt::Display for UnavailableReason {
             Self::UnsupportedEngine => write!(f, "browser engine is unsupported or untrusted"),
             Self::LaunchFailed => write!(f, "browser host launch failed"),
             Self::ProtocolViolation => write!(f, "browser host protocol violation"),
+            Self::UnsupportedRuntime => {
+                write!(f, "browser worker runtime is missing or unsupported")
+            }
+            Self::ManagedPolicy => write!(f, "a managed browser policy prevents confinement"),
         }
     }
 }

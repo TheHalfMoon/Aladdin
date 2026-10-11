@@ -29,6 +29,11 @@ end-of-input stops a host whose parent died, independent of job timing.
 - Engine verification: allowlisted executable name, version probe with a
   ten-second bound, and Authenticode signature verification on Windows.
   Anything else is typed unavailable.
+  *Amended by SG-000108 (slice 2b-ii-a):* on Windows the version is read
+  from the executable's version resource without running it. `--version`
+  prints nothing there and hands the command to a running browser session,
+  so discovery had always failed on Windows and the live-host test passed
+  as typed unavailable.
 - Command line: exactly the frozen flags with the Deskal-owned profile
   directory and a blank initial page. Sandbox-weakening flags, debugging
   listeners, extension loading, and web-security relaxations fail closed.
