@@ -445,4 +445,3 @@ The committed document must be on the origin the navigation began with.
 The test passed 3 of 3 runs locally.
 
 **Test-only certificate trust:** `WorkerLaunch.test_trusted_spki` exists only under `cfg(test)` and appends `--ignore-certificate-errors-spki-list`. The worker accepts that flag only when every admitted pin is loopback; production pins are never loopback. A governance test pins the flag to `cfg(test)` code.
-
