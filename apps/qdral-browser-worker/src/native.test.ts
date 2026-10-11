@@ -536,16 +536,31 @@ async function httpsFixture(
   });
   await listen(t, server, FIXTURE_PORT, "127.0.0.1");
   const counts = new Map<number, number>();
+  const socketErrors: Error[] = [];
   for (const port of [FIXTURE_PORT, 4433]) {
     counts.set(port, 0);
     const udp = createSocket("udp4");
+    t.after(
+      () =>
+        new Promise<void>((resolve) => {
+          try {
+            udp.close(() => resolve());
+          } catch {
+            resolve(); // never bound, or already closed
+          }
+        })
+    );
     udp.on("message", () => counts.set(port, (counts.get(port) ?? 0) + 1));
     await new Promise<void>((resolve, reject) => {
       udp.once("error", reject);
-      udp.bind(port, "127.0.0.1", () => resolve());
+      udp.bind(port, "127.0.0.1", () => {
+        udp.off("error", reject);
+        udp.on("error", (error) => socketErrors.push(error));
+        resolve();
+      });
     });
-    t.after(() => new Promise<void>((resolve) => udp.close(() => resolve())));
   }
+  t.after(() => assert.deepEqual(socketErrors, [], "a UDP listener failed"));
   return { hits, admittedUdp: () => counts.get(FIXTURE_PORT) ?? 0, literalUdp: () => counts.get(4433) ?? 0 };
 }
 
@@ -591,8 +606,9 @@ nativeTest("over HTTPS the confined engine sends no Alt-Svc QUIC and no WebTrans
   }
   await new Promise((resolve) => setTimeout(resolve, 700));
   assert.equal(fixture.admittedUdp(), 0, "Alt-Svc upgraded the confined engine to QUIC");
-  // An IP literal is refused by the no-route proxy.
-  assert.notEqual(await tryWebTransport(context, "https://127.0.0.1:4433/x"), "open");
+  // An IP literal is refused by the no-route proxy. The outcome must be a
+  // WebTransport failure: a missing API would make the zero count vacuous.
+  assert.equal(await tryWebTransport(context, "https://127.0.0.1:4433/x"), "WebTransportError");
   await new Promise((resolve) => setTimeout(resolve, 700));
   assert.equal(fixture.literalUdp(), 0, "WebTransport reached an IP literal under confinement");
 
