@@ -8,9 +8,11 @@
 // worker checks here is defense in depth against a host bug.
 
 import { isIPv4, isIPv6 } from "node:net";
+import type { SnapshotNode } from "./snapshot.js";
 
-/// Generation 2 adds the slice-3a navigation frames.
-export const WORKER_PROTOCOL_GENERATION = 2;
+/// Generation 2 adds the slice-3a navigation frames; generation 3 adds
+/// slice-3b observation.
+export const WORKER_PROTOCOL_GENERATION = 3;
 export const WORKER_IDENTITY = "qdral-browser-worker";
 export const MAX_FRAME_BYTES = 64 * 1024;
 
@@ -56,6 +58,7 @@ export type HostFrame =
   | { frame: "ping"; nonce: string }
   | { frame: "navigate"; nav_id: number; url: string }
   | { frame: "route_decision"; request_id: number; allow: boolean }
+  | { frame: "observe"; obs_id: number }
   | { frame: "shutdown" };
 
 export type RouteKind = "document" | "redirect" | "frame" | "popup" | "fetch" | "subresource" | "service_worker";
@@ -72,6 +75,8 @@ export type WorkerFrame =
   | { frame: "route_request"; request_id: number; kind: RouteKind; url: string; origin: string }
   | { frame: "navigated"; nav_id: number; url: string; status: number }
   | { frame: "navigation_failed"; nav_id: number; reason: NavigationFailure }
+  | { frame: "observed"; obs_id: number; url: string; truncated: boolean; nodes: SnapshotNode[] }
+  | { frame: "observation_failed"; obs_id: number }
   | { frame: "error"; code: ErrorCode };
 
 export class ProtocolViolation extends Error {}
@@ -181,6 +186,10 @@ export function parseHostFrame(raw: unknown): HostFrame {
       const url = boundedString(raw.url, MAX_URL_BYTES, "navigation URL");
       if (!url.startsWith("https://")) throw new ProtocolViolation("navigation URL is not https");
       return { frame: "navigate", nav_id: navId, url };
+    }
+    case "observe": {
+      exactKeys(raw, ["frame", "obs_id"]);
+      return { frame: "observe", obs_id: positiveId(raw.obs_id, "obs_id") };
     }
     case "route_decision": {
       exactKeys(raw, ["frame", "request_id", "allow"]);

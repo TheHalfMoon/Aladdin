@@ -854,3 +854,88 @@ fn the_host_decides_every_request_of_a_live_navigation() {
     assert!(report.job_empty, "the job did not empty");
     assert_profile_gone(report.profile_removed, &profile);
 }
+
+#[test]
+#[ignore = "requires the built browser worker and Edge; run by npm run browser-launcher:native"]
+fn observation_is_bounded_redacted_and_bound_to_the_committed_document() {
+    let fixture = HttpsFixture::start();
+    let profile = temp_profile("observe");
+    let mut launch = spec(&profile, true);
+    launch.destinations =
+        vec![
+            AdmittedDestination::fixture("fixture.test", IpAddr::V4(Ipv4Addr::LOCALHOST))
+                .expect("fixture.test"),
+        ];
+    launch.test_trusted_spki = Some(fixture.spki.clone());
+    let mut worker = launch_worker(&launch, &Policy(PolicyKeyState::Absent)).expect("launch");
+    let scope = crate::observation::ObservationScope {
+        workspace: "workspace".into(),
+        profile_identity: "profile".into(),
+    };
+    // Nothing to observe before a committed document.
+    assert!(worker.observe(&scope).is_err());
+
+    worker
+        .navigate("https://fixture.test/reports")
+        .expect("reports page");
+    let live = worker.observe(&scope).expect("observe");
+    assert!(
+        live.observation.node_count > 5,
+        "{}",
+        live.observation.node_count
+    );
+    let shown = format!("{:?}", live.observation);
+    for raw in ["Quarterly report", "hunter2", "alice"] {
+        assert!(
+            !shown.contains(raw),
+            "{raw} reached the caller-visible observation"
+        );
+    }
+    // Host-issued identities bound to this document; the host keeps the raw
+    // link names and URLs for its own typed selection.
+    let generation = live.document.document_generation;
+    let mut links = Vec::new();
+    let mut stack: Vec<&crate::observation::ObservedNode> = live.observation.nodes.iter().collect();
+    while let Some(node) = stack.pop() {
+        assert!(
+            node.node_id.starts_with(&format!("d{generation}-")),
+            "{}",
+            node.node_id
+        );
+        let host = worker.host_node(&node.node_id).expect("host index entry");
+        assert!(!host.name.contains("hunter2") && !host.name.contains("alice"));
+        if host.role == "link" {
+            links.push((host.name.clone(), host.url.clone()));
+        }
+        stack.extend(node.children.iter());
+    }
+    links.sort();
+    assert_eq!(
+        links
+            .iter()
+            .map(|(name, _)| name.as_str())
+            .collect::<Vec<_>>(),
+        [
+            "Quarterly report 2026-03-31",
+            "Quarterly report 2026-06-30",
+            "Quarterly report 2026-09-30"
+        ]
+    );
+    assert!(links
+        .iter()
+        .all(|(_, url)| url.as_deref().is_some_and(|u| u.starts_with("/reports/"))));
+
+    // A page that moved itself is stale until the host navigates again.
+    worker
+        .navigate("https://fixture.test/self-move")
+        .expect("self-moving page");
+    pump(&mut worker, Duration::from_secs(2));
+    assert!(
+        matches!(worker.observe(&scope), Err(HostError::Invalid(_))),
+        "a moved page was observed"
+    );
+    let report = worker.shutdown();
+    assert!(report.job_empty, "the job did not empty");
+    assert_profile_gone(report.profile_removed, &profile);
+    drop(fixture);
+}

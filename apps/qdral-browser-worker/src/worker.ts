@@ -27,6 +27,7 @@ import {
   type WorkerFrame
 } from "./protocol.js";
 import type { RouteQuery } from "./routing.js";
+import type { BoundedSnapshot } from "./snapshot.js";
 
 export type LaunchSpec = Extract<HostFrame, { frame: "launch" }>;
 
@@ -48,6 +49,8 @@ export interface EngineSession {
   close(): Promise<void>;
   /// Navigate the primary page; rejects with NavigationError.
   navigate(url: string): Promise<{ url: string; status: number }>;
+  /// A bounded, value-free accessibility snapshot of the primary page.
+  observe(): Promise<{ url: string; snapshot: BoundedSnapshot }>;
   /// Called once if the engine goes away without `close`.
   onUnexpectedExit(listener: () => void): void;
 }
@@ -151,6 +154,16 @@ export class Worker {
       case "hello":
       case "route_decision":
         return this.fail("protocol_violation");
+      case "observe": {
+        if (this.state !== "launched" || !this.session) return this.fail("not_ready");
+        try {
+          const { url, snapshot } = await this.session.observe();
+          this.send({ frame: "observed", obs_id: frame.obs_id, url, truncated: snapshot.truncated, nodes: snapshot.nodes });
+        } catch {
+          this.send({ frame: "observation_failed", obs_id: frame.obs_id });
+        }
+        return;
+      }
       case "navigate": {
         if (this.state !== "launched" || !this.session) return this.fail("not_ready");
         if (this.navigating) {

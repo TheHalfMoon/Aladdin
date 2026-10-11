@@ -36,8 +36,9 @@ pub struct JobProcess {
 }
 
 /// Worker protocol generation (apps/qdral-browser-worker/src/protocol.ts).
-/// Generation 2 adds the slice-3a navigation frames.
-pub const WORKER_PROTOCOL_GENERATION: u32 = 2;
+/// Generation 2 adds the slice-3a navigation frames; generation 3 adds
+/// slice-3b observation.
+pub const WORKER_PROTOCOL_GENERATION: u32 = 3;
 /// Worker identity reported in its hello.
 pub const WORKER_IDENTITY: &str = "qdral-browser-worker";
 /// The only Node option the worker accepts (inspector activation refused).
@@ -50,6 +51,42 @@ pub const WORKER_REPLY_TIMEOUT: Duration = Duration::from_secs(10);
 pub const WORKER_SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(10);
 /// Upper bound for one navigation, including every route decision.
 pub const WORKER_NAVIGATION_TIMEOUT: Duration = Duration::from_secs(45);
+
+/// Upper bound for one observation round trip.
+pub const WORKER_OBSERVATION_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// One node of a worker snapshot: ref, role, accessible name and (links
+/// only) the link URL. The worker never sends field values.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SnapshotNode {
+    #[serde(rename = "ref")]
+    pub reference: String,
+    pub role: String,
+    pub name: String,
+    #[serde(default)]
+    pub url: Option<String>,
+    pub children: Vec<SnapshotNode>,
+}
+
+/// What the host keeps about an observed node for its own typed selection;
+/// never returned to callers.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HostNode {
+    pub reference: String,
+    pub role: String,
+    pub name: String,
+    pub url: Option<String>,
+}
+
+/// A live observation: SG-000076 identities and the redacted, digested
+/// observation. Raw names stay inside the host.
+#[derive(Debug, Clone)]
+pub struct LiveObservation {
+    pub page: crate::observation::PageIdentity,
+    pub document: crate::observation::DocumentIdentity,
+    pub observation: crate::observation::Observation,
+}
 
 /// A completed top-level navigation.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -125,6 +162,9 @@ pub(crate) enum WorkerRequest<'a> {
         request_id: u64,
         allow: bool,
     },
+    Observe {
+        obs_id: u64,
+    },
     Shutdown,
 }
 
@@ -157,6 +197,15 @@ pub(crate) enum WorkerReply {
     NavigationFailed {
         nav_id: u64,
         reason: String,
+    },
+    Observed {
+        obs_id: u64,
+        url: String,
+        truncated: bool,
+        nodes: Vec<SnapshotNode>,
+    },
+    ObservationFailed {
+        obs_id: u64,
     },
     Error {
         code: String,
@@ -227,6 +276,42 @@ pub(crate) fn seed_profile_preferences(profile_dir: &Path) -> Result<(), HostErr
 #[cfg_attr(not(windows), allow(dead_code))]
 pub(crate) fn test_certificate_flag(spki: &str) -> String {
     format!("--ignore-certificate-errors-spki-list={spki}")
+}
+
+/// Map a worker snapshot node onto an SG-000076 input node with a
+/// host-issued identity, recording the raw name host-side. The value is
+/// always empty: the worker never sends field values.
+#[cfg(any(windows, test))]
+pub(crate) fn input_node(
+    node: &SnapshotNode,
+    generation: u64,
+    index: &mut std::collections::HashMap<String, HostNode>,
+) -> crate::observation::InputNode {
+    let node_id = format!("d{generation}-{}", node.reference);
+    index.insert(
+        node_id.clone(),
+        HostNode {
+            reference: node.reference.clone(),
+            role: node.role.clone(),
+            name: node.name.clone(),
+            url: node.url.clone(),
+        },
+    );
+    crate::observation::InputNode {
+        identity: crate::observation::NodeIdentity {
+            node_id,
+            role: node.role.clone(),
+            document_generation: generation,
+        },
+        role: node.role.clone(),
+        name: node.name.clone(),
+        value: String::new(),
+        children: node
+            .children
+            .iter()
+            .map(|child| input_node(child, generation, index))
+            .collect(),
+    }
 }
 
 /// Map a worker navigation failure onto the typed vocabulary.
@@ -505,6 +590,11 @@ mod platform {
         policy: NavigationPolicy,
         next_nav: u64,
         last_request: u64,
+        next_obs: u64,
+        /// The committed document: URL and document generation.
+        committed: Option<(String, u64)>,
+        /// Raw names of the last observation, by host-issued node id.
+        host_nodes: std::collections::HashMap<String, HostNode>,
     }
 
     /// Launch the worker and its engine, or fail closed with a typed error
@@ -551,6 +641,9 @@ mod platform {
             browser_pid: 0,
             finished: false,
             policy: NavigationPolicy::new(&spec.destinations),
+            next_obs: 0,
+            committed: None,
+            host_nodes: std::collections::HashMap::new(),
             next_nav: 0,
             last_request: 0,
         };
@@ -718,6 +811,9 @@ mod platform {
                     status,
                 } if done == nav_id => {
                     self.policy.commit(&committed)?;
+                    // A new document: earlier node identities are stale.
+                    self.committed = Some((committed.clone(), nav_id));
+                    self.host_nodes.clear();
                     Ok(NavigationOutcome {
                         url: committed,
                         status,
@@ -738,6 +834,75 @@ mod platform {
                     Err(HostError::Unavailable(UnavailableReason::ProtocolViolation))
                 }
             }
+        }
+
+        /// Observe the committed document (SG-000076). The snapshot must be
+        /// of exactly the committed URL (a page that moved itself is stale
+        /// and needs a new navigation). Node identities are issued here,
+        /// bound to the document generation; callers get only the
+        /// redacted, digested observation.
+        pub fn observe(
+            &mut self,
+            scope: &crate::observation::ObservationScope,
+        ) -> Result<LiveObservation, HostError> {
+            let (url, generation) = self
+                .committed
+                .clone()
+                .ok_or_else(|| HostError::Invalid("no committed document to observe".into()))?;
+            let origin = self
+                .policy
+                .committed_origin()
+                .ok_or_else(|| HostError::Invalid("no committed origin".into()))?
+                .to_owned();
+            self.next_obs += 1;
+            let obs_id = self.next_obs;
+            let started = Instant::now();
+            self.send(&WorkerRequest::Observe { obs_id })?;
+            let (observed_url, nodes) = match self.reply(WORKER_OBSERVATION_TIMEOUT)? {
+                WorkerReply::Observed {
+                    obs_id: done,
+                    url: observed_url,
+                    truncated: _,
+                    nodes,
+                } if done == obs_id => (observed_url, nodes),
+                WorkerReply::ObservationFailed { obs_id: done } if done == obs_id => {
+                    return Err(HostError::Unavailable(UnavailableReason::LaunchFailed))
+                }
+                _ => return Err(HostError::Unavailable(UnavailableReason::ProtocolViolation)),
+            };
+            if observed_url != url {
+                return Err(HostError::Invalid(
+                    "stale page: the document changed".into(),
+                ));
+            }
+            let elapsed = started.elapsed().as_millis().min(u64::MAX as u128) as u64;
+            let page = crate::observation::PageIdentity {
+                page_id: format!("p{generation}"),
+                origin,
+                page_generation: generation,
+            };
+            let document = crate::observation::DocumentIdentity {
+                page_id: page.page_id.clone(),
+                document_generation: generation,
+            };
+            let mut index = std::collections::HashMap::new();
+            let roots: Vec<crate::observation::InputNode> = nodes
+                .iter()
+                .map(|node| input_node(node, generation, &mut index))
+                .collect();
+            let observation =
+                crate::observation::observe_snapshot(scope, &page, &document, &roots, elapsed)?;
+            self.host_nodes = index;
+            Ok(LiveObservation {
+                page,
+                document,
+                observation,
+            })
+        }
+
+        /// Host-only view of an observed node (for typed selection).
+        pub fn host_node(&self, node_id: &str) -> Option<&HostNode> {
+            self.host_nodes.get(node_id)
         }
 
         /// Graceful shutdown with a forced fallback: ask the worker to stop,
@@ -803,6 +968,21 @@ mod fallback {
             Err(HostError::Unavailable(
                 UnavailableReason::UnsupportedRuntime,
             ))
+        }
+
+        /// API parity: no worker ever exists off Windows.
+        pub fn observe(
+            &mut self,
+            _scope: &crate::observation::ObservationScope,
+        ) -> Result<LiveObservation, HostError> {
+            Err(HostError::Unavailable(
+                UnavailableReason::UnsupportedRuntime,
+            ))
+        }
+
+        /// API parity: no worker ever exists off Windows.
+        pub fn host_node(&self, _node_id: &str) -> Option<&HostNode> {
+            None
         }
     }
 
@@ -1053,6 +1233,64 @@ mod tests {
             assert!(seed_profile_preferences(&dir).is_err(), "{bad}");
         }
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn observation_frames_and_identities_are_exact() {
+        let json = |request: &WorkerRequest<'_>| serde_json::to_string(request).unwrap();
+        assert_eq!(
+            json(&WorkerRequest::Observe { obs_id: 4 }),
+            r#"{"frame":"observe","obs_id":4}"#
+        );
+        let reply = |text: &str| serde_json::from_str::<WorkerReply>(text);
+        let observed = reply(
+            r#"{"frame":"observed","obs_id":4,"url":"https://fixture.test/r","truncated":false,"nodes":[{"ref":"e1","role":"list","name":"","children":[{"ref":"e2","role":"link","name":"Report 2026-09-30","url":"/r.pdf","children":[]}]}]}"#,
+        )
+        .unwrap();
+        let WorkerReply::Observed { nodes, .. } = observed else {
+            panic!("not an observation")
+        };
+        // Unknown fields (for example a field value) are refused anywhere.
+        assert!(reply(r#"{"frame":"observed","obs_id":4,"url":"u","truncated":false,"nodes":[{"ref":"e1","role":"textbox","name":"","value":"secret","children":[]}]}"#).is_err());
+        assert!(reply(r#"{"frame":"observation_failed","obs_id":4,"x":1}"#).is_err());
+        // Identities are host-issued and bound to the document generation;
+        // the raw name stays in the host index; values are always empty.
+        let mut index = std::collections::HashMap::new();
+        let roots: Vec<_> = nodes.iter().map(|n| input_node(n, 7, &mut index)).collect();
+        assert_eq!(roots[0].identity.node_id, "d7-e1");
+        assert_eq!(roots[0].children[0].identity.node_id, "d7-e2");
+        assert_eq!(roots[0].children[0].identity.document_generation, 7);
+        assert!(roots[0].children[0].value.is_empty());
+        let link = &index["d7-e2"];
+        assert_eq!(link.name, "Report 2026-09-30");
+        assert_eq!(link.url.as_deref(), Some("/r.pdf"));
+        assert_eq!(WORKER_OBSERVATION_TIMEOUT, Duration::from_secs(10));
+        // The SG-000076 pipeline digests names and checks generations.
+        let scope = crate::observation::ObservationScope {
+            workspace: "ws".into(),
+            profile_identity: "profile".into(),
+        };
+        let page = crate::observation::PageIdentity {
+            page_id: "p7".into(),
+            origin: "https://fixture.test".into(),
+            page_generation: 7,
+        };
+        let document = crate::observation::DocumentIdentity {
+            page_id: "p7".into(),
+            document_generation: 7,
+        };
+        let observation =
+            crate::observation::observe_snapshot(&scope, &page, &document, &roots, 5).unwrap();
+        let text = format!("{observation:?}");
+        assert!(
+            !text.contains("Report 2026-09-30"),
+            "a raw name reached the observation"
+        );
+        let stale = crate::observation::DocumentIdentity {
+            page_id: "p7".into(),
+            document_generation: 8,
+        };
+        assert!(crate::observation::observe_snapshot(&scope, &page, &stale, &roots, 5).is_err());
     }
 
     #[test]

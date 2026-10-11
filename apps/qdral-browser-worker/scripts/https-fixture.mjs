@@ -63,6 +63,16 @@ try { window.open("https://other.test/popup"); } catch {}
 try { window.open("/redirect-cross"); } catch {}
 </script>`;
 
+// Slice 3b observation fixtures: a dated report list with a filled login
+// form, and a page that moves itself after loading.
+const REPORTS = `<!doctype html><title>Reports</title><h1>Reports</h1><ul>
+<li><a href="/reports/2026-09-30.pdf">Quarterly report 2026-09-30</a></li>
+<li><a href="/reports/2026-06-30.pdf">Quarterly report 2026-06-30</a></li>
+<li><a href="/reports/2026-03-31.pdf">Quarterly report 2026-03-31</a></li></ul>
+<form><label>User <input name=u value="alice"></label>
+<label>Password <input type=password value="hunter2-secret"></label><button>Sign in</button></form>`;
+const SELF_MOVE = `<!doctype html><title>moving</title><script>setTimeout(() => { location.href = "/landing"; }, 300);</script>`;
+
 // The escape a judge proved against slice 3a: prerender a same-origin page
 // that redirects cross-origin, then activate it with no new request.
 const SPEC_ESCAPE = `<!doctype html><title>spec-escape</title>
@@ -107,7 +117,7 @@ const server = createServer({ key, cert }, (request, response) => {
     response.setHeader("reporting-endpoints", 'csp="https://other.test/reports"');
     response.setHeader("content-security-policy", "img-src 'self'; report-to csp");
   }
-  const pages = { "/mixed": MIXED, "/spec-escape": SPEC_ESCAPE };
+  const pages = { "/mixed": MIXED, "/spec-escape": SPEC_ESCAPE, "/reports": REPORTS, "/self-move": SELF_MOVE };
   response.end(pages[path] ?? `<!doctype html><title>${host}${path}</title><p>fixture</p>`);
 });
 server.listen({ port: 443, host: "127.0.0.1" }, () => process.stdout.write(`READY ${spki}\n`));

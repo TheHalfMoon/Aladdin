@@ -9,6 +9,7 @@ import { chromium, type Page } from "playwright-core";
 import { refusedWorkerVariables, startupRefusal } from "./environment.js";
 import { encodeFrame, FrameDecoder, ProtocolViolation, type WorkerFrame } from "./protocol.js";
 import { installRoutes } from "./routes.js";
+import { boundSnapshot } from "./snapshot.js";
 import { NavigationError, Worker, type EngineSession, type Launcher, type LaunchSpec, type RoutePolicy } from "./worker.js";
 
 const startup = startupRefusal(process.execArgv, process.version);
@@ -67,6 +68,10 @@ const playwrightLauncher: Launcher = {
           if ((error as Error).name === "TimeoutError") throw new NavigationError("timeout");
           throw new NavigationError("failed");
         }
+      },
+      async observe() {
+        const raw: unknown = await primary.ariaSnapshotJSON({ mode: "ai", depth: 16, timeout: 2_000 });
+        return { url: primary.url(), snapshot: boundSnapshot(raw) };
       },
       async close() {
         closing = true;
