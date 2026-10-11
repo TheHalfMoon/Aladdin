@@ -71,6 +71,9 @@ const REPORTS = `<!doctype html><title>Reports</title><h1>Reports</h1><ul>
 <li><a href="/reports/2026-03-31.pdf">Quarterly report 2026-03-31</a></li></ul>
 <form><label>User <input name=u value="alice"></label>
 <label>Password <input type=password value="hunter2-secret"></label><button>Sign in</button></form>`;
+const FILES = `<!doctype html><title>Files</title><ul>
+<li><a href="/files/oversized.pdf">Oversized 2026-01-01</a></li>
+<li><a href="/files/fake.pdf">Disguised 2026-01-02</a></li></ul>`;
 const ARCHIVE = `<!doctype html><title>Archive</title><ul>
 <li><a href="/archive/2026-06-30">Annual review 2026-06-30</a></li>
 <li><a href="/archive/2026-09-30">Annual review 2026-09-30</a></li>
@@ -110,6 +113,27 @@ const server = createServer({ key, cert }, (request, response) => {
     response.setHeader("content-type", "text/css");
     return response.end('@import url("https://other.test/imported.css"); body { color: black; }');
   }
+  if (path.startsWith("/reports/") && path.endsWith(".pdf")) {
+    // A small, valid-looking PDF whose bytes name the report.
+    const body = Buffer.from(`%PDF-1.4
+% ${path}
+1 0 obj << /Type /Catalog >> endobj
+trailer << /Root 1 0 R >>
+%%EOF
+`);
+    response.setHeader("content-type", "application/pdf");
+    response.setHeader("content-length", String(body.length));
+    return response.end(body);
+  }
+  if (path === "/files/oversized.pdf") {
+    response.setHeader("content-type", "application/pdf");
+    return response.end(Buffer.concat([Buffer.from("%PDF-1.4\n"), Buffer.alloc(9 * 1024 * 1024, 0x20)]));
+  }
+  if (path === "/files/fake.pdf") {
+    // An executable disguised as a PDF.
+    response.setHeader("content-type", "application/pdf");
+    return response.end(Buffer.concat([Buffer.from("MZ"), Buffer.alloc(64, 0)]));
+  }
   if (path.endsWith(".png")) {
     response.setHeader("content-type", "image/png");
     return response.end(Buffer.from("89504e470d0a1a0a", "hex"));
@@ -124,7 +148,7 @@ const server = createServer({ key, cert }, (request, response) => {
     response.setHeader("reporting-endpoints", 'csp="https://other.test/reports"');
     response.setHeader("content-security-policy", "img-src 'self'; report-to csp");
   }
-  const pages = { "/mixed": MIXED, "/spec-escape": SPEC_ESCAPE, "/reports": REPORTS, "/self-move": SELF_MOVE, "/archive": ARCHIVE, "/archive-hostile": ARCHIVE_HOSTILE };
+  const pages = { "/mixed": MIXED, "/spec-escape": SPEC_ESCAPE, "/reports": REPORTS, "/self-move": SELF_MOVE, "/archive": ARCHIVE, "/archive-hostile": ARCHIVE_HOSTILE, "/files": FILES };
   response.end(pages[path] ?? `<!doctype html><title>${host}${path}</title><p>fixture</p>`);
 });
 server.listen({ port: 443, host: "127.0.0.1" }, () => process.stdout.write(`READY ${spki}\n`));
