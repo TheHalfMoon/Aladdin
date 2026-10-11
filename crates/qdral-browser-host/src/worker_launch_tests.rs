@@ -143,6 +143,11 @@ fn launch_verifies_the_job_and_shuts_down_without_residue() {
     );
     assert_eq!(worker.verify().expect("verify"), worker.browser_pid());
     worker.ping("native-1").expect("ping");
+    // Control for the machine-wide residue check: it sees the live engine.
+    assert!(
+        processes_referencing(&profile).contains("msedge.exe"),
+        "the residue query does not see the running engine"
+    );
     let started = Instant::now();
     let report = worker.shutdown();
     eprintln!(
@@ -239,10 +244,52 @@ fn wait_for_profile_lock_release(profile: &Path, timeout: Duration) -> bool {
     }
 }
 
+/// No process anywhere on the machine (not only the job's recorded
+/// members) may still name `profile` on its command line once supervision
+/// has ended: a helper started outside the job would otherwise go unseen.
+fn assert_no_process_references(profile: &Path) {
+    let started = Instant::now();
+    loop {
+        let holders = processes_referencing(profile);
+        if holders.is_empty() {
+            return;
+        }
+        assert!(
+            started.elapsed() < Duration::from_secs(10),
+            "processes still reference {}: {holders}",
+            profile.display()
+        );
+        std::thread::sleep(Duration::from_millis(500));
+    }
+}
+
+/// Every process except the query itself whose command line names the
+/// profile directory, as "pid name" lines.
+fn processes_referencing(profile: &Path) -> String {
+    let marker = profile
+        .file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .expect("profile directory name");
+    let powershell =
+        PathBuf::from(std::env::var_os("SystemRoot").unwrap_or_else(|| "C:\\Windows".into()))
+            .join("System32\\WindowsPowerShell\\v1.0\\powershell.exe");
+    let query = format!(
+        "Get-CimInstance Win32_Process | Where-Object {{ $_.ProcessId -ne $PID -and \
+         $_.CommandLine -like '*{marker}*' }} | ForEach-Object {{ \"$($_.ProcessId) $($_.Name)\" }}"
+    );
+    let output = std::process::Command::new(&powershell)
+        .args(["-NoProfile", "-NonInteractive", "-Command", &query])
+        .output()
+        .expect("query processes");
+    assert!(output.status.success(), "process query failed");
+    String::from_utf8_lossy(&output.stdout).trim().to_owned()
+}
+
 /// The launcher must have removed the profile within its own budget. A
 /// failure is diagnosed (the held file and how long it stays held, which
 /// also cleans up) and still fails the test.
 fn assert_profile_gone(reported_removed: bool, profile: &Path) {
+    assert_no_process_references(profile);
     if reported_removed && !profile.exists() {
         return;
     }

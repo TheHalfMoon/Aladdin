@@ -80,7 +80,9 @@ pub struct ShutdownReport {
     pub graceful: bool,
     /// No process remained in the job afterwards.
     pub job_empty: bool,
-    /// The ephemeral profile (if any) was removed.
+    /// The ephemeral profile was removed. Always true for a non-ephemeral
+    /// profile, which the launcher never removes (nothing was to be removed);
+    /// for an ephemeral one, true only once the directory no longer exists.
     pub profile_removed: bool,
 }
 
