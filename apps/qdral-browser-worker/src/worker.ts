@@ -51,6 +51,9 @@ export interface EngineSession {
   navigate(url: string): Promise<{ url: string; status: number }>;
   /// A bounded, value-free accessibility snapshot of the primary page.
   observe(): Promise<{ url: string; snapshot: BoundedSnapshot }>;
+  /// Click the element with this snapshot ref and wait for the resulting
+  /// navigation to load; rejects with NavigationError.
+  activate(ref: string): Promise<{ url: string; status: number }>;
   /// Called once if the engine goes away without `close`.
   onUnexpectedExit(listener: () => void): void;
 }
@@ -154,6 +157,16 @@ export class Worker {
       case "hello":
       case "route_decision":
         return this.fail("protocol_violation");
+      case "activate": {
+        if (this.state !== "launched" || !this.session) return this.fail("not_ready");
+        if (this.navigating) {
+          this.send({ frame: "activation_failed", act_id: frame.act_id, reason: "busy" });
+          return;
+        }
+        this.navigating = true;
+        void this.runActivation(this.session, frame.act_id, frame.ref);
+        return;
+      }
       case "observe": {
         if (this.state !== "launched" || !this.session) return this.fail("not_ready");
         try {
@@ -213,6 +226,19 @@ export class Worker {
     } catch (error) {
       const reason: NavigationFailure = error instanceof NavigationError ? error.reason : "failed";
       outcome = { frame: "navigation_failed", nav_id: navId, reason };
+    }
+    this.navigating = false;
+    if (this.state === "launched" && this.session === session) this.send(outcome);
+  }
+
+  private async runActivation(session: EngineSession, actId: number, ref: string): Promise<void> {
+    let outcome: WorkerFrame;
+    try {
+      const result = await session.activate(ref);
+      outcome = { frame: "activated", act_id: actId, url: result.url, status: result.status };
+    } catch (error) {
+      const reason: NavigationFailure = error instanceof NavigationError ? error.reason : "failed";
+      outcome = { frame: "activation_failed", act_id: actId, reason };
     }
     this.navigating = false;
     if (this.state === "launched" && this.session === session) this.send(outcome);

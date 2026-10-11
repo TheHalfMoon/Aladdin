@@ -69,6 +69,38 @@ const playwrightLauncher: Launcher = {
           throw new NavigationError("failed");
         }
       },
+      async activate(ref: string) {
+        const page = primary;
+        let status = 0;
+        const onResponse = (response: import("playwright-core").Response) => {
+          const request = response.request();
+          if (request.isNavigationRequest() && request.frame() === page.mainFrame()) status = response.status();
+        };
+        page.on("response", onResponse);
+        try {
+          const navigated = page.waitForEvent("framenavigated", {
+            predicate: (frame) => frame === page.mainFrame(),
+            timeout: 30_000
+          });
+          try {
+            await page.locator(`aria-ref=${ref}`).click({ timeout: 5_000 });
+          } catch {
+            navigated.catch(() => {});
+            throw new NavigationError("failed");
+          }
+          await navigated;
+          await page.waitForLoadState("load", { timeout: 30_000 });
+        } catch (error) {
+          if (error instanceof NavigationError) throw error;
+          if ((error as Error).name === "TimeoutError") throw new NavigationError("timeout");
+          throw new NavigationError("failed");
+        } finally {
+          page.off("response", onResponse);
+        }
+        // A refused navigation lands on Chromium's error page.
+        if (page.url().startsWith("chrome-error:")) throw new NavigationError("denied");
+        return { url: page.url(), status };
+      },
       async observe() {
         const raw: unknown = await primary.ariaSnapshotJSON({ mode: "ai", depth: 16, timeout: 2_000 });
         return { url: primary.url(), snapshot: boundSnapshot(raw) };

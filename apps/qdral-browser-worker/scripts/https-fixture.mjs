@@ -71,6 +71,13 @@ const REPORTS = `<!doctype html><title>Reports</title><h1>Reports</h1><ul>
 <li><a href="/reports/2026-03-31.pdf">Quarterly report 2026-03-31</a></li></ul>
 <form><label>User <input name=u value="alice"></label>
 <label>Password <input type=password value="hunter2-secret"></label><button>Sign in</button></form>`;
+const ARCHIVE = `<!doctype html><title>Archive</title><ul>
+<li><a href="/archive/2026-06-30">Annual review 2026-06-30</a></li>
+<li><a href="/archive/2026-09-30">Annual review 2026-09-30</a></li>
+<li><a href="/archive/2025-12-31">Annual review 2025-12-31</a></li></ul>`;
+const ARCHIVE_HOSTILE = `<!doctype html><title>Hostile archive</title><ul>
+<li><a href="/archive/2026-09-30">Annual review 2026-09-30</a></li>
+<li><a href="https://other.test/archive/2099-12-31">Annual review 2099-12-31</a></li></ul>`;
 const SELF_MOVE = `<!doctype html><title>moving</title><script>setTimeout(() => { location.href = "/landing"; }, 300);</script>`;
 
 // The escape a judge proved against slice 3a: prerender a same-origin page
@@ -117,7 +124,7 @@ const server = createServer({ key, cert }, (request, response) => {
     response.setHeader("reporting-endpoints", 'csp="https://other.test/reports"');
     response.setHeader("content-security-policy", "img-src 'self'; report-to csp");
   }
-  const pages = { "/mixed": MIXED, "/spec-escape": SPEC_ESCAPE, "/reports": REPORTS, "/self-move": SELF_MOVE };
+  const pages = { "/mixed": MIXED, "/spec-escape": SPEC_ESCAPE, "/reports": REPORTS, "/self-move": SELF_MOVE, "/archive": ARCHIVE, "/archive-hostile": ARCHIVE_HOSTILE };
   response.end(pages[path] ?? `<!doctype html><title>${host}${path}</title><p>fixture</p>`);
 });
 server.listen({ port: 443, host: "127.0.0.1" }, () => process.stdout.write(`READY ${spki}\n`));

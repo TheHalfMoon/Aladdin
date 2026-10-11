@@ -122,6 +122,20 @@ impl NavigationPolicy {
         Ok(())
     }
 
+    /// Record a document the page reached itself (for example through an
+    /// approved activation): it must be an admitted name on the committed
+    /// origin. Any in-progress navigation state is cleared.
+    pub fn commit_page_initiated(&mut self, url: &str) -> Result<(), HostError> {
+        let target = self.admitted_target(url)?;
+        self.abort();
+        if self.committed_origin.as_deref() != Some(target.origin.as_str()) {
+            return Err(HostError::Invalid(
+                "the page left its committed origin".into(),
+            ));
+        }
+        Ok(())
+    }
+
     pub fn committed_origin(&self) -> Option<&str> {
         self.committed_origin.as_deref()
     }
@@ -368,6 +382,20 @@ mod tests {
         assert!(p
             .decide(RouteKind::Redirect, "https://other.test/moved", HOME)
             .is_err());
+    }
+
+    #[test]
+    fn page_initiated_commits_stay_on_the_committed_origin() {
+        let mut p = policy();
+        assert!(
+            p.commit_page_initiated("https://fixture.test/x").is_err(),
+            "nothing committed yet"
+        );
+        p.begin("https://fixture.test/").unwrap();
+        p.commit("https://fixture.test/").unwrap();
+        assert!(p.commit_page_initiated("https://fixture.test/next").is_ok());
+        assert!(p.commit_page_initiated("https://other.test/next").is_err());
+        assert!(p.commit_page_initiated("https://example.com/").is_err());
     }
 
     #[test]

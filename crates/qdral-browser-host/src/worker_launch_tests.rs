@@ -939,3 +939,124 @@ fn observation_is_bounded_redacted_and_bound_to_the_committed_document() {
     assert_profile_gone(report.profile_removed, &profile);
     drop(fixture);
 }
+
+/// An SG-000077 target and a matching one-shot approval for a node of the
+/// current observation.
+fn approved_click(
+    live: &LiveObservation,
+    node_id: &str,
+) -> (
+    crate::actuation::ActuationTarget,
+    crate::actuation::ApprovalToken,
+) {
+    let target = crate::actuation::ActuationTarget {
+        page_id: live.page.page_id.clone(),
+        origin: live.page.origin.clone(),
+        document_generation: live.document.document_generation,
+        node_id: node_id.to_owned(),
+        role: "link".into(),
+        state: String::new(),
+        action: crate::actuation::SupportedAction::Click,
+        workspace: "workspace".into(),
+        policy_revision: 1,
+    };
+    let approval = crate::actuation::ApprovalToken {
+        approval_id: "approval-1".into(),
+        target_digest: crate::actuation::target_digest(&target),
+        workspace: "workspace".into(),
+        policy_revision: 1,
+        consumed: false,
+    };
+    (target, approval)
+}
+
+#[test]
+#[ignore = "requires the built browser worker and Edge; run by npm run browser-launcher:native"]
+fn an_approved_activation_follows_the_latest_dated_link_and_nothing_else() {
+    let fixture = HttpsFixture::start();
+    let profile = temp_profile("activate");
+    let mut launch = spec(&profile, true);
+    launch.destinations =
+        vec![
+            AdmittedDestination::fixture("fixture.test", IpAddr::V4(Ipv4Addr::LOCALHOST))
+                .expect("fixture.test"),
+        ];
+    launch.test_trusted_spki = Some(fixture.spki.clone());
+    let mut worker = launch_worker(&launch, &Policy(PolicyKeyState::Absent)).expect("launch");
+    let scope = crate::observation::ObservationScope {
+        workspace: "workspace".into(),
+        profile_identity: "profile".into(),
+    };
+
+    worker
+        .navigate("https://fixture.test/archive")
+        .expect("archive");
+    let live = worker.observe(&scope).expect("observe");
+    let latest = worker
+        .select_latest_dated_link()
+        .expect("latest dated link");
+    assert_eq!(
+        worker.host_node(&latest).map(|n| n.name.as_str()),
+        Some("Annual review 2026-09-30")
+    );
+    // A digest that does not match the target is refused before any click.
+    let (target, mut forged) = approved_click(&live, &latest);
+    forged.target_digest = "0000000000000000".into();
+    assert!(worker
+        .activate(&target, &mut forged, 1, "workspace")
+        .is_err());
+    // The approved click navigates to the selected document.
+    let (target, mut approval) = approved_click(&live, &latest);
+    let opened = worker
+        .activate(&target, &mut approval, 1, "workspace")
+        .expect("approved activation");
+    assert_eq!(opened.url, "https://fixture.test/archive/2026-09-30");
+    assert!(approval.consumed);
+    // The approval cannot be replayed, and the old node is stale.
+    assert!(worker
+        .activate(&target, &mut approval, 1, "workspace")
+        .is_err());
+    let (target, mut fresh) = approved_click(&live, &latest);
+    assert!(
+        worker
+            .activate(&target, &mut fresh, 1, "workspace")
+            .is_err(),
+        "stale node"
+    );
+    // The next observation is of the new document, one generation later.
+    let after = worker.observe(&scope).expect("observe after activation");
+    assert_eq!(
+        after.document.document_generation,
+        live.document.document_generation + 1
+    );
+
+    // A hostile page whose latest-dated link is cross-origin: the host's
+    // selection picks it, and the activation is refused by the policy.
+    worker
+        .navigate("https://fixture.test/archive-hostile")
+        .expect("hostile archive");
+    let live = worker.observe(&scope).expect("observe hostile");
+    let latest = worker.select_latest_dated_link().expect("latest");
+    assert_eq!(
+        worker.host_node(&latest).map(|n| n.name.as_str()),
+        Some("Annual review 2099-12-31")
+    );
+    let (target, mut approval) = approved_click(&live, &latest);
+    assert!(
+        worker
+            .activate(&target, &mut approval, 1, "workspace")
+            .is_err(),
+        "a cross-origin activation was followed"
+    );
+    pump(&mut worker, Duration::from_secs(1));
+    assert!(
+        !fixture
+            .hits()
+            .iter()
+            .any(|hit| hit.starts_with("other.test")),
+        "other.test was contacted"
+    );
+    let report = worker.shutdown();
+    assert!(report.job_empty, "the job did not empty");
+    assert_profile_gone(report.profile_removed, &profile);
+}
