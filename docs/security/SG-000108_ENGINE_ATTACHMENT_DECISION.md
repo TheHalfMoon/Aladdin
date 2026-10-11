@@ -297,7 +297,46 @@ fixture. Unmapped names failed with `ERR_PROXY_CONNECTION_FAILED`.
 **Findings that bind slice 2b:**
 - The OS command line quotes arguments that contain spaces (the resolver rules), so the host must parse it with `CommandLineToArgvW` rules before the element-for-element comparison.
 - Node acts on `NODE_OPTIONS` (verified with `--require`) before any worker code runs. The host must therefore build the worker environment from an allowlist and never inherit it; the worker's own refusal is only a second line.
-- Inspector activation: evaluate `--disable-sigusr1`. It exists only from Node 22.14 / 23.7. Whether it also closes the Windows activation path (`process._debugProcess`) is unproven. If it is adopted, raise the worker's minimum Node version in the spec. Prove with a native probe that the inspector cannot be activated (no listener appears).
+- Inspector activation: **decided and enforced by the worker in slice 2b-i**. The worker refuses to start (exit 2, nothing on stdout) unless Node is 22.14+ and its Node options are exactly `--disable-sigusr1` (`startupRefusal`, with tests). A later `--no-disable-sigusr1` would otherwise re-enable activation (verified), and no `--inspect*`, `--require` or `--import` may accompany the flag. The slice 2b-ii launcher passes the flag and reports the browser as typed unavailable when the worker refuses.
 - Service workers: Playwright's `serviceWorkers: "block"` only replaces `navigator.serviceWorker.register` with an init script, so page script may be able to bypass it. Block service workers by engine or protocol means, and prove it with a native probe.
 - Worker environment allowlist: also exclude the OpenSSL start-up variables (`OPENSSL_CONF`, `OPENSSL_MODULES`, `OPENSSL_ENGINES`, `SSL_CERT_FILE`, `SSL_CERT_DIR`). The worker refuses them as a second line.
 - Release packaging (A2): the `playwright-core` NOTICE, the SBOM entry and provenance enter the release with the packaged worker. Packaging strips the `node_modules/.bin` link to the Playwright CLI, which is never exposed.
+
+**Slice 2b-i: native confinement probes in CI** (`apps/qdral-browser-worker/src/native.test.ts`). These run against the installed Edge through the root `npm test`, so the **Node / windows-latest** job produces real-engine evidence. On Windows a missing engine fails the suite. On other platforms the suite is skipped, because only Windows results count. The probes use owned loopback fixtures on port 443 and an argv the worker contract accepts.
+
+1. **Lifecycle.** The worker drives the engine through `hello` → `launch` → `ping` → `shutdown`.
+   - Exactly one browser process exists. Its OS command line, split with `CommandLineToArgvW` rules, equals `[engine, ...argv]`.
+   - No process carries `--remote-debugging-port`/`-address` or `--enable-automation`.
+   - Exit code 0, and no engine process remains.
+2. **Worker kill.** Killing the worker takes the engine down with its pipe. The Job Object of slice 2b-ii remains the guarantee.
+3. **Layers 1 and 2 with no policy route at all.** The admitted name reaches the fixture, and another port of it lands on the pinned port. All of the following fail:
+   - an unmapped name;
+   - a real public name;
+   - IPv4 and IPv6 literals (including the fixture's own address and port);
+   - a private address;
+   - IPv4 and IPv6 metadata addresses.
+
+   Listeners on `0.0.0.0:9`, `127.0.0.1:9` and `[::]:9` accept nothing, and the fixture sees only the two admitted requests.
+4. **WebRTC.** STUN to loopback and to the first LAN address, and TURN over TCP, gather no ICE candidate, send no UDP packet and open no TCP connection.
+5. **Inspector.** With `--disable-sigusr1`, `process._debugProcess` from a same-user process is refused and no listener appears on 9229. A negative control without the flag shows that the probe detects an activated inspector.
+
+**Evidence validity (review of PR #295).**
+- Each probe that could pass vacuously has a control:
+  - WebRTC is re-run with the default policy, outside the contract, and must then gather candidates and reach the STUN listener. ICE gathering is awaited to completion, not a fixed sleep. The UDP trap listens on every interface, so the LAN case can be observed.
+  - The inspector control activates a plain Node process and must see a listener.
+- Each denied destination must fail with `ERR_PROXY_CONNECTION_FAILED` specifically, so that a regression in layer 2 cannot hide behind layer 1.
+- A failing process query throws instead of reporting "no processes".
+- Cleanup runs last-in, first-out and always runs every step, so a failed probe cannot leave an engine, a server or a profile behind. A fresh run leaves 0 profiles.
+
+**Contract tests not yet covered (slice 2b-ii, with the host launcher):**
+- comparing the command line after a navigation;
+- checking that every engine process is a descendant of the worker inside the host Job Object;
+- TURN over UDP;
+- QUIC and WebTransport, and the service-worker block (these need an HTTPS fixture);
+- the managed-policy refusal on a test hive;
+- DNS-rebinding resistance with a fixture resolver whose answers change;
+- refusal of a second browser-process engine in the job;
+- the job process limit;
+- whether pipe handles are inherited.
+
+**Local result (Windows 11, Edge 155):** all 25 worker tests pass, 5 of them native, and the run exits cleanly in about 45 s.
