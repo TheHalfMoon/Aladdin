@@ -57,6 +57,18 @@ impl Engine {
         self.publisher_verified
     }
 
+    /// Unit-test stand-in for a verified engine (never constructed in
+    /// production code).
+    #[cfg(test)]
+    pub(crate) fn for_tests(path: PathBuf, kind: EngineKind) -> Self {
+        Self {
+            path,
+            kind,
+            version: "0.0.0.0".into(),
+            publisher_verified: false,
+        }
+    }
+
     /// Short fingerprint binding kind, version, and path for identities.
     pub fn fingerprint(&self) -> String {
         format!(

@@ -11,6 +11,10 @@ import { existsSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+// Every native test must run: a filter that matches nothing (for example
+// after a module rename) exits 0 and would otherwise pass vacuously.
+const EXPECTED_TESTS = 12;
+
 const app = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const repo = resolve(app, "..", "..");
 const main = join(app, "dist", "main.js");
@@ -25,12 +29,24 @@ if (!existsSync(main)) {
 }
 const result = spawnSync(
   "cargo",
-  ["test", "-p", "qdral-browser-host", "--lib", "native_tests", "--", "--ignored", "--test-threads=1"],
+  ["test", "-p", "qdral-browser-host", "--lib", "native_tests", "--", "--ignored", "--test-threads=1", "--nocapture"],
   {
     cwd: repo,
-    stdio: "inherit",
+    stdio: ["ignore", "pipe", "inherit"],
+    encoding: "utf8",
+    maxBuffer: 64 * 1024 * 1024,
     shell: false,
     env: { ...process.env, QDRAL_SG108_NODE: process.execPath, QDRAL_SG108_WORKER_MAIN: main }
   }
 );
-process.exit(result.status ?? 1);
+process.stdout.write(result.stdout ?? "");
+if (result.status !== 0) {
+  process.exit(result.status ?? 1);
+}
+const summary = /test result: ok\. (\d+) passed; 0 failed; 0 ignored/.exec(result.stdout ?? "");
+if (!summary || Number(summary[1]) !== EXPECTED_TESTS) {
+  process.stderr.write(
+    `browser-launcher:native: expected ${EXPECTED_TESTS} native tests to pass, saw ${summary ? summary[1] : "none"}\n`
+  );
+  process.exit(1);
+}

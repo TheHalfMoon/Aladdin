@@ -353,23 +353,26 @@ fixture. Unmapped names failed with `ERR_PROXY_CONNECTION_FAILED`.
    - with inheritance restricted by `PROC_THREAD_ATTRIBUTE_HANDLE_LIST` to its stdin, stdout and a `NUL` stderr.
 6. Exchange `hello`, then `launch`, over the closed protocol with bounded waits (15 s handshake, 60 s launch). A worker that exits with code 2 before answering is typed `UnsupportedRuntime`; a silent worker is typed `LaunchFailed` and its job is terminated.
 7. **Verify the job** (`classify_job`):
-   - its only members are the worker and processes of the verified engine image;
-   - no member carries a forbidden flag;
+   - its only members are the worker, running with exactly its host-built arguments, and processes of the verified engine image;
+   - no member carries a forbidden flag, in any spelling Chromium accepts on Windows (`--`, `-` or `/` prefix, any case);
    - exactly one browser process (no `--type=`) exists;
    - that process's OS command line, read with `NtQueryInformationProcess` and split with `CommandLineToArgvW`, equals `[engine, …host argv]`;
    - a member that cannot be inspected is accepted only if it has left the job in the meantime.
 
+The engine in a launch request is a `discovery::Engine`, so only an engine that discovery verified (kind, version, publisher) can be launched. `node` and the worker entry point must come from Deskal's install records.
+
 Shutdown asks for `bye` and waits for exit 0. It then terminates the job regardless and confirms it is empty, and finally removes an ephemeral profile. Kill and drop take the same path without the exchange.
 
-**Native tests** (`worker_launch_tests.rs`, real Node worker and Edge 155). These are ignored in a plain `cargo test` with a documented reason. The root `npm test` runs them via `npm run browser-launcher:native`, so the **Node / windows-latest** job runs them. All 11 pass locally in two consecutive full root runs:
+**Native tests** (`worker_launch_tests.rs`, real Node worker and Edge 155). These are ignored in a plain `cargo test` with a documented reason. The root `npm test` runs them via `npm run browser-launcher:native`, so the **Node / windows-latest** job runs them. The runner fails unless exactly 12 tests run and pass, so a filter that matches nothing cannot pass vacuously. All 12 pass locally in two consecutive runs. On the first CI run, 10 of the then 11 passed on the hosted runner. The lifecycle test failed there because the runner carries Edge policies, which led to the split below.
 
 | Test | What it proves |
 |---|---|
-| Lifecycle | The real registry precondition holds. The job verifies and `ping` answers. Shutdown is graceful, the job empties, every recorded member dies, and the profile is removed. |
+| Lifecycle | With no managed policy (a stand-in source), the job verifies and `ping` answers. Shutdown is graceful, the job empties, every recorded member dies, and the launcher removes the profile. |
+| Real registry precondition | On the actual machine, the launch happens exactly when the policy check passes, and is typed `ManagedPolicy` with nothing started exactly when it refuses. The log records which branch ran: GitHub's Windows runners carry Edge policies, this development host does not. |
 | Drop | Dropping supervision kills every member and removes the profile. |
 | Crash and restart | The killed worker is detected (`ping` fails) and the job empties. The same profile relaunches, answers `ping`, and shuts down clean. |
 | Host death | A separate host process is hard-killed with no destructor, and kill-on-close takes the worker, the browser and every helper down. |
-| Foreign or second browser | `PING.EXE`, then a second Edge browser process, are assigned into the job. `verify` refuses each one, and the job still empties. |
+| Foreign or second browser | `PING.EXE`, then a second Edge browser process (started suspended, so it cannot exit or start helpers outside the job first), are assigned into the job. `verify` refuses each one, and the job still empties. |
 | Handle inheritance | An inheritable pipe that the host created reaches EOF as soon as the host closes its copy, so the worker and engine did not inherit it. Negative control: a process started without a handle list does inherit it. |
 | Silent worker | It is typed `LaunchFailed` after the handshake timeout, and its process is dead. |
 | Refused runtime | It is typed `UnsupportedRuntime`. |
@@ -379,9 +382,9 @@ Shutdown asks for `bye` and waits for exit 0. It then terminates the job regardl
 **Findings:**
 - **Discovery defect (fixed here; SG-000074 path).** The engine version was probed by running `msedge.exe --version`. On Windows, Chromium prints no version for that, and instead hands the command to an already running browser session ("Opening in existing browser session."), so it can touch the user's personal profile. Discovery therefore always failed on Windows, which made SG-000074's `live_host_or_typed_unavailable_with_lifecycle` pass as "unavailable" without exercising the live host. The version is now read from the executable's version resource, without executing anything. On this host, discovery verifies Edge 155.0.4283.45 (publisher verified) and the SG-000074 live host launches.
 - **`conhost.exe`.** `CREATE_NO_WINDOW` still attaches a hidden console host to Node, which the job check correctly refused as a foreign process. `DETACHED_PROCESS` removes it.
-- **Kernel-held profile files.** After every job member is dead, Restart Manager has reported `System` (pid 4) briefly holding memory-mapped profile files. Under load this exceeded 10 s. No Edge or Node process outside the job held a profile in these runs. Removal now retries for up to 30 s and reports `profile_removed: false` if the files are still held. The tests require eventual removal, with the held file diagnosed.
-- **Crash-session restore.** A profile reused after a crash restores the previous session (9 renderers instead of 2). Production uses a fresh ephemeral profile per lifetime. Reusing a profile across lifetimes would carry state over and is not allowed.
-- **Unit variants in serde.** With `deny_unknown_fields`, serde still accepts unknown fields on unit variants of an internally tagged enum. The worker replies use empty struct variants instead. The SG-000074 host protocol (`proto.rs`: `Shutdown`, `Bye`) has the same looseness; it is tracked separately.
+- **Kernel-held profile files.** After every job member is dead, Restart Manager has reported `System` (pid 4) briefly holding memory-mapped profile files. Under load this exceeded 10 s. No Edge or Node process outside the job held a profile in these runs. Removal now retries for up to 30 s and reports `profile_removed: false` if the files are still held. The tests fail unless the launcher itself reported removal; on failure they diagnose the held file and clean up.
+- **Crash-session restore.** A profile reused after a crash restores the previous session (9 renderers instead of 2). Production must use a fresh ephemeral profile per lifetime, because reusing one carries state over. The launcher does not enforce this (`ephemeral_profile: false` is accepted, and the crash test reuses a profile on purpose), so the future product caller must.
+- **Unit variants in serde.** With `deny_unknown_fields`, serde still accepts unknown fields on unit variants of an internally tagged enum. The worker replies use empty struct variants instead. The SG-000074 host protocol (`proto.rs`: `Shutdown`, `Bye`) has the same looseness; it is tracked in #296.
 - **No crash-report uploads from a crash.** An abrupt worker kill leaves only Crashpad metadata (no report or dump), so a crash produces no upload candidate.
 
 **Still to be done in slice 2b-ii-b:**

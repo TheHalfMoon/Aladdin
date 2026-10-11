@@ -15,7 +15,7 @@ use crate::argv::FORBIDDEN_FLAGS;
 #[cfg(windows)]
 use crate::confinement::build_worker_argv;
 use crate::confinement::{assert_no_managed_policy, AdmittedDestination, PolicySource};
-use crate::discovery::EngineKind;
+use crate::discovery::Engine;
 use crate::error::{HostError, UnavailableReason};
 use crate::supervise::{CleanEnv, JOB_ACTIVE_PROCESS_LIMIT};
 #[cfg(any(windows, test))]
@@ -48,19 +48,24 @@ pub const WORKER_LAUNCH_TIMEOUT: Duration = Duration::from_secs(60);
 pub const WORKER_REPLY_TIMEOUT: Duration = Duration::from_secs(10);
 pub const WORKER_SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(10);
 
-/// Everything the launcher needs; every path must be absolute.
+/// Everything the launcher needs; every path must be absolute. `node` and
+/// `worker_main` must come from Deskal's install records, never from a
+/// caller; the engine can only be a [`Engine`] that discovery verified
+/// (kind, version, publisher), so no unverified executable can be launched
+/// under the confinement contract.
 #[derive(Debug, Clone)]
 pub struct WorkerLaunch {
     /// node.exe recorded at install (the worker itself refuses Node < 22.14).
     pub node: PathBuf,
     /// The worker entry point, `…/dist/main.js`.
     pub worker_main: PathBuf,
-    /// The verified engine executable and its family.
-    pub engine: PathBuf,
-    pub engine_kind: EngineKind,
+    /// The verified engine (from `discover_engine`).
+    pub engine: Engine,
     /// The Deskal-owned profile directory.
     pub profile_dir: PathBuf,
-    /// Remove the profile directory when supervision ends.
+    /// Remove the profile directory when supervision ends. Production uses
+    /// a fresh ephemeral profile per lifetime; the launcher does not refuse
+    /// `false` (the native crash test reuses a profile deliberately).
     pub ephemeral_profile: bool,
     /// TEMP/TMP for the worker and engine.
     pub temp_dir: PathBuf,
@@ -167,9 +172,9 @@ fn file_name_is(path: &Path, expected: &str) -> bool {
 /// or worker is a missing prerequisite (typed unavailable).
 pub(crate) fn validate_launch(spec: &WorkerLaunch) -> Result<(), HostError> {
     for (path, what) in [
-        (&spec.node, "node"),
+        (spec.node.as_path(), "node"),
         (&spec.worker_main, "worker entry point"),
-        (&spec.engine, "engine"),
+        (spec.engine.path(), "engine"),
         (&spec.profile_dir, "profile directory"),
         (&spec.temp_dir, "temp directory"),
     ] {
@@ -185,7 +190,7 @@ pub(crate) fn validate_launch(spec: &WorkerLaunch) -> Result<(), HostError> {
             UnavailableReason::UnsupportedRuntime,
         ));
     }
-    if !spec.engine.is_file() {
+    if !spec.engine.path().is_file() {
         return Err(HostError::Unavailable(UnavailableReason::NoEngine));
     }
     if !spec.profile_dir.is_dir() || !spec.temp_dir.is_dir() {
@@ -203,14 +208,28 @@ fn path_text(path: &Path, what: &str) -> Result<String, HostError> {
         .ok_or_else(|| HostError::Invalid(format!("{what} is not UTF-8")))
 }
 
-/// Verify the job against the host-built launch: only the worker and the
-/// verified engine are members, no member carries a forbidden flag, exactly
-/// one browser process (an engine process without `--type=`) exists, and its
-/// OS command line equals `[engine, …expected_argv]`. Returns its pid.
+/// The switch name of a command-line argument as Chromium on Windows reads
+/// it: a `--`, `-` or `/` prefix, the name lowercased, any `=value` dropped.
+fn switch_name(arg: &str) -> Option<String> {
+    let name = arg
+        .strip_prefix("--")
+        .or_else(|| arg.strip_prefix('-'))
+        .or_else(|| arg.strip_prefix('/'))?;
+    let name = name.split('=').next().unwrap_or(name);
+    Some(name.to_ascii_lowercase())
+}
+
+/// Verify the job against the host-built launch: the worker runs with
+/// exactly its host-built arguments, every other member is the verified
+/// engine, no member carries a forbidden flag (in any spelling Chromium
+/// accepts), exactly one browser process (an engine process without
+/// `--type=`) exists, and its OS command line equals
+/// `[engine, …expected_argv]`. Returns its pid.
 pub fn classify_job(
     processes: &[JobProcess],
     worker_pid: u32,
     node: &Path,
+    worker_args: &[String],
     engine: &Path,
     expected_argv: &[String],
 ) -> Result<u32, HostError> {
@@ -223,14 +242,23 @@ pub fn classify_job(
         a.to_string_lossy()
             .eq_ignore_ascii_case(&b.to_string_lossy())
     };
-    if !processes
+    let Some(worker) = processes
         .iter()
-        .any(|process| process.pid == worker_pid && same(&process.image, node))
-    {
+        .find(|process| process.pid == worker_pid && same(&process.image, node))
+    else {
         return Err(HostError::Invalid(
             "the worker is not a member of its job".into(),
         ));
+    };
+    if worker.argv.get(1..) != Some(worker_args) {
+        return Err(HostError::Invalid(
+            "the worker command line differs from the host-built one".into(),
+        ));
     }
+    let forbidden: Vec<String> = FORBIDDEN_FLAGS
+        .iter()
+        .filter_map(|flag| switch_name(flag))
+        .collect();
     let mut browsers = Vec::new();
     for process in processes {
         if process.pid == worker_pid {
@@ -247,10 +275,9 @@ pub fn classify_job(
             )));
         }
         for arg in process.argv.iter().skip(1) {
-            let flag = arg.split('=').next().unwrap_or(arg);
-            if FORBIDDEN_FLAGS.contains(&flag) {
+            if let Some(name) = switch_name(arg).filter(|name| forbidden.contains(name)) {
                 return Err(HostError::Invalid(format!(
-                    "an engine process carries the forbidden flag {flag}"
+                    "an engine process carries the forbidden flag --{name}"
                 )));
             }
         }
@@ -327,6 +354,7 @@ mod platform {
         stdin: File,
         replies: Receiver<Result<WorkerReply, HostError>>,
         node: PathBuf,
+        worker_args: Vec<String>,
         engine: PathBuf,
         argv: Vec<String>,
         profile: Option<PathBuf>,
@@ -341,11 +369,12 @@ mod platform {
         policy: &impl PolicySource,
     ) -> Result<BrowserWorker, HostError> {
         validate_launch(spec)?;
-        assert_no_managed_policy(spec.engine_kind, policy)
+        assert_no_managed_policy(spec.engine.kind(), policy)
             .map_err(|_| HostError::Unavailable(UnavailableReason::ManagedPolicy))?;
         let argv = build_worker_argv(&spec.profile_dir, &spec.destinations)?;
         let env = worker_environment(&spec.temp_dir);
-        let (process, pipes) = spawn(&spec.node, &worker_node_args(&spec.worker_main), &env)?;
+        let worker_args = worker_node_args(&spec.worker_main);
+        let (process, pipes) = spawn(&spec.node, &worker_args, &env)?;
         let (sender, replies) = mpsc::channel();
         let stdout = pipes.stdout;
         std::thread::spawn(move || {
@@ -363,7 +392,8 @@ mod platform {
             stdin: pipes.stdin,
             replies,
             node: spec.node.clone(),
-            engine: spec.engine.clone(),
+            worker_args,
+            engine: spec.engine.path().to_path_buf(),
             argv,
             profile: spec.ephemeral_profile.then(|| spec.profile_dir.clone()),
             browser_pid: 0,
@@ -417,7 +447,7 @@ mod platform {
                     )
                 })
                 .collect();
-            let engine = path_text(&spec.engine, "engine")?;
+            let engine = path_text(spec.engine.path(), "engine")?;
             let profile_dir = path_text(&spec.profile_dir, "profile directory")?;
             let argv = self.argv.clone();
             self.send(&WorkerRequest::Launch {
@@ -441,6 +471,7 @@ mod platform {
                 &processes,
                 self.process.pid(),
                 &self.node,
+                &self.worker_args,
                 &self.engine,
                 &self.argv,
             )
@@ -532,7 +563,7 @@ mod fallback {
         policy: &impl PolicySource,
     ) -> Result<BrowserWorker, HostError> {
         validate_launch(spec)?;
-        assert_no_managed_policy(spec.engine_kind, policy)
+        assert_no_managed_policy(spec.engine.kind(), policy)
             .map_err(|_| HostError::Unavailable(UnavailableReason::ManagedPolicy))?;
         Err(HostError::Unavailable(
             UnavailableReason::UnsupportedRuntime,
@@ -563,6 +594,10 @@ mod tests {
         ]
     }
 
+    fn worker_args() -> Vec<String> {
+        vec!["--disable-sigusr1".into(), "C:\\w\\main.js".into()]
+    }
+
     fn healthy() -> Vec<JobProcess> {
         vec![
             process(10, NODE, &[NODE, "--disable-sigusr1", "C:\\w\\main.js"]),
@@ -581,7 +616,14 @@ mod tests {
     }
 
     fn classify(processes: &[JobProcess]) -> Result<u32, HostError> {
-        classify_job(processes, 10, Path::new(NODE), Path::new(EDGE), &expected())
+        classify_job(
+            processes,
+            10,
+            Path::new(NODE),
+            &worker_args(),
+            Path::new(EDGE),
+            &expected(),
+        )
     }
 
     #[test]
@@ -645,6 +687,28 @@ mod tests {
             &[EDGE, "--type=renderer", "--remote-debugging-port=9222"],
         );
         cases.push(child);
+        // The same flag in every other spelling Chromium accepts on Windows.
+        for flag in [
+            "-remote-debugging-port=9222",
+            "/remote-debugging-port=9222",
+            "--Remote-Debugging-Port=9222",
+            "--NO-SANDBOX",
+        ] {
+            let mut child = healthy();
+            child[2] = process(12, EDGE, &[EDGE, "--type=renderer", flag]);
+            cases.push(child);
+        }
+        // The worker with any arguments other than the host-built ones.
+        for argv in [
+            vec![NODE, "--disable-sigusr1", "C:\\w\\main.js", "--inspect"],
+            vec![NODE, "--inspect", "C:\\w\\main.js"],
+            vec![NODE, "--disable-sigusr1", "C:\\w\\other.js"],
+            vec![NODE],
+        ] {
+            let mut drift = healthy();
+            drift[0] = process(10, NODE, &argv);
+            cases.push(drift);
+        }
         // Over the job limit.
         let mut many = healthy();
         for pid in 100..100 + JOB_ACTIVE_PROCESS_LIMIT {
@@ -746,11 +810,12 @@ mod tests {
     #[test]
     fn missing_prerequisites_are_typed_and_nothing_is_spawned() {
         let base = std::env::temp_dir();
+        // Built from temp_dir so the path is absolute on every platform.
+        let engine = Engine::for_tests(base.join("msedge.exe"), crate::discovery::EngineKind::Edge);
         let spec = |node: PathBuf, main: PathBuf| WorkerLaunch {
             node,
             worker_main: main,
-            engine: PathBuf::from(EDGE),
-            engine_kind: EngineKind::Edge,
+            engine: engine.clone(),
             profile_dir: base.clone(),
             ephemeral_profile: false,
             temp_dir: base.clone(),

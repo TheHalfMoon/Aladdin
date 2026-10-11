@@ -3,8 +3,9 @@
 //! Ignored in a plain `cargo test`: they need the built browser worker
 //! (`apps/qdral-browser-worker/dist/main.js` with its dependencies) and an
 //! installed Edge, located through QDRAL_SG108_NODE and
-//! QDRAL_SG108_WORKER_MAIN. `npm run browser-launcher:native` builds the
-//! worker and runs them. Fixture destinations use the test-only loopback pin.
+//! QDRAL_SG108_WORKER_MAIN. `npm run browser-launcher:native` (part of the
+//! root `npm test`, after the worker build) runs them and requires every one
+//! of them to run. Fixture destinations use the test-only loopback pin.
 
 use super::*;
 use crate::confinement::{PolicyHive, PolicyKeyState, RegistryPolicySource};
@@ -13,6 +14,7 @@ use std::fs::File;
 use std::io::Read;
 use std::net::{IpAddr, Ipv4Addr};
 use std::os::windows::io::FromRawHandle;
+use std::os::windows::process::CommandExt;
 use std::sync::mpsc;
 use std::time::Instant;
 use windows_sys::Win32::Foundation::{CloseHandle, HANDLE, STILL_ACTIVE};
@@ -51,12 +53,10 @@ fn temp_profile(label: &str) -> PathBuf {
 
 fn spec_with(main: PathBuf, profile: &Path, ephemeral: bool) -> WorkerLaunch {
     let (node, _) = prerequisites();
-    let engine = engine();
     WorkerLaunch {
         node,
         worker_main: main,
-        engine: engine.path().to_path_buf(),
-        engine_kind: engine.kind(),
+        engine: engine(),
         profile_dir: profile.to_path_buf(),
         ephemeral_profile: ephemeral,
         temp_dir: std::env::temp_dir(),
@@ -131,8 +131,8 @@ fn job_pids(worker: &BrowserWorker) -> Vec<u32> {
 #[ignore = "requires the built browser worker and Edge; run by npm run browser-launcher:native"]
 fn launch_verifies_the_job_and_shuts_down_without_residue() {
     let profile = temp_profile("lifecycle");
-    // The real registry precondition: this host must carry no Edge policy.
-    let mut worker = launch_worker(&spec(&profile, true), &RegistryPolicySource).expect("launch");
+    let mut worker =
+        launch_worker(&spec(&profile, true), &Policy(PolicyKeyState::Absent)).expect("launch");
     let pids = job_pids(&worker);
     assert!(pids.contains(&worker.worker_pid()));
     assert!(pids.contains(&worker.browser_pid()));
@@ -205,20 +205,50 @@ fn a_crashed_worker_is_detected_contained_and_restartable() {
     assert_profile_gone(report.profile_removed, &profile);
 }
 
-/// A profile must be gone: immediately when the launcher reported it
-/// removed, otherwise eventually. After every job member is dead the kernel
-/// can still hold a memory-mapped profile file briefly (Restart Manager
-/// reports System, pid 4); the held file is diagnosed and the profile must
-/// still disappear.
+/// The launcher must have removed the profile within its own budget. A
+/// failure is diagnosed (the held file and how long it stays held, which
+/// also cleans up) and still fails the test.
 fn assert_profile_gone(reported_removed: bool, profile: &Path) {
-    if !reported_removed || profile.exists() {
-        diagnose_locked(profile);
+    if reported_removed && !profile.exists() {
+        return;
     }
-    assert!(
-        !profile.exists(),
-        "profile never released: {}",
+    diagnose_locked(profile);
+    panic!(
+        "profile not removed by the launcher (reported removed: {reported_removed}): {}",
         profile.display()
     );
+}
+
+/// The real registry precondition on this machine: a launch exactly when
+/// the policy check passes, and typed ManagedPolicy (nothing started)
+/// exactly when it refuses. Hosted CI runners carry Edge policies, so both
+/// outcomes are legitimate; which one ran is printed as evidence.
+#[test]
+#[ignore = "requires the built browser worker and Edge; run by npm run browser-launcher:native"]
+fn the_real_registry_precondition_decides_the_launch() {
+    let profile = temp_profile("registry");
+    let launch = spec(&profile, true);
+    let expected_refusal =
+        crate::confinement::assert_no_managed_policy(launch.engine.kind(), &RegistryPolicySource)
+            .is_err();
+    match launch_worker(&launch, &RegistryPolicySource) {
+        Ok(mut worker) => {
+            assert!(!expected_refusal, "launched despite a managed policy");
+            worker.ping("registry").expect("ping");
+            let report = worker.shutdown();
+            assert!(report.job_empty, "the job did not empty");
+            assert_profile_gone(report.profile_removed, &profile);
+            eprintln!("SG108-EVIDENCE registry precondition: no managed policy; launched");
+        }
+        Err(HostError::Unavailable(UnavailableReason::ManagedPolicy)) => {
+            assert!(expected_refusal, "refused without a managed policy");
+            assert_profile_gone(remove_profile(&profile), &profile);
+            eprintln!(
+                "SG108-EVIDENCE registry precondition: managed policy present; refused typed"
+            );
+        }
+        Err(other) => panic!("unexpected launch result: {other:?}"),
+    }
 }
 
 /// Investigation aid: name the first file that cannot be opened for
@@ -363,7 +393,10 @@ fn a_second_browser_or_a_foreign_process_in_the_job_is_refused() {
     let other = temp_profile("second-b-other");
     let worker =
         launch_worker(&spec(&profile, true), &Policy(PolicyKeyState::Absent)).expect("launch");
+    // Suspended: it cannot exit or start helpers outside the job before it
+    // is assigned; terminating the job ends it.
     let mut second = std::process::Command::new(engine().path())
+        .creation_flags(windows_sys::Win32::System::Threading::CREATE_SUSPENDED)
         .args([
             "--headless",
             "--no-first-run",
@@ -385,8 +418,7 @@ fn a_second_browser_or_a_foreign_process_in_the_job_is_refused() {
     );
     assert!(worker.kill().job_empty);
     let _ = second.wait();
-    std::thread::sleep(Duration::from_secs(2));
-    assert!(remove_profile(&other));
+    assert_profile_gone(remove_profile(&other), &other);
 }
 
 /// An inheritable pipe whose write end the test closes after starting a

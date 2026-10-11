@@ -10,7 +10,7 @@
 //! paths, OS command lines split with `CommandLineToArgvW`) and is
 //! terminated, with confirmation, when supervision ends.
 
-use crate::error::{HostError, UnavailableReason};
+use crate::error::HostError;
 use crate::supervise::platform::{Job, OwnedHandle};
 use crate::supervise::CleanEnv;
 use crate::worker_launch::JobProcess;
@@ -147,7 +147,10 @@ impl AttributeList {
         };
         // SAFETY: the buffer is at least `size` bytes and 8-byte aligned.
         if unsafe { InitializeProcThreadAttributeList(list.raw(), 1, 0, &mut size) } == 0 {
-            return Err(platform_error("InitializeProcThreadAttributeList"));
+            let error = platform_error("InitializeProcThreadAttributeList");
+            // Never initialized: Drop must not delete it.
+            list.buffer.clear();
+            return Err(error);
         }
         // SAFETY: `handles` outlives CreateProcessW (the caller keeps it
         // alive); the size covers exactly the slice.
@@ -298,9 +301,9 @@ pub(crate) fn spawn(
     };
     drop(attributes);
     if created == 0 {
-        return Err(HostError::Unavailable(
-            UnavailableReason::UnsupportedRuntime,
-        ));
+        // node.exe was validated as an existing file; a failure here is a
+        // launch failure (access, resources), not a runtime refusal.
+        return Err(platform_error("CreateProcessW(worker)"));
     }
     let process =
         OwnedHandle::new(info.hProcess).ok_or_else(|| platform_error("CreateProcessW process"))?;
