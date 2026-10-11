@@ -45,6 +45,8 @@ export const FROZEN_FLAGS: readonly string[] = [
 export const NO_ROUTE_PROXY = "--proxy-server=http://0.0.0.0:9";
 export const WEBRTC_POLICY = "--webrtc-ip-handling-policy=disable_non_proxied_udp";
 export const DISABLE_QUIC = "--disable-quic";
+/// SG-000108 slice 3a: SharedWorker requests are never routed, so the API is removed.
+export const DISABLE_SHARED_WORKER = "--disable-blink-features=SharedWorker";
 export const PIPE = "--remote-debugging-pipe";
 export const INITIAL_URL = "about:blank";
 
@@ -271,8 +273,8 @@ export function launchRefusal(launch: Extract<HostFrame, { frame: "launch" }>): 
   // every admitted pin is loopback. Production pins come from the host's
   // public-address selection and are never loopback, so a release host
   // cannot use this even by mistake (and it never emits it).
-  if (rest.length === 9) {
-    const certificate = rest[7] ?? "";
+  if (rest.length === 10) {
+    const certificate = rest[8] ?? "";
     if (!/^--ignore-certificate-errors-spki-list=[A-Za-z0-9+/]{43}=$/.test(certificate)) {
       return "argv carries an unexpected flag";
     }
@@ -281,10 +283,10 @@ export function launchRefusal(launch: Extract<HostFrame, { frame: "launch" }>): 
     if (pins.length === 0 || !pins.every((pin) => pin === "127.0.0.1" || pin === "[::1]")) {
       return "a trusted test certificate requires loopback fixture pins";
     }
-    rest = [...rest.slice(0, 7), ...rest.slice(8)];
+    rest = [...rest.slice(0, 8), ...rest.slice(9)];
   }
-  if (rest.length !== 8) return "argv does not carry exactly the profile and the six confinement flags";
-  const [profile, pipe, resolver, proxy, bypass, webrtc, quic, initial] = rest;
+  if (rest.length !== 9) return "argv does not carry exactly the profile and the seven confinement flags";
+  const [profile, pipe, resolver, proxy, bypass, webrtc, quic, sharedWorker, initial] = rest;
   if (profile !== `--user-data-dir=${launch.profile_dir}`) return "argv profile differs from the launch profile";
   if (pipe !== PIPE) return "argv lacks the debugging pipe";
   const resolverPrefix = "--host-resolver-rules=";
@@ -296,6 +298,7 @@ export function launchRefusal(launch: Extract<HostFrame, { frame: "launch" }>): 
   }
   if (webrtc !== WEBRTC_POLICY) return "argv lacks the WebRTC UDP policy";
   if (quic !== DISABLE_QUIC) return "argv lacks the QUIC refusal";
+  if (sharedWorker !== DISABLE_SHARED_WORKER) return "argv lacks the SharedWorker refusal";
   if (initial !== INITIAL_URL) return "argv does not end with the blank page";
   return null;
 }

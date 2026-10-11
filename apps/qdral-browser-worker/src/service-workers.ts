@@ -1,4 +1,4 @@
-// Service-worker denial (closes #301).
+// Service-worker and shared-worker denial (closes #301).
 //
 // Playwright's `serviceWorkers: "block"` only replaces
 // `navigator.serviceWorker.register` with an init script, so a page can
@@ -15,7 +15,11 @@ import type { BrowserContext, Route } from "playwright-core";
 export async function denyServiceWorkerScripts(context: BrowserContext): Promise<void> {
   await context.route("**/*", async (route: Route) => {
     const headers = await route.request().allHeaders();
-    if (headers["service-worker"] === "script") {
+    // Shared workers too: their own requests are never routed (measured),
+    // so their scripts are refused. The engine sets Sec-Fetch-Dest; a page
+    // cannot forge it.
+    const destination = headers["sec-fetch-dest"];
+    if (headers["service-worker"] === "script" || destination === "serviceworker" || destination === "sharedworker") {
       await route.abort("blockedbyclient");
       return;
     }

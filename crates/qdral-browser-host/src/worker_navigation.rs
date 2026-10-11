@@ -126,11 +126,40 @@ impl NavigationPolicy {
         self.committed_origin.as_deref()
     }
 
-    /// Decide one forwarded request. `origin` is the requesting context's
-    /// origin (parent frame, opener, or document), empty for a top-level
-    /// document request.
+    /// Clear an in-progress navigation that did not commit, so its expected
+    /// URL and redirect chain cannot authorize anything later.
+    pub fn abort(&mut self) {
+        self.expected = None;
+        self.begun_origin = None;
+        self.chain = None;
+    }
+
+    /// The origin the host itself holds for the page: the origin of the
+    /// navigation in progress, otherwise the committed one. Requests are
+    /// mediated against this, never against an origin the worker reports,
+    /// so a page that moved itself without a host decision (for example by
+    /// activating a prerender) gains nothing.
+    fn current_origin(&self) -> Result<&str, HostError> {
+        self.begun_origin
+            .as_deref()
+            .or(self.committed_origin.as_deref())
+            .ok_or_else(|| HostError::Invalid("no page origin is established".into()))
+    }
+
+    /// Decide one forwarded request. `origin` is what the worker reports
+    /// for the requesting context; it must agree with the host's own page
+    /// origin when present (empty for top-level documents and opaque
+    /// frames), and the decision itself uses the host's origin.
     pub fn decide(&mut self, kind: RouteKind, url: &str, origin: &str) -> Result<(), HostError> {
         let target = self.admitted_target(url)?;
+        if !matches!(kind, RouteKind::Document) && !origin.is_empty() {
+            let reported = parse_navigation_url(origin)?;
+            if reported.origin != self.current_origin()? {
+                return Err(HostError::Invalid(
+                    "the requesting origin is not the page's origin".into(),
+                ));
+            }
+        }
         match kind {
             RouteKind::Document => {
                 if self.expected.as_deref() == Some(url) {
@@ -150,22 +179,22 @@ impl NavigationPolicy {
             }
             RouteKind::Redirect => match self.chain.as_mut() {
                 Some(chain) => chain.push(url),
-                None => Err(HostError::Invalid(
-                    "redirect outside a navigation denied".into(),
-                )),
+                // A subresource redirect after commit stays on the page's
+                // origin (the engine bounds its own redirect count).
+                None => {
+                    let base = self.current_origin()?.to_owned();
+                    mediate_subresource(&base, url, SubresourceKind::Fetch).map(|_| ())
+                }
             },
-            RouteKind::Frame => mediate_frame(origin, url).map(|_| ()),
-            RouteKind::Popup => mediate_popup(origin, url).map(|_| ()),
-            RouteKind::Fetch => {
-                mediate_subresource(origin, url, SubresourceKind::Fetch).map(|_| ())
-            }
-            RouteKind::Subresource => {
-                mediate_subresource(origin, url, SubresourceKind::Fetch).map(|_| ())
+            RouteKind::Frame => mediate_frame(self.current_origin()?, url).map(|_| ()),
+            RouteKind::Popup => mediate_popup(self.current_origin()?, url).map(|_| ()),
+            RouteKind::Fetch | RouteKind::Subresource => {
+                mediate_subresource(self.current_origin()?, url, SubresourceKind::Fetch).map(|_| ())
             }
             RouteKind::ServiceWorker => {
                 // Service workers are refused outright (SG-000108 #301); the
                 // mediation result is irrelevant.
-                let _ = mediate_service_worker(origin, url);
+                let _ = mediate_service_worker(self.current_origin().unwrap_or(""), url);
                 Err(HostError::Invalid("service worker denied".into()))
             }
         }
@@ -273,6 +302,12 @@ mod tests {
     #[test]
     fn frames_popups_and_subresources_are_exact_origin() {
         let mut p = policy();
+        // Nothing is mediated before the host has a page origin.
+        assert!(p
+            .decide(RouteKind::Fetch, "https://fixture.test/x", HOME)
+            .is_err());
+        p.begin("https://fixture.test/").unwrap();
+        p.commit("https://fixture.test/").unwrap();
         for kind in [
             RouteKind::Frame,
             RouteKind::Popup,
@@ -296,6 +331,57 @@ mod tests {
                 "{kind:?}"
             );
         }
+    }
+
+    #[test]
+    fn the_hosts_origin_governs_not_the_reported_one() {
+        let mut p = policy();
+        p.begin("https://fixture.test/").unwrap();
+        p.commit("https://fixture.test/").unwrap();
+        // A page that moved itself to other.test (prerender activation)
+        // reports other.test as its origin: refused.
+        assert!(p
+            .decide(
+                RouteKind::Fetch,
+                "https://other.test/x",
+                "https://other.test"
+            )
+            .is_err());
+        assert!(p
+            .decide(
+                RouteKind::Subresource,
+                "https://fixture.test/x",
+                "https://other.test"
+            )
+            .is_err());
+        // Opaque frames report no origin and are held to the page's origin.
+        assert!(p
+            .decide(RouteKind::Fetch, "https://fixture.test/x", "")
+            .is_ok());
+        assert!(p
+            .decide(RouteKind::Fetch, "https://other.test/x", "")
+            .is_err());
+        // Subresource redirects after commit stay on the page's origin.
+        assert!(p
+            .decide(RouteKind::Redirect, "https://fixture.test/moved", HOME)
+            .is_ok());
+        assert!(p
+            .decide(RouteKind::Redirect, "https://other.test/moved", HOME)
+            .is_err());
+    }
+
+    #[test]
+    fn an_aborted_navigation_authorizes_nothing() {
+        let mut p = policy();
+        p.begin("https://fixture.test/a").unwrap();
+        p.abort();
+        assert!(p
+            .decide(RouteKind::Document, "https://fixture.test/a", "")
+            .is_err());
+        assert!(p
+            .decide(RouteKind::Fetch, "https://fixture.test/x", "")
+            .is_err());
+        assert!(p.commit("https://fixture.test/a").is_err());
     }
 
     #[test]

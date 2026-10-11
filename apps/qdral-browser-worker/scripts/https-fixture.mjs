@@ -42,7 +42,26 @@ const spki = createHash("sha256")
 const MIXED = `<!doctype html><title>mixed</title>
 <img src="/pixel.png"><img src="https://other.test/pixel.png">
 <iframe src="https://other.test/frame"></iframe><iframe src="/frame"></iframe>
-<script>fetch("https://other.test/api").catch(() => {}); fetch("/api").catch(() => {});</script>`;
+<link rel="prefetch" href="https://other.test/prefetch">
+<link rel="stylesheet" href="/style.css">
+<script type="speculationrules">{"prerender":[{"source":"list","urls":["https://other.test/prerender"]}],"prefetch":[{"source":"list","urls":["https://other.test/specprefetch"]}]}</script>
+<a id="pinged" href="/landing" ping="https://other.test/ping">x</a>
+<script>
+fetch("https://other.test/api").catch(() => {});
+fetch("/api").catch(() => {});
+try { navigator.sendBeacon("https://other.test/beacon", "x"); } catch {}
+try { new EventSource("https://other.test/events"); } catch {}
+try { new Worker(URL.createObjectURL(new Blob(['importScripts("https://other.test/worker-import.js")'], { type: "text/javascript" }))); } catch {}
+try { new SharedWorker("/shared.js"); } catch {}
+try { window.open("https://other.test/popup"); } catch {}
+try { window.open("/redirect-cross"); } catch {}
+</script>`;
+
+// The escape a judge proved against slice 3a: prerender a same-origin page
+// that redirects cross-origin, then activate it with no new request.
+const SPEC_ESCAPE = `<!doctype html><title>spec-escape</title>
+<script type="speculationrules">{"prerender":[{"source":"list","urls":["/redirect-evil"]}]}</script>
+<script>setTimeout(() => { location.href = "/redirect-evil"; }, 1500);</script>`;
 
 const server = createServer({ key, cert }, (request, response) => {
   const host = (request.headers.host ?? "").split(":")[0];
@@ -55,10 +74,19 @@ const server = createServer({ key, cert }, (request, response) => {
   };
   if (path === "/redirect-same") return redirect("/landing");
   if (path === "/redirect-cross") return redirect("https://other.test/landing");
+  if (path === "/redirect-evil") return redirect("https://other.test/evil");
   if (path === "/loop-a") return redirect("/loop-b");
   if (path === "/loop-b") return redirect("/loop-a");
   const chain = /^\/chain\/(\d+)$/.exec(path);
   if (chain) return redirect(`/chain/${Number(chain[1]) + 1}`);
+  if (path === "/shared.js") {
+    response.setHeader("content-type", "text/javascript");
+    return response.end('fetch("https://other.test/shared-fetch").catch(() => {}); try { importScripts("https://other.test/shared-import.js"); } catch {}');
+  }
+  if (path === "/style.css") {
+    response.setHeader("content-type", "text/css");
+    return response.end('@import url("https://other.test/imported.css"); body { color: black; }');
+  }
   if (path.endsWith(".png")) {
     response.setHeader("content-type", "image/png");
     return response.end(Buffer.from("89504e470d0a1a0a", "hex"));
@@ -68,7 +96,8 @@ const server = createServer({ key, cert }, (request, response) => {
     return response.end("{}");
   }
   response.setHeader("content-type", "text/html");
-  response.end(path === "/mixed" ? MIXED : `<!doctype html><title>${host}${path}</title><p>fixture</p>`);
+  const pages = { "/mixed": MIXED, "/spec-escape": SPEC_ESCAPE };
+  response.end(pages[path] ?? `<!doctype html><title>${host}${path}</title><p>fixture</p>`);
 });
 server.listen({ port: 443, host: "127.0.0.1" }, () => process.stdout.write(`READY ${spki}\n`));
 process.stdin.resume();

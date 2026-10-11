@@ -175,6 +175,53 @@ pub(crate) fn reply_error(code: &str) -> HostError {
     }
 }
 
+/// Largest profile preferences file the host will rewrite.
+#[cfg(any(windows, test))]
+const MAX_PREFERENCES_BYTES: u64 = 8 * 1024 * 1024;
+
+/// Turn off preloading in the profile before the engine starts. Speculation
+/// rules prefetch and prerender run in the browser process, outside every
+/// route and redirect guard (measured: an undecided request to another
+/// admitted name, and a prerender whose activation moved the page). No
+/// engine switch tested disables them; the profile's "Preload pages: never"
+/// preference (`net.network_prediction_options` = 2) does. Existing
+/// preferences are kept; an unreadable or oversized file fails closed.
+#[cfg(any(windows, test))]
+pub(crate) fn seed_profile_preferences(profile_dir: &Path) -> Result<(), HostError> {
+    let dir = profile_dir.join("Default");
+    std::fs::create_dir_all(&dir)
+        .map_err(|err| HostError::Platform(format!("profile preferences: {err}")))?;
+    let path = dir.join("Preferences");
+    let mut value = match std::fs::metadata(&path) {
+        Ok(meta) if meta.len() > MAX_PREFERENCES_BYTES => {
+            return Err(HostError::Invalid(
+                "profile preferences are oversized".into(),
+            ))
+        }
+        Ok(_) => {
+            let text = std::fs::read_to_string(&path)
+                .map_err(|err| HostError::Platform(format!("profile preferences: {err}")))?;
+            serde_json::from_str::<serde_json::Value>(&text)
+                .map_err(|_| HostError::Invalid("profile preferences are not JSON".into()))?
+        }
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => serde_json::json!({}),
+        Err(err) => return Err(HostError::Platform(format!("profile preferences: {err}"))),
+    };
+    let root = value
+        .as_object_mut()
+        .ok_or_else(|| HostError::Invalid("profile preferences are not an object".into()))?;
+    let net = root
+        .entry("net")
+        .or_insert_with(|| serde_json::json!({}))
+        .as_object_mut()
+        .ok_or_else(|| HostError::Invalid("profile `net` preferences are not an object".into()))?;
+    net.insert("network_prediction_options".into(), serde_json::json!(2));
+    let text = serde_json::to_string(&value)
+        .map_err(|err| HostError::Invalid(format!("profile preferences: {err}")))?;
+    std::fs::write(&path, text)
+        .map_err(|err| HostError::Platform(format!("profile preferences: {err}")))
+}
+
 /// Test builds only: the fixture certificate trust flag.
 #[cfg(test)]
 #[cfg_attr(not(windows), allow(dead_code))]
@@ -464,6 +511,7 @@ mod platform {
             // Before the trailing blank page, where the worker expects it.
             argv.insert(argv.len() - 1, test_certificate_flag(spki));
         }
+        seed_profile_preferences(&spec.profile_dir)?;
         let env = worker_environment(&spec.temp_dir);
         let worker_args = worker_node_args(&spec.worker_main);
         let (process, pipes) = spawn(&spec.node, &worker_args, &env)?;
@@ -510,6 +558,11 @@ mod platform {
             let deadline = Instant::now() + timeout;
             loop {
                 let remaining = deadline.saturating_duration_since(Instant::now());
+                // A worker that keeps sending route requests cannot hold the
+                // host past the deadline.
+                if remaining.is_zero() {
+                    return Err(HostError::Unavailable(UnavailableReason::LaunchFailed));
+                }
                 match self.next_frame(remaining)? {
                     WorkerReply::RouteRequest {
                         request_id,
@@ -634,6 +687,14 @@ mod platform {
         /// the engine makes meanwhile is decided here by the SG-000075
         /// policy; the outcome is typed.
         pub fn navigate(&mut self, url: &str) -> Result<NavigationOutcome, HostError> {
+            let outcome = self.navigate_inner(url);
+            if outcome.is_err() {
+                self.policy.abort();
+            }
+            outcome
+        }
+
+        fn navigate_inner(&mut self, url: &str) -> Result<NavigationOutcome, HostError> {
             self.policy.begin(url)?;
             self.next_nav += 1;
             let nav_id = self.next_nav;
@@ -942,6 +1003,44 @@ mod tests {
             worker_node_args(Path::new("C:\\w\\main.js")),
             ["--disable-sigusr1", "C:\\w\\main.js"]
         );
+    }
+
+    #[test]
+    fn profile_preferences_turn_preloading_off_and_keep_the_rest() {
+        let dir = std::env::temp_dir().join(format!(
+            "qdral-sg108-prefs-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0)
+        ));
+        let read = |dir: &Path| -> serde_json::Value {
+            serde_json::from_str(
+                &std::fs::read_to_string(dir.join("Default").join("Preferences")).unwrap(),
+            )
+            .unwrap()
+        };
+        // A fresh profile gets the preference.
+        seed_profile_preferences(&dir).unwrap();
+        assert_eq!(read(&dir)["net"]["network_prediction_options"], 2);
+        // Existing preferences are kept and the value is forced.
+        std::fs::write(
+            dir.join("Default").join("Preferences"),
+            r#"{"keep":1,"net":{"network_prediction_options":0,"other":true}}"#,
+        )
+        .unwrap();
+        seed_profile_preferences(&dir).unwrap();
+        let value = read(&dir);
+        assert_eq!(value["keep"], 1);
+        assert_eq!(value["net"]["other"], true);
+        assert_eq!(value["net"]["network_prediction_options"], 2);
+        // Malformed preferences fail closed.
+        for bad in ["not json", "[1]", r#"{"net":5}"#] {
+            std::fs::write(dir.join("Default").join("Preferences"), bad).unwrap();
+            assert!(seed_profile_preferences(&dir).is_err(), "{bad}");
+        }
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

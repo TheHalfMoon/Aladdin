@@ -69,6 +69,7 @@ function confinedArgv(profile: string, destinations: Destination[]): string[] {
     `--proxy-bypass-list=${bypass}`,
     WEBRTC_POLICY,
     "--disable-quic",
+    "--disable-blink-features=SharedWorker",
     "about:blank"
   ];
 }

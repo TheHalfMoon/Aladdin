@@ -422,26 +422,39 @@ In these probes the no-route proxy refuses the IP literal and nothing leaves the
 
 **Slice 3a: live navigation decided by the host.** Code: `worker_navigation.rs`; the worker's `routes.ts`, `redirect-guard.ts` and `routing.ts`; worker protocol generation 2.
 
-The host stays the authority. `navigate` first runs `NavigationPolicy::begin`, which requires an HTTPS URL on one of this lifetime's admitted names. Every request the engine then makes is described to the host as a `route_request` and continues only on an explicit allow. The policy is the existing SG-000075 code:
-- the first document must be the requested URL;
-- a page-initiated top-level navigation must stay on the committed origin;
-- redirects are checked by `RedirectChain` (same origin, at most 5 hops, no loops);
-- frames, popups, fetch and other subresources are checked by `mediate_*` (exact origin);
-- service workers are refused.
+The host stays the authority. `navigate` first runs `NavigationPolicy::begin`, which requires an HTTPS URL on one of this lifetime's admitted names. Engine requests are then described to the host as `route_request`s and continue only on an explicit allow, by these means:
+- **Routed requests.** Documents, frames, popups, fetch and XHR, and other subresources, including dedicated-worker scripts and their imports.
+- **Redirect hops.** Playwright routes never see them. A per-page CDP `Fetch` guard pauses each hop and forwards it as a `redirect` query.
+- **Service workers and SharedWorkers.** Service-worker scripts are refused by the route stack. SharedWorker requests are never routed (measured), so the API is removed from the engine; see the argv amendment below.
+- **Speculation rules.** Speculation-rules prefetch and prerender run in the browser process, outside every route and guard. This was measured: an undecided request to another admitted name, and a prerender whose activation moved the page with no request at all. Engine switches did not stop them (`Prerender2`, `SpeculationRulesPrefetchProxy`, `--disable-blink-features=SpeculationRules`, and CDP `Page.setPrerenderingAllowed` were tested). The profile preference "Preload pages: never" (`net.network_prediction_options` = 2) does stop them, so the host writes it into the profile before every launch (`seed_profile_preferences`). Existing preferences are kept, and malformed ones fail closed.
 
-The committed document must be on the origin the navigation began with.
+The decisions are the existing SG-000075 policy:
+- the first document must be the requested URL;
+- a page-initiated top-level navigation must stay on the page's origin;
+- redirects of a navigation are checked by `RedirectChain` (same origin, at most 5 hops, no loops);
+- a later subresource redirect must stay on the page's origin;
+- frames, popups, fetch and subresources are checked by `mediate_*` (exact origin).
+
+All of these are checked against the **host's own** page origin: the begun origin during a navigation, otherwise the committed one. A request whose reported origin disagrees with the host's is refused, so a page that moved itself without a decision gains nothing. The committed document must be on the navigation's origin, and a failed navigation is aborted so its state authorizes nothing.
+
+**Argv amendment (authority delta, narrowing):** the confinement argv gains `--disable-blink-features=SharedWorker`. It is applied by the host builder (`confinement.rs`), required by the worker's exact-argv contract, and covered by the OS command-line verification.
 
 **Implementation findings:**
-- **Redirect hops are invisible to Playwright routes.** Chromium follows redirects internally, and an unasked hop to another admitted name was measured. The CDP `Fetch` domain does pause every hop (`redirectedRequestId`), so each page gets a Fetch guard that forwards exactly those hops as `redirect` queries.
-- **A refused navigation's error page commits late**, sometimes more than once, and interrupts the next navigation in the same page. Each host navigation therefore runs in a fresh page, guarded before it navigates, and the previous page is closed.
-- **Edge runs a built-in component extension service worker** (`chrome-extension://…`) even with `--disable-extensions`. It is not a page registration, and the probes count only web service workers.
+- A refused navigation's error page commits late, sometimes more than once, and interrupts the next navigation in the same page. Each host navigation therefore runs in a fresh, guarded page.
+- Edge runs a built-in component extension service worker even with `--disable-extensions`. The probes count only web service workers.
 
-**Native end-to-end evidence:** the real host, worker and Edge run against a two-name HTTPS fixture (`scripts/https-fixture.mjs`, test only).
+**Known limits (fail closed):**
+- The host decides only while it is in a call. A page's own requests made while the host is idle wait for up to 10 s and are then refused.
+- A popup's first navigation is not completed, so popups do not work, but nothing leaks.
+- WebTransport to admitted names remains the founder-accepted residual risk #300.
+
+**Native end-to-end evidence:** the real host, worker and Edge run against a two-name HTTPS fixture (`scripts/https-fixture.mjs`, test only). The ground truth is the fixture's request log.
 - An admitted page loads, and a same-origin redirect commits.
 - A cross-origin redirect, a redirect loop and a 7-hop chain are refused, typed as denied.
 - Non-admitted, `http:` and IP-literal URLs are refused before anything is sent.
-- On a mixed page, the cross-origin iframe, image and fetch are refused, and the fixture logs **no** request to `other.test`, while the same-origin resources load.
+- The mixed page contains cross-origin iframe, image, fetch, `<link rel=prefetch>`, speculation-rules prefetch and prerender, beacon, `EventSource`, a blob worker importing a cross-origin script, a CSS `@import`, `<a ping>`, a SharedWorker, and popups including one that redirects cross-origin. It never contacts `other.test`, while the same-origin resources load.
+- In the prerender-then-activate escape, the page's navigation to `/redirect-evil` is observed and its cross-origin hop is refused.
 
-The test passed 3 of 3 runs locally.
+The test passed 3 of 3 runs locally. A fresh-context judge's first round on this slice was BLOCK; the speculation-rules, SharedWorker and host-origin findings above are its fixes.
 
 **Test-only certificate trust:** `WorkerLaunch.test_trusted_spki` exists only under `cfg(test)` and appends `--ignore-certificate-errors-spki-list`. The worker accepts that flag only when every admitted pin is loopback; production pins are never loopback. A governance test pins the flag to `cfg(test)` code.

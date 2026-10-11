@@ -48,5 +48,9 @@ export async function attachRedirectGuard(context: BrowserContext, page: Page, p
       }
     })();
   });
+  // Speculation-rules prerendering loads pages in hidden targets that
+  // neither routes nor this guard see (measured: a prerender of another
+  // admitted name went out undecided), so it is switched off per page.
+  await session.send("Page.setPrerenderingAllowed", { isAllowed: false });
   await session.send("Fetch.enable", { patterns: [{ urlPattern: "*", requestStage: "Request" }] });
 }

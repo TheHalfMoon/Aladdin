@@ -750,6 +750,20 @@ impl Drop for HttpsFixture {
     }
 }
 
+/// Keep the host answering route requests for `duration` (it decides only
+/// while it is in a call, as a real caller would be).
+fn pump(worker: &mut BrowserWorker, duration: Duration) {
+    let until = Instant::now() + duration;
+    let mut n = 0;
+    while Instant::now() < until {
+        std::thread::sleep(Duration::from_millis(250));
+        n += 1;
+        worker
+            .ping(&format!("pump-{n}"))
+            .expect("ping while pumping");
+    }
+}
+
 #[test]
 #[ignore = "requires the built browser worker and Edge; run by npm run browser-launcher:native"]
 fn the_host_decides_every_request_of_a_live_navigation() {
@@ -801,15 +815,35 @@ fn the_host_decides_every_request_of_a_live_navigation() {
     worker
         .navigate("https://fixture.test/mixed")
         .expect("mixed page");
-    std::thread::sleep(Duration::from_secs(2));
-    worker.ping("after-navigation").expect("ping");
+    // Popups, speculation rules, beacons, workers and the like settle; the
+    // host answers the page's own requests only while it is in a call, so
+    // keep it in calls.
+    pump(&mut worker, Duration::from_secs(4));
+    // The prerender-then-activate escape: the page prerenders a same-origin
+    // URL that redirects to other.test and then navigates to it. With
+    // preloading off the redirect hop is asked and refused.
+    worker
+        .navigate("https://fixture.test/spec-escape")
+        .expect("spec-escape page");
+    pump(&mut worker, Duration::from_secs(5));
     let hits = fixture.hits();
     let other: Vec<&String> = hits
         .iter()
         .filter(|hit| hit.starts_with("other.test"))
         .collect();
     assert!(other.is_empty(), "other.test was contacted: {other:?}");
-    for path in ["/pixel.png", "/frame", "/api"] {
+    // The escapes really ran: the page navigated itself to /redirect-evil
+    // (whose cross-origin hop was then refused), and the shared worker's
+    // script was refused outright.
+    assert!(
+        hits.contains(&"fixture.test /redirect-evil".to_string()),
+        "the activation attempt never happened: {hits:?}"
+    );
+    assert!(
+        !hits.contains(&"fixture.test /shared.js".to_string()),
+        "the shared worker script was fetched: {hits:?}"
+    );
+    for path in ["/pixel.png", "/frame", "/api", "/style.css"] {
         assert!(
             hits.contains(&format!("fixture.test {path}")),
             "same-origin {path} did not load: {hits:?}"
