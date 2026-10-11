@@ -22,6 +22,7 @@ import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { chromium, type BrowserContext } from "playwright-core";
 import { splitWindowsCommandLine } from "./cmdline.js";
+import { KNOWN_GAPS } from "./gaps.js";
 import { denyServiceWorkerScripts } from "./service-workers.js";
 import { encodeFrame, FrameDecoder, launchRefusal, type HostFrame, type WorkerFrame } from "./protocol.js";
 
@@ -72,6 +73,7 @@ function confinedArgv(profile: string, destinations: Destination[]): string[] {
 }
 
 const FIXTURE: Destination[] = [{ host: "fixture.test", pin: "127.0.0.1" }];
+const TWO_SITES: Destination[] = [...FIXTURE, { host: "other.test", pin: "127.0.0.1" }];
 
 /// Per-test cleanup that runs last-in, first-out and always runs every step
 /// (node:test runs `t.after` hooks in registration order and a failing hook
@@ -495,7 +497,7 @@ function tlsFixture(t: Cleanup): TlsFixture {
     [
       "req", "-x509", "-newkey", "ec", "-pkeyopt", "ec_paramgen_curve:prime256v1", "-nodes",
       "-keyout", join(dir, "key.pem"), "-out", join(dir, "cert.pem"), "-days", "2",
-      "-subj", "/CN=fixture.test", "-addext", "subjectAltName=DNS:fixture.test"
+      "-subj", "/CN=fixture.test", "-addext", "subjectAltName=DNS:fixture.test,DNS:other.test"
     ],
     { stdio: "ignore" }
   );
@@ -533,7 +535,11 @@ async function httpsFixture(
       return;
     }
     response.setHeader("content-type", "text/html");
-    response.end(url === "/sw" ? SERVICE_WORKER_PAGE : "<p>secure fixture</p>");
+    const pages: Record<string, string> = {
+      "/sw": SERVICE_WORKER_PAGE,
+      "/sw-cross": `<!doctype html><body><iframe src="https://other.test/sw"></iframe></body>`
+    };
+    response.end(pages[url] ?? "<p>secure fixture</p>");
   });
   await listen(t, server, FIXTURE_PORT, "127.0.0.1");
   const counts = new Map<number, number>();
@@ -660,7 +666,7 @@ nativeTest("WebTransport reaches nothing beyond admitted names under confinement
   console.error(`SG108-EVIDENCE accepted residual #300: admitted-name WebTransport datagrams=${fixture.admittedUdp()}`);
 });
 
-nativeTest("the worker's service-worker denial refuses every registration, and the control registers", async (t) => {
+nativeTest("the worker's service-worker denial refuses same-origin registration, and the control registers", async (t) => {
   const tls = tlsFixture(t);
   const fixture = await httpsFixture(t, tls);
   const scripts = (): string[] => fixture.hits.filter((hit) => hit.endsWith(".js"));
@@ -695,3 +701,22 @@ nativeTest("the worker's service-worker denial refuses every registration, and t
   assert.ok(await waitFor(() => scripts().length > 0, 10_000), "the control fetched no service-worker script");
   await controlPage.close();
 });
+
+nativeTest(
+  "a cross-site iframe cannot register a service worker",
+  async (t) => {
+    const tls = tlsFixture(t);
+    const fixture = await httpsFixture(t, tls);
+    const profile = profileFor(t, "native-sw-cross");
+    const args = [...confinedArgv(profile, TWO_SITES).slice(0, -1), `--ignore-certificate-errors-spki-list=${tls.spki}`, "about:blank"];
+    const context = await launchDirect(t, profile, args, { serviceWorkers: "allow" });
+    await denyServiceWorkerScripts(context);
+    const page = await context.newPage();
+    await page.goto("https://fixture.test/sw-cross", { timeout: 15_000 });
+    await new Promise((resolve) => setTimeout(resolve, 3_000));
+    await page.close();
+    assert.deepEqual(fixture.hits.filter((hit) => hit.endsWith(".js")), [], "a cross-site service-worker script was fetched");
+    assert.deepEqual(context.serviceWorkers().map((worker) => worker.url()), [], "a service worker is running");
+  },
+  KNOWN_GAPS.serviceWorkers
+);
