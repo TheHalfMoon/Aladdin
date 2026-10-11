@@ -392,8 +392,21 @@ Shutdown asks for `bye` and waits for exit 0. It then terminates the job regardl
 - **Unit variants in serde.** With `deny_unknown_fields`, serde still accepts unknown fields on unit variants of an internally tagged enum. The worker replies use empty struct variants instead. The SG-000074 host protocol (`proto.rs`: `Shutdown`, `Bye`) has the same looseness; it is tracked in #296.
 - **No crash-report uploads from a crash.** An abrupt worker kill leaves only Crashpad metadata (no report or dump), so a crash produces no upload candidate.
 
+**Slice 2b-ii-b, part 1: HTTPS-fixture probes** (`apps/qdral-browser-worker/src/native.test.ts`).
+
+The fixture origin is served over TLS on 127.0.0.1:443, advertising `alt-svc: h3`. Its certificate is a throwaway one, generated at test time with Git for Windows' OpenSSL, and only the direct test launches trust it (`--ignore-certificate-errors-spki-list`). The production argv carries no certificate flag. UDP listeners on 127.0.0.1:443 (the admitted name's pin) and 127.0.0.1:4433 (an IP literal) count datagrams.
+
+| Probe | Result (Edge 155, local) |
+|---|---|
+| Alt-Svc HTTP/3 upgrade under the confinement argv | **Holds.** 0 datagrams over two navigations; `--disable-quic` stops it. |
+| WebTransport to an IP literal | **Holds.** 0 datagrams; the no-route proxy refuses it. Control: without the confinement flags, the same attempt sends UDP. |
+| WebTransport to an admitted name | **Gap (#300).** QUIC Initial packets reach the name's pinned address directly, bypassing the SG-000075 policy route. Neither `--disable-features=WebTransport` nor `--disable-features=WebTransportOverHTTP3` stops it, and `--disable-blink-features=WebTransport` leaves the API defined in pages and workers. Tracked as a `todo` probe. |
+| Service-worker block (`serviceWorkers: "block"`) | **Gap (#301).** `ServiceWorkerContainer.prototype.register` registers a real worker, and its script fetch (`Service-Worker: script`) is not visible to Playwright routing. Tracked as a `todo` probe. |
+
+Resolver pinning and the no-route proxy hold in every case. Both gaps stay inside admitted destinations, but they evade the policy route, which already denies the equivalent WebSocket traffic. Both must be closed, or accepted as founder-reviewed residual risks, before slice 3 grants live navigation.
+
 **Still to be done in slice 2b-ii-b:**
-- HTTPS-fixture probes: QUIC, WebTransport, and the service-worker block;
+- closing #300 and #301 (engine- or protocol-level measures, each proven by these probes);
 - a real public name pinned by the host reaching only its pin;
 - the job process limit under a heavy page;
 - the release packaging of the worker (NOTICE, SBOM, `.bin` strip).
