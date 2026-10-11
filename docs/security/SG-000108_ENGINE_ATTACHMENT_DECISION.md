@@ -425,7 +425,7 @@ In these probes the no-route proxy refuses the IP literal and nothing leaves the
 The host stays the authority. **An engine lifetime admits exactly one destination** (`validate_launch`). `navigate` first runs `NavigationPolicy::begin`, which requires an HTTPS URL on that admitted name.
 
 Two layers then govern traffic:
-- **Network layer (complete).** The pinned resolver and the no-route proxy make every other host unreachable, whatever issues the request: pages, workers, or the browser process itself.
+- **Network layer (complete).** The pinned resolver and the no-route proxy make every other host unreachable, whatever issues the request: pages, workers, or the browser process itself. The one exception is the accepted residual #300: WebTransport UDP to the admitted name's own pin.
 - **Per-request layer.** Engine requests on the admitted origin are described to the host as `route_request`s and continue only on an explicit allow, by the means listed below.
 
 A fresh-context judge measured that the browser process issues some requests outside every route and guard: `fetchLater`, Reporting API and CSP reports, FedCM, audio-worklet modules, and NoStatePrefetch (`<link rel=prerender>`). With a second admitted name, those reached it undecided. With one admitted name they can reach only the page's own origin, which SG-000075 permits for subresources anyway. No capability is lost: the policy is exact-origin, and another site means another lifetime.
@@ -452,7 +452,7 @@ All of these are checked against the **host's own** page origin: the begun origi
 - Edge runs a built-in component extension service worker even with `--disable-extensions`. The probes count only web service workers.
 
 **Known limits:**
-- Browser-process requests (see above) on the admitted origin are not individually decided. They are bounded by the one-destination network layer.
+- Browser-process requests (see above) on the admitted origin are not individually decided. They are bounded by the one-destination network layer, but the host cannot decide, log or rate-limit them, and a deferred `fetchLater` POST or a batched report can reach the admitted site after the host has moved on. A later slice that adds write approval or a non-GET audit must account for this. Options are to close these APIs with engine switches, or to close the lifetime before trusting such controls.
 - (Fail closed) The host decides only while it is in a call. A page's own requests made while the host is idle wait for up to 10 s and are then refused.
 - A popup's first navigation is not completed, so popups do not work, but nothing leaks.
 - WebTransport to admitted names remains the founder-accepted residual risk #300.
