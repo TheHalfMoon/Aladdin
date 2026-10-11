@@ -22,6 +22,7 @@ import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { chromium, type BrowserContext } from "playwright-core";
 import { splitWindowsCommandLine } from "./cmdline.js";
+import { KNOWN_GAPS } from "./gaps.js";
 import { encodeFrame, FrameDecoder, launchRefusal, type HostFrame, type WorkerFrame } from "./protocol.js";
 
 const EDGE_CANDIDATES = [
@@ -647,7 +648,7 @@ nativeTest(
     await new Promise((resolve) => setTimeout(resolve, 700));
     assert.equal(fixture.admittedUdp(), 0, "WebTransport sent QUIC to the admitted name's pinned address");
   },
-  "known gap #300: WebTransport bypasses the SG-000075 policy route to admitted names"
+  KNOWN_GAPS.webTransport
 );
 
 nativeTest(
@@ -667,5 +668,5 @@ nativeTest(
     assert.deepEqual(fixture.hits.filter((hit) => hit.endsWith(".js")), [], "a service-worker script was fetched");
     assert.equal(registered, 0, "a service worker registered");
   },
-  "known gap #301: Playwright's serviceWorkers block is bypassable via the prototype"
+  KNOWN_GAPS.serviceWorkers
 );
