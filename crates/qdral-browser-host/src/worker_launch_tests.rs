@@ -263,26 +263,18 @@ fn assert_no_process_references(profile: &Path) {
     }
 }
 
-/// Every process except the query itself whose command line names the
-/// profile directory, as "pid name" lines.
+/// Every process except this one whose command line names the profile
+/// directory, as "pid image" lines (native process snapshot).
 fn processes_referencing(profile: &Path) -> String {
     let marker = profile
         .file_name()
         .map(|name| name.to_string_lossy().into_owned())
         .expect("profile directory name");
-    let powershell =
-        PathBuf::from(std::env::var_os("SystemRoot").unwrap_or_else(|| "C:\\Windows".into()))
-            .join("System32\\WindowsPowerShell\\v1.0\\powershell.exe");
-    let query = format!(
-        "Get-CimInstance Win32_Process | Where-Object {{ $_.ProcessId -ne $PID -and \
-         $_.CommandLine -like '*{marker}*' }} | ForEach-Object {{ \"$($_.ProcessId) $($_.Name)\" }}"
-    );
-    let output = std::process::Command::new(&powershell)
-        .args(["-NoProfile", "-NonInteractive", "-Command", &query])
-        .output()
-        .expect("query processes");
-    assert!(output.status.success(), "process query failed");
-    String::from_utf8_lossy(&output.stdout).trim().to_owned()
+    crate::worker_process::processes_with_command_line_containing(&marker)
+        .iter()
+        .map(|process| format!("{} {}", process.pid, process.image.display()))
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 /// The launcher must have removed the profile within its own budget. A

@@ -221,6 +221,25 @@ fn switch_name(arg: &str) -> Option<String> {
     Some(name.to_ascii_lowercase())
 }
 
+/// The process type Chromium derives from a command line: switches end at a
+/// bare `--`, the last `type` switch in any accepted spelling wins, and an
+/// absent or empty value means the browser process (`None`).
+fn chromium_process_type(argv: &[String]) -> Option<String> {
+    let mut kind = None;
+    for arg in argv.iter().skip(1) {
+        if arg == "--" {
+            break;
+        }
+        if switch_name(arg).as_deref() == Some("type") {
+            kind = arg
+                .split_once('=')
+                .map(|(_, value)| value.to_owned())
+                .filter(|value| !value.is_empty());
+        }
+    }
+    kind
+}
+
 /// Verify the job against the host-built launch: the worker runs with
 /// exactly its host-built arguments, every other member is the verified
 /// engine, no member carries a forbidden flag (in any spelling Chromium
@@ -283,12 +302,7 @@ pub fn classify_job(
                 )));
             }
         }
-        if !process
-            .argv
-            .iter()
-            .skip(1)
-            .any(|arg| arg.starts_with("--type="))
-        {
+        if chromium_process_type(&process.argv).is_none() {
             browsers.push(process);
         }
     }
@@ -635,6 +649,12 @@ mod tests {
         let mut upper = healthy();
         upper[1].image = PathBuf::from(EDGE.to_uppercase());
         assert_eq!(classify(&upper).unwrap(), 11);
+        // A helper whose last `type` switch is non-empty stays a helper,
+        // whatever its spelling.
+        let mut helpers = healthy();
+        helpers.push(process(18, EDGE, &[EDGE, "/Type=utility"]));
+        helpers.push(process(19, EDGE, &[EDGE, "--type=", "--type=gpu-process"]));
+        assert_eq!(classify(&helpers).unwrap(), 11);
     }
 
     #[test]
@@ -699,6 +719,20 @@ mod tests {
             let mut child = healthy();
             child[2] = process(12, EDGE, &[EDGE, "--type=renderer", flag]);
             cases.push(child);
+        }
+        // A second browser disguised as a helper: Chromium takes the last
+        // `type` switch, treats an empty value as the browser, accepts any
+        // switch spelling, and stops reading switches at a bare `--`.
+        for argv in [
+            vec![EDGE, "--type=renderer", "--type=", "--user-data-dir=C:\\q"],
+            vec![EDGE, "--type=renderer", "--type", "--user-data-dir=C:\\q"],
+            vec![EDGE, "--type=", "--user-data-dir=C:\\q"],
+            vec![EDGE, "--", "--type=renderer", "--user-data-dir=C:\\q"],
+            vec![EDGE, "-type=renderer", "-type=", "--user-data-dir=C:\\q"],
+        ] {
+            let mut disguised = healthy();
+            disguised.push(process(17, EDGE, &argv));
+            cases.push(disguised);
         }
         // The worker with any arguments other than the host-built ones.
         for argv in [

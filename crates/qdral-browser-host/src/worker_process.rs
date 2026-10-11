@@ -460,6 +460,40 @@ impl Drop for WorkerProcess {
     }
 }
 
+/// Every process on the machine whose command line contains `marker`,
+/// except the calling process. Processes that cannot be opened (other
+/// users, protected) are skipped: an engine this host started can always be
+/// opened by it.
+#[cfg(test)]
+pub(crate) fn processes_with_command_line_containing(marker: &str) -> Vec<JobProcess> {
+    use windows_sys::Win32::System::Diagnostics::ToolHelp::{
+        CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W,
+        TH32CS_SNAPPROCESS,
+    };
+    // SAFETY: a process snapshot with documented flags.
+    let snapshot = unsafe { CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0) };
+    let snapshot = OwnedHandle::new(snapshot).expect("process snapshot");
+    // SAFETY: zeroed PROCESSENTRY32W with dwSize set is the documented input.
+    let mut entry: PROCESSENTRY32W = unsafe { std::mem::zeroed() };
+    entry.dwSize = std::mem::size_of::<PROCESSENTRY32W>() as u32;
+    let mut found = Vec::new();
+    // SAFETY: valid snapshot handle and entry out-pointer.
+    let mut more = unsafe { Process32FirstW(snapshot.raw(), &mut entry) } != 0;
+    while more {
+        let pid = entry.th32ProcessID;
+        if pid != std::process::id() && pid != 0 {
+            if let Ok(Some(process)) = inspect(pid) {
+                if process.argv.iter().any(|arg| arg.contains(marker)) {
+                    found.push(process);
+                }
+            }
+        }
+        // SAFETY: as above.
+        more = unsafe { Process32NextW(snapshot.raw(), &mut entry) } != 0;
+    }
+    found
+}
+
 fn inspect(pid: u32) -> Result<Option<JobProcess>, HostError> {
     // SAFETY: plain open with query-only rights.
     let handle = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid) };

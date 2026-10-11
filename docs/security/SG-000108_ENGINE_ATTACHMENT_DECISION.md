@@ -355,11 +355,13 @@ fixture. Unmapped names failed with `ERR_PROXY_CONNECTION_FAILED`.
 7. **Verify the job** (`classify_job`):
    - its only members are the worker, running with exactly its host-built arguments, and processes of the verified engine image;
    - no member carries a forbidden flag, in any spelling Chromium accepts on Windows (`--`, `-` or `/` prefix, any case);
-   - exactly one browser process (no `--type=`) exists;
+   - exactly one browser process exists, where the process type is derived the way Chromium derives it: switches end at a bare `--`, the last `type` switch in any accepted spelling wins, and an absent or empty value means the browser;
    - that process's OS command line, read with `NtQueryInformationProcess` and split with `CommandLineToArgvW`, equals `[engine, …host argv]`;
    - a member that cannot be inspected is accepted only if it has left the job in the meantime.
 
 The engine in a launch request is a `discovery::Engine`, so only an engine that discovery verified (kind, version, publisher) can be launched. `node` and the worker entry point must come from Deskal's install records.
+
+Verification runs once, when the launch completes. Afterwards, only the job limit and kill-on-close constrain the worker. The product caller must call `verify` again before any authority is granted for a navigation.
 
 Shutdown asks for `bye` and waits for exit 0. It then terminates the job regardless and confirms it is empty, and finally removes an ephemeral profile. Kill and drop take the same path without the exchange.
 
@@ -384,7 +386,7 @@ Shutdown asks for `bye` and waits for exit 0. It then terminates the job regardl
 - **`conhost.exe`.** `CREATE_NO_WINDOW` still attaches a hidden console host to Node, which the job check correctly refused as a foreign process. `DETACHED_PROCESS` removes it.
 - **Kernel-held profile files.** After every job member is dead, Restart Manager has reported `System` (pid 4) briefly holding memory-mapped profile files. Under load this exceeded 10 s. No Edge or Node process outside the job held a profile in these runs. Removal now retries for up to 30 s and reports `profile_removed: false` if the files are still held. The tests fail unless the launcher itself reported removal; on failure they diagnose the held file and clean up.
 - **Profile lock after a crash.** Chromium's exclusive `lockfile` in the profile stays held for 0.2–4.4 s after every job member has exited. A relaunch on the same profile inside that window makes the new engine exit (typed `LaunchFailed`). The crash test now waits, with a bound, for the lock to be released before it relaunches. A fresh profile per lifetime, as production uses, avoids this entirely.
-- **No out-of-job residue.** At the end of every supervised native test, a machine-wide query must find no process that still names the profile on its command line. A control confirms that the same query does see the engine while it runs.
+- **No out-of-job residue.** At the end of every supervised native test, a machine-wide native process snapshot (Toolhelp, plus each process's OS command line) must find no process that still names the profile on its command line. A control confirms that the same query does see the engine while it runs.
 - **Known limitation: host death leaves the profile directory.** Kill-on-close takes the worker and the engine down, but nothing removes the ephemeral profile once the host itself has died. The sweep belongs with the product caller, which decides where profiles live. It is tracked in #298.
 - **Crash-session restore.** A profile reused after a crash restores the previous session (9 renderers instead of 2). Production must use a fresh ephemeral profile per lifetime, because reusing one carries state over. The launcher does not enforce this (`ephemeral_profile: false` is accepted, and the crash test reuses a profile on purpose), so the future product caller must.
 - **Unit variants in serde.** With `deny_unknown_fields`, serde still accepts unknown fields on unit variants of an internally tagged enum. The worker replies use empty struct variants instead. The SG-000074 host protocol (`proto.rs`: `Shutdown`, `Bye`) has the same looseness; it is tracked in #296.
