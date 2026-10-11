@@ -79,7 +79,7 @@ pub fn spawn_host_piped(
 }
 
 #[cfg(windows)]
-mod platform {
+pub(crate) mod platform {
     use super::*;
     use std::ffi::c_void;
     use std::os::windows::ffi::OsStrExt;
@@ -100,7 +100,7 @@ mod platform {
     pub struct OwnedHandle(HANDLE);
 
     impl OwnedHandle {
-        fn new(handle: HANDLE) -> Option<Self> {
+        pub(crate) fn new(handle: HANDLE) -> Option<Self> {
             (handle != 0 && handle != -1).then_some(Self(handle))
         }
     }
@@ -144,6 +144,10 @@ mod platform {
             Ok(Self(handle))
         }
 
+        pub(crate) fn handle(&self) -> HANDLE {
+            self.0.raw()
+        }
+
         pub fn assign(&self, process: HANDLE) -> Result<(), HostError> {
             // SAFETY: both handles are valid for the duration of the call.
             if unsafe { AssignProcessToJobObject(self.0.raw(), process) } == 0 {
@@ -152,15 +156,22 @@ mod platform {
             Ok(())
         }
 
-        fn terminate(&self) {
+        pub(crate) fn terminate(&self) {
             // SAFETY: valid job handle.
             unsafe { TerminateJobObject(self.0.raw(), 1) };
         }
     }
 
     impl OwnedHandle {
-        fn raw(&self) -> HANDLE {
+        pub(crate) fn raw(&self) -> HANDLE {
             self.0
+        }
+
+        /// Release ownership without closing (the caller takes it over).
+        pub(crate) fn into_raw(self) -> HANDLE {
+            let handle = self.0;
+            std::mem::forget(self);
+            handle
         }
     }
 
@@ -329,7 +340,7 @@ mod platform {
 }
 
 #[cfg(not(windows))]
-mod platform {
+pub(crate) mod platform {
     use super::*;
 
     pub struct PlatformChild {

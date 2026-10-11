@@ -598,6 +598,8 @@ fn error_vocabulary_is_typed_and_secret_free() {
         qdral_browser_host::UnavailableReason::UnsupportedEngine,
         qdral_browser_host::UnavailableReason::LaunchFailed,
         qdral_browser_host::UnavailableReason::ProtocolViolation,
+        qdral_browser_host::UnavailableReason::UnsupportedRuntime,
+        qdral_browser_host::UnavailableReason::ManagedPolicy,
     ] {
         let text = format!(
             "{:?} {}",
@@ -1181,11 +1183,13 @@ fn no_shell_script_or_remote_process_surface_exists() {
         }
     }
     // Process spawning exists only where the supervised launch and the
-    // read-only engine version probe live.
+    // read-only engine version probe live. The SG-000108 worker launch uses
+    // CreateProcessW in worker_process.rs (no Command::new); `*_tests.rs`
+    // modules compile only under cfg(test) and spawn test fixtures.
     for (file, text) in &sources {
         if text.contains("Command::new") {
             assert!(
-                file == "supervise.rs" || file == "discovery.rs",
+                file == "supervise.rs" || file == "discovery.rs" || file.ends_with("_tests.rs"),
                 "unexpected process spawn in {file}"
             );
         }

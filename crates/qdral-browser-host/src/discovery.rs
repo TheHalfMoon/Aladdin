@@ -6,8 +6,10 @@
 //! typed unavailable. There is no personal-browser fallback.
 
 use crate::error::{HostError, UnavailableReason};
+#[cfg(not(windows))]
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
+#[cfg(not(windows))]
 use std::time::{Duration, Instant};
 
 /// Supported engine kinds. Anything else is unsupported.
@@ -158,8 +160,58 @@ fn verify_candidate(path: &Path) -> Result<Engine, HostError> {
     })
 }
 
+/// The engine's version. On Windows it is read from the executable's
+/// version resource without running anything: Chromium-family engines print
+/// no version for `--version` on Windows and instead hand the command to an
+/// already-running browser session, which would touch the user's personal
+/// profile. Elsewhere `<engine> --version` runs with a bounded wait and a
+/// scrubbed environment.
+#[cfg(windows)]
+pub fn probe_version(engine: &Path) -> Result<String, HostError> {
+    use std::os::windows::ffi::OsStrExt;
+    use windows_sys::Win32::Storage::FileSystem::{
+        GetFileVersionInfoSizeW, GetFileVersionInfoW, VerQueryValueW, VS_FIXEDFILEINFO,
+    };
+    let path: Vec<u16> = engine.as_os_str().encode_wide().chain(Some(0)).collect();
+    let mut ignored = 0u32;
+    // SAFETY: NUL-terminated path; the out-parameter is valid.
+    let size = unsafe { GetFileVersionInfoSizeW(path.as_ptr(), &mut ignored) };
+    if size == 0 || size > 1 << 20 {
+        return Err(HostError::Unavailable(UnavailableReason::UnsupportedEngine));
+    }
+    let mut block = vec![0u8; size as usize];
+    // SAFETY: the buffer holds `size` bytes.
+    if unsafe { GetFileVersionInfoW(path.as_ptr(), 0, size, block.as_mut_ptr().cast()) } == 0 {
+        return Err(HostError::Unavailable(UnavailableReason::UnsupportedEngine));
+    }
+    let root: Vec<u16> = "\\".encode_utf16().chain(Some(0)).collect();
+    let mut info: *mut std::ffi::c_void = std::ptr::null_mut();
+    let mut len = 0u32;
+    // SAFETY: `block` is a version resource; the result points into it.
+    if unsafe { VerQueryValueW(block.as_ptr().cast(), root.as_ptr(), &mut info, &mut len) } == 0
+        || info.is_null()
+        || (len as usize) < std::mem::size_of::<VS_FIXEDFILEINFO>()
+    {
+        return Err(HostError::Unavailable(UnavailableReason::UnsupportedEngine));
+    }
+    // SAFETY: VerQueryValueW returned a VS_FIXEDFILEINFO inside `block`.
+    let fixed = unsafe { std::ptr::read_unaligned(info as *const VS_FIXEDFILEINFO) };
+    if fixed.dwSignature != 0xFEEF_04BD {
+        return Err(HostError::Unavailable(UnavailableReason::UnsupportedEngine));
+    }
+    let version = format!(
+        "{}.{}.{}.{}",
+        fixed.dwProductVersionMS >> 16,
+        fixed.dwProductVersionMS & 0xFFFF,
+        fixed.dwProductVersionLS >> 16,
+        fixed.dwProductVersionLS & 0xFFFF
+    );
+    parse_version(&version).ok_or(HostError::Unavailable(UnavailableReason::UnsupportedEngine))
+}
+
 /// Run `<engine> --version` with a bounded wait and parse the version.
 /// The probe inherits only a scrubbed environment.
+#[cfg(not(windows))]
 pub fn probe_version(engine: &Path) -> Result<String, HostError> {
     let mut child = std::process::Command::new(engine)
         .arg("--version")
@@ -208,35 +260,11 @@ fn parse_version(text: &str) -> Option<String> {
     runs.into_iter().find(|run| run.matches('.').count() >= 2)
 }
 
-/// Minimal scrubbed environment for engine processes. No caller, user, or
-/// Deskal secret variable is inherited.
+/// Minimal scrubbed environment for the non-Windows version probe. No
+/// caller, user, or Deskal secret variable is inherited.
+#[cfg(not(windows))]
 fn probe_env() -> Vec<(OsString, OsString)> {
     platform_probe_env()
-}
-
-#[cfg(windows)]
-fn platform_probe_env() -> Vec<(OsString, OsString)> {
-    let system_root =
-        std::env::var_os("SystemRoot").unwrap_or_else(|| OsString::from("C:\\Windows"));
-    let system32 = Path::new(&system_root).join("System32");
-    let system_temp = Path::new(&system_root).join("Temp");
-    vec![
-        (OsString::from("SystemRoot"), system_root.clone()),
-        (
-            OsString::from("SystemDrive"),
-            std::env::var_os("SystemDrive").unwrap_or_else(|| OsString::from("C:")),
-        ),
-        (
-            OsString::from("PATH"),
-            OsString::from(format!(
-                "{};{}",
-                system32.to_string_lossy(),
-                system_root.to_string_lossy()
-            )),
-        ),
-        (OsString::from("TEMP"), system_temp.clone().into_os_string()),
-        (OsString::from("TMP"), system_temp.into_os_string()),
-    ]
 }
 
 #[cfg(not(windows))]

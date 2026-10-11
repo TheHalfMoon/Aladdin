@@ -19,6 +19,9 @@ mod remote_leases;
 mod supervise;
 mod transfers;
 mod uia;
+mod worker_launch;
+#[cfg(windows)]
+mod worker_process;
 
 pub use actuation::{
     coordinate_fallback, dispatch, retry_after_dispatch, role_supports_action, target_digest,
@@ -97,4 +100,9 @@ pub use uia::{
     set_value, toggle, uia_coordinate_fallback, uia_target_digest, verify_pattern_support,
     verify_uia_target, ScrollDirection, SupportedPattern, UiaApproval, UiaElement, UiaLive,
     UiaProcess, UiaTarget, UiaWindow, MAX_SCROLL_AMOUNT, MAX_UIA_VALUE_CHARS, MIN_SCROLL_AMOUNT,
+};
+pub use worker_launch::{
+    classify_job, launch_worker, worker_environment, worker_node_args, BrowserWorker, JobProcess,
+    ShutdownReport, WorkerLaunch, WORKER_HANDSHAKE_TIMEOUT, WORKER_IDENTITY, WORKER_LAUNCH_TIMEOUT,
+    WORKER_NODE_OPTION, WORKER_PROTOCOL_GENERATION, WORKER_REPLY_TIMEOUT, WORKER_SHUTDOWN_TIMEOUT,
 };
