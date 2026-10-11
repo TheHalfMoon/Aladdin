@@ -422,7 +422,15 @@ In these probes the no-route proxy refuses the IP literal and nothing leaves the
 
 **Slice 3a: live navigation decided by the host.** Code: `worker_navigation.rs`; the worker's `routes.ts`, `redirect-guard.ts` and `routing.ts`; worker protocol generation 2.
 
-The host stays the authority. `navigate` first runs `NavigationPolicy::begin`, which requires an HTTPS URL on one of this lifetime's admitted names. Engine requests are then described to the host as `route_request`s and continue only on an explicit allow, by these means:
+The host stays the authority. **An engine lifetime admits exactly one destination** (`validate_launch`). `navigate` first runs `NavigationPolicy::begin`, which requires an HTTPS URL on that admitted name.
+
+Two layers then govern traffic:
+- **Network layer (complete).** The pinned resolver and the no-route proxy make every other host unreachable, whatever issues the request: pages, workers, or the browser process itself.
+- **Per-request layer.** Engine requests on the admitted origin are described to the host as `route_request`s and continue only on an explicit allow, by the means listed below.
+
+A fresh-context judge measured that the browser process issues some requests outside every route and guard: `fetchLater`, Reporting API and CSP reports, FedCM, audio-worklet modules, and NoStatePrefetch (`<link rel=prerender>`). With a second admitted name, those reached it undecided. With one admitted name they can reach only the page's own origin, which SG-000075 permits for subresources anyway. No capability is lost: the policy is exact-origin, and another site means another lifetime.
+
+The per-request means are:
 - **Routed requests.** Documents, frames, popups, fetch and XHR, and other subresources, including dedicated-worker scripts and their imports.
 - **Redirect hops.** Playwright routes never see them. A per-page CDP `Fetch` guard pauses each hop and forwards it as a `redirect` query.
 - **Service workers and SharedWorkers.** Service-worker scripts are refused by the route stack. SharedWorker requests are never routed (measured), so the API is removed from the engine; see the argv amendment below.
@@ -443,8 +451,9 @@ All of these are checked against the **host's own** page origin: the begun origi
 - A refused navigation's error page commits late, sometimes more than once, and interrupts the next navigation in the same page. Each host navigation therefore runs in a fresh, guarded page.
 - Edge runs a built-in component extension service worker even with `--disable-extensions`. The probes count only web service workers.
 
-**Known limits (fail closed):**
-- The host decides only while it is in a call. A page's own requests made while the host is idle wait for up to 10 s and are then refused.
+**Known limits:**
+- Browser-process requests (see above) on the admitted origin are not individually decided. They are bounded by the one-destination network layer.
+- (Fail closed) The host decides only while it is in a call. A page's own requests made while the host is idle wait for up to 10 s and are then refused.
 - A popup's first navigation is not completed, so popups do not work, but nothing leaks.
 - WebTransport to admitted names remains the founder-accepted residual risk #300.
 
@@ -455,6 +464,8 @@ All of these are checked against the **host's own** page origin: the begun origi
 - The mixed page contains cross-origin iframe, image, fetch, `<link rel=prefetch>`, speculation-rules prefetch and prerender, beacon, `EventSource`, a blob worker importing a cross-origin script, a CSS `@import`, `<a ping>`, a SharedWorker, and popups including one that redirects cross-origin. It never contacts `other.test`, while the same-origin resources load.
 - In the prerender-then-activate escape, the page's navigation to `/redirect-evil` is observed and its cross-origin hop is refused.
 
-The test passed 3 of 3 runs locally. A fresh-context judge's first round on this slice was BLOCK; the speculation-rules, SharedWorker and host-origin findings above are its fixes.
+The mixed page also issues the browser-process requests the judge measured (`fetchLater`, a CSP report-to violation with `Reporting-Endpoints`, FedCM, an audio worklet, `<link rel=prerender>` of a cross-origin redirect); none reaches `other.test`. The judge's runs with two admitted names are the control: with two names admitted, these requests did reach `other.test`.
+
+The test passed in repeated local runs. The fresh-context judge's rounds 1 and 2 on this slice were BLOCK. The speculation-rules, SharedWorker and host-origin findings, and the one-destination rule, are their fixes.
 
 **Test-only certificate trust:** `WorkerLaunch.test_trusted_spki` exists only under `cfg(test)` and appends `--ignore-certificate-errors-spki-list`. The worker accepts that flag only when every admitted pin is loopback; production pins are never loopback. A governance test pins the flag to `cfg(test)` code.

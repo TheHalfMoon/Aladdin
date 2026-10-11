@@ -282,6 +282,18 @@ fn file_name_is(path: &Path, expected: &str) -> bool {
 /// Validate the launch request before anything is spawned. A missing Node
 /// or worker is a missing prerequisite (typed unavailable).
 pub(crate) fn validate_launch(spec: &WorkerLaunch) -> Result<(), HostError> {
+    // Exactly one destination per engine lifetime. The browser process
+    // issues some requests outside every route and guard (measured:
+    // fetchLater, Reporting/CSP reports, FedCM, audio worklet modules,
+    // NoStatePrefetch). With a single admitted name, the pinned resolver and
+    // the no-route proxy make every other host unreachable, so such requests
+    // can reach only the page's own origin, which SG-000075 permits. The
+    // policy is exact-origin anyway; another site is another lifetime.
+    if spec.destinations.len() != 1 {
+        return Err(HostError::Invalid(
+            "a browser lifetime admits exactly one destination".into(),
+        ));
+    }
     for (path, what) in [
         (spec.node.as_path(), "node"),
         (&spec.worker_main, "worker entry point"),
@@ -1179,6 +1191,46 @@ mod tests {
     }
 
     #[test]
+    fn a_lifetime_admits_exactly_one_destination() {
+        let base = std::env::temp_dir();
+        let engine = Engine::for_tests(base.join("msedge.exe"), crate::discovery::EngineKind::Edge);
+        let destination = |host: &str| {
+            crate::confinement::AdmittedDestination::fixture(
+                host,
+                std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
+            )
+            .unwrap()
+        };
+        let launch = |destinations| WorkerLaunch {
+            test_trusted_spki: None,
+            node: base.join("node.exe"),
+            worker_main: base.join("main.js"),
+            engine: engine.clone(),
+            profile_dir: base.clone(),
+            ephemeral_profile: false,
+            temp_dir: base.clone(),
+            destinations,
+        };
+        for destinations in [
+            Vec::new(),
+            vec![destination("fixture.test"), destination("other.test")],
+        ] {
+            assert!(matches!(
+                validate_launch(&launch(destinations)),
+                Err(HostError::Invalid(message)) if message.contains("exactly one destination")
+            ));
+        }
+        // One destination passes this rule (and then fails on the missing
+        // runtime, as a typed prerequisite).
+        assert!(matches!(
+            validate_launch(&launch(vec![destination("fixture.test")])),
+            Err(HostError::Unavailable(
+                UnavailableReason::UnsupportedRuntime
+            ))
+        ));
+    }
+
+    #[test]
     fn missing_prerequisites_are_typed_and_nothing_is_spawned() {
         let base = std::env::temp_dir();
         // Built from temp_dir so the path is absolute on every platform.
@@ -1191,7 +1243,11 @@ mod tests {
             profile_dir: base.clone(),
             ephemeral_profile: false,
             temp_dir: base.clone(),
-            destinations: Vec::new(),
+            destinations: vec![crate::confinement::AdmittedDestination::fixture(
+                "fixture.test",
+                std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
+            )
+            .unwrap()],
         };
         let missing = base.join("qdral-sg108-missing");
         // A missing Node or worker is a missing prerequisite.

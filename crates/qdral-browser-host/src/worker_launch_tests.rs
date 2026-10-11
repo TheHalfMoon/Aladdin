@@ -771,10 +771,11 @@ fn the_host_decides_every_request_of_a_live_navigation() {
     let profile = temp_profile("navigate");
     let mut launch = spec(&profile, true);
     let loopback = IpAddr::V4(Ipv4Addr::LOCALHOST);
-    launch.destinations = vec![
-        AdmittedDestination::fixture("fixture.test", loopback).expect("fixture.test"),
-        AdmittedDestination::fixture("other.test", loopback).expect("other.test"),
-    ];
+    // One destination per lifetime: other.test is served by the fixture but
+    // is not admitted, so the engine cannot reach it at all, whatever issues
+    // the request (routes, guards, or the browser process itself).
+    launch.destinations =
+        vec![AdmittedDestination::fixture("fixture.test", loopback).expect("fixture.test")];
     launch.test_trusted_spki = Some(fixture.spki.clone());
     let mut worker = launch_worker(&launch, &Policy(PolicyKeyState::Absent)).expect("launch");
 

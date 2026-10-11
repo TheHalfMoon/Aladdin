@@ -44,6 +44,7 @@ const MIXED = `<!doctype html><title>mixed</title>
 <iframe src="https://other.test/frame"></iframe><iframe src="/frame"></iframe>
 <link rel="prefetch" href="https://other.test/prefetch">
 <link rel="stylesheet" href="/style.css">
+<link rel="prerender" href="/redirect-cross">
 <script type="speculationrules">{"prerender":[{"source":"list","urls":["https://other.test/prerender"]}],"prefetch":[{"source":"list","urls":["https://other.test/specprefetch"]}]}</script>
 <a id="pinged" href="/landing" ping="https://other.test/ping">x</a>
 <script>
@@ -53,6 +54,11 @@ try { navigator.sendBeacon("https://other.test/beacon", "x"); } catch {}
 try { new EventSource("https://other.test/events"); } catch {}
 try { new Worker(URL.createObjectURL(new Blob(['importScripts("https://other.test/worker-import.js")'], { type: "text/javascript" }))); } catch {}
 try { new SharedWorker("/shared.js"); } catch {}
+// Browser-process requests a judge measured outside every route and guard.
+try { fetchLater("https://other.test/fetchlater", { activateAfter: 0 }); } catch {}
+try { navigator.credentials.get({ identity: { providers: [{ configURL: "https://other.test/fedcm.json", clientId: "x" }] } }).catch(() => {}); } catch {}
+try { new AudioContext().audioWorklet.addModule("https://other.test/audio.js").catch(() => {}); } catch {}
+try { const s = document.createElement("img"); s.src = "http://insecure.other.test/csp-violation.png"; document.body.append(s); } catch {}
 try { window.open("https://other.test/popup"); } catch {}
 try { window.open("/redirect-cross"); } catch {}
 </script>`;
@@ -96,6 +102,11 @@ const server = createServer({ key, cert }, (request, response) => {
     return response.end("{}");
   }
   response.setHeader("content-type", "text/html");
+  if (path === "/mixed") {
+    // Reporting API: CSP violations are reported by the network service.
+    response.setHeader("reporting-endpoints", 'csp="https://other.test/reports"');
+    response.setHeader("content-security-policy", "img-src 'self'; report-to csp");
+  }
   const pages = { "/mixed": MIXED, "/spec-escape": SPEC_ESCAPE };
   response.end(pages[path] ?? `<!doctype html><title>${host}${path}</title><p>fixture</p>`);
 });
