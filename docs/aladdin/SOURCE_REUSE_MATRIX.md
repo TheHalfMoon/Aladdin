@@ -4,7 +4,7 @@ Status: ADOPTED planning direction (founder decision, 2026-10-09; Sol revision g
 
 ## Priority
 
-P0 keep Aladdin's authority, approval broker after repair, UIA/capture/input, file/process identities, device identity/OAuth/relay and existing MCP edge. P1 wrap Playwright-core and keep PR282 WPF foundation. P2 narrowly adapt required file/read/search/session/parser behavior. P3 native web extraction/crawling (Firecrawl as behavioral reference only; founder decision 2026-10-11) and target-scoped remote workflow. No whole-product donor gets ambient device authority.
+P0 keep Aladdin's authority, approval broker after repair, UIA/capture/input, file/process identities, device identity/OAuth/relay and existing MCP edge. P1 wrap Playwright-core and keep PR282 WPF foundation. P2 narrowly adapt required file/read/search/session/parser behavior. P3 native web extraction/crawling (Firecrawl modules adaptable under the founder's source permission of 2026-10-12, `SOURCE_PERMISSIONS.md`; previously behavioral reference only, founder decision 2026-10-11) and target-scoped remote workflow. No whole-product donor gets ambient device authority.
 
 All revisions below are independently checked source HEADs on 2026-10-09. They are **research pins**, not approved runtime dependencies. Licenses describe inspected root declarations, not exhaustive transitive/assets/legal audits. Donor tests were read selectively; donor suites and integrated runtime behavior were not executed. A permissive root license does not remove notice, asset, dependency or service obligations.
 

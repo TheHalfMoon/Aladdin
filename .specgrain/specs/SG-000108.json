@@ -81,7 +81,7 @@
       "question": "WebMCP and web extraction scope",
       "status": "ADOPTED founder decision (2026-10-11)",
       "record": "docs/aladdin/WEB_CAPABILITIES_DECISION.md",
-      "decision": "WebMCP is added to SG-000108 as later slices on the isolated worker: read-only discovery (slice 4), then approval-gated execution (slice 5). Native web extraction follows: scrape and Markdown (slice 6), then map and crawl (slice 7). These are rebuilt natively because Firecrawl's AGPL-3.0 engine is not copied. Page-advertised tools grant nothing; the Rust host validates, approves and bounds every call. Every slice is separately qualified, and this decision grants no authority."
+      "decision": "WebMCP is added to SG-000108 as later slices on the isolated worker: read-only discovery (slice 4), then approval-gated execution (slice 5). Native web extraction follows: scrape and Markdown (slice 6), then map and crawl (slice 7). These are Aladdin's own pipeline on the isolated engine; Firecrawl modules may be adapted into it under the founder's source permission of 2026-10-12 (docs/aladdin/SOURCE_PERMISSIONS.md). Page-advertised tools grant nothing; the Rust host validates, approves and bounds every call. Every slice is separately qualified, and this decision grants no authority."
     }
   ],
   "invariants": [
