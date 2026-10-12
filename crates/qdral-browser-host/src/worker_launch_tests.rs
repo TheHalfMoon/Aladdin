@@ -854,3 +854,290 @@ fn the_host_decides_every_request_of_a_live_navigation() {
     assert!(report.job_empty, "the job did not empty");
     assert_profile_gone(report.profile_removed, &profile);
 }
+
+#[test]
+#[ignore = "requires the built browser worker and Edge; run by npm run browser-launcher:native"]
+fn observation_is_bounded_redacted_and_bound_to_the_committed_document() {
+    let fixture = HttpsFixture::start();
+    let profile = temp_profile("observe");
+    let mut launch = spec(&profile, true);
+    launch.destinations =
+        vec![
+            AdmittedDestination::fixture("fixture.test", IpAddr::V4(Ipv4Addr::LOCALHOST))
+                .expect("fixture.test"),
+        ];
+    launch.test_trusted_spki = Some(fixture.spki.clone());
+    let mut worker = launch_worker(&launch, &Policy(PolicyKeyState::Absent)).expect("launch");
+    let scope = crate::observation::ObservationScope {
+        workspace: "workspace".into(),
+        profile_identity: "profile".into(),
+    };
+    // Nothing to observe before a committed document.
+    assert!(worker.observe(&scope).is_err());
+
+    worker
+        .navigate("https://fixture.test/reports")
+        .expect("reports page");
+    let live = worker.observe(&scope).expect("observe");
+    assert!(
+        live.observation.node_count > 5,
+        "{}",
+        live.observation.node_count
+    );
+    let shown = format!("{:?}", live.observation);
+    for raw in ["Quarterly report", "hunter2", "alice"] {
+        assert!(
+            !shown.contains(raw),
+            "{raw} reached the caller-visible observation"
+        );
+    }
+    // Host-issued identities bound to this document; the host keeps the raw
+    // link names and URLs for its own typed selection.
+    let generation = live.document.document_generation;
+    let mut links = Vec::new();
+    let mut stack: Vec<&crate::observation::ObservedNode> = live.observation.nodes.iter().collect();
+    while let Some(node) = stack.pop() {
+        assert!(
+            node.node_id.starts_with(&format!("d{generation}-")),
+            "{}",
+            node.node_id
+        );
+        let host = worker.host_node(&node.node_id).expect("host index entry");
+        assert!(!host.name.contains("hunter2") && !host.name.contains("alice"));
+        if host.role == "link" {
+            links.push((host.name.clone(), host.url.clone()));
+        }
+        stack.extend(node.children.iter());
+    }
+    links.sort();
+    assert_eq!(
+        links
+            .iter()
+            .map(|(name, _)| name.as_str())
+            .collect::<Vec<_>>(),
+        [
+            "Quarterly report 2026-03-31",
+            "Quarterly report 2026-06-30",
+            "Quarterly report 2026-09-30"
+        ]
+    );
+    assert!(links
+        .iter()
+        .all(|(_, url)| url.as_deref().is_some_and(|u| u.starts_with("/reports/"))));
+
+    // A button named by a password field (aria-labelledby): the raw secret
+    // never reaches the caller, and its digest is keyed (not checkable
+    // against a guessed value).
+    worker
+        .navigate("https://fixture.test/secret-name")
+        .expect("secret-name page");
+    let live = worker.observe(&scope).expect("observe secret-name");
+    assert!(!format!("{:?}", live.observation).contains("HUNTER2PW"));
+    let unkeyed = crate::observation::short_digest("HUNTER2PW");
+    let mut stack: Vec<&crate::observation::ObservedNode> = live.observation.nodes.iter().collect();
+    let mut buttons = 0;
+    while let Some(node) = stack.pop() {
+        if node.role == "button" {
+            buttons += 1;
+            assert_ne!(
+                node.name_digest, unkeyed,
+                "the name digest is dictionary-checkable"
+            );
+        }
+        stack.extend(node.children.iter());
+    }
+    assert_eq!(buttons, 1, "the secret-named button was not observed");
+
+    // A page that moved itself is stale until the host navigates again.
+    worker
+        .navigate("https://fixture.test/self-move")
+        .expect("self-moving page");
+    pump(&mut worker, Duration::from_secs(2));
+    assert!(
+        matches!(worker.observe(&scope), Err(HostError::Invalid(_))),
+        "a moved page was observed"
+    );
+    let report = worker.shutdown();
+    assert!(report.job_empty, "the job did not empty");
+    assert_profile_gone(report.profile_removed, &profile);
+    drop(fixture);
+}
+
+/// An SG-000077 target and a matching one-shot approval for a node of the
+/// current observation.
+fn approved_click(
+    worker: &BrowserWorker,
+    live: &LiveObservation,
+    node_id: &str,
+) -> (
+    crate::actuation::ActuationTarget,
+    crate::actuation::ApprovalToken,
+) {
+    // The approval names where the click goes: the host-resolved link
+    // destination is the target's state.
+    let state = worker.link_destination(node_id).unwrap_or_default();
+    let target = crate::actuation::ActuationTarget {
+        page_id: live.page.page_id.clone(),
+        origin: live.page.origin.clone(),
+        document_generation: live.document.document_generation,
+        node_id: node_id.to_owned(),
+        role: "link".into(),
+        state,
+        action: crate::actuation::SupportedAction::Click,
+        workspace: "workspace".into(),
+        policy_revision: 1,
+    };
+    let approval = crate::actuation::ApprovalToken {
+        approval_id: "approval-1".into(),
+        target_digest: crate::actuation::target_digest(&target),
+        workspace: "workspace".into(),
+        policy_revision: 1,
+        consumed: false,
+    };
+    (target, approval)
+}
+
+#[test]
+#[ignore = "requires the built browser worker and Edge; run by npm run browser-launcher:native"]
+fn an_approved_activation_follows_the_latest_dated_link_and_nothing_else() {
+    let fixture = HttpsFixture::start();
+    let profile = temp_profile("activate");
+    let mut launch = spec(&profile, true);
+    launch.destinations =
+        vec![
+            AdmittedDestination::fixture("fixture.test", IpAddr::V4(Ipv4Addr::LOCALHOST))
+                .expect("fixture.test"),
+        ];
+    launch.test_trusted_spki = Some(fixture.spki.clone());
+    let mut worker = launch_worker(&launch, &Policy(PolicyKeyState::Absent)).expect("launch");
+    let scope = crate::observation::ObservationScope {
+        workspace: "workspace".into(),
+        profile_identity: "profile".into(),
+    };
+
+    worker
+        .navigate("https://fixture.test/archive")
+        .expect("archive");
+    let live = worker.observe(&scope).expect("observe");
+    let latest = worker
+        .select_latest_dated_link()
+        .expect("latest dated link");
+    assert_eq!(
+        worker.host_node(&latest).map(|n| n.name.as_str()),
+        Some("Annual review 2026-09-30")
+    );
+    // A digest that does not match the target is refused before any click.
+    let (target, mut forged) = approved_click(&worker, &live, &latest);
+    forged.target_digest = "0000000000000000".into();
+    assert!(worker
+        .activate(&target, &mut forged, 1, "workspace")
+        .is_err());
+    // The approved click navigates to the selected document.
+    let (target, mut approval) = approved_click(&worker, &live, &latest);
+    let opened = worker
+        .activate(&target, &mut approval, 1, "workspace")
+        .expect("approved activation");
+    assert_eq!(opened.url, "https://fixture.test/archive/2026-09-30");
+    assert!(approval.consumed);
+    // The approval cannot be replayed, and the old node is stale.
+    assert!(worker
+        .activate(&target, &mut approval, 1, "workspace")
+        .is_err());
+    let (target, mut fresh) = approved_click(&worker, &live, &latest);
+    assert!(
+        worker
+            .activate(&target, &mut fresh, 1, "workspace")
+            .is_err(),
+        "stale node"
+    );
+    // The next observation is of the new document, one generation later.
+    let after = worker.observe(&scope).expect("observe after activation");
+    assert_eq!(
+        after.document.document_generation,
+        live.document.document_generation + 1
+    );
+
+    // A hostile page whose latest-dated link is cross-origin: the host's
+    // selection picks it, and the activation is refused by the policy.
+    worker
+        .navigate("https://fixture.test/archive-hostile")
+        .expect("hostile archive");
+    let live = worker.observe(&scope).expect("observe hostile");
+    let latest = worker.select_latest_dated_link().expect("latest");
+    assert_eq!(
+        worker.host_node(&latest).map(|n| n.name.as_str()),
+        Some("Annual review 2099-12-31")
+    );
+    let (target, mut approval) = approved_click(&worker, &live, &latest);
+    assert!(
+        worker
+            .activate(&target, &mut approval, 1, "workspace")
+            .is_err(),
+        "a cross-origin activation was followed"
+    );
+    assert!(
+        !approval.consumed,
+        "a refused destination consumed the approval"
+    );
+
+    // A click redirected by script, and an href swapped after observation:
+    // both open another document than the approved destination: refused.
+    let find = |worker: &BrowserWorker, live: &LiveObservation, name: &str| {
+        let mut stack: Vec<&crate::observation::ObservedNode> =
+            live.observation.nodes.iter().collect();
+        while let Some(node) = stack.pop() {
+            if worker
+                .host_node(&node.node_id)
+                .is_some_and(|h| h.name == name)
+            {
+                return node.node_id.clone();
+            }
+            stack.extend(node.children.iter());
+        }
+        panic!("no node named {name}");
+    };
+    worker
+        .navigate("https://fixture.test/archive-tricky")
+        .expect("tricky");
+    let live = worker.observe(&scope).expect("observe tricky");
+    let scripted = find(&worker, &live, "Annual review 2026-09-30");
+    let (target, mut approval) = approved_click(&worker, &live, &scripted);
+    assert!(
+        worker
+            .activate(&target, &mut approval, 1, "workspace")
+            .is_err(),
+        "script redirect followed"
+    );
+    worker
+        .navigate("https://fixture.test/archive-tricky")
+        .expect("tricky again");
+    let live = worker.observe(&scope).expect("observe tricky again");
+    let swapped = find(&worker, &live, "Annual review 2026-06-30");
+    pump(&mut worker, Duration::from_millis(2_500));
+    let (target, mut approval) = approved_click(&worker, &live, &swapped);
+    assert!(
+        worker
+            .activate(&target, &mut approval, 1, "workspace")
+            .is_err(),
+        "swapped href followed"
+    );
+    pump(&mut worker, Duration::from_secs(1));
+    let hits = fixture.hits();
+    for path in ["/js-dest", "/evil"] {
+        assert!(
+            !hits.contains(&format!("fixture.test {path}")),
+            "{path} was requested: {hits:?}"
+        );
+    }
+    pump(&mut worker, Duration::from_secs(1));
+    assert!(
+        !fixture
+            .hits()
+            .iter()
+            .any(|hit| hit.starts_with("other.test")),
+        "other.test was contacted"
+    );
+    let report = worker.shutdown();
+    assert!(report.job_empty, "the job did not empty");
+    assert_profile_gone(report.profile_removed, &profile);
+}

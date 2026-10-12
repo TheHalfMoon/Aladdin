@@ -469,3 +469,30 @@ The mixed page also issues the browser-process requests the judge measured (`fet
 The test passed in repeated local runs. The fresh-context judge's rounds 1 and 2 on this slice were BLOCK. The speculation-rules, SharedWorker and host-origin findings, and the one-destination rule, are their fixes.
 
 **Test-only certificate trust:** `WorkerLaunch.test_trusted_spki` exists only under `cfg(test)` and appends `--ignore-certificate-errors-spki-list`. The worker accepts that flag only when every admitted pin is loopback; production pins are never loopback. A governance test pins the flag to `cfg(test)` code.
+
+**Slices 3b and 3c: observation and approval-gated activation** (worker protocol generations 3 and 4).
+
+- **Observation (SG-000076).**
+  - The worker sends a bounded tree from `ariaSnapshotJSON({mode:"ai"})`, covering shadow DOM and iframes. Each node carries a ref, a role, an accessible name and, for links only, a bounded URL. Field values are never forwarded; this was measured, because the snapshot shows a password value in clear text under role `textbox`.
+  - An accessible name can still carry a field's text: a button labelled by a password field through `aria-labelledby` was measured. Names are therefore keyed with a per-lifetime secret from the system RNG before they enter SG-000076, so a caller cannot check a digest against a guessed value. Within one lifetime, equal names still produce equal digests, so a caller can tell that two names match, and could confirm a value it planted itself through an approved fill. Raw names stay in a host-only index, and no product API exposes them.
+  - The snapshot must be of exactly the committed URL. Node identities are bound to the document generation.
+  - Worker truncation is propagated, and only nodes the caller actually received can be acted on.
+- **Activation (SG-000077).**
+  - Selection is host-side and typed: `select_latest_dated_link`. It scans bytes only, so non-ASCII names cannot crash the host, and it refuses ties.
+  - The host does not model element state. A target's `state` must instead be the link's host-resolved destination (`link_destination`; absolute `https://` or root-relative links only), so the one-shot approval covers where the click goes.
+  - The destination is checked against the page's origin before the approval is consumed.
+  - During the click, the host accepts exactly one page-initiated document request, and it must be that destination. A script redirect and an `href` swapped after observation were both measured and are refused at the request. A click that requests no document (`pushState`, a script action) is not a verified activation.
+  - The destination's server may still redirect same-origin. That is decided hop by hop by `RedirectChain`, so the committed URL can differ from the approved destination; the server already controls what it serves there.
+  - The host does not see the HTTP method, so a click handler that submits a form to the destination is accepted as well. That gives the page nothing it cannot already do with a same-origin `fetch`.
+  - Matching is by exact string. A link that Chromium normalizes before requesting it (spaces, `..`, a fragment) is therefore refused, failing closed, and its approval is spent.
+  - The worker clicks by `aria-ref`. A replaced node or an overlay makes the click time out rather than hit another element (measured).
+- **Known limits.**
+  - Off-screen or `opacity:0` links appear in the snapshot and can win the date selection. Host policy still applies to whatever they open.
+  - A click that has a side effect without opening a document (for example `fetch`) is refused as unverified only after it has happened, and its approval is consumed.
+  - A `target=_blank` click that opens a popup is not an activation; the popup itself is mediated by host policy.
+
+**Evidence (local, Edge 155), native end-to-end tests on the HTTPS fixture:**
+- Observation never shows a raw name, the user name or the password to the caller, and the secret-named button's digest is keyed. The host index holds the dated links and their URLs, and a page that moved itself is refused as stale.
+- Activation follows the latest dated link with an approval. A forged digest, a replayed approval, the stale node, the cross-origin latest link (without consuming its approval), the script redirect and the swapped `href` are all refused, and none of their destinations is requested.
+
+A fresh-context judge's first round on these slices was BLOCK. The byte-safe date scan, keyed names, destination-bound approvals, host-side state and propagated truncation are its fixes.

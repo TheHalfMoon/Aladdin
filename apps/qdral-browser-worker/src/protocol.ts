@@ -8,9 +8,11 @@
 // worker checks here is defense in depth against a host bug.
 
 import { isIPv4, isIPv6 } from "node:net";
+import type { SnapshotNode } from "./snapshot.js";
 
-/// Generation 2 adds the slice-3a navigation frames.
-export const WORKER_PROTOCOL_GENERATION = 2;
+/// Generation 2 adds the slice-3a navigation frames, generation 3 slice-3b
+/// observation, generation 4 slice-3c activation.
+export const WORKER_PROTOCOL_GENERATION = 4;
 export const WORKER_IDENTITY = "qdral-browser-worker";
 export const MAX_FRAME_BYTES = 64 * 1024;
 
@@ -56,6 +58,8 @@ export type HostFrame =
   | { frame: "ping"; nonce: string }
   | { frame: "navigate"; nav_id: number; url: string }
   | { frame: "route_decision"; request_id: number; allow: boolean }
+  | { frame: "observe"; obs_id: number }
+  | { frame: "activate"; act_id: number; ref: string }
   | { frame: "shutdown" };
 
 export type RouteKind = "document" | "redirect" | "frame" | "popup" | "fetch" | "subresource" | "service_worker";
@@ -72,6 +76,10 @@ export type WorkerFrame =
   | { frame: "route_request"; request_id: number; kind: RouteKind; url: string; origin: string }
   | { frame: "navigated"; nav_id: number; url: string; status: number }
   | { frame: "navigation_failed"; nav_id: number; reason: NavigationFailure }
+  | { frame: "observed"; obs_id: number; url: string; truncated: boolean; nodes: SnapshotNode[] }
+  | { frame: "observation_failed"; obs_id: number }
+  | { frame: "activated"; act_id: number; url: string; status: number }
+  | { frame: "activation_failed"; act_id: number; reason: NavigationFailure }
   | { frame: "error"; code: ErrorCode };
 
 export class ProtocolViolation extends Error {}
@@ -181,6 +189,18 @@ export function parseHostFrame(raw: unknown): HostFrame {
       const url = boundedString(raw.url, MAX_URL_BYTES, "navigation URL");
       if (!url.startsWith("https://")) throw new ProtocolViolation("navigation URL is not https");
       return { frame: "navigate", nav_id: navId, url };
+    }
+    case "activate": {
+      exactKeys(raw, ["frame", "act_id", "ref"]);
+      const actId = positiveId(raw.act_id, "act_id");
+      if (typeof raw.ref !== "string" || !/^(?:f\d{1,4})?e\d{1,6}$/.test(raw.ref)) {
+        throw new ProtocolViolation("activation ref is malformed");
+      }
+      return { frame: "activate", act_id: actId, ref: raw.ref };
+    }
+    case "observe": {
+      exactKeys(raw, ["frame", "obs_id"]);
+      return { frame: "observe", obs_id: positiveId(raw.obs_id, "obs_id") };
     }
     case "route_decision": {
       exactKeys(raw, ["frame", "request_id", "allow"]);

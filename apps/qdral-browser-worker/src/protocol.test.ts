@@ -36,7 +36,7 @@ test("length bounds and non-JSON bodies are violations before buffering", () => 
 });
 
 test("the host vocabulary is closed and exact", () => {
-  assert.deepEqual(parseHostFrame({ frame: "hello", generation: 2 }), { frame: "hello", generation: 2 });
+  assert.deepEqual(parseHostFrame({ frame: "hello", generation: 4 }), { frame: "hello", generation: 4 });
   const parsed = parseHostFrame(validLaunch());
   assert.deepEqual(JSON.parse(JSON.stringify(parsed)), validLaunch());
   assert.equal(parsed.frame === "launch" && Object.getPrototypeOf(parsed.env), null);
@@ -44,11 +44,11 @@ test("the host vocabulary is closed and exact", () => {
     null,
     [],
     "hello",
-    { generation: 2 },
+    { generation: 4 },
     { frame: "navigate", url: "https://example.com" },
     { frame: "evaluate", script: "1+1" },
     { frame: "cdp", method: "Runtime.evaluate" },
-    { frame: "hello", generation: 2, extra: true },
+    { frame: "hello", generation: 4, extra: true },
     { frame: "hello", generation: "1" },
     { frame: "hello" },
     { frame: "shutdown", now: true },
