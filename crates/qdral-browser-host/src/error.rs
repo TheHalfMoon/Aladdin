@@ -34,6 +34,9 @@ pub enum UnavailableReason {
     /// The worker process exited during an operation; the lifetime is over
     /// and nothing was committed.
     WorkerExited,
+    /// The caller cancelled the lifetime (`CancelHandle::cancel`); nothing
+    /// in flight was committed.
+    Cancelled,
 }
 
 impl fmt::Display for UnavailableReason {
@@ -50,6 +53,7 @@ impl fmt::Display for UnavailableReason {
             Self::TimedOut => write!(f, "the browser operation timed out"),
             Self::ActionFailed => write!(f, "the browser action failed"),
             Self::WorkerExited => write!(f, "the browser worker exited"),
+            Self::Cancelled => write!(f, "the browser operation was cancelled"),
         }
     }
 }
