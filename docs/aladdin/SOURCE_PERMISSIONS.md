@@ -1,0 +1,32 @@
+# Source permissions
+
+Status: **ADOPTED founder decision (2026-10-12)**. This record changes which donor source may be copied. It grants no runtime authority: every import still needs its own exact-head qualified change, with its provenance record, notices, tests and review gates.
+
+## Founder attestation
+
+On 2026-10-12 the founder stated: "i have official permission to copy and use the source codes from all sources. apply this on the project."
+
+The founder therefore attests that official permission is held to **copy, use, adapt and rename source code** from the donors. This record applies the statement to every donor repository recorded in `SOURCE_REUSE_MATRIX.md`; that limit is this record's choice, made so that each donor stays pinned, licence-checked and listed, and a donor added to the matrix later is covered on the same terms. A permission reaches only **code its grantor owns**: files a donor itself carries under another party's license (third-party files, vendored packages, datasets with their own attribution) keep that license, whatever the permission says. The permission covers the copyleft donors that were previously reference-only for want of a written grant:
+
+| Donor | Public license | Previous rule | Rule from 2026-10-12 |
+|---|---|---|---|
+| [Firecrawl](https://github.com/firecrawl/firecrawl/tree/f84845c864b6e2af22791c18fcf89ac2a21f1434) `f84845c` | AGPL-3.0 (engine) | Behavioral reference only; native rebuild (founder decision 2026-10-11) | Grantor-owned code may be copied and adapted under this permission; an import merges once the permission document is filed (below). |
+| [Skyvern-AI/skyvern](https://github.com/Skyvern-AI/skyvern/tree/f5f3f28a9ce0021a1db24286928a7bff6582a1eb) `f5f3f28` | AGPL-3.0 | Behavioral reference only | Grantor-owned code may be copied and adapted under this permission; an import merges once the permission document is filed (below). |
+
+For permissive donors (MIT, Apache-2.0, BSD) nothing changes. Their licenses already allow copying and renaming, provided the copyright and permission notices travel with the copied code.
+
+## What the attestation does not change
+
+- **Notices and provenance.** Every copied or adapted file keeps an attribution header (donor, path, commit). Every import keeps a provenance record with blob SHAs and a modification summary, plus the donor's notice under `docs/aladdin/notices/`. For the AGPL donors the notice records the upstream license **and** this permission.
+- **Architecture and authority.** The SG-000074..SG-000108 invariants still apply to copied code, whatever its license. In particular, no code path may evaluate caller-, model- or page-supplied script, and no second channel into the browser is allowed. Donor code that breaks an invariant is not copied, however permissive its terms.
+- **Dependencies.** A donor's third-party dependencies (crates, npm packages) are separate works. Each is admitted on its own license, with integrity, SBOM and supply-chain audit, as for playwright-core.
+- **Models.** This record covers source code only. The written-grant requirement for redistributing or rebranding models (`ALADDIN_AI_SERVER_ARCHITECTURE.md`, `MODEL_INTEGRATION_CONTRACTS.md`) is unchanged.
+
+## The permission documents, and the gate they open
+
+The permission documents themselves are **not in the repository yet**. Aladdin is distributed under Apache-2.0. AGPL-3.0 code may be distributed under other terms only if the copyright holders' permission allows it, so each document must state that scope: copy, modification, combination, redistribution and commercial distribution under Aladdin's license.
+
+The existing gate stays as written. `docs/canonical/DESKAL_P20_DONOR_LEDGER.md` (Firecrawl, "Permission gate") requires the owning grain to reference durable evidence that the permission covers the intended use before any Firecrawl-owned source is copied into a distributable artifact, and `apps/qdral-mcp/src/p20-architecture.test.ts` asserts that gate. This record applies the same gate to Skyvern:
+- **Until the document is filed,** AGPL donor code may be studied, and an import may be prepared and reviewed on a branch. It is **not merged** into `main`, which feeds every release.
+- **Filing:** put a copy of each document, or its durable reference, in `docs/aladdin/grants/` (one file per donor: grantor, date, scope, contact), and have counsel confirm the scope (`ALADDIN_MASTER_PLAN.md`, the open item "Written rights grants").
+- **After filing,** the importing change names that file and this record in its provenance, and the merge may proceed.
