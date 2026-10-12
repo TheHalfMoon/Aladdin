@@ -600,6 +600,9 @@ fn error_vocabulary_is_typed_and_secret_free() {
         qdral_browser_host::UnavailableReason::ProtocolViolation,
         qdral_browser_host::UnavailableReason::UnsupportedRuntime,
         qdral_browser_host::UnavailableReason::ManagedPolicy,
+        qdral_browser_host::UnavailableReason::TimedOut,
+        qdral_browser_host::UnavailableReason::ActionFailed,
+        qdral_browser_host::UnavailableReason::WorkerExited,
     ] {
         let text = format!(
             "{:?} {}",

@@ -1171,6 +1171,129 @@ fn an_approved_activation_follows_the_latest_dated_link_and_nothing_else() {
 
 #[test]
 #[ignore = "requires the built browser worker and Edge; run by npm run browser-launcher:native"]
+fn a_stalled_or_killed_download_is_typed_and_commits_nothing() {
+    let fixture = HttpsFixture::start();
+    let profile = temp_profile("download-outcomes");
+    let approved = temp_profile("approved-outcomes");
+    let mut launch = spec(&profile, true);
+    launch.destinations =
+        vec![
+            AdmittedDestination::fixture("fixture.test", IpAddr::V4(Ipv4Addr::LOCALHOST))
+                .expect("fixture.test"),
+        ];
+    launch.test_trusted_spki = Some(fixture.spki.clone());
+    let mut worker = launch_worker(&launch, &Policy(PolicyKeyState::Absent)).expect("launch");
+    let scope = crate::observation::ObservationScope {
+        workspace: "workspace".into(),
+        profile_identity: "profile".into(),
+    };
+    let stalled_link = |worker: &mut BrowserWorker| {
+        worker
+            .navigate("https://fixture.test/files")
+            .expect("files");
+        let live = worker.observe(&scope).expect("observe files");
+        let node = live
+            .observation
+            .nodes
+            .iter()
+            .flat_map(|n| std::iter::once(n).chain(n.children.iter()))
+            .flat_map(|n| std::iter::once(n).chain(n.children.iter()))
+            .find(|n| {
+                worker
+                    .host_node(&n.node_id)
+                    .is_some_and(|h| h.name == "Stalled 2026-01-05")
+            })
+            .map(|n| n.node_id.clone())
+            .expect("stalled link");
+        (live, node)
+    };
+    let no_residue = |worker: &BrowserWorker, out: &str| {
+        assert!(!approved.join(out).exists(), "{out} was committed");
+        let staged = std::fs::read_dir(worker.staging_dir())
+            .map(|entries| entries.count())
+            .unwrap_or(0);
+        assert_eq!(staged, 0, "a staging file was left behind");
+    };
+
+    // Timeout: the body never ends. The worker gives up at its capture
+    // deadline, inside the host's own, and reports a typed timeout.
+    let (live, node) = stalled_link(&mut worker);
+    let (target, mut approval) = approved_download(&worker, &live, &node, &approved, "stall.pdf");
+    let started = Instant::now();
+    let outcome = worker.download(
+        &target,
+        &mut approval,
+        1,
+        "workspace",
+        &approved,
+        "stall.pdf",
+    );
+    assert!(
+        matches!(
+            outcome,
+            Err(HostError::Unavailable(UnavailableReason::TimedOut))
+        ),
+        "{outcome:?}"
+    );
+    assert!(
+        started.elapsed() < WORKER_NAVIGATION_TIMEOUT,
+        "the host waited past its deadline"
+    );
+    assert!(
+        approval.consumed,
+        "a dispatched download must spend its approval"
+    );
+    no_residue(&worker, "stall.pdf");
+
+    // The worker stays usable after a timeout.
+    worker
+        .ping("after-timeout")
+        .expect("ping after a timed-out download");
+
+    // Crash: the worker is killed while the download is stalled. The outcome
+    // is typed, nothing is committed, and the job empties.
+    let (live, node) = stalled_link(&mut worker);
+    let (target, mut approval) = approved_download(&worker, &live, &node, &approved, "crash.pdf");
+    let pids = job_pids(&worker);
+    let victim = worker.worker_pid();
+    let killer = std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_secs(3));
+        terminate(victim);
+    });
+    let outcome = worker.download(
+        &target,
+        &mut approval,
+        1,
+        "workspace",
+        &approved,
+        "crash.pdf",
+    );
+    killer.join().expect("killer thread");
+    assert!(
+        matches!(
+            outcome,
+            Err(HostError::Unavailable(UnavailableReason::WorkerExited))
+        ),
+        "{outcome:?}"
+    );
+    no_residue(&worker, "crash.pdf");
+    let staging = worker.staging_dir().to_path_buf();
+    let report = worker.kill();
+    assert!(report.job_empty, "the job did not empty after the crash");
+    assert!(
+        all_dead(&pids, Duration::from_secs(10)),
+        "a member outlived the crash"
+    );
+    assert!(
+        !staging.exists(),
+        "the staging directory outlived the lifetime"
+    );
+    assert_profile_gone(report.profile_removed, &profile);
+    let _ = std::fs::remove_dir_all(&approved);
+}
+
+#[test]
+#[ignore = "requires the built browser worker and Edge; run by npm run browser-launcher:native"]
 fn the_journey_downloads_the_latest_report_create_only_and_verified() {
     let fixture = HttpsFixture::start();
     let profile = temp_profile("download");

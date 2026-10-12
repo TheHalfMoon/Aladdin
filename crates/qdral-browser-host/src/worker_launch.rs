@@ -585,7 +585,8 @@ pub(crate) fn commit_create_only(
 pub(crate) fn navigation_failure(reason: &str) -> HostError {
     match reason {
         "denied" => HostError::Invalid("navigation denied by the browser policy".into()),
-        "timeout" | "failed" | "busy" => HostError::Unavailable(UnavailableReason::LaunchFailed),
+        "timeout" => HostError::Unavailable(UnavailableReason::TimedOut),
+        "failed" | "busy" => HostError::Unavailable(UnavailableReason::ActionFailed),
         _ => HostError::Unavailable(UnavailableReason::ProtocolViolation),
     }
 }
@@ -989,7 +990,11 @@ mod platform {
                         Some(2) => Err(HostError::Unavailable(
                             UnavailableReason::UnsupportedRuntime,
                         )),
-                        _ => Err(HostError::Unavailable(UnavailableReason::ProtocolViolation)),
+                        // The worker died: the lifetime is over.
+                        Some(_) => Err(HostError::Unavailable(UnavailableReason::WorkerExited)),
+                        // Still running but the channel broke: malformed
+                        // output.
+                        None => Err(HostError::Unavailable(UnavailableReason::ProtocolViolation)),
                     }
                 }
                 Err(RecvTimeoutError::Timeout) => {
@@ -1522,6 +1527,12 @@ mod platform {
                 bytes: content.len() as u64,
                 source_url: url,
             })
+        }
+
+        /// Test-only: this lifetime's download staging directory.
+        #[cfg(test)]
+        pub(crate) fn staging_dir(&self) -> &Path {
+            &self.staging
         }
 
         /// Test-only view of an observed node: raw names never leave the
@@ -2170,10 +2181,14 @@ mod tests {
             navigation_failure("denied"),
             HostError::Invalid(_)
         ));
-        for reason in ["timeout", "failed", "busy"] {
+        assert!(matches!(
+            navigation_failure("timeout"),
+            HostError::Unavailable(UnavailableReason::TimedOut)
+        ));
+        for reason in ["failed", "busy"] {
             assert!(matches!(
                 navigation_failure(reason),
-                HostError::Unavailable(UnavailableReason::LaunchFailed)
+                HostError::Unavailable(UnavailableReason::ActionFailed)
             ));
         }
         assert!(matches!(

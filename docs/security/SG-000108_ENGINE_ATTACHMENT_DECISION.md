@@ -553,3 +553,17 @@ A fresh-context judge's first round on these slices was BLOCK. The byte-safe dat
 The worker's unit tests cover the generation-5 frames, the staging-path rules, and typed download failures. The host's unit tests cover the new destination-name rules, with non-ASCII controls.
 
 A fresh-context judge's first round on this slice was BLOCK. The destination-name type check, the `download` action and its binding, the exact-URL check, the junction-safe folder creation, the bounded reads, the restored prerender switch and the post-timeout failing of documents are its fixes.
+
+**Slice 3e: typed outcomes for timeouts and crashes** (acceptance A6; issue #307, item 1).
+
+- **Typed failure reasons.** `UnavailableReason` gains three values:
+  - `TimedOut`: the worker reported a timeout;
+  - `ActionFailed`: the worker reported a failure or that it was busy;
+  - `WorkerExited`: the worker process died during an operation.
+
+  Navigation, activation and download failures used to all come back as `LaunchFailed`. A broken channel while the worker is still running is still `ProtocolViolation`, and the handshake timeout is still `LaunchFailed`. A worker that writes a malformed frame and then exits is reported as `WorkerExited`. Both fail closed and end the lifetime.
+- **Evidence (local, Edge 155), from the native test `a_stalled_or_killed_download_is_typed_and_commits_nothing`.** It uses a fixture PDF whose body never ends.
+  - **Timeout:** an approved download fails as `TimedOut` at the worker's 30 s capture deadline, inside the host's 45 s deadline. The approval is spent, nothing is committed, the staging folder is empty, and the worker still answers `ping`.
+  - **Crash:** the worker is killed three seconds into a stalled download. The outcome is `WorkerExited`, and nothing is committed or staged. The job empties, every member dies, and the staging folder and the profile are removed.
+
+  Cancellation of a running download is the same forced path, `kill`. A cancellation that leaves the lifetime alive is not offered.
