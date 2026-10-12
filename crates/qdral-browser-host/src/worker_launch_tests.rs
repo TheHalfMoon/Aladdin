@@ -1269,18 +1269,21 @@ fn webmcp_declarative_tools_are_discovered_read_only_and_bound_to_the_document()
 
 #[test]
 #[ignore = "requires the built browser worker and Edge; run by npm run browser-launcher:native"]
-fn a_stalled_or_killed_download_is_typed_and_commits_nothing() {
+fn a_stalled_cancelled_or_killed_download_is_typed_and_commits_nothing() {
     let fixture = HttpsFixture::start();
-    let profile = temp_profile("download-outcomes");
     let approved = temp_profile("approved-outcomes");
-    let mut launch = spec(&profile, true);
-    launch.destinations =
-        vec![
-            AdmittedDestination::fixture("fixture.test", IpAddr::V4(Ipv4Addr::LOCALHOST))
-                .expect("fixture.test"),
-        ];
-    launch.test_trusted_spki = Some(fixture.spki.clone());
-    let mut worker = launch_worker(&launch, &Policy(PolicyKeyState::Absent)).expect("launch");
+    let launch_one = |label: &str| {
+        let profile = temp_profile(label);
+        let mut launch = spec(&profile, true);
+        launch.destinations =
+            vec![
+                AdmittedDestination::fixture("fixture.test", IpAddr::V4(Ipv4Addr::LOCALHOST))
+                    .expect("fixture.test"),
+            ];
+        launch.test_trusted_spki = Some(fixture.spki.clone());
+        let worker = launch_worker(&launch, &Policy(PolicyKeyState::Absent)).expect("launch");
+        (worker, profile)
+    };
     let scope = crate::observation::ObservationScope {
         workspace: "workspace".into(),
         profile_identity: "profile".into(),
@@ -1305,6 +1308,26 @@ fn a_stalled_or_killed_download_is_typed_and_commits_nothing() {
             .expect("stalled link");
         (live, node)
     };
+    let stall_requests = |hits: &std::sync::Mutex<Vec<String>>| {
+        hits.lock()
+            .expect("hits")
+            .iter()
+            .filter(|hit| hit.contains("/files/stall.pdf"))
+            .count()
+    };
+    // Fire `act` once the fixture has seen stall request number `nth`, so
+    // the download is provably in flight (no fixed sleep).
+    let when_stalled = |nth: usize, act: Box<dyn FnOnce() + Send>| {
+        let hits = std::sync::Arc::clone(&fixture.hits);
+        std::thread::spawn(move || {
+            let deadline = Instant::now() + Duration::from_secs(20);
+            while stall_requests(&hits) < nth && Instant::now() < deadline {
+                std::thread::sleep(Duration::from_millis(50));
+            }
+            std::thread::sleep(Duration::from_millis(500));
+            act();
+        })
+    };
     let no_residue = |worker: &BrowserWorker, out: &str| {
         assert!(!approved.join(out).exists(), "{out} was committed");
         let staged = std::fs::read_dir(worker.staging_dir())
@@ -1313,8 +1336,10 @@ fn a_stalled_or_killed_download_is_typed_and_commits_nothing() {
         assert_eq!(staged, 0, "a staging file was left behind");
     };
 
-    // Timeout: the body never ends. The worker gives up at its capture
-    // deadline, inside the host's own, and reports a typed timeout.
+    // Timeout: the body never ends. The request went out, the worker gives
+    // up at its 30 s capture deadline (inside the host's own) and reports a
+    // typed timeout; the lifetime stays usable.
+    let (mut worker, profile) = launch_one("download-outcomes");
     let (live, node) = stalled_link(&mut worker);
     let (target, mut approval) = approved_download(&worker, &live, &node, &approved, "stall.pdf");
     let started = Instant::now();
@@ -1326,6 +1351,7 @@ fn a_stalled_or_killed_download_is_typed_and_commits_nothing() {
         &approved,
         "stall.pdf",
     );
+    let elapsed = started.elapsed();
     assert!(
         matches!(
             outcome,
@@ -1333,31 +1359,84 @@ fn a_stalled_or_killed_download_is_typed_and_commits_nothing() {
         ),
         "{outcome:?}"
     );
+    assert_eq!(
+        stall_requests(&fixture.hits),
+        1,
+        "the stalled document was never requested"
+    );
     assert!(
-        started.elapsed() < WORKER_NAVIGATION_TIMEOUT,
-        "the host waited past its deadline"
+        elapsed >= Duration::from_secs(29) && elapsed < WORKER_NAVIGATION_TIMEOUT,
+        "the timeout came from somewhere else: {elapsed:?}"
     );
     assert!(
         approval.consumed,
         "a dispatched download must spend its approval"
     );
     no_residue(&worker, "stall.pdf");
-
-    // The worker stays usable after a timeout.
     worker
         .ping("after-timeout")
         .expect("ping after a timed-out download");
 
-    // Crash: the worker is killed while the download is stalled. The outcome
-    // is typed, nothing is committed, and the job empties.
+    // Cancellation: another thread cancels while the download is in flight.
+    // The outcome is typed, the whole job is terminated, nothing is
+    // committed, and every later call reports the cancellation.
+    let (live, node) = stalled_link(&mut worker);
+    let (target, mut approval) = approved_download(&worker, &live, &node, &approved, "cancel.pdf");
+    let pids = job_pids(&worker);
+    let handle = worker.cancel_handle();
+    let canceller = when_stalled(
+        2,
+        Box::new(move || assert!(handle.cancel(), "nothing to cancel")),
+    );
+    let outcome = worker.download(
+        &target,
+        &mut approval,
+        1,
+        "workspace",
+        &approved,
+        "cancel.pdf",
+    );
+    canceller.join().expect("canceller thread");
+    assert!(
+        matches!(
+            outcome,
+            Err(HostError::Unavailable(UnavailableReason::Cancelled))
+        ),
+        "{outcome:?}"
+    );
+    assert!(
+        approval.consumed,
+        "a dispatched download must spend its approval"
+    );
+    no_residue(&worker, "cancel.pdf");
+    assert!(
+        all_dead(&pids, Duration::from_secs(10)),
+        "a member outlived the cancellation"
+    );
+    assert!(matches!(
+        worker.ping("after-cancel"),
+        Err(HostError::Unavailable(UnavailableReason::Cancelled))
+    ));
+    let staging = worker.staging_dir().to_path_buf();
+    let report = worker.kill();
+    assert!(
+        report.job_empty,
+        "the job did not empty after the cancellation"
+    );
+    assert!(
+        !staging.exists(),
+        "the staging directory outlived the lifetime"
+    );
+    assert_profile_gone(report.profile_removed, &profile);
+
+    // Crash: the worker is killed while a download is in flight. The outcome
+    // is typed, nothing is committed, and the lifetime is over.
+    let (mut worker, profile) = launch_one("download-crash");
     let (live, node) = stalled_link(&mut worker);
     let (target, mut approval) = approved_download(&worker, &live, &node, &approved, "crash.pdf");
     let pids = job_pids(&worker);
     let victim = worker.worker_pid();
-    let killer = std::thread::spawn(move || {
-        std::thread::sleep(Duration::from_secs(3));
-        terminate(victim);
-    });
+    let killer = when_stalled(3, Box::new(move || terminate(victim)));
     let outcome = worker.download(
         &target,
         &mut approval,
@@ -1374,14 +1453,22 @@ fn a_stalled_or_killed_download_is_typed_and_commits_nothing() {
         ),
         "{outcome:?}"
     );
+    assert!(
+        approval.consumed,
+        "a dispatched download must spend its approval"
+    );
     no_residue(&worker, "crash.pdf");
-    let staging = worker.staging_dir().to_path_buf();
-    let report = worker.kill();
-    assert!(report.job_empty, "the job did not empty after the crash");
     assert!(
         all_dead(&pids, Duration::from_secs(10)),
         "a member outlived the crash"
     );
+    assert!(matches!(
+        worker.navigate("https://fixture.test/files"),
+        Err(HostError::Unavailable(UnavailableReason::WorkerExited))
+    ));
+    let staging = worker.staging_dir().to_path_buf();
+    let report = worker.kill();
+    assert!(report.job_empty, "the job did not empty after the crash");
     assert!(
         !staging.exists(),
         "the staging directory outlived the lifetime"

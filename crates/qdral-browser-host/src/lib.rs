@@ -109,7 +109,7 @@ pub use webmcp::{
     MAX_TOOL_DESCRIPTION, MAX_TOOL_NAME, MAX_TOOL_PARAMS, MAX_TOOL_TITLE,
 };
 pub use worker_launch::{
-    classify_job, launch_worker, worker_environment, worker_node_args, BrowserWorker,
+    classify_job, launch_worker, worker_environment, worker_node_args, BrowserWorker, CancelHandle,
     CommittedDownload, HostNode, JobProcess, LiveObservation, NavigationOutcome, ShutdownReport,
     SnapshotNode, WorkerLaunch, WORKER_ACTIVATION_TIMEOUT, WORKER_HANDSHAKE_TIMEOUT,
     WORKER_IDENTITY, WORKER_LAUNCH_TIMEOUT, WORKER_NAVIGATION_TIMEOUT, WORKER_NODE_OPTION,

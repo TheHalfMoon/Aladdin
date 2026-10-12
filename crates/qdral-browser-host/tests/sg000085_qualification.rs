@@ -603,6 +603,7 @@ fn error_vocabulary_is_typed_and_secret_free() {
         qdral_browser_host::UnavailableReason::TimedOut,
         qdral_browser_host::UnavailableReason::ActionFailed,
         qdral_browser_host::UnavailableReason::WorkerExited,
+        qdral_browser_host::UnavailableReason::Cancelled,
     ] {
         let text = format!(
             "{:?} {}",
