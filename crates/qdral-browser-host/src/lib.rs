@@ -119,4 +119,6 @@ pub use worker_launch::{
     WORKER_NAVIGATION_TIMEOUT, WORKER_NODE_OPTION, WORKER_OBSERVATION_TIMEOUT,
     WORKER_PROTOCOL_GENERATION, WORKER_REPLY_TIMEOUT, WORKER_SHUTDOWN_TIMEOUT,
 };
-pub use worker_navigation::{NavigationPolicy, RouteKind};
+pub use worker_navigation::{
+    decode_form, NavigationPolicy, RequestDetail, RouteKind, Submission, Submitted,
+};

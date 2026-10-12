@@ -237,6 +237,10 @@ pub(crate) enum WorkerReply {
         kind: String,
         url: String,
         origin: String,
+        method: String,
+        content_type: String,
+        body: Option<String>,
+        body_bytes: u64,
     },
     Navigated {
         nav_id: u64,
@@ -621,6 +625,47 @@ pub(crate) fn commit_create_only(
         });
     }
     Ok(())
+}
+
+/// What an approved submission of `tool` with `fields` may send.
+#[cfg(any(windows, test))]
+pub(crate) fn submission_of(
+    tool: &crate::webmcp::DiscoveredTool,
+    fields: &[crate::webmcp::ExecField],
+    post: bool,
+) -> crate::worker_navigation::Submission {
+    use crate::webmcp::ControlKind;
+    use crate::worker_navigation::Submitted;
+    let submitted = fields
+        .iter()
+        .map(|field| {
+            let expected = match field.control {
+                ControlKind::Checkbox
+                    if field.values.first().map(String::as_str) == Some("true") =>
+                {
+                    Submitted::Present
+                }
+                ControlKind::Checkbox => Submitted::Absent,
+                _ => Submitted::Values(field.values.clone()),
+            };
+            (field.name.clone(), expected)
+        })
+        .collect();
+    crate::worker_navigation::Submission {
+        method: if post { "POST" } else { "GET" }.to_owned(),
+        fields: submitted,
+        unsupplied: tool
+            .params
+            .iter()
+            .filter(|param| !fields.iter().any(|field| field.name == param.name))
+            .map(|param| param.name.clone())
+            .collect(),
+        multiline: fields
+            .iter()
+            .filter(|field| field.control == ControlKind::Textarea)
+            .map(|field| field.name.clone())
+            .collect(),
+    }
 }
 
 /// Map a worker navigation failure onto the typed vocabulary.
@@ -1099,7 +1144,19 @@ mod platform {
                         kind,
                         url,
                         origin,
-                    } => self.answer_route(request_id, &kind, &url, &origin)?,
+                        method,
+                        content_type,
+                        body,
+                        body_bytes,
+                    } => {
+                        let detail = crate::worker_navigation::RequestDetail {
+                            method,
+                            content_type,
+                            body,
+                            body_bytes,
+                        };
+                        self.answer_route(request_id, &kind, &url, &origin, &detail)?
+                    }
                     reply => return Ok(reply),
                 }
             }
@@ -1113,13 +1170,17 @@ mod platform {
             kind: &str,
             url: &str,
             origin: &str,
+            detail: &crate::worker_navigation::RequestDetail,
         ) -> Result<(), HostError> {
             if request_id <= self.last_request {
                 return Err(HostError::Unavailable(UnavailableReason::ProtocolViolation));
             }
             self.last_request = request_id;
             let allow = match RouteKind::parse(kind) {
-                Some(kind) => self.policy.decide(kind, url, origin).is_ok(),
+                Some(kind) => self
+                    .policy
+                    .decide_request(kind, url, origin, detail)
+                    .is_ok(),
                 None => false,
             };
             self.send(&WorkerRequest::RouteDecision { request_id, allow })
@@ -1508,8 +1569,9 @@ mod platform {
             let fields = crate::webmcp::validate_arguments(&shown, args)?;
             let action =
                 crate::webmcp::resolve_action(&url, shown.action.as_deref().unwrap_or_default())?;
-            let any_query = shown.method != crate::webmcp::FormMethod::Post;
-            self.policy.expect_submission(&action, any_query)?;
+            let post = shown.method == crate::webmcp::FormMethod::Post;
+            self.policy
+                .expect_submission(&action, !post, submission_of(&shown, &fields, post))?;
             if let Err(error) = crate::actuation::dispatch(
                 target,
                 approval,
@@ -2628,12 +2690,16 @@ mod tests {
         );
         let reply = |text: &str| serde_json::from_str::<WorkerReply>(text);
         assert_eq!(
-            reply(r#"{"frame":"route_request","request_id":1,"kind":"frame","url":"https://x.test/","origin":"https://fixture.test"}"#).unwrap(),
+            reply(r#"{"frame":"route_request","request_id":1,"kind":"frame","url":"https://x.test/","origin":"https://fixture.test","method":"GET","content_type":"","body":null,"body_bytes":0}"#).unwrap(),
             WorkerReply::RouteRequest {
                 request_id: 1,
                 kind: "frame".into(),
                 url: "https://x.test/".into(),
-                origin: "https://fixture.test".into()
+                origin: "https://fixture.test".into(),
+                method: "GET".into(),
+                content_type: String::new(),
+                body: None,
+                body_bytes: 0
             }
         );
         assert_eq!(
@@ -2657,7 +2723,7 @@ mod tests {
         // Unknown fields, negative ids and out-of-range statuses are refused.
         assert!(reply(r#"{"frame":"navigated","nav_id":3,"url":"u","status":200,"x":1}"#).is_err());
         assert!(reply(
-            r#"{"frame":"route_request","request_id":-1,"kind":"frame","url":"u","origin":""}"#
+            r#"{"frame":"route_request","request_id":-1,"kind":"frame","url":"u","origin":"","method":"GET","content_type":"","body":null,"body_bytes":0}"#
         )
         .is_err());
         assert!(reply(r#"{"frame":"navigated","nav_id":3,"url":"u","status":70000}"#).is_err());

@@ -67,6 +67,9 @@ pub struct NavigationPolicy {
     /// The expectation matches any query on the expected path (a GET form
     /// submission, whose query the engine builds from every field).
     activation_any_query: bool,
+    /// During an approved form submission: what the submitted request must
+    /// carry (method and field values), checked at the request.
+    submission: Option<Submission>,
 }
 
 impl std::fmt::Debug for RedirectChain {
@@ -87,6 +90,7 @@ impl NavigationPolicy {
             committed_origin: None,
             activation: None,
             activation_any_query: false,
+            submission: None,
         }
     }
 
@@ -163,10 +167,16 @@ impl NavigationPolicy {
     /// submission to `action`: the exact URL for POST; for GET (`any_query`)
     /// the same URL with whatever query the engine builds from the form's
     /// fields, including fields the host never sees.
-    pub fn expect_submission(&mut self, action: &str, any_query: bool) -> Result<(), HostError> {
+    pub fn expect_submission(
+        &mut self,
+        action: &str,
+        any_query: bool,
+        submission: Submission,
+    ) -> Result<(), HostError> {
         let path = action.split('?').next().unwrap_or(action);
         self.expect_activation(if any_query { path } else { action })?;
         self.activation_any_query = any_query;
+        self.submission = Some(submission);
         Ok(())
     }
 
@@ -175,6 +185,7 @@ impl NavigationPolicy {
     /// or a script action, is not a verified activation).
     pub fn finish_activation(&mut self) -> bool {
         self.activation_any_query = false;
+        self.submission = None;
         matches!(self.activation.take(), Some((_, true)))
     }
 
@@ -212,6 +223,18 @@ impl NavigationPolicy {
     /// origin when present (empty for top-level documents and opaque
     /// frames), and the decision itself uses the host's origin.
     pub fn decide(&mut self, kind: RouteKind, url: &str, origin: &str) -> Result<(), HostError> {
+        self.decide_request(kind, url, origin, &RequestDetail::default())
+    }
+
+    /// `decide`, with the request's method and (bounded) body: an approved
+    /// form submission is checked against exactly what it may send.
+    pub fn decide_request(
+        &mut self,
+        kind: RouteKind,
+        url: &str,
+        origin: &str,
+        detail: &RequestDetail,
+    ) -> Result<(), HostError> {
         let target = self.admitted_target(url)?;
         if !matches!(kind, RouteKind::Document) && !origin.is_empty() {
             let reported = parse_navigation_url(origin)?;
@@ -239,6 +262,9 @@ impl NavigationPolicy {
                         return Err(HostError::Invalid(
                             "the activation opened another document".into(),
                         ));
+                    }
+                    if let Some(submission) = &self.submission {
+                        submission.check(url, detail)?;
                     }
                     *taken = true;
                     self.chain = Some(RedirectChain::start(url)?);
@@ -277,6 +303,150 @@ impl NavigationPolicy {
                 Err(HostError::Invalid("service worker denied".into()))
             }
         }
+    }
+}
+
+/// What the worker reports about a request besides its URL.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct RequestDetail {
+    /// Upper-case HTTP method ("GET" when unknown).
+    pub method: String,
+    pub content_type: String,
+    /// The request body, when it fit the worker's bound.
+    pub body: Option<String>,
+    /// The body's full size in bytes.
+    pub body_bytes: u64,
+}
+
+/// What one approved field must submit.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Submitted {
+    /// Exactly these values, in any order.
+    Values(Vec<String>),
+    /// A checked checkbox: one value, whatever the author declared.
+    Present,
+    /// An unchecked checkbox: nothing.
+    Absent,
+}
+
+/// What an approved form submission may send: its method, every approved
+/// field's values, and the declared parameters it did not supply (those may
+/// appear only empty). Undeclared names (hidden fields the host never sees,
+/// such as a CSRF token) may appear with any value.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Submission {
+    pub method: String,
+    pub fields: Vec<(String, Submitted)>,
+    pub unsupplied: Vec<String>,
+    /// Textarea fields: the engine submits line breaks as CRLF.
+    pub multiline: Vec<String>,
+}
+
+fn refused(reason: &str) -> HostError {
+    HostError::Invalid(format!(
+        "the submission does not match its approval: {reason}"
+    ))
+}
+
+/// Decode `application/x-www-form-urlencoded` (strict: invalid escapes or
+/// UTF-8 refuse).
+pub fn decode_form(text: &str) -> Result<Vec<(String, String)>, HostError> {
+    fn decode(part: &str) -> Result<String, HostError> {
+        let bytes = part.as_bytes();
+        let mut out = Vec::with_capacity(bytes.len());
+        let mut i = 0;
+        while i < bytes.len() {
+            match bytes[i] {
+                b'+' => out.push(b' '),
+                b'%' => {
+                    let hex = bytes
+                        .get(i + 1..i + 3)
+                        .and_then(|h| std::str::from_utf8(h).ok())
+                        .and_then(|h| u8::from_str_radix(h, 16).ok())
+                        .ok_or_else(|| refused("malformed escape"))?;
+                    out.push(hex);
+                    i += 2;
+                }
+                byte => out.push(byte),
+            }
+            i += 1;
+        }
+        String::from_utf8(out).map_err(|_| refused("malformed UTF-8"))
+    }
+    if text.is_empty() {
+        return Ok(Vec::new());
+    }
+    text.split('&')
+        .filter(|pair| !pair.is_empty())
+        .map(|pair| {
+            let (name, value) = pair.split_once('=').unwrap_or((pair, ""));
+            Ok((decode(name)?, decode(value)?))
+        })
+        .collect()
+}
+
+impl Submission {
+    fn check(&self, url: &str, detail: &RequestDetail) -> Result<(), HostError> {
+        let method = if detail.method.is_empty() {
+            "GET"
+        } else {
+            detail.method.as_str()
+        };
+        if !method.eq_ignore_ascii_case(&self.method) {
+            return Err(refused("another method"));
+        }
+        let pairs = if self.method.eq_ignore_ascii_case("POST") {
+            let urlencoded = detail.content_type.split(';').next().is_some_and(|t| {
+                t.trim()
+                    .eq_ignore_ascii_case("application/x-www-form-urlencoded")
+            });
+            let body = detail
+                .body
+                .as_deref()
+                .filter(|body| body.len() as u64 == detail.body_bytes)
+                .ok_or_else(|| refused("the body is missing or cut"))?;
+            if !urlencoded {
+                return Err(refused("not a urlencoded body"));
+            }
+            decode_form(body)?
+        } else {
+            decode_form(url.split_once('?').map(|(_, q)| q).unwrap_or(""))?
+        };
+        for (name, expected) in &self.fields {
+            let mut sent: Vec<String> = pairs
+                .iter()
+                .filter(|(key, _)| key == name)
+                .map(|(_, value)| {
+                    if self.multiline.contains(name) {
+                        value.replace("\r\n", "\n")
+                    } else {
+                        value.clone()
+                    }
+                })
+                .collect();
+            let ok = match expected {
+                Submitted::Values(values) => {
+                    let mut wanted = values.clone();
+                    wanted.sort();
+                    sent.sort();
+                    sent == wanted
+                }
+                Submitted::Present => sent.len() == 1,
+                Submitted::Absent => sent.is_empty(),
+            };
+            if !ok {
+                return Err(refused("an approved field carries other values"));
+            }
+        }
+        for name in &self.unsupplied {
+            if pairs
+                .iter()
+                .any(|(key, value)| key == name && !value.is_empty())
+            {
+                return Err(refused("an unsupplied parameter carries a value"));
+            }
+        }
+        Ok(())
     }
 }
 
@@ -449,15 +619,100 @@ mod tests {
             .is_err());
     }
 
+    fn any_get() -> Submission {
+        Submission {
+            method: "GET".into(),
+            fields: Vec::new(),
+            unsupplied: Vec::new(),
+            multiline: Vec::new(),
+        }
+    }
+
+    fn post_note() -> Submission {
+        Submission {
+            method: "POST".into(),
+            fields: vec![("note".into(), Submitted::Values(vec!["a\nb".into()]))],
+            unsupplied: Vec::new(),
+            multiline: vec!["note".into()],
+        }
+    }
+
+    fn post(body: &str) -> RequestDetail {
+        RequestDetail {
+            method: "POST".into(),
+            content_type: "application/x-www-form-urlencoded".into(),
+            body: Some(body.into()),
+            body_bytes: body.len() as u64,
+        }
+    }
+
+    #[test]
+    fn a_submission_must_send_exactly_its_approved_fields() {
+        let search = Submission {
+            method: "GET".into(),
+            fields: vec![
+                ("q".into(), Submitted::Values(vec!["rust lang".into()])),
+                (
+                    "tags".into(),
+                    Submitted::Values(vec!["a".into(), "b".into()]),
+                ),
+                ("exact".into(), Submitted::Present),
+                ("off".into(), Submitted::Absent),
+            ],
+            unsupplied: vec!["year".into()],
+            multiline: Vec::new(),
+        };
+        let get = RequestDetail {
+            method: "GET".into(),
+            ..RequestDetail::default()
+        };
+        let check = |url: &str, detail: &RequestDetail| search.check(url, detail);
+        assert!(check(
+            "https://f.test/s?q=rust+lang&tags=b&tags=a&exact=on&csrf=t&year=",
+            &get
+        )
+        .is_ok());
+        for bad in [
+            "https://f.test/s?q=evil&tags=a&tags=b&exact=on",
+            "https://f.test/s?q=rust+lang&q=x&tags=a&tags=b&exact=on",
+            "https://f.test/s?q=rust+lang&tags=a&exact=on",
+            "https://f.test/s?q=rust+lang&tags=a&tags=b",
+            "https://f.test/s?q=rust+lang&tags=a&tags=b&exact=on&off=on",
+            "https://f.test/s?q=rust+lang&tags=a&tags=b&exact=on&year=2026",
+            "https://f.test/s?q=%ZZ&tags=a&tags=b&exact=on",
+            "https://f.test/s?q=%FF&tags=a&tags=b&exact=on",
+        ] {
+            assert!(check(bad, &get).is_err(), "{bad}");
+        }
+        // Another method is refused.
+        assert!(check(
+            "https://f.test/s?q=rust+lang&tags=a&tags=b&exact=on",
+            &post("")
+        )
+        .is_err());
+        // POST: the body is checked; line breaks arrive as CRLF.
+        let note = post_note();
+        assert!(note
+            .check("https://f.test/n", &post("note=a%0D%0Ab"))
+            .is_ok());
+        assert!(note.check("https://f.test/n", &post("note=evil")).is_err());
+        let mut cut = post("note=a%0D%0Ab");
+        cut.body_bytes += 1;
+        assert!(note.check("https://f.test/n", &cut).is_err(), "a cut body");
+        let mut multipart = post("note=a%0D%0Ab");
+        multipart.content_type = "multipart/form-data; boundary=x".into();
+        assert!(note.check("https://f.test/n", &multipart).is_err());
+    }
+
     #[test]
     fn a_submission_opens_its_action_once_with_any_query_for_get() {
         let mut p = policy();
         p.begin("https://fixture.test/").unwrap();
         p.commit("https://fixture.test/").unwrap();
         assert!(p
-            .expect_submission("https://other.test/search", true)
+            .expect_submission("https://other.test/search", true, any_get())
             .is_err());
-        p.expect_submission("https://fixture.test/search?ignored=1", true)
+        p.expect_submission("https://fixture.test/search?ignored=1", true, any_get())
             .unwrap();
         assert!(p
             .decide(RouteKind::Document, "https://fixture.test/searchx?q=1", "")
@@ -480,16 +735,21 @@ mod tests {
         );
         assert!(p.finish_activation());
         // POST: the exact action only.
-        p.expect_submission("https://fixture.test/post", false)
+        p.expect_submission("https://fixture.test/post", false, post_note())
             .unwrap();
         assert!(p
             .decide(RouteKind::Document, "https://fixture.test/post?x=1", "")
             .is_err());
         assert!(!p.finish_activation());
-        p.expect_submission("https://fixture.test/post", false)
+        p.expect_submission("https://fixture.test/post", false, post_note())
             .unwrap();
         assert!(p
-            .decide(RouteKind::Document, "https://fixture.test/post", "")
+            .decide_request(
+                RouteKind::Document,
+                "https://fixture.test/post",
+                "",
+                &post("note=a%0D%0Ab")
+            )
             .is_ok());
         assert!(p.finish_activation());
     }
