@@ -1420,6 +1420,13 @@ mod platform {
                 consumed: false,
             };
             source_record.consume(0)?;
+            // The bytes must come from the approved document: checked before
+            // anything is written to the approved folder.
+            if !self.policy.activation_opened() {
+                return Err(HostError::Invalid(
+                    "postcondition unverified: the download opened another document".into(),
+                ));
+            }
             commit_create_only(destination, destination_root, &content)?;
             Ok(CommittedDownload {
                 path: destination.to_path_buf(),

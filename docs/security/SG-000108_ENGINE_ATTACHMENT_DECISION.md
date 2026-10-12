@@ -496,3 +496,33 @@ The test passed in repeated local runs. The fresh-context judge's rounds 1 and 2
 - Activation follows the latest dated link with an approval. A forged digest, a replayed approval, the stale node, the cross-origin latest link (without consuming its approval), the script redirect and the swapped `href` are all refused, and none of their destinations is requested.
 
 A fresh-context judge's first round on these slices was BLOCK. The byte-safe date scan, keyed names, destination-bound approvals, host-side state and propagated truncation are its fixes.
+
+**Slice 3d: the approved inert-PDF download journey** (worker protocol generation 5).
+
+- **Founder amendment to SG-000078 (2026-10-11): inert PDFs.** `validate_inert_pdf` admits a download only if every check holds: the name ends in `.pdf`, the declared media type is `application/pdf` (parameters allowed), the content sniffs as PDF, and the size is within `MAX_TRANSFER_BYTES`. "Inert" describes how Aladdin treats the bytes: the engine never renders them, and the host never opens or executes them; it only stores them. Every other type still goes through the general `validate_download_type` allowlist.
+- **Approval.** A download is an activation (SG-000077) that is bound in the same way. The target's `state` is the link's host-resolved destination, and that destination is checked against the page's origin before the approval is consumed. During the click, the host accepts exactly one page-initiated document request, and it must be that destination.
+- **Capture (measured).** Headless Edge renders a PDF navigation in its built-in viewer. It raises no download event, and the navigation's response body is the viewer's wrapper page. Seeding `plugins.always_open_pdf_externally` did not change this. While a download is armed, the worker's per-page CDP `Fetch` guard pauses the next main-frame document at the response stage. It takes the original bytes with `Fetch.getResponseBody`, which sends no new request, and bounds them to 8 MiB. It then fulfils the navigation with an empty `text/plain` page, so the document is never rendered. Playwright's `acceptDownloads` stays off.
+- **Staging and commit.** The worker writes the bytes create-only (`wx`) to a staging path chosen by the host, inside the lifetime's own staging directory. The protocol accepts only an absolute `.part` path and refuses relative, UNC and other paths. The host then:
+  - checks that the source URL is on the page's origin;
+  - re-reads the staged file with a bound;
+  - checks the declared size against the actual size;
+  - applies the type check;
+  - requires that the approved destination was the document requested;
+  - records the SHA-256 digest;
+  - commits create-only (`create_new`) to the caller's relative destination, re-checking containment through the real path.
+
+  An existing destination is refused before anything is sent. The staging file is always removed, and the staging directory is removed at shutdown.
+- **After a download**, the committed document is the inert blank page, one generation later, and every earlier node identity is stale. A caller observes again only after navigating again.
+
+**Known limits:**
+- The host cannot see the HTTP method, the same limit as for activation.
+- A same-origin server redirect from the approved link is decided hop by hop, so the stored bytes are those of the redirect's final target on the same origin.
+- A PDF can still contain active content. Aladdin does not render or open it, but a user who opens the stored file later is outside this boundary.
+
+**Evidence (local, Edge 155), from the native journey E2E test on the HTTPS fixture** (`the_journey_downloads_the_latest_report_create_only_and_verified`):
+- The host selects the latest dated report. The approved download stores exactly the fixture's bytes, verified independently along with their SHA-256 digest, at the approved relative path.
+- A traversal destination is refused before dispatch, and its approval is not consumed.
+- A second download to the same destination is refused (create-only), and the first file is unchanged.
+- An oversized PDF (9 MiB) and an executable disguised as a PDF (`MZ` bytes served as `application/pdf`) are refused, and neither leaves a file.
+
+The worker's unit tests cover the generation-5 frames, the staging-path rules, and typed download failures.
