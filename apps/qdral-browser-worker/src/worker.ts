@@ -13,6 +13,7 @@
 // immediately (decisions bypass the queue, or a navigation waiting for them
 // would deadlock). A request the host does not answer in time is refused.
 
+import type { DeclaredTool } from "./webmcp/declarative.js";
 import {
   launchRefusal,
   MAX_ORIGIN_BYTES,
@@ -51,6 +52,9 @@ export interface EngineSession {
   navigate(url: string): Promise<{ url: string; status: number }>;
   /// A bounded, value-free accessibility snapshot of the primary page.
   observe(): Promise<{ url: string; snapshot: BoundedSnapshot }>;
+  /// The primary page's declarative WebMCP tools, read without running
+  /// page script; bounded so the reply frame fits.
+  discover(): Promise<{ url: string; truncated: boolean; tools: DeclaredTool[] }>;
   /// Click the element with this snapshot ref and wait for the resulting
   /// navigation to load; rejects with NavigationError.
   activate(ref: string): Promise<{ url: string; status: number }>;
@@ -178,6 +182,16 @@ export class Worker {
         }
         this.navigating = true;
         void this.runActivation(this.session, frame.act_id, frame.ref);
+        return;
+      }
+      case "discover": {
+        if (this.state !== "launched" || !this.session) return this.fail("not_ready");
+        try {
+          const { url, truncated, tools } = await this.session.discover();
+          this.send({ frame: "discovered", disc_id: frame.disc_id, url, truncated, tools });
+        } catch {
+          this.send({ frame: "discovery_failed", disc_id: frame.disc_id });
+        }
         return;
       }
       case "observe": {

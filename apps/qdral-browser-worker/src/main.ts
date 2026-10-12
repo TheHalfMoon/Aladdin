@@ -11,6 +11,8 @@ import { refusedWorkerVariables, startupRefusal } from "./environment.js";
 import { encodeFrame, FrameDecoder, ProtocolViolation, type WorkerFrame } from "./protocol.js";
 import { installRoutes } from "./routes.js";
 import { boundSnapshot } from "./snapshot.js";
+import { discoverDeclarativeTools } from "./webmcp/declarative.js";
+import { documentModel, type CapturedSnapshot } from "./webmcp/dom-snapshot.js";
 import { NavigationError, Worker, type EngineSession, type Launcher, type LaunchSpec, type RoutePolicy } from "./worker.js";
 
 const startup = startupRefusal(process.execArgv, process.version);
@@ -146,6 +148,32 @@ const playwrightLauncher: Launcher = {
       async observe() {
         const raw: unknown = await primary.ariaSnapshotJSON({ mode: "ai", depth: 16, timeout: 2_000 });
         return { url: primary.url(), snapshot: boundSnapshot(raw) };
+      },
+      async discover() {
+        // The engine serialises its own DOM: no page script runs.
+        const session = await context.newCDPSession(primary);
+        let captured: CapturedSnapshot;
+        try {
+          captured = (await session.send("DOMSnapshot.captureSnapshot", { computedStyles: [] })) as unknown as CapturedSnapshot;
+        } finally {
+          await session.detach().catch(() => {});
+        }
+        const model = documentModel(captured);
+        const found = discoverDeclarativeTools(model.root);
+        const url = primary.url();
+        const tools = [...found.tools];
+        let truncated = model.truncated || found.truncated;
+        // Drop tools from the end until the reply frame fits.
+        while (tools.length > 0) {
+          try {
+            encodeFrame({ frame: "discovered", disc_id: 1, url, truncated, tools });
+            break;
+          } catch {
+            tools.pop();
+            truncated = true;
+          }
+        }
+        return { url, truncated, tools };
       },
       async close() {
         closing = true;

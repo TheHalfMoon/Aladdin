@@ -23,6 +23,14 @@ class FakeEngine implements EngineSession {
   observe(): Promise<{ url: string; snapshot: { nodes: never[]; truncated: boolean } }> {
     return this.observeBehavior();
   }
+  discoverBehavior: () => Promise<{ url: string; truncated: boolean; tools: never[] }> = async () => ({
+    url: "https://fixture.test/",
+    truncated: false,
+    tools: []
+  });
+  discover(): Promise<{ url: string; truncated: boolean; tools: never[] }> {
+    return this.discoverBehavior();
+  }
   activations: string[] = [];
   activateBehavior: (ref: string) => Promise<{ url: string; status: number }> = async () => ({ url: "https://fixture.test/next", status: 200 });
   activate(ref: string): Promise<{ url: string; status: number }> {
@@ -65,12 +73,12 @@ function harness(launchBehavior: (spec: LaunchSpec) => Promise<EngineSession> = 
 test("hello, launch, ping and shutdown follow the closed lifecycle", async () => {
   const engine = new FakeEngine();
   const { worker, sent, exits, launches } = harness(async () => engine);
-  await worker.receive({ frame: "hello", generation: 5 });
+  await worker.receive({ frame: "hello", generation: 6 });
   await worker.receive(validLaunch());
   await worker.receive({ frame: "ping", nonce: "n1" });
   await worker.receive({ frame: "shutdown" });
   assert.deepEqual(sent, [
-    { frame: "hello", generation: 5, worker: "qdral-browser-worker" },
+    { frame: "hello", generation: 6, worker: "qdral-browser-worker" },
     { frame: "launched" },
     { frame: "pong", nonce: "n1" },
     { frame: "bye" }
@@ -85,7 +93,7 @@ test("hello, launch, ping and shutdown follow the closed lifecycle", async () =>
 });
 
 test("anything before hello, a wrong generation, or a second hello fails closed", async () => {
-  for (const first of [validLaunch(), { frame: "ping", nonce: "n" }, { frame: "hello", generation: 4 }, { frame: "hello", generation: 6 }, { frame: "bogus" }]) {
+  for (const first of [validLaunch(), { frame: "ping", nonce: "n" }, { frame: "hello", generation: 5 }, { frame: "hello", generation: 7 }, { frame: "bogus" }]) {
     const { worker, sent, exits, launches } = harness();
     await worker.receive(first);
     assert.deepEqual(sent, [{ frame: "error", code: "protocol_violation" }]);
@@ -93,15 +101,15 @@ test("anything before hello, a wrong generation, or a second hello fails closed"
     assert.equal(launches.length, 0);
   }
   const { worker, sent, exits } = harness();
-  await worker.receive({ frame: "hello", generation: 5 });
-  await worker.receive({ frame: "hello", generation: 5 });
+  await worker.receive({ frame: "hello", generation: 6 });
+  await worker.receive({ frame: "hello", generation: 6 });
   assert.deepEqual(sent.at(-1), { frame: "error", code: "protocol_violation" });
   assert.deepEqual(exits, [1]);
 });
 
 test("a refused launch never reaches the launcher", async () => {
   const { worker, sent, exits, launches } = harness();
-  await worker.receive({ frame: "hello", generation: 5 });
+  await worker.receive({ frame: "hello", generation: 6 });
   const launch = validLaunch();
   launch.argv.splice(9, 0, "--remote-debugging-port=9222");
   await worker.receive(launch);
@@ -113,7 +121,7 @@ test("a refused launch never reaches the launcher", async () => {
 test("only one engine per worker lifetime", async () => {
   const engine = new FakeEngine();
   const { worker, sent, exits, launches } = harness(async () => engine);
-  await worker.receive({ frame: "hello", generation: 5 });
+  await worker.receive({ frame: "hello", generation: 6 });
   await worker.receive(validLaunch());
   await worker.receive(validLaunch());
   assert.equal(launches.length, 1);
@@ -127,7 +135,7 @@ test("launch failure, engine exit, violations and end of input all close the eng
     const { worker, sent, exits } = harness(async () => {
       throw new Error("no engine");
     });
-    await worker.receive({ frame: "hello", generation: 5 });
+    await worker.receive({ frame: "hello", generation: 6 });
     await worker.receive(validLaunch());
     assert.deepEqual(sent.at(-1), { frame: "error", code: "launch_failed" });
     assert.deepEqual(exits, [1]);
@@ -135,7 +143,7 @@ test("launch failure, engine exit, violations and end of input all close the eng
   {
     const engine = new FakeEngine();
     const { worker, sent, exits } = harness(async () => engine);
-    await worker.receive({ frame: "hello", generation: 5 });
+    await worker.receive({ frame: "hello", generation: 6 });
     await worker.receive(validLaunch());
     engine.crash();
     await worker.receive({ frame: "ping", nonce: "after" });
@@ -145,7 +153,7 @@ test("launch failure, engine exit, violations and end of input all close the eng
   {
     const engine = new FakeEngine();
     const { worker, sent, exits } = harness(async () => engine);
-    await worker.receive({ frame: "hello", generation: 5 });
+    await worker.receive({ frame: "hello", generation: 6 });
     await worker.receive(validLaunch());
     await worker.violation();
     assert.deepEqual(sent.at(-1), { frame: "error", code: "protocol_violation" });
@@ -155,7 +163,7 @@ test("launch failure, engine exit, violations and end of input all close the eng
   {
     const engine = new FakeEngine();
     const { worker, sent, exits } = harness(async () => engine);
-    await worker.receive({ frame: "hello", generation: 5 });
+    await worker.receive({ frame: "hello", generation: 6 });
     await worker.receive(validLaunch());
     await worker.endOfInput();
     assert.deepEqual(sent.at(-1), { frame: "launched" });
@@ -172,7 +180,7 @@ test("a shutdown queued behind a slow launch closes the launched engine", async 
     await gate;
     return engine;
   });
-  await worker.receive({ frame: "hello", generation: 5 });
+  await worker.receive({ frame: "hello", generation: 6 });
   const launching = worker.receive(validLaunch());
   const shutdown = worker.receive({ frame: "shutdown" });
   release();
@@ -195,7 +203,7 @@ test("an unexpected error in a step fails the worker closed exactly once", async
     },
     (code) => exits.push(code)
   );
-  await worker.receive({ frame: "hello", generation: 5 });
+  await worker.receive({ frame: "hello", generation: 6 });
   await worker.receive(validLaunch());
   await worker.receive({ frame: "ping", nonce: "boom" });
   await worker.receive({ frame: "ping", nonce: "after" });
@@ -205,7 +213,7 @@ test("an unexpected error in a step fails the worker closed exactly once", async
 
 async function launched(engine = new FakeEngine()) {
   const h = harness(async () => engine);
-  await h.worker.receive({ frame: "hello", generation: 5 });
+  await h.worker.receive({ frame: "hello", generation: 6 });
   await h.worker.receive(validLaunch());
   return { ...h, engine, policy: h.policies[0] as RoutePolicy };
 }
@@ -247,7 +255,7 @@ test("navigation failures are typed", async () => {
 
 test("navigate before launch fails closed", async () => {
   const { worker, sent, exits } = harness();
-  await worker.receive({ frame: "hello", generation: 5 });
+  await worker.receive({ frame: "hello", generation: 6 });
   await worker.receive({ frame: "navigate", nav_id: 1, url: "https://fixture.test/" });
   assert.deepEqual(sent.at(-1), { frame: "error", code: "not_ready" });
   assert.deepEqual(exits, [1]);
@@ -294,7 +302,7 @@ test("pending decisions are refused when the worker closes", async () => {
 
 test("a route decision before launch is a violation", async () => {
   const { worker, sent, exits } = harness();
-  await worker.receive({ frame: "hello", generation: 5 });
+  await worker.receive({ frame: "hello", generation: 6 });
   await worker.receive({ frame: "route_decision", request_id: 1, allow: true });
   assert.deepEqual(sent.at(-1), { frame: "error", code: "protocol_violation" });
   assert.deepEqual(exits, [1]);
@@ -314,7 +322,7 @@ test("observe reports a bounded snapshot or a typed failure", async () => {
 
 test("observe before launch fails closed", async () => {
   const { worker, sent, exits } = harness();
-  await worker.receive({ frame: "hello", generation: 5 });
+  await worker.receive({ frame: "hello", generation: 6 });
   await worker.receive({ frame: "observe", obs_id: 1 });
   assert.deepEqual(sent.at(-1), { frame: "error", code: "not_ready" });
   assert.deepEqual(exits, [1]);
@@ -353,4 +361,20 @@ test("downloads report the captured document or a typed failure", async () => {
   await worker.receive({ frame: "download", dl_id: 2, ref: "e5", path: "C:\\s\\dl-2.part" });
   await settle();
   assert.deepEqual(sent.at(-1), { frame: "download_failed", dl_id: 2, reason: "timeout" });
+});
+
+test("discover reports bounded tools or a typed failure, and needs a launch", async () => {
+  const { worker, sent, engine } = await launched();
+  engine.discoverBehavior = async () => ({ url: "https://fixture.test/t", truncated: true, tools: [] });
+  await worker.receive({ frame: "discover", disc_id: 2 });
+  assert.deepEqual(sent.at(-1), { frame: "discovered", disc_id: 2, url: "https://fixture.test/t", truncated: true, tools: [] });
+  engine.discoverBehavior = async () => {
+    throw new Error("snapshot failed");
+  };
+  await worker.receive({ frame: "discover", disc_id: 3 });
+  assert.deepEqual(sent.at(-1), { frame: "discovery_failed", disc_id: 3 });
+  const fresh = harness();
+  await fresh.worker.receive({ frame: "hello", generation: 6 });
+  await fresh.worker.receive({ frame: "discover", disc_id: 1 });
+  assert.deepEqual(fresh.sent.at(-1), { frame: "error", code: "not_ready" });
 });
