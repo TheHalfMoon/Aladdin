@@ -17,13 +17,24 @@
       "destination": "apps/qdral-browser-worker/src/webmcp/declarative.ts",
       "reuse": "ADAPT",
       "modified": true,
-      "modification_summary": "Keeps the declarative-form tool recognition and the form-control-to-schema rules (input types, number and step bounds, temporal formats, option, radio and checkbox choices, labels, fieldset descriptions, duplicate-name handling). Works on an attribute-only DOM model from a CDP DOMSnapshot instead of the live DOM; removes tool registration, listeners, submission, respondWith and every page mutation; never emits a control value; omits password controls and flags the tool; bounds every string and collection and keeps them free of controls and lone surrogates.",
+      "modification_summary": "Keeps the declarative-form tool recognition and the form-control-to-schema rules (input types, number and step bounds, temporal formats, option, radio and checkbox choices, labels, fieldset descriptions, duplicate-name handling). Works on an attribute-only DOM model from a CDP DOMSnapshot instead of the live DOM, in one linear tree pass under a CPU budget; models shadow roots as separate tree scopes, labels as labelling only their first labelable descendant, and the first-legend exemption of disabled fieldsets; matches attribute names exactly. Removes tool registration, listeners, submission, respondWith and every page mutation. Never emits a control value; skips editable regions in label text; omits password-like controls (also via autocomplete) and flags the tool. Number schemas carry no pattern and drop contradictory bounds. Every string and collection is bounded; text is made well formed (lone surrogates become U+FFFD) and free of controls and bidi marks, and exact values (names, choices, patterns) with such characters are refused. Names shaped like host identities are not tools.",
       "authority_delta": "Read-only page data only; no execution, input, navigation or exposure authority.",
-      "qualification": ["worker unit tests (webmcp/declarative.test.ts)", "host validator unit tests (crates/qdral-browser-host/src/webmcp.rs)", "native discovery test with page-script traps and a trap control"]
+      "qualification": [
+        "worker unit tests (webmcp/declarative.test.ts)",
+        "shared worker/host vectors (webmcp/shared-vectors.json)",
+        "host validator unit tests (crates/qdral-browser-host/src/webmcp.rs)",
+        "native discovery test with page-script traps and an armed trap control"
+      ]
     }
   ],
   "not_imported": [
-    {"source": "packages/webmcp-ts-sdk/src/json-schema.ts, normalize.ts", "reason": "The schema subset is produced directly by the adapted form rules and re-checked by the Rust host validator; no generic JSON Schema handling is needed for read-only discovery."},
-    {"source": "packages/webmcp-local-relay, browser extensions", "reason": "A second channel to the browser (rejected in WEB_CAPABILITIES_DECISION.md)."}
+    {
+      "source": "packages/webmcp-ts-sdk/src/json-schema.ts, normalize.ts",
+      "reason": "The schema subset is produced directly by the adapted form rules and re-checked by the Rust host validator; no generic JSON Schema handling is needed for read-only discovery."
+    },
+    {
+      "source": "packages/webmcp-local-relay, browser extensions",
+      "reason": "A second channel to the browser (rejected in WEB_CAPABILITIES_DECISION.md)."
+    }
   ]
 }

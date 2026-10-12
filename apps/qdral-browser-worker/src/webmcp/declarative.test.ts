@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { discoverDeclarativeTools, LIMITS, type DomElement, type DomNode } from "./declarative.js";
 import { documentModel, MAX_SNAPSHOT_NODES, type CapturedSnapshot } from "./dom-snapshot.js";
+import { readFileSync } from "node:fs";
+import { vectorCases } from "./vectors.fixture.js";
 
 let nextNode = 1;
 
@@ -186,33 +188,135 @@ test("the snapshot model is bounded", () => {
   assert.equal(documentModel(snapshot(nodes)).truncated, true);
 });
 
-test("bounds cut whole code points and controls never cross", () => {
-  const emoji = "\u{1F600}";
-  const { tools } = discoverDeclarativeTools(
-    doc(
-      el(
-        "form",
-        { toolname: "e", tooldescription: "a".repeat(LIMITS.description - 1) + emoji + "tail", tooltitle: "T\u0001itle" },
-        el("input", { name: "bad\u0007name" }),
-        el("input", { name: "ok", pattern: "a\u0000b" }),
-        el("select", { name: "pick" }, el("option", { value: "lone\ud800" }))
-      )
-    )
-  );
-  const [tool] = tools;
-  assert.ok(tool);
-  assert.ok(tool.description.endsWith(emoji), "the cut kept the whole emoji");
-  assert.equal(Array.from(tool.description).length, LIMITS.description);
-  assert.equal(tool.title, "Title");
-  assert.deepEqual(tool.params, [{ name: "ok", required: false, type: "string" }]);
-  // Nothing the worker sends carries a lone surrogate (strict JSON on the host).
-  const lone = /[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/;
-  assert.ok(!lone.test(JSON.stringify(tools)));
-});
 
 test("a DOM deeper than any call stack is walked without recursion", () => {
   let inner = el("form", { toolname: "deep", tooldescription: "At the bottom." }, el("label", {}, "Deep field ", el("input", { name: "d" })));
   for (let i = 0; i < 200_000; i++) inner = el("div", {}, inner);
   const { tools } = discoverDeclarativeTools(doc(inner));
   assert.deepEqual(tools.map((t) => [t.name, t.params]), [["deep", [{ name: "d", required: false, type: "string", description: "Deep field" }]]]);
+});
+
+const LONE = /[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/;
+function strings(value: unknown, out: string[] = []): string[] {
+  if (typeof value === "string") out.push(value);
+  else if (Array.isArray(value)) for (const item of value) strings(item, out);
+  else if (value && typeof value === "object") for (const item of Object.values(value)) strings(item, out);
+  return out;
+}
+
+test("text is well formed, control- and bidi-free, and cut at whole code points", () => {
+  const emoji = "\u{1F600}";
+  const { tools } = discoverDeclarativeTools(
+    doc(
+      el(
+        "form",
+        { toolname: "e", tooldescription: "x\ud800y " + "a".repeat(LIMITS.description) + emoji, tooltitle: "T\u0001it\u202ele\udc00" },
+        el("label", {}, "Lab\ud800el ", el("input", { name: "q" })),
+        el("input", { name: "bad\u0007name" }),
+        el("input", { name: "pat", pattern: "a\u0000b" }),
+        el("select", { name: "lone" }, el("option", { value: "lone\ud800" })),
+        el("select", { name: "bidi" }, el("option", { value: "a\u202eb" }))
+      )
+    )
+  );
+  const [tool] = tools;
+  assert.ok(tool);
+  for (const text of strings(tools)) assert.ok(!LONE.test(text), JSON.stringify(text));
+  assert.ok(tool.description.startsWith("x\ufffdy "));
+  assert.equal(Array.from(tool.description).length, LIMITS.description);
+  assert.equal(tool.title, "Title\ufffd");
+  assert.deepEqual(tool.params, [
+    { name: "q", required: false, type: "string", description: "Lab\ufffdel" },
+    { name: "pat", required: false, type: "string" }
+  ]);
+});
+
+test("number schemas stay inside the host's subset", () => {
+  const { tools } = discoverDeclarativeTools(
+    doc(
+      el(
+        "form",
+        { toolname: "n", tooldescription: "d" },
+        el("input", { name: "pat", type: "number", pattern: "[0-9]+" }),
+        el("input", { name: "inverted", type: "number", min: "10", max: "1" }),
+        el("input", { name: "range_high", type: "range", min: "200" }),
+        el("input", { name: "range_ok", type: "range", min: "5" })
+      )
+    )
+  );
+  assert.deepEqual(tools[0]?.params, [
+    { name: "pat", required: false, type: "number", multiple_of: 1 },
+    { name: "inverted", required: false, type: "number", multiple_of: 1 },
+    { name: "range_high", required: false, type: "number", multiple_of: 1 },
+    { name: "range_ok", required: false, type: "number", minimum: 5, maximum: 100, multiple_of: 1 }
+  ]);
+});
+
+test("discovery is linear and bounded by its CPU budget", () => {
+  // A deep chain with many controls, and nested declared forms around it.
+  let chain = el("div", {}, ...Array.from({ length: 40_000 }, (_, i) => el("input", { name: `c${i}` })));
+  for (let i = 0; i < 40_000; i++) chain = el("div", {}, chain);
+  let nested = el("form", { toolname: "inner", tooldescription: "d" }, chain);
+  for (let i = 0; i < 31; i++) nested = el("form", { toolname: `outer${i}`, tooldescription: "d" }, nested);
+  const started = Date.now();
+  const found = discoverDeclarativeTools(doc(nested));
+  assert.ok(Date.now() - started < 3_000, `took ${Date.now() - started} ms`);
+  assert.equal(found.tools.length, 32);
+  // An exhausted budget truncates instead of running late.
+  const late = discoverDeclarativeTools(doc(nested), 0);
+  assert.equal(late.truncated, true);
+});
+
+test("editable regions never contribute text, and labels label one control", () => {
+  const { tools } = discoverDeclarativeTools(
+    doc(
+      el(
+        "form",
+        { toolname: "t", tooldescription: "d" },
+        el("label", {}, "Query ", el("div", { contenteditable: "" }, "USER TYPED SECRET"), el("span", { role: "textbox" }, "ALSO TYPED"), el("input", { name: "q" }), el("input", { name: "second" }))
+      )
+    )
+  );
+  assert.deepEqual(tools[0]?.params, [
+    { name: "q", required: false, type: "string", description: "Query" },
+    { name: "second", required: false, type: "string" }
+  ]);
+});
+
+test("tree scopes, legends, exact attribute names and reserved names follow the DOM", () => {
+  const { tools } = discoverDeclarativeTools(
+    doc(
+      el(
+        "form",
+        { toolname: "scoped", tooldescription: "d", id: "f" },
+        el("input", { name: "light" }),
+        // Shadow-tree controls are never associated with a light-DOM form.
+        el("x-host", {}, el("#shadow-root", {}, el("input", { name: "shadowed" }), el("input", { name: "by_id", form: "f" }))),
+        el("fieldset", { disabled: "" }, el("legend", {}, el("input", { name: "in_legend" })), el("input", { name: "off" }))
+      ),
+      el("form", { TOOLNAME: "upper", tooldescription: "d" }),
+      el("form", { toolname: "d1-w1", tooldescription: "looks like a host identity" })
+    )
+  );
+  assert.deepEqual(tools.map((t) => [t.name, t.params.map((p) => p.name)]), [["scoped", ["light", "in_legend"]]]);
+});
+
+test("password-like controls flag the tool even when disabled", () => {
+  const { tools } = discoverDeclarativeTools(
+    doc(
+      el("form", { toolname: "a", tooldescription: "d" }, el("input", { type: "password", name: "p", disabled: "" })),
+      el("form", { toolname: "b", tooldescription: "d" }, el("input", { name: "code", autocomplete: "one-time-code" }), el("input", { name: "user" }))
+    )
+  );
+  assert.deepEqual(tools.map((t) => [t.name, t.has_password, t.params.map((p) => p.name)]), [
+    ["a", true, []],
+    ["b", true, ["user"]]
+  ]);
+});
+
+test("the worker's output for awkward markup equals the shared host vectors", () => {
+  const pinned: unknown = JSON.parse(readFileSync(new URL("../../src/webmcp/shared-vectors.json", import.meta.url), "utf8"));
+  const produced: Record<string, unknown> = {};
+  for (const [name, root] of Object.entries(vectorCases())) produced[name] = discoverDeclarativeTools(root);
+  assert.deepEqual(produced, pinned, "regenerate shared-vectors.json only together with the host validator");
 });

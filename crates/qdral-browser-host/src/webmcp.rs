@@ -135,15 +135,42 @@ fn violation() -> HostError {
     HostError::Unavailable(UnavailableReason::ProtocolViolation)
 }
 
+/// Bidi controls, zero-width marks and the BOM (the worker removes them
+/// from text and refuses them in exact values).
+fn is_bidi_or_format(ch: char) -> bool {
+    matches!(
+        ch,
+        '\u{61c}'
+            | '\u{200b}'..='\u{200f}'
+            | '\u{202a}'..='\u{202e}'
+            | '\u{2060}'..='\u{2064}'
+            | '\u{2066}'..='\u{206f}'
+            | '\u{feff}'
+    )
+}
+
 fn bounded_text(text: &str, max: usize) -> Result<(), HostError> {
-    if text.chars().count() > max || text.chars().any(char::is_control) {
+    if text.chars().count() > max
+        || text
+            .chars()
+            .any(|ch| ch.is_control() || is_bidi_or_format(ch))
+    {
         return Err(violation());
     }
     Ok(())
 }
 
+/// Names shaped like host identities (`d3-e12`, `d1-w1`) are reserved.
+fn host_identity_shape(name: &str) -> bool {
+    name.strip_prefix('d').is_some_and(|rest| {
+        let digits = rest.bytes().take_while(u8::is_ascii_digit).count();
+        digits > 0 && rest.as_bytes().get(digits) == Some(&b'-')
+    })
+}
+
 fn valid_name(name: &str) -> bool {
-    !name.is_empty()
+    !host_identity_shape(name)
+        && !name.is_empty()
         && name.len() <= MAX_TOOL_NAME
         && name
             .bytes()
@@ -297,6 +324,24 @@ mod tests {
         {"name":"meal","required":false,"type":"array","items_enum":["veg"]},
         {"name":"ok","required":false,"type":"boolean"}]}]"#;
 
+    /// The worker's pinned output for awkward markup (see the worker's
+    /// `webmcp/vectors.fixture.ts`): every vector must be accepted.
+    #[test]
+    fn the_shared_worker_vectors_are_all_accepted() {
+        let vectors: std::collections::BTreeMap<String, serde_json::Value> = serde_json::from_str(
+            include_str!("../../../apps/qdral-browser-worker/src/webmcp/shared-vectors.json"),
+        )
+        .expect("shared vectors");
+        assert!(vectors.len() >= 5);
+        for (name, discovery) in vectors {
+            let wire: Result<Vec<WireTool>, _> = serde_json::from_value(discovery["tools"].clone());
+            assert!(wire.is_ok(), "{name}: {wire:?}");
+            let wire = wire.unwrap_or_default();
+            assert!(!wire.is_empty(), "{name}: no tools");
+            assert!(validate_tools(wire, 3).is_ok(), "{name} was refused");
+        }
+    }
+
     #[test]
     fn valid_tools_get_generation_bound_identities_and_stay_page_text() {
         let wire: Vec<WireTool> = serde_json::from_str(GOOD).unwrap();
@@ -329,6 +374,8 @@ mod tests {
         );
         for bad in [
             base.replace(r#""name":"search""#, r#""name":"bad name""#),
+            base.replace(r#""name":"search""#, r#""name":"d1-w1""#),
+            base.replace(r#""title":"Search""#, "\"title\":\"a\\u202eb\""),
             base.replace(r#""node":12"#, r#""node":0"#),
             base.replace(r#""title":"Search""#, "\"title\":\"a\\u0007b\""),
             base.replace(r#""type":"boolean"}"#, r#""type":"boolean","minimum":1}"#),

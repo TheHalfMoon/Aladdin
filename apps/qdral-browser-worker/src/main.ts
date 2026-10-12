@@ -149,8 +149,9 @@ const playwrightLauncher: Launcher = {
         const raw: unknown = await primary.ariaSnapshotJSON({ mode: "ai", depth: 16, timeout: 2_000 });
         return { url: primary.url(), snapshot: boundSnapshot(raw) };
       },
-      async discover() {
+      async discover(discId: number) {
         // The engine serialises its own DOM: no page script runs.
+        const before = primary.url();
         const session = await context.newCDPSession(primary);
         let captured: CapturedSnapshot;
         try {
@@ -162,14 +163,17 @@ const playwrightLauncher: Launcher = {
           await session.detach().catch(() => {});
         }
         const model = documentModel(captured);
-        const found = discoverDeclarativeTools(model.root);
+        // The snapshot must be of the page's document: if the page moved
+        // during the capture, the result is stale and is refused.
         const url = primary.url();
+        if (model.url !== url || before !== url) throw new Error("the document changed during discovery");
+        const found = discoverDeclarativeTools(model.root);
         const tools = [...found.tools];
         let truncated = model.truncated || found.truncated;
         // Drop tools from the end until the reply frame fits.
         while (tools.length > 0) {
           try {
-            encodeFrame({ frame: "discovered", disc_id: 1, url, truncated, tools });
+            encodeFrame({ frame: "discovered", disc_id: discId, url, truncated, tools });
             break;
           } catch {
             tools.pop();

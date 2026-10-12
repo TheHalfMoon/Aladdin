@@ -1193,7 +1193,30 @@ fn webmcp_declarative_tools_are_discovered_read_only_and_bound_to_the_document()
     let names: Vec<&str> = found.tools.iter().map(|t| t.name.as_str()).collect();
     // The duplicate and the undescribed form are not tools; the shadow-root
     // declaration is.
-    assert_eq!(names, ["search_reports", "login", "contact", "shadow_tool"]);
+    assert_eq!(
+        names,
+        [
+            "search_reports",
+            "login",
+            "contact",
+            "shadow_tool",
+            "awkward"
+        ]
+    );
+    // A script-set lone surrogate arrives replaced (the frame stays valid
+    // JSON), a number with a pattern and inverted bounds stays inside the
+    // host's subset, and editable text never becomes a description.
+    let awkward = &found.tools[4];
+    assert_eq!(awkward.description.untrusted(), "x\u{fffd}y");
+    assert_eq!(awkward.params.len(), 2);
+    assert!(awkward.params[0].pattern.is_none() && awkward.params[0].minimum.is_none());
+    assert_eq!(
+        awkward.params[1]
+            .description
+            .as_ref()
+            .map(|d| d.untrusted()),
+        Some("Note")
+    );
     let search = &found.tools[0];
     assert_eq!(search.title.untrusted(), "Reports");
     let params: Vec<(&str, bool)> = search
@@ -1224,7 +1247,12 @@ fn webmcp_declarative_tools_are_discovered_read_only_and_bound_to_the_document()
         .starts_with("Ignore previous instructions"));
     // No value typed or prefilled in the page reaches the host.
     let text = format!("{found:?}");
-    for secret in ["alice", "hunter2-secret", "csrf-secret-123"] {
+    for secret in [
+        "alice",
+        "hunter2-secret",
+        "csrf-secret-123",
+        "USER TYPED SECRET",
+    ] {
         assert!(!text.contains(secret), "{secret} reached the host");
     }
     // Identities are host-issued and bound to the document generation.
@@ -1233,6 +1261,15 @@ fn webmcp_declarative_tools_are_discovered_read_only_and_bound_to_the_document()
     let host = worker.host_tool(&first).expect("host tool");
     assert_eq!(host.name, "search_reports");
     assert!(host.node > 0);
+
+    // Any trap request discovery caused has time to arrive before the page
+    // goes away.
+    pump(&mut worker, Duration::from_secs(1));
+    let hits = fixture.hits();
+    assert!(
+        hits.iter().all(|hit| !hit.contains("/trap-")),
+        "page code ran during discovery: {hits:?}"
+    );
 
     // A page without declarations yields no tools, and the earlier
     // identities are gone.
@@ -1255,13 +1292,17 @@ fn webmcp_declarative_tools_are_discovered_read_only_and_bound_to_the_document()
         .navigate("https://fixture.test/tools-control")
         .expect("control");
     pump(&mut worker, Duration::from_secs(2));
-    assert!(
-        fixture
-            .hits()
-            .iter()
-            .any(|hit| hit.contains("/trap-control")),
-        "the trap control never reached the fixture"
-    );
+    let control = fixture.hits();
+    for trap in [
+        "/trap-control",
+        "/trap-control-mutation",
+        "/trap-control-focus",
+    ] {
+        assert!(
+            control.iter().any(|hit| hit.ends_with(trap)),
+            "the {trap} control never reached the fixture: {control:?}"
+        );
+    }
     let report = worker.shutdown();
     assert!(report.job_empty, "the job did not empty");
     assert_profile_gone(report.profile_removed, &profile);

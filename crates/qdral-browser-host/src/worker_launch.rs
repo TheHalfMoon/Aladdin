@@ -1213,6 +1213,10 @@ mod platform {
         /// the engine makes meanwhile is decided here by the SG-000075
         /// policy; the outcome is typed.
         pub fn navigate(&mut self, url: &str) -> Result<NavigationOutcome, HostError> {
+            // Any navigation attempt, failed or not, invalidates every
+            // identity issued for the previous document.
+            self.host_nodes.clear();
+            self.host_tools.clear();
             let outcome = self.navigate_inner(url);
             if outcome.is_err() {
                 self.policy.abort();
@@ -1347,6 +1351,8 @@ mod platform {
         /// text. A page with no declared tools yields an empty list (the
         /// caller falls back to observation). Nothing here grants execution.
         pub fn discover_tools(&mut self) -> Result<crate::webmcp::DiscoveredTools, HostError> {
+            // A failed discovery leaves no tools from an earlier one.
+            self.host_tools.clear();
             let (url, generation) = self
                 .committed
                 .clone()

@@ -11,6 +11,7 @@ export const MAX_SNAPSHOT_NODES = 100_000;
 
 export interface CapturedSnapshot {
   documents: Array<{
+    documentURL?: number;
     nodes: {
       parentIndex?: number[];
       nodeType?: number[];
@@ -35,6 +36,8 @@ interface MutableElement {
 export interface DocumentModel {
   root: DomElement;
   truncated: boolean;
+  /// The snapshot's own document URL.
+  url: string;
 }
 
 /// Build the model of the first (main-frame) document. Element names are
@@ -65,7 +68,9 @@ export function documentModel(snapshot: CapturedSnapshot): DocumentModel {
       const attrs = new Map<string, string>();
       const flat = attributes[i] ?? [];
       for (let a = 0; a + 1 < flat.length; a += 2) {
-        const name = text(flat[a]).toLowerCase();
+        // Exact names: the HTML parser and setAttribute lowercase them, so a
+        // differently cased name (setAttributeNS) is not a declaration.
+        const name = text(flat[a]);
         if (name && !attrs.has(name)) attrs.set(name, text(flat[a + 1]));
       }
       const element: MutableElement = {
@@ -80,11 +85,15 @@ export function documentModel(snapshot: CapturedSnapshot): DocumentModel {
       slots[i] = element;
     } else if (type === 3) {
       parent.children.push({ kind: "text", text: text(nodeValue[i]), parent });
-    } else if (type === 9 || type === 11) {
-      // The document and shadow roots: their children attach to the parent
-      // element (the host, for a shadow root).
+    } else if (type === 9) {
+      // The document: its children attach to the root.
       slots[i] = parent;
+    } else if (type === 11) {
+      // A shadow root: a separate tree scope under its host.
+      const shadow: MutableElement = { kind: "element", tag: "#shadow-root", attrs: new Map(), children: [], parent, node: backend[i] ?? 0 };
+      parent.children.push(shadow);
+      slots[i] = shadow;
     }
   }
-  return { root, truncated: nodeType.length > MAX_SNAPSHOT_NODES };
+  return { root, truncated: nodeType.length > MAX_SNAPSHOT_NODES, url: text(doc.documentURL) };
 }

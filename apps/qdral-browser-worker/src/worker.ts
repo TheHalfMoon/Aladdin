@@ -54,7 +54,7 @@ export interface EngineSession {
   observe(): Promise<{ url: string; snapshot: BoundedSnapshot }>;
   /// The primary page's declarative WebMCP tools, read without running
   /// page script; bounded so the reply frame fits.
-  discover(): Promise<{ url: string; truncated: boolean; tools: DeclaredTool[] }>;
+  discover(discId: number): Promise<{ url: string; truncated: boolean; tools: DeclaredTool[] }>;
   /// Click the element with this snapshot ref and wait for the resulting
   /// navigation to load; rejects with NavigationError.
   activate(ref: string): Promise<{ url: string; status: number }>;
@@ -187,7 +187,7 @@ export class Worker {
       case "discover": {
         if (this.state !== "launched" || !this.session) return this.fail("not_ready");
         try {
-          const { url, truncated, tools } = await this.session.discover();
+          const { url, truncated, tools } = await this.session.discover(frame.disc_id);
           this.send({ frame: "discovered", disc_id: frame.disc_id, url, truncated, tools });
         } catch {
           this.send({ frame: "discovery_failed", disc_id: frame.disc_id });

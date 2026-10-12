@@ -13,7 +13,17 @@
 //   radio, checkbox and option elements); password controls are omitted and
 //   flag the tool instead.
 // - Every string and collection is bounded; anything over a bound truncates
-//   the record set or drops the field rather than growing.
+//   the record set or drops the field rather than growing. Strings are made
+//   well formed and free of controls and bidi marks; values that must cross
+//   unchanged (names, choices, patterns) are refused instead.
+// - One linear tree pass under a CPU budget replaces the donor's per-form
+//   DOM queries. Shadow roots are separate tree scopes (no form ownership,
+//   labels, ids or disabled fieldsets across them); a wrapping label labels
+//   only its first labelable descendant; a disabled fieldset spares its
+//   first legend.
+// - Number schemas carry no `pattern`, and contradictory bounds are dropped.
+// - Editable regions (contenteditable, role=textbox) never contribute text.
+// - Names shaped like host identities (`d<n>-...`) are not tools.
 //
 // The output is untrusted page data: the host validates and labels it.
 
@@ -79,25 +89,54 @@ export const LIMITS = {
 } as const;
 
 const NAME = /^[A-Za-z0-9_.-]{1,64}$/;
+/// Names shaped like host identities (`d3-e12`, `d1-w1`) are reserved.
+const HOST_IDENTITY_SHAPE = /^d\d+-/;
 const TEXT_INPUT_TYPES = new Set(["email", "password", "search", "tel", "text", "url"]);
 const READONLY_INPUT_TYPES = new Set([...TEXT_INPUT_TYPES, "date", "datetime-local", "month", "number", "time", "week"]);
 const CONTROL_TAGS = new Set(["input", "select", "textarea"]);
+/// Elements a `label` can label (HTML "labelable", hidden inputs excluded).
+const LABELABLE = new Set(["button", "input", "meter", "output", "progress", "select", "textarea"]);
+const PASSWORD_AUTOCOMPLETE = new Set(["current-password", "new-password", "one-time-code"]);
+/// The worker's CPU budget for one discovery, well inside the host's
+/// observation deadline; past it the result is truncated, never late.
+export const DISCOVERY_BUDGET_MS = 4_000;
 
 // C0/C1 controls (whitespace is collapsed to spaces first).
 const CONTROL = /[\u0000-\u001f\u007f-\u009f]/;
 const CONTROLS = /[\u0000-\u001f\u007f-\u009f]/g;
+// Bidi controls, zero-width marks and the BOM: they make text read
+// differently from what it is.
+const BIDI = /[؜​-‏‪-‮⁠-⁤⁦-⁯﻿]/;
+const BIDIS = /[؜​-‏‪-‮⁠-⁤⁦-⁯﻿]/g;
+const LONE_SURROGATES = /[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/g;
 
-/// Collapse whitespace, drop controls and cut at `max` code points, never
-/// inside a surrogate pair (a lone surrogate would make the frame invalid
-/// JSON for the host).
+/// Replace lone surrogates (they cannot cross the frame as valid JSON for
+/// the host) with U+FFFD.
+function wellFormedText(text: string): string {
+  return text.replace(LONE_SURROGATES, "�");
+}
+
+/// No lone surrogates.
+function wellFormed(text: string): boolean {
+  return !new RegExp(LONE_SURROGATES.source).test(text);
+}
+
+/// Make well formed, collapse whitespace, drop controls and bidi marks, and
+/// cut at `max` code points (never inside a surrogate pair).
 function bound(text: string, max: number): string {
-  const clean = text.replace(/\s+/g, " ").replace(CONTROLS, "").trim();
+  const clean = wellFormedText(text).replace(/\s+/g, " ").replace(CONTROLS, "").replace(BIDIS, "").trim();
   const points = Array.from(clean);
   return points.length > max ? points.slice(0, max).join("") : clean;
 }
 
 function codePoints(text: string): number {
   return Array.from(text).length;
+}
+
+/// A value that must cross unchanged (a name, a choice, a pattern): bounded,
+/// well formed, and free of controls and bidi marks, or refused.
+function exactValue(text: string, max: number): boolean {
+  return codePoints(text) <= max && !CONTROL.test(text) && !BIDI.test(text) && wellFormed(text);
 }
 
 function attr(element: DomElement, name: string): string | undefined {
@@ -109,37 +148,43 @@ function inputType(element: DomElement): string {
   return type === "" ? "text" : type;
 }
 
-/// Every element below `element`, in tree order. Iterative: a page can
-/// build a DOM deeper than any call stack.
-function* descendants(element: DomElement): Generator<DomElement> {
-  const stack: DomNode[] = [...element.children].reverse();
-  for (let node = stack.pop(); node; node = stack.pop()) {
-    if (node.kind !== "element") continue;
-    yield node;
-    for (let i = node.children.length - 1; i >= 0; i--) {
-      const child = node.children[i];
-      if (child) stack.push(child);
-    }
-  }
+function isInput(control: DomElement, type: string): boolean {
+  return control.tag === "input" && inputType(control) === type;
+}
+
+function isLabelable(element: DomElement): boolean {
+  return LABELABLE.has(element.tag) && !isInput(element, "hidden");
 }
 
 const SKIPPED_IN_LABELS = new Set(["button", "input", "meter", "output", "progress", "select", "textarea"]);
-/// Text collected for one label or option before it is bounded.
+/// Bounds on the text gathered for one label or option before it is cut.
 const MAX_TEXT_GATHERED = 4096;
+const MAX_TEXT_NODES_VISITED = 4096;
 
-/// The text below `element` in tree order (iterative, and stopping once
-/// enough has been gathered for any bound).
+/// Editable regions hold what the user typed; their text never crosses.
+function isEditable(element: DomElement): boolean {
+  const editable = attr(element, "contenteditable");
+  if (editable !== undefined && editable.toLowerCase() !== "false") return true;
+  return (attr(element, "role") ?? "").toLowerCase() === "textbox";
+}
+
+/// The text below `element` in tree order: iterative, bounded in nodes
+/// visited and characters gathered, skipping controls (for labels),
+/// editable regions and shadow roots.
 function textOf(element: DomElement, skipControls: boolean): string {
   const parts: string[] = [];
   let gathered = 0;
-  const stack: DomNode[] = [element];
-  for (let node = stack.pop(); node && gathered < MAX_TEXT_GATHERED; node = stack.pop()) {
+  let visited = 0;
+  const stack: DomNode[] = [...element.children].reverse();
+  for (let node = stack.pop(); node && gathered < MAX_TEXT_GATHERED && visited < MAX_TEXT_NODES_VISITED; node = stack.pop()) {
+    visited++;
     if (node.kind === "text") {
       parts.push(node.text);
       gathered += node.text.length + 1;
       continue;
     }
-    if (skipControls && node !== element && SKIPPED_IN_LABELS.has(node.tag)) continue;
+    if (node.tag === "#shadow-root" || isEditable(node)) continue;
+    if (skipControls && SKIPPED_IN_LABELS.has(node.tag)) continue;
     for (let i = node.children.length - 1; i >= 0; i--) {
       const child = node.children[i];
       if (child) stack.push(child);
@@ -148,12 +193,135 @@ function textOf(element: DomElement, skipControls: boolean): string {
   return parts.join(" ");
 }
 
-function isDisabled(control: DomElement): boolean {
-  if (control.attrs.has("disabled")) return true;
-  for (let up = control.parent; up; up = up.parent) {
-    if (up.tag === "fieldset" && up.attrs.has("disabled")) return true;
+/// What the single tree pass learns about one control.
+interface ControlFacts {
+  element: DomElement;
+  /// The owner form (nearest form ancestor in its tree scope, or the form a
+  /// `form` attribute names in that scope).
+  owner: DomElement | null;
+  disabled: boolean;
+  /// Labels: the wrapping label (if this is its first labelable
+  /// descendant) and any `label for=` naming this control.
+  labels: DomElement[];
+  /// Nearest fieldset ancestors, innermost first (bounded).
+  fieldsets: DomElement[];
+}
+
+interface Frame {
+  node: DomNode;
+  form: DomElement | null;
+  disabled: boolean;
+  label: { element: DomElement; used: boolean } | null;
+  select: DomElement | null;
+  fieldsets: DomElement[];
+  scope: number;
+}
+
+/// Nearest fieldsets remembered per control.
+const MAX_FIELDSETS = 8;
+
+interface Pass {
+  forms: DomElement[];
+  controls: ControlFacts[];
+  options: Map<DomElement, DomElement[]>;
+  truncated: boolean;
+}
+
+/// One iterative pre-order pass over the model (linear in its size). Shadow
+/// roots (`#shadow-root`) start a new tree scope: form ownership, labels,
+/// ids and disabled fieldsets do not cross them.
+function treePass(root: DomElement, deadline: number): Pass {
+  const forms: DomElement[] = [];
+  const controls: ControlFacts[] = [];
+  const options = new Map<DomElement, DomElement[]>();
+  const byId = new Map<string, DomElement>();
+  const formAttr = new Map<ControlFacts, { scope: number; id: string }>();
+  const labelFor: Array<{ label: DomElement; scope: number; id: string }> = [];
+  const factsOf = new Map<DomElement, ControlFacts>();
+  let scopes = 0;
+  let truncated = false;
+  let steps = 0;
+  const stack: Frame[] = [{ node: root, form: null, disabled: false, label: null, select: null, fieldsets: [], scope: 0 }];
+  for (let frame = stack.pop(); frame; frame = stack.pop()) {
+    if ((++steps & 1023) === 0 && Date.now() > deadline) {
+      truncated = true;
+      break;
+    }
+    const { node } = frame;
+    if (node.kind !== "element") continue;
+    let { form, disabled, label, select, fieldsets, scope } = frame;
+    if (node.tag === "#shadow-root") {
+      scope = ++scopes;
+      form = null;
+      disabled = false;
+      label = null;
+      select = null;
+      fieldsets = [];
+    } else {
+      const id = attr(node, "id");
+      if (id) {
+        const key = `${scope}#${id}`;
+        if (!byId.has(key)) byId.set(key, node);
+      }
+      if (node.tag === "form") forms.push(node);
+      if (node.tag === "option" && select) options.get(select)?.push(node);
+      if (node.tag === "label") {
+        const target = attr(node, "for");
+        if (target !== undefined) labelFor.push({ label: node, scope, id: target });
+      }
+      if (CONTROL_TAGS.has(node.tag)) {
+        const facts: ControlFacts = {
+          element: node,
+          owner: form,
+          disabled: disabled || node.attrs.has("disabled"),
+          labels: [],
+          fieldsets
+        };
+        const named = attr(node, "form");
+        if (named !== undefined) formAttr.set(facts, { scope, id: named });
+        controls.push(facts);
+        factsOf.set(node, facts);
+      }
+      if (label && !label.used && isLabelable(node)) {
+        label.used = true;
+        factsOf.get(node)?.labels.push(label.element);
+      }
+    }
+    // What the children inherit.
+    const childForm = node.tag === "form" ? node : form;
+    const childLabel = node.tag === "label" && !node.attrs.has("for") ? { element: node, used: false } : label;
+    const childSelect = node.tag === "select" ? node : select;
+    if (node.tag === "select") options.set(node, []);
+    const childFieldsets = node.tag === "fieldset" ? [node, ...fieldsets].slice(0, MAX_FIELDSETS) : fieldsets;
+    const disables = node.tag === "fieldset" && node.attrs.has("disabled");
+    // A disabled fieldset's first legend child stays enabled.
+    const legend = disables ? node.children.find((child) => child.kind === "element" && child.tag === "legend") : undefined;
+    for (let i = node.children.length - 1; i >= 0; i--) {
+      const child = node.children[i];
+      if (!child) continue;
+      stack.push({
+        node: child,
+        form: childForm,
+        disabled: disables && child !== legend ? true : disabled,
+        label: childLabel,
+        select: childSelect,
+        fieldsets: childFieldsets,
+        scope
+      });
+    }
   }
-  return false;
+  // `form=` names a form by id in the control's own scope; any other value
+  // leaves the control without an owner.
+  for (const [facts, { scope, id }] of formAttr) {
+    const target = byId.get(`${scope}#${id}`);
+    facts.owner = target && target.tag === "form" ? target : null;
+  }
+  for (const { label, scope, id } of labelFor) {
+    const target = byId.get(`${scope}#${id}`);
+    const facts = target && isLabelable(target) ? factsOf.get(target) : undefined;
+    facts?.labels.push(label);
+  }
+  return { forms, controls, options, truncated };
 }
 
 function isReadOnly(control: DomElement): boolean {
@@ -161,82 +329,35 @@ function isReadOnly(control: DomElement): boolean {
   return control.tag === "textarea" || (control.tag === "input" && READONLY_INPUT_TYPES.has(inputType(control)));
 }
 
-/// The form's controls in tree order: its descendants (not inside a nested
-/// form, not owned elsewhere by a `form` attribute) plus controls anywhere
-/// in the document whose `form` attribute names this form's id.
-function formControls(form: DomElement, all: readonly DomElement[]): DomElement[] {
-  const id = attr(form, "id");
-  const owned = new Set<DomElement>();
-  for (const element of descendants(form)) {
-    if (!CONTROL_TAGS.has(element.tag)) continue;
-    const owner = attr(element, "form");
-    if (owner !== undefined) continue;
-    let nested = false;
-    for (let up = element.parent; up && up !== form; up = up.parent) if (up.tag === "form") nested = true;
-    if (!nested) owned.add(element);
-  }
-  if (id !== undefined && id !== "") {
-    for (const element of all) if (CONTROL_TAGS.has(element.tag) && attr(element, "form") === id) owned.add(element);
-  }
-  return all.filter((element) => owned.has(element));
+function isPasswordLike(control: DomElement): boolean {
+  if (isInput(control, "password")) return true;
+  const autocomplete = (attr(control, "autocomplete") ?? "").toLowerCase().split(/\s+/);
+  return autocomplete.some((token) => PASSWORD_AUTOCOMPLETE.has(token));
 }
 
-interface Context {
-  all: readonly DomElement[];
-  /// `label for=` elements by the id they name.
-  labelsFor: ReadonlyMap<string, readonly DomElement[]>;
-}
-
-function context(all: readonly DomElement[]): Context {
-  const labelsFor = new Map<string, DomElement[]>();
-  for (const element of all) {
-    const target = element.tag === "label" ? attr(element, "for") : undefined;
-    if (!target) continue;
-    const list = labelsFor.get(target);
-    if (list) list.push(element);
-    else labelsFor.set(target, [element]);
-  }
-  return { all, labelsFor };
-}
-
-function labelText(control: DomElement, ctx: Context): string {
-  const labels: DomElement[] = [];
-  const id = attr(control, "id");
-  if (id) labels.push(...(ctx.labelsFor.get(id) ?? []));
-  for (let up = control.parent; up; up = up.parent) {
-    if (up.tag === "label" && !up.attrs.has("for")) {
-      labels.push(up);
-      break;
-    }
-  }
-  return labels
+function labelText(facts: ControlFacts): string {
+  return facts.labels
     .map((label) => bound(textOf(label, true), LIMITS.paramDescription))
     .filter(Boolean)
     .join("; ");
 }
 
-function isInside(element: DomElement, ancestor: DomElement): boolean {
-  for (let up = element.parent; up; up = up.parent) if (up === ancestor) return true;
-  return false;
-}
-
-function commonFieldset(form: DomElement, controls: readonly DomElement[]): DomElement | undefined {
-  const first = controls[0];
-  for (let up = first?.parent ?? null; up && up !== form; up = up.parent) {
-    if (up.tag !== "fieldset") continue;
-    const fieldset = up;
-    if (controls.every((control) => isInside(control, fieldset))) return fieldset;
+function commonFieldset(group: readonly ControlFacts[]): DomElement | undefined {
+  const [first] = group;
+  for (const fieldset of first?.fieldsets ?? []) {
+    if (group.every((facts) => facts.fieldsets.includes(fieldset))) return fieldset;
   }
   return undefined;
 }
 
-function parameterDescription(form: DomElement, controls: readonly DomElement[], ctx: Context): string | undefined {
-  if (controls.length === 1) {
-    const control = controls[0];
-    if (!control) return undefined;
-    return attr(control, "toolparamdescription") || labelText(control, ctx) || attr(control, "aria-description") || undefined;
+function parameterDescription(group: readonly ControlFacts[]): string | undefined {
+  if (group.length === 1) {
+    const facts = group[0];
+    if (!facts) return undefined;
+    const control = facts.element;
+    return attr(control, "toolparamdescription") || labelText(facts) || attr(control, "aria-description") || undefined;
   }
-  const fieldset = commonFieldset(form, controls);
+  const fieldset = commonFieldset(group);
   return (fieldset && attr(fieldset, "toolparamdescription")) || undefined;
 }
 
@@ -258,7 +379,7 @@ function isStepBaseMultiple(stepBase: number, step: number): boolean {
 
 function withPattern(schema: ParamSchema, input: DomElement): ParamSchema {
   const pattern = attr(input, "pattern");
-  if (pattern === undefined || codePoints(pattern) > LIMITS.pattern || CONTROL.test(pattern) || !wellFormed(pattern)) return schema;
+  if (pattern === undefined || !exactValue(pattern, LIMITS.pattern)) return schema;
   try {
     new RegExp(pattern, "v");
   } catch {
@@ -267,10 +388,22 @@ function withPattern(schema: ParamSchema, input: DomElement): ParamSchema {
   return { ...schema, pattern };
 }
 
-function numberSchema(input: DomElement): ParamSchema {
+/// A number schema. Bounds that contradict each other (minimum above
+/// maximum) are dropped rather than sent: the host refuses them. `pattern`
+/// does not apply to numbers (the donor carries it; the host's subset does
+/// not).
+function numberSchema(input: DomElement, defaults?: { minimum: number; maximum: number }): ParamSchema {
   const schema: ParamSchema = { type: "number" };
-  const minimum = finiteNumber(attr(input, "min"));
-  const maximum = finiteNumber(attr(input, "max"));
+  let minimum = finiteNumber(attr(input, "min"));
+  let maximum = finiteNumber(attr(input, "max"));
+  if (defaults) {
+    minimum ??= defaults.minimum;
+    maximum ??= defaults.maximum;
+  }
+  if (minimum !== undefined && maximum !== undefined && minimum > maximum) {
+    minimum = undefined;
+    maximum = undefined;
+  }
   if (minimum !== undefined) schema.minimum = minimum;
   if (maximum !== undefined) schema.maximum = maximum;
   if (attr(input, "step") !== "any") {
@@ -297,13 +430,9 @@ function inputSchema(input: DomElement): ParamSchema | undefined {
     case "hidden":
       return attr(input, "toolparamdescription") ? { type: "string" } : undefined;
     case "number":
-      return withPattern(numberSchema(input), input);
-    case "range": {
-      const schema = numberSchema(input);
-      schema.minimum ??= 0;
-      schema.maximum ??= 100;
-      return schema;
-    }
+      return numberSchema(input);
+    case "range":
+      return numberSchema(input, { minimum: 0, maximum: 100 });
     case "checkbox":
       return { type: "boolean" };
     case "date":
@@ -323,35 +452,21 @@ function inputSchema(input: DomElement): ParamSchema | undefined {
   }
 }
 
-/// No lone surrogates (they cannot cross the frame as valid JSON).
-function wellFormed(text: string): boolean {
-  return !/[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/.test(text);
-}
-
-/// Author-declared choice values, bounded; undefined if any value is too
-/// long, carries controls or a lone surrogate, or there are too many (the
-/// parameter is then dropped).
+/// Author-declared choice values, unchanged; undefined if any value cannot
+/// cross exactly or there are too many (the parameter is then dropped).
 function choices(values: readonly string[]): string[] | undefined {
   if (values.length > LIMITS.choices) return undefined;
-  if (values.some((value) => codePoints(value) > LIMITS.choice || CONTROL.test(value) || !wellFormed(value))) return undefined;
+  if (!values.every((value) => exactValue(value, LIMITS.choice))) return undefined;
   return [...values];
 }
 
-function optionValues(select: DomElement): string[] {
-  const values: string[] = [];
-  for (const element of descendants(select)) {
-    if (element.tag !== "option") continue;
-    // An option without a value attribute submits its text.
-    values.push(attr(element, "value") ?? bound(textOf(element, false), LIMITS.choice));
-  }
-  return values;
+function optionValues(options: readonly DomElement[]): string[] {
+  // An option without a value attribute submits its text.
+  return options.map((option) => attr(option, "value") ?? bound(textOf(option, false), LIMITS.choice));
 }
 
-function isInput(control: DomElement, type: string): boolean {
-  return control.tag === "input" && inputType(control) === type;
-}
-
-function parameterSchema(form: DomElement, controls: readonly DomElement[], ctx: Context): ParamSchema | undefined {
+function parameterSchema(group: readonly ControlFacts[], options: ReadonlyMap<DomElement, DomElement[]>): ParamSchema | undefined {
+  const controls = group.map((facts) => facts.element);
   const [first] = controls;
   if (!first) return undefined;
   let schema: ParamSchema | undefined;
@@ -366,13 +481,13 @@ function parameterSchema(form: DomElement, controls: readonly DomElement[], ctx:
   } else if (first.tag === "textarea") {
     schema = { type: "string" };
   } else if (first.tag === "select") {
-    const values = choices(optionValues(first));
+    const values = choices(optionValues(options.get(first) ?? []));
     schema = values && (first.attrs.has("multiple") ? { type: "array", items_enum: values } : { type: "string", enum: values });
   } else {
     schema = inputSchema(first);
   }
   if (!schema) return undefined;
-  const description = parameterDescription(form, controls, ctx);
+  const description = parameterDescription(group);
   const dateHint = isInput(first, "date") ? "Dates MUST be provided in 'YYYY-MM-DD' format." : undefined;
   const combined = description && dateHint ? `${description} (${dateHint})` : description || dateHint;
   return combined ? { ...schema, description: bound(combined, LIMITS.paramDescription) } : schema;
@@ -380,26 +495,38 @@ function parameterSchema(form: DomElement, controls: readonly DomElement[], ctx:
 
 export interface Discovery {
   tools: DeclaredTool[];
-  /// Some declarations were dropped by a bound.
+  /// Some declarations were dropped by a bound or the CPU budget.
   truncated: boolean;
 }
 
 /// Every declarative tool in the document, in tree order. A form needs a
 /// valid `toolname` and a `tooldescription`; the first form with a name wins
-/// and later duplicates are dropped (as in the donor).
-export function discoverDeclarativeTools(root: DomElement): Discovery {
-  const all = [root, ...descendants(root)];
-  const ctx = context(all);
+/// and later duplicates are dropped (as in the donor). Linear in the size of
+/// the model, and bounded by `budgetMs` of CPU time.
+export function discoverDeclarativeTools(root: DomElement, budgetMs: number = DISCOVERY_BUDGET_MS): Discovery {
+  const deadline = Date.now() + budgetMs;
+  const pass = treePass(root, deadline);
+  let truncated = pass.truncated;
+  const owned = new Map<DomElement, ControlFacts[]>();
+  for (const facts of pass.controls) {
+    if (!facts.owner) continue;
+    const list = owned.get(facts.owner);
+    if (list) list.push(facts);
+    else owned.set(facts.owner, [facts]);
+  }
   const tools: DeclaredTool[] = [];
   const names = new Set<string>();
-  let truncated = false;
-  for (const form of all) {
-    if (form.tag !== "form") continue;
+  for (const form of pass.forms) {
+    if (Date.now() > deadline) {
+      truncated = true;
+      break;
+    }
     const name = attr(form, "toolname");
     const description = attr(form, "tooldescription");
     if (name === undefined || description === undefined) continue;
-    if (!NAME.test(name) || names.has(name)) {
-      truncated ||= !NAME.test(name);
+    const valid = NAME.test(name) && !HOST_IDENTITY_SHAPE.test(name);
+    if (!valid || names.has(name)) {
+      truncated ||= !valid;
       continue;
     }
     if (tools.length >= LIMITS.tools) {
@@ -407,33 +534,33 @@ export function discoverDeclarativeTools(root: DomElement): Discovery {
       break;
     }
     names.add(name);
-    const controls = formControls(form, all).filter((control) => !isDisabled(control) && !isReadOnly(control));
-    const groups = new Map<string, DomElement[]>();
-    let hasPassword = false;
-    for (const control of controls) {
-      if (isInput(control, "password")) {
-        hasPassword = true;
-        continue;
-      }
+    const controls = owned.get(form) ?? [];
+    // Password-like controls flag the tool whether or not they are enabled,
+    // and never become parameters.
+    const hasPassword = controls.some((facts) => isPasswordLike(facts.element));
+    const groups = new Map<string, ControlFacts[]>();
+    for (const facts of controls) {
+      const control = facts.element;
+      if (isPasswordLike(control) || facts.disabled || isReadOnly(control)) continue;
       const key = (attr(control, "name") ?? "").trim();
       if (!key) continue;
       const group = groups.get(key);
-      if (group) group.push(control);
-      else groups.set(key, [control]);
+      if (group) group.push(facts);
+      else groups.set(key, [facts]);
     }
     const params: DeclaredParam[] = [];
     for (const [key, group] of groups) {
-      if (codePoints(key) > LIMITS.name || CONTROL.test(key) || !wellFormed(key)) {
+      if (!exactValue(key, LIMITS.name)) {
         truncated = true;
         continue;
       }
-      const schema = parameterSchema(form, group, ctx);
-      if (!schema) continue;
       if (params.length >= LIMITS.params) {
         truncated = true;
         break;
       }
-      params.push({ name: key, required: group.some((control) => control.attrs.has("required")), ...schema });
+      const schema = parameterSchema(group, pass.options);
+      if (!schema) continue;
+      params.push({ name: key, required: group.some((facts) => facts.element.attrs.has("required")), ...schema });
     }
     if (codePoints(description) > LIMITS.description) truncated = true;
     tools.push({
