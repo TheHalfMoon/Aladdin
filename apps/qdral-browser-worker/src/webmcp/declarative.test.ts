@@ -185,3 +185,27 @@ test("the snapshot model is bounded", () => {
   for (let i = 1; i <= MAX_SNAPSHOT_NODES + 5; i++) nodes.push([0, 1, "DIV"]);
   assert.equal(documentModel(snapshot(nodes)).truncated, true);
 });
+
+test("bounds cut whole code points and controls never cross", () => {
+  const emoji = "\u{1F600}";
+  const { tools } = discoverDeclarativeTools(
+    doc(
+      el(
+        "form",
+        { toolname: "e", tooldescription: "a".repeat(LIMITS.description - 1) + emoji + "tail", tooltitle: "T\u0001itle" },
+        el("input", { name: "bad\u0007name" }),
+        el("input", { name: "ok", pattern: "a\u0000b" }),
+        el("select", { name: "pick" }, el("option", { value: "lone\ud800" }))
+      )
+    )
+  );
+  const [tool] = tools;
+  assert.ok(tool);
+  assert.ok(tool.description.endsWith(emoji), "the cut kept the whole emoji");
+  assert.equal(Array.from(tool.description).length, LIMITS.description);
+  assert.equal(tool.title, "Title");
+  assert.deepEqual(tool.params, [{ name: "ok", required: false, type: "string" }]);
+  // Nothing the worker sends carries a lone surrogate (strict JSON on the host).
+  const lone = /[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/;
+  assert.ok(!lone.test(JSON.stringify(tools)));
+});

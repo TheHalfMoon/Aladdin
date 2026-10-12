@@ -82,9 +82,21 @@ const TEXT_INPUT_TYPES = new Set(["email", "password", "search", "tel", "text", 
 const READONLY_INPUT_TYPES = new Set([...TEXT_INPUT_TYPES, "date", "datetime-local", "month", "number", "time", "week"]);
 const CONTROL_TAGS = new Set(["input", "select", "textarea"]);
 
+// C0/C1 controls (whitespace is collapsed to spaces first).
+const CONTROL = /[\u0000-\u001f\u007f-\u009f]/;
+const CONTROLS = /[\u0000-\u001f\u007f-\u009f]/g;
+
+/// Collapse whitespace, drop controls and cut at `max` code points, never
+/// inside a surrogate pair (a lone surrogate would make the frame invalid
+/// JSON for the host).
 function bound(text: string, max: number): string {
-  const trimmed = text.replace(/\s+/g, " ").trim();
-  return trimmed.length > max ? trimmed.slice(0, max) : trimmed;
+  const clean = text.replace(/\s+/g, " ").replace(CONTROLS, "").trim();
+  const points = Array.from(clean);
+  return points.length > max ? points.slice(0, max).join("") : clean;
+}
+
+function codePoints(text: string): number {
+  return Array.from(text).length;
 }
 
 function attr(element: DomElement, name: string): string | undefined {
@@ -206,7 +218,7 @@ function isStepBaseMultiple(stepBase: number, step: number): boolean {
 
 function withPattern(schema: ParamSchema, input: DomElement): ParamSchema {
   const pattern = attr(input, "pattern");
-  if (pattern === undefined || pattern.length > LIMITS.pattern) return schema;
+  if (pattern === undefined || codePoints(pattern) > LIMITS.pattern || CONTROL.test(pattern) || !wellFormed(pattern)) return schema;
   try {
     new RegExp(pattern, "v");
   } catch {
@@ -271,10 +283,17 @@ function inputSchema(input: DomElement): ParamSchema | undefined {
   }
 }
 
+/// No lone surrogates (they cannot cross the frame as valid JSON).
+function wellFormed(text: string): boolean {
+  return !/[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/.test(text);
+}
+
 /// Author-declared choice values, bounded; undefined if any value is too
-/// long or there are too many (the parameter is then dropped).
+/// long, carries controls or a lone surrogate, or there are too many (the
+/// parameter is then dropped).
 function choices(values: readonly string[]): string[] | undefined {
-  if (values.length > LIMITS.choices || values.some((value) => value.length > LIMITS.choice)) return undefined;
+  if (values.length > LIMITS.choices) return undefined;
+  if (values.some((value) => codePoints(value) > LIMITS.choice || CONTROL.test(value) || !wellFormed(value))) return undefined;
   return [...values];
 }
 
@@ -363,7 +382,7 @@ export function discoverDeclarativeTools(root: DomElement): Discovery {
     }
     const params: DeclaredParam[] = [];
     for (const [key, group] of groups) {
-      if (key.length > LIMITS.name) {
+      if (codePoints(key) > LIMITS.name || CONTROL.test(key) || !wellFormed(key)) {
         truncated = true;
         continue;
       }
@@ -375,7 +394,7 @@ export function discoverDeclarativeTools(root: DomElement): Discovery {
       }
       params.push({ name: key, required: group.some((control) => control.attrs.has("required")), ...schema });
     }
-    if (description.length > LIMITS.description) truncated = true;
+    if (codePoints(description) > LIMITS.description) truncated = true;
     tools.push({
       name,
       title: bound(attr(form, "tooltitle") ?? "", LIMITS.title),
