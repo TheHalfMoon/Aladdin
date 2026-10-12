@@ -34,7 +34,12 @@ export const CONTENT_STYLES = [
   "overflow-x",
   "overflow-y",
   "content-visibility",
-  "position"
+  "position",
+  "transform",
+  "perspective",
+  "backdrop-filter",
+  "contain",
+  "will-change"
 ] as const;
 type StyleName = (typeof CONTENT_STYLES)[number];
 
@@ -127,13 +132,25 @@ interface Slot {
   /// Under a `content-visibility: auto` box (its unrendered text is lost,
   /// not hidden).
   lazy: boolean;
-  /// Under a box that clips its content to a few pixels: its text is
-  /// hidden, unless it escapes the clip (below).
-  clipped: boolean;
-  /// A positioned element lies between that clip box and here (inclusive of
-  /// the clip box): absolutely positioned descendants stay clipped.
-  positionedSinceClip: boolean;
+  /// The tiny clip boxes above this node that still clip it, by what lies
+  /// between them and here: `free` clips have neither a positioned nor a
+  /// containing-block element in between (absolute and fixed descendants
+  /// escape them), `positioned` clips have a positioned one (only fixed
+  /// descendants escape), `contained` clips have a containing block for
+  /// fixed descendants (nothing escapes). Text is hidden while any is
+  /// active.
+  clips: Clips;
 }
+
+interface Clips {
+  free: number;
+  positioned: number;
+  contained: number;
+}
+
+const NO_CLIPS: Clips = { free: 0, positioned: 0, contained: 0 };
+
+const clipped = (clips: Clips): boolean => clips.free + clips.positioned + clips.contained > 0;
 
 /// The alpha of a computed colour in any syntax the engine reports: `/ a`
 /// in modern syntax (`color()`, `oklch()`, `lab()`, `rgb(r g b / a)`), the
@@ -207,7 +224,7 @@ export function contentModel(snapshot: LayoutSnapshot, deadline = Number.POSITIV
       break;
     }
     const parentAt = parentIndex[i] ?? -1;
-    const parent: Slot | null | undefined = parentAt >= 0 ? slots[parentAt] : { element: root, lazy: false, clipped: false, positionedSinceClip: false };
+    const parent: Slot | null | undefined = parentAt >= 0 ? slots[parentAt] : { element: root, lazy: false, clips: NO_CLIPS };
     if (parent === null || parent === undefined) {
       slots[i] = null;
       continue;
@@ -218,11 +235,18 @@ export function contentModel(snapshot: LayoutSnapshot, deadline = Number.POSITIV
       const rendered = layoutAt.has(i);
       const opacity = Math.min(Number(style(i, "opacity") ?? "1"), filterOpacity(style(i, "filter")));
       const bounds = box(i);
-      const clips = ["hidden", "clip"].includes(style(i, "overflow-x") ?? "") || ["hidden", "clip"].includes(style(i, "overflow-y") ?? "");
+      const contain = style(i, "contain") ?? "";
+      const overflowClips = ["hidden", "clip"].includes(style(i, "overflow-x") ?? "") || ["hidden", "clip"].includes(style(i, "overflow-y") ?? "");
+      const paintContained = /\b(paint|strict|content)\b/.test(contain);
       // The root and body never clip the page: their overflow applies to
       // the viewport.
       const clipsTiny =
-        tag !== "html" && tag !== "body" && rendered && clips && bounds !== undefined && (bounds.w <= MAX_CLIPPED_PX || bounds.h <= MAX_CLIPPED_PX);
+        tag !== "html" &&
+        tag !== "body" &&
+        rendered &&
+        (overflowClips || paintContained) &&
+        bounds !== undefined &&
+        (bounds.w <= MAX_CLIPPED_PX || bounds.h <= MAX_CLIPPED_PX);
       if (SKIPPED.has(tag) || (Number.isFinite(opacity) && opacity < MIN_OPACITY)) {
         slots[i] = null;
         continue;
@@ -236,21 +260,38 @@ export function contentModel(snapshot: LayoutSnapshot, deadline = Number.POSITIV
       const shown = rendered && visible(i) && bounds !== undefined && bounds.w > 0 && bounds.h > 0;
       const element: Building = { kind: "element", tag, attrs, children: [], shown };
       parent.element.children.push(element);
-      // An overflow clip does not apply to a fixed-position descendant, nor to
-      // an absolutely positioned one whose containing block lies outside the
-      // clip box (no positioned element in between).
+      // A clip box clips a descendant unless the descendant's containing
+      // block lies outside it: a fixed-position element escapes clips with
+      // no containing block for fixed elements in between (an element with
+      // a transform, perspective, filter, backdrop filter, layout or paint
+      // containment, or a will-change of those), an absolutely positioned
+      // one escapes clips with no positioned element or such containing
+      // block in between.
       const position = style(i, "position") ?? "static";
-      let clipped = parent.clipped;
-      let positionedSinceClip = parent.positionedSinceClip;
-      if (clipped && (position === "fixed" || (position === "absolute" && !positionedSinceClip))) clipped = false;
-      if (clipped && position !== "static") positionedSinceClip = true;
+      const willChange = style(i, "will-change") ?? "auto";
+      const containsFixed =
+        (style(i, "transform") ?? "none") !== "none" ||
+        (style(i, "perspective") ?? "none") !== "none" ||
+        (style(i, "filter") ?? "none") !== "none" ||
+        (style(i, "backdrop-filter") ?? "none") !== "none" ||
+        /\b(layout|paint|strict|content)\b/.test(contain) ||
+        /\b(transform|perspective|filter|contain)\b/.test(willChange);
+      let clips: Clips = parent.clips;
+      if (position === "fixed") clips = { free: 0, positioned: 0, contained: clips.contained };
+      else if (position === "absolute") clips = { free: 0, positioned: clips.positioned, contained: clips.contained };
+      // This element now lies between the clips above and its descendants.
+      if (containsFixed) clips = { free: 0, positioned: 0, contained: clips.free + clips.positioned + clips.contained };
+      else if (position !== "static") clips = { free: 0, positioned: clips.free + clips.positioned, contained: clips.contained };
       if (clipsTiny) {
-        clipped = true;
-        positionedSinceClip = position !== "static";
+        clips = containsFixed
+          ? { ...clips, contained: clips.contained + 1 }
+          : position !== "static"
+            ? { ...clips, positioned: clips.positioned + 1 }
+            : { ...clips, free: clips.free + 1 };
       }
       // Attribute text of a clipped element is hidden like its text.
-      if (clipped) element.shown = false;
-      slots[i] = { element, lazy: parent.lazy || style(i, "content-visibility") === "auto", clipped, positionedSinceClip };
+      if (clipped(clips)) element.shown = false;
+      slots[i] = { element, lazy: parent.lazy || style(i, "content-visibility") === "auto", clips };
     } else if (type === 3) {
       const value = text(nodeValue[i]);
       if (!layoutAt.has(i)) {
@@ -264,7 +305,7 @@ export function contentModel(snapshot: LayoutSnapshot, deadline = Number.POSITIV
       const fill = style(i, "-webkit-text-fill-color");
       if (
         !visible(i) ||
-        parent.clipped ||
+        clipped(parent.clips) ||
         alphaOf(style(i, "color")) < MIN_OPACITY ||
         (fill !== undefined && fill !== "" && alphaOf(fill) < MIN_OPACITY) ||
         (Number.isFinite(fontSize) && fontSize <= 0) ||
@@ -282,7 +323,7 @@ export function contentModel(snapshot: LayoutSnapshot, deadline = Number.POSITIV
     } else if (type === 11) {
       const shadow: Building = { kind: "element", tag: "#shadow-root", attrs: new Map(), children: [], shown: false };
       parent.element.children.push(shadow);
-      slots[i] = { element: shadow, lazy: parent.lazy, clipped: parent.clipped, positionedSinceClip: parent.positionedSinceClip };
+      slots[i] = { element: shadow, lazy: parent.lazy, clips: parent.clips };
     } else {
       slots[i] = null;
     }

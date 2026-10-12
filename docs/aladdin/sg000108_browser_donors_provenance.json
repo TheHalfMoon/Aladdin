@@ -56,11 +56,11 @@
       "destination": "apps/qdral-browser-worker/src/extract/model.ts",
       "reuse": "ADAPT",
       "modified": true,
-      "modification_summary": "The donor's CSS visibility rule (display none, visibility hidden, opacity 0) and its parsing of DOMSnapshot layout styles, applied to content and extended: only text with a layout object, visible computed visibility, a non-transparent colour and text fill (any colour syntax), a non-zero font size and a non-empty box not past the document's top or left edge is kept; subtrees with opacity or filter opacity below 0.01 are dropped, and so is text inside a box (other than the root or body) clipped to at most four pixels unless it escapes the clip by positioning; colour alpha below 0.01 counts as transparent; attribute text is used only from rendered, visible elements; text the engine skipped under content-visibility auto is reported as truncated. The donor's viewport threshold is not used, its Runtime.evaluate calls (readyState, iframe scroll, getEventListeners) are not used, and live input values (inputValue, textValue) are never read.",
+      "modification_summary": "The donor's CSS visibility rule (display none, visibility hidden, opacity 0) and its parsing of DOMSnapshot layout styles, applied to content and extended: only text with a layout object, visible computed visibility, a non-transparent colour and text fill (any colour syntax), a non-zero font size and a non-empty box not past the document's top or left edge is kept; subtrees with opacity or filter opacity below 0.01 are dropped, and so is text inside a box (other than the root or body) clipped to at most four pixels by overflow or paint containment, unless it escapes every enclosing clip under the CSS containing-block rules (positioning, transforms, filters, containment, will-change); colour alpha below 0.01 counts as transparent; attribute text is used only from rendered, visible elements; text the engine skipped under content-visibility auto is reported as truncated. The donor's viewport threshold is not used, its Runtime.evaluate calls (readyState, iframe scroll, getEventListeners) are not used, and live input values (inputValue, textValue) are never read.",
       "authority_delta": "None: a pure function over a DOMSnapshot.",
       "qualification": [
         "extract/extract.test.ts",
-        "extract/extract.native.test.ts (real Edge, 25 hidden-content cases)"
+        "extract/extract.native.test.ts (real Edge, 29 hidden-content cases)"
       ]
     }
   ],
