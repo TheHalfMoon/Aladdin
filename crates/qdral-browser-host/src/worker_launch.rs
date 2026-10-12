@@ -2295,7 +2295,7 @@ mod tests {
         );
         let reply = |text: &str| serde_json::from_str::<WorkerReply>(text);
         let tools = match reply(
-            r#"{"frame":"discovered","disc_id":2,"url":"https://fixture.test/t","truncated":false,"tools":[{"name":"t","title":"","description":"d","autosubmit":false,"node":3,"has_password":false,"params":[]}]}"#,
+            r#"{"frame":"discovered","disc_id":2,"url":"https://fixture.test/t","truncated":false,"tools":[{"name":"t","title":"","description":"d","autosubmit":false,"node":3,"has_password":false,"action":null,"method":"get","params":[]}]}"#,
         )
         .unwrap()
         {
@@ -2309,7 +2309,7 @@ mod tests {
         ));
         // Unknown fields anywhere in a tool are refused.
         assert!(reply(
-            r#"{"frame":"discovered","disc_id":2,"url":"u","truncated":false,"tools":[{"name":"t","title":"","description":"d","autosubmit":false,"node":3,"has_password":false,"params":[],"run":"x"}]}"#
+            r#"{"frame":"discovered","disc_id":2,"url":"u","truncated":false,"tools":[{"name":"t","title":"","description":"d","autosubmit":false,"node":3,"has_password":false,"action":null,"method":"get","params":[],"run":"x"}]}"#
         )
         .is_err());
     }

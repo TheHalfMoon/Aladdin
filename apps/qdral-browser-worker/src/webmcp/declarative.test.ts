@@ -66,12 +66,12 @@ test("a declared form becomes a bounded tool with a schema from its controls", (
   assert.equal(tool.autosubmit, true);
   assert.equal(tool.has_password, false);
   assert.deepEqual(tool.params, [
-    { name: "from", required: true, type: "string", pattern: "[A-Z]{3}", description: "From airport" },
-    { name: "seats", required: false, type: "number", minimum: 1, maximum: 9, multiple_of: 1 },
-    { name: "cabin", required: false, type: "string", enum: ["eco", "Business"] },
-    { name: "trip", required: false, type: "string", enum: ["one", "return"], description: "Trip type" },
-    { name: "meal", required: false, type: "array", items_enum: ["veg", "halal"] },
-    { name: "when", required: false, type: "string", format: "date", description: "Dates MUST be provided in 'YYYY-MM-DD' format." }
+    { name: "from", required: true, control: "text", type: "string", pattern: "[A-Z]{3}", description: "From airport" },
+    { name: "seats", required: false, control: "text", type: "number", minimum: 1, maximum: 9, multiple_of: 1 },
+    { name: "cabin", required: false, control: "select", type: "string", enum: ["eco", "Business"] },
+    { name: "trip", required: false, control: "radio", type: "string", enum: ["one", "return"], description: "Trip type" },
+    { name: "meal", required: false, control: "checkboxes", type: "array", items_enum: ["veg", "halal"] },
+    { name: "when", required: false, control: "text", type: "string", format: "date", description: "Dates MUST be provided in 'YYYY-MM-DD' format." }
   ]);
   // The hidden field (no description) is not a parameter and its value never appears.
   assert.ok(!JSON.stringify(tools).includes("tok-123"));
@@ -181,7 +181,7 @@ test("the snapshot model keeps shadow trees and text, and drops other node kinds
   assert.equal(model.truncated, false);
   const { tools } = discoverDeclarativeTools(model.root);
   assert.deepEqual(tools.map((t) => [t.name, t.node, t.params]), [
-    ["shadowed", 105, [{ name: "q", required: false, type: "string", description: "Query" }]]
+    ["shadowed", 105, [{ name: "q", required: false, control: "text", type: "string", description: "Query" }]]
   ]);
 });
 
@@ -196,7 +196,7 @@ test("a DOM deeper than any call stack is walked without recursion", () => {
   let inner = el("form", { toolname: "deep", tooldescription: "At the bottom." }, el("label", {}, "Deep field ", el("input", { name: "d" })));
   for (let i = 0; i < 200_000; i++) inner = el("div", {}, inner);
   const { tools } = discoverDeclarativeTools(doc(inner));
-  assert.deepEqual(tools.map((t) => [t.name, t.params]), [["deep", [{ name: "d", required: false, type: "string", description: "Deep field" }]]]);
+  assert.deepEqual(tools.map((t) => [t.name, t.params]), [["deep", [{ name: "d", required: false, control: "text", type: "string", description: "Deep field" }]]]);
 });
 
 const LONE = /[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/;
@@ -229,8 +229,8 @@ test("text is well formed, control- and bidi-free, and cut at whole code points"
   assert.equal(Array.from(tool.description).length, LIMITS.description);
   assert.equal(tool.title, "Title\ufffd");
   assert.deepEqual(tool.params, [
-    { name: "q", required: false, type: "string", description: "Lab\ufffdel" },
-    { name: "pat", required: false, type: "string" }
+    { name: "q", required: false, control: "text", type: "string", description: "Lab\ufffdel" },
+    { name: "pat", required: false, control: "text", type: "string" }
   ]);
 });
 
@@ -248,10 +248,10 @@ test("number schemas stay inside the host's subset", () => {
     )
   );
   assert.deepEqual(tools[0]?.params, [
-    { name: "pat", required: false, type: "number", multiple_of: 1 },
-    { name: "inverted", required: false, type: "number", multiple_of: 1 },
-    { name: "range_high", required: false, type: "number", multiple_of: 1 },
-    { name: "range_ok", required: false, type: "number", minimum: 5, maximum: 100, multiple_of: 1 }
+    { name: "pat", required: false, control: "text", type: "number", multiple_of: 1 },
+    { name: "inverted", required: false, control: "text", type: "number", multiple_of: 1 },
+    { name: "range_high", required: false, control: "text", type: "number", multiple_of: 1 },
+    { name: "range_ok", required: false, control: "text", type: "number", minimum: 5, maximum: 100, multiple_of: 1 }
   ]);
 });
 
@@ -281,8 +281,8 @@ test("editable regions never contribute text, and labels label one control", () 
     )
   );
   assert.deepEqual(tools[0]?.params, [
-    { name: "q", required: false, type: "string", description: "Query" },
-    { name: "second", required: false, type: "string" }
+    { name: "q", required: false, control: "text", type: "string", description: "Query" },
+    { name: "second", required: false, control: "text", type: "string" }
   ]);
 });
 

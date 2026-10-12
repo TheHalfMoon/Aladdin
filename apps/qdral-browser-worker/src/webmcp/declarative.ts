@@ -59,9 +59,13 @@ export interface ParamSchema {
   items_enum?: string[];
 }
 
+/// How a parameter is entered into the form when the tool is executed.
+export type ControlKind = "text" | "textarea" | "select" | "select_multiple" | "radio" | "checkbox" | "checkboxes" | "hidden";
+
 export interface DeclaredParam extends ParamSchema {
   name: string;
   required: boolean;
+  control: ControlKind;
 }
 
 export interface DeclaredTool {
@@ -73,6 +77,11 @@ export interface DeclaredTool {
   node: number;
   /// The form carries a password control (omitted from `params`).
   has_password: boolean;
+  /// The form's `action` attribute as written ("" when absent), or null when
+  /// it cannot cross exactly (the tool is then not executable).
+  action: string | null;
+  /// The form's method: "get", "post" or "dialog" (HTML's default is get).
+  method: "get" | "post" | "dialog";
   params: DeclaredParam[];
 }
 
@@ -85,7 +94,8 @@ export const LIMITS = {
   paramDescription: 512,
   choices: 64,
   choice: 256,
-  pattern: 256
+  pattern: 256,
+  action: 2048
 } as const;
 
 const NAME = /^[A-Za-z0-9_.-]{1,64}$/;
@@ -497,6 +507,22 @@ function parameterSchema(group: readonly ControlFacts[], options: ReadonlyMap<Do
   return combined ? { ...schema, description: bound(combined, LIMITS.paramDescription) } : schema;
 }
 
+function controlKind(group: readonly ControlFacts[]): ControlKind {
+  const first = group[0]?.element;
+  if (!first) return "text";
+  if (first.tag === "textarea") return "textarea";
+  if (first.tag === "select") return first.attrs.has("multiple") ? "select_multiple" : "select";
+  if (isInput(first, "radio")) return "radio";
+  if (isInput(first, "checkbox")) return group.length > 1 ? "checkboxes" : "checkbox";
+  if (isInput(first, "hidden")) return "hidden";
+  return "text";
+}
+
+function formMethod(form: DomElement): "get" | "post" | "dialog" {
+  const method = (attr(form, "method") ?? "").trim().toLowerCase();
+  return method === "post" || method === "dialog" ? method : "get";
+}
+
 export interface Discovery {
   tools: DeclaredTool[];
   /// Some declarations were dropped by a bound or the CPU budget.
@@ -564,7 +590,7 @@ export function discoverDeclarativeTools(root: DomElement, budgetMs: number = DI
       }
       const schema = parameterSchema(group, pass.options);
       if (!schema) continue;
-      params.push({ name: key, required: group.some((facts) => facts.element.attrs.has("required")), ...schema });
+      params.push({ name: key, required: group.some((facts) => facts.element.attrs.has("required")), control: controlKind(group), ...schema });
     }
     if (codePoints(description) > LIMITS.description) truncated = true;
     tools.push({
@@ -574,6 +600,8 @@ export function discoverDeclarativeTools(root: DomElement, budgetMs: number = DI
       autosubmit: form.attrs.has("toolautosubmit"),
       node: form.node,
       has_password: hasPassword,
+      action: ((raw) => (exactValue(raw, LIMITS.action) ? raw : null))(attr(form, "action") ?? ""),
+      method: formMethod(form),
       params
     });
   }
