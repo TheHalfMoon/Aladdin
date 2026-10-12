@@ -11,7 +11,8 @@ import { refusedWorkerVariables, startupRefusal } from "./environment.js";
 import { encodeFrame, FrameDecoder, ProtocolViolation, type WorkerFrame } from "./protocol.js";
 import { installRoutes } from "./routes.js";
 import { boundSnapshot } from "./snapshot.js";
-import { discoverDeclarativeTools } from "./webmcp/declarative.js";
+import { discoverDeclarativeTools, DISCOVERY_BUDGET_MS } from "./webmcp/declarative.js";
+import { CAPTURE_TIMEOUT_MS, DISCOVERY_TOTAL_MS, fitTools } from "./webmcp/fit.js";
 import { documentModel, type CapturedSnapshot } from "./webmcp/dom-snapshot.js";
 import { NavigationError, Worker, type EngineSession, type Launcher, type LaunchSpec, type RoutePolicy } from "./worker.js";
 
@@ -150,16 +151,25 @@ const playwrightLauncher: Launcher = {
         return { url: primary.url(), snapshot: boundSnapshot(raw) };
       },
       async discover(discId: number) {
-        // The engine serialises its own DOM: no page script runs.
+        // The engine serialises its own DOM: no page script runs. The whole
+        // call (capture, discovery, fit) stays inside DISCOVERY_TOTAL_MS.
+        const started = Date.now();
         const before = primary.url();
         const session = await context.newCDPSession(primary);
         let captured: CapturedSnapshot;
+        let timer: NodeJS.Timeout | undefined;
         try {
           // Playwright's protocol typings name this result differently;
           // documentModel reads every field defensively (missing arrays are
           // empty, a missing document throws into discovery_failed).
-          captured = (await session.send("DOMSnapshot.captureSnapshot", { computedStyles: [] })) as unknown as CapturedSnapshot;
+          const capture = session.send("DOMSnapshot.captureSnapshot", { computedStyles: [] }) as unknown as Promise<CapturedSnapshot>;
+          capture.catch(() => {});
+          const deadline = new Promise<never>((_, reject) => {
+            timer = setTimeout(() => reject(new Error("the DOM snapshot timed out")), CAPTURE_TIMEOUT_MS);
+          });
+          captured = await Promise.race([capture, deadline]);
         } finally {
+          clearTimeout(timer);
           await session.detach().catch(() => {});
         }
         const model = documentModel(captured);
@@ -167,20 +177,9 @@ const playwrightLauncher: Launcher = {
         // during the capture, the result is stale and is refused.
         const url = primary.url();
         if (model.url !== url || before !== url) throw new Error("the document changed during discovery");
-        const found = discoverDeclarativeTools(model.root);
-        const tools = [...found.tools];
-        let truncated = model.truncated || found.truncated;
-        // Drop tools from the end until the reply frame fits.
-        while (tools.length > 0) {
-          try {
-            encodeFrame({ frame: "discovered", disc_id: discId, url, truncated, tools });
-            break;
-          } catch {
-            tools.pop();
-            truncated = true;
-          }
-        }
-        return { url, truncated, tools };
+        const remaining = Math.max(0, DISCOVERY_TOTAL_MS - CAPTURE_TIMEOUT_MS / 2 - (Date.now() - started));
+        const found = discoverDeclarativeTools(model.root, Math.min(DISCOVERY_BUDGET_MS, remaining));
+        return fitTools(discId, url, model.truncated || found.truncated, found.tools);
       },
       async close() {
         closing = true;

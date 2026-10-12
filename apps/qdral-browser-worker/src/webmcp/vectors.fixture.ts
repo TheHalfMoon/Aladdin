@@ -48,7 +48,7 @@ export function vectorCases(): Record<string, DomElement> {
       el("input", { name: "email", type: "email", required: "" }),
       el("input", { name: "bad_pattern", pattern: "(" }),
       el("input", { name: "long_pattern", pattern: "a".repeat(300) }),
-      el("textarea", { name: "notes", toolparamdescription: "Free text ‮ reversed" }),
+      el("textarea", { name: "notes", toolparamdescription: "Free text \u202e reversed" }),
       el("input", { name: "secret", type: "hidden", toolparamdescription: "A described hidden field" }),
       el("input", { name: "token", type: "hidden", value: "never-sent" })
     ),

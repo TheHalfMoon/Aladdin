@@ -135,17 +135,21 @@ fn violation() -> HostError {
     HostError::Unavailable(UnavailableReason::ProtocolViolation)
 }
 
-/// Bidi controls, zero-width marks and the BOM (the worker removes them
-/// from text and refuses them in exact values).
+/// Invisible format characters: bidi controls, zero-width marks, the BOM,
+/// the soft hyphen, interlinear annotation marks and tag characters (the
+/// worker removes them from text and refuses them in exact values).
 fn is_bidi_or_format(ch: char) -> bool {
     matches!(
         ch,
         '\u{61c}'
+            | '\u{ad}'
             | '\u{200b}'..='\u{200f}'
             | '\u{202a}'..='\u{202e}'
             | '\u{2060}'..='\u{2064}'
             | '\u{2066}'..='\u{206f}'
             | '\u{feff}'
+            | '\u{fff9}'..='\u{fffb}'
+            | '\u{e0000}'..='\u{e007f}'
     )
 }
 

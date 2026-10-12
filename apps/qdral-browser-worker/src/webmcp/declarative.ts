@@ -97,17 +97,21 @@ const CONTROL_TAGS = new Set(["input", "select", "textarea"]);
 /// Elements a `label` can label (HTML "labelable", hidden inputs excluded).
 const LABELABLE = new Set(["button", "input", "meter", "output", "progress", "select", "textarea"]);
 const PASSWORD_AUTOCOMPLETE = new Set(["current-password", "new-password", "one-time-code"]);
-/// The worker's CPU budget for one discovery, well inside the host's
-/// observation deadline; past it the result is truncated, never late.
+/// The CPU budget for the tree pass and tool building. The worker's whole
+/// discovery (capture deadline, this budget and a linear frame fit) stays
+/// inside DISCOVERY_TOTAL_MS (webmcp/fit.ts), well inside the host's
+/// observation deadline; past this budget the result is truncated.
 export const DISCOVERY_BUDGET_MS = 4_000;
 
 // C0/C1 controls (whitespace is collapsed to spaces first).
 const CONTROL = /[\u0000-\u001f\u007f-\u009f]/;
 const CONTROLS = /[\u0000-\u001f\u007f-\u009f]/g;
-// Bidi controls, zero-width marks and the BOM: they make text read
-// differently from what it is.
-const BIDI = /[؜​-‏‪-‮⁠-⁤⁦-⁯﻿]/;
-const BIDIS = /[؜​-‏‪-‮⁠-⁤⁦-⁯﻿]/g;
+// Invisible format characters (bidi controls, zero-width marks, the BOM, the
+// soft hyphen, interlinear annotation marks and Unicode tag characters):
+// they make text read differently from what it is. Written as escapes, never
+// as the characters themselves.
+const BIDI = /[\u{61c}\u{ad}\u{200b}-\u{200f}\u{202a}-\u{202e}\u{2060}-\u{2064}\u{2066}-\u{206f}\u{feff}\u{fff9}-\u{fffb}\u{e0000}-\u{e007f}]/u;
+const BIDIS = /[\u{61c}\u{ad}\u{200b}-\u{200f}\u{202a}-\u{202e}\u{2060}-\u{2064}\u{2066}-\u{206f}\u{feff}\u{fff9}-\u{fffb}\u{e0000}-\u{e007f}]/gu;
 const LONE_SURROGATES = /[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/g;
 
 /// Replace lone surrogates (they cannot cross the frame as valid JSON for

@@ -4,6 +4,8 @@ import { discoverDeclarativeTools, LIMITS, type DomElement, type DomNode } from 
 import { documentModel, MAX_SNAPSHOT_NODES, type CapturedSnapshot } from "./dom-snapshot.js";
 import { readFileSync } from "node:fs";
 import { vectorCases } from "./vectors.fixture.js";
+import { fitTools } from "./fit.js";
+import { encodeFrame } from "../protocol.js";
 
 let nextNode = 1;
 
@@ -319,4 +321,24 @@ test("the worker's output for awkward markup equals the shared host vectors", ()
   const produced: Record<string, unknown> = {};
   for (const [name, root] of Object.entries(vectorCases())) produced[name] = discoverDeclarativeTools(root);
   assert.deepEqual(produced, pinned, "regenerate shared-vectors.json only together with the host validator");
+});
+
+test("the frame fit is linear and keeps the longest prefix that fits", () => {
+  // 32 tools at their bounds, each far larger than one frame on its own.
+  const options = Array.from({ length: LIMITS.choices }, (_, i) => el("option", { value: `${i}`.padEnd(LIMITS.choice, "v") }));
+  const big = Array.from({ length: LIMITS.tools }, (_, t) =>
+    el("form", { toolname: `t${t}`, tooldescription: "d".repeat(LIMITS.description) }, ...Array.from({ length: LIMITS.params }, (_, p) => el("select", { name: `p${p}` }, ...options.map((o) => el("option", { value: o.attrs.get("value") ?? "" })))))
+  );
+  const { tools } = discoverDeclarativeTools(doc(...big));
+  assert.equal(tools.length, LIMITS.tools);
+  const started = Date.now();
+  const fitted = fitTools(123456, "https://fixture.test/x", false, tools);
+  assert.ok(Date.now() - started < 1_000, `fit took ${Date.now() - started} ms`);
+  assert.equal(fitted.truncated, true);
+  // Whatever was kept encodes within the frame bound.
+  encodeFrame({ frame: "discovered", disc_id: 123456, ...fitted });
+  // Small tools all fit and nothing is marked truncated.
+  const small = discoverDeclarativeTools(doc(el("form", { toolname: "a", tooldescription: "d" }), el("form", { toolname: "b", tooldescription: "d" })));
+  const kept = fitTools(1, "https://fixture.test/", false, small.tools);
+  assert.deepEqual([kept.truncated, kept.tools.length], [false, 2]);
 });

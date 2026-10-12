@@ -31,12 +31,17 @@ A page with no declarations yields an empty list, and the caller falls back to o
 
 ## Bounds and validation
 
-- **Worker.** Discovery is one linear tree pass under a 4 s CPU budget, inside the host's 10 s observation deadline. Past the budget, the result is truncated rather than late, so a hostile DOM cannot end the lifetime through the host deadline. The worker bounds everything before sending:
+- **Worker.** One discovery replies within 6 s (`DISCOVERY_TOTAL_MS`), inside the host's 10 s observation deadline, so a hostile page cannot end the lifetime through that deadline:
+  - the engine's DOM snapshot has a 3 s deadline, and a slower capture fails as `discovery_failed`;
+  - the linear tree pass and tool building run under at most 4 s of the remaining time, and are truncated past it;
+  - the reply is fitted in linear time: each tool is encoded once, and the longest prefix that fits the 64 KiB frame is kept.
+
+  The worker bounds everything before sending:
   - 32 tools; 32 parameters; names of 64 characters; titles of 128; descriptions of 1024; parameter descriptions of 512; 64 choices of 256 characters each; patterns of 256;
   - 100 000 snapshot nodes;
   - the reply frame's 64 KiB, by dropping tools from the end.
 
-  Text is made well formed (a lone surrogate becomes U+FFFD, so the frame stays valid JSON for the host), has controls and bidi or format marks removed, and is cut at whole code points. Values that must cross unchanged (parameter names, choices, patterns) are refused instead of altered.
+  Text is made well formed (a lone surrogate becomes U+FFFD, so the frame stays valid JSON for the host), has controls and invisible format characters removed, and is cut at whole code points. The invisible characters are bidi controls, zero-width marks, the BOM, the soft hyphen, interlinear annotation marks and Unicode tag characters. Values that must cross unchanged (parameter names, choices, patterns) are refused instead of altered.
 
   Number schemas carry no `pattern`. Bounds that contradict each other (minimum above maximum, including a `range` minimum above its default maximum of 100) are dropped. Any drop is reported as `truncated`.
 - **Shared vectors.** `apps/qdral-browser-worker/src/webmcp/shared-vectors.json` pins the worker's output for awkward markup. The worker's tests require its output to equal the vectors, and the host's tests require `validate_tools` to accept every one, so a disagreement between the two sides fails in CI.
@@ -44,13 +49,18 @@ A page with no declarations yields an empty list, and the caller falls back to o
   - exact keys (`deny_unknown_fields`);
   - name syntax and uniqueness;
   - a non-zero, unique form node per tool;
-  - no control characters, and no bidi or format marks;
+  - no control characters, and none of the invisible format characters above;
   - no names shaped like host identities;
   - type-consistent constraints;
   - finite numbers, `minimum <= maximum`, and `multiple_of > 0`.
 
   A record outside these is a protocol violation. It is not repaired.
 - The snapshot must be of exactly the committed URL. The worker compares the snapshot's own document URL with the page URL before and after the capture, and the host compares the result with the committed URL. A page that moved itself is stale.
+
+## Known limits for slice 5
+
+- For an `<option>` without a `value`, the reported choice is its text after bounding: controls and invisible marks are removed, and whitespace is collapsed. HTML collapses only ASCII whitespace, so the reported choice can differ from what the form would submit. Execution must match against the real option, never against this string.
+- The host's shared-vector test reads the worker's `shared-vectors.json` through a monorepo-relative `include_str!`. That ties the crate's tests to the repository layout, and they would not build from a packaged crate.
 
 ## Deviation from the decision's slice plan
 
