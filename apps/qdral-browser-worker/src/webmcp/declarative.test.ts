@@ -209,3 +209,10 @@ test("bounds cut whole code points and controls never cross", () => {
   const lone = /[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/;
   assert.ok(!lone.test(JSON.stringify(tools)));
 });
+
+test("a DOM deeper than any call stack is walked without recursion", () => {
+  let inner = el("form", { toolname: "deep", tooldescription: "At the bottom." }, el("label", {}, "Deep field ", el("input", { name: "d" })));
+  for (let i = 0; i < 200_000; i++) inner = el("div", {}, inner);
+  const { tools } = discoverDeclarativeTools(doc(inner));
+  assert.deepEqual(tools.map((t) => [t.name, t.params]), [["deep", [{ name: "d", required: false, type: "string", description: "Deep field" }]]]);
+});

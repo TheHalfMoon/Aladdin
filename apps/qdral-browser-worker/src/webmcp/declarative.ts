@@ -109,26 +109,42 @@ function inputType(element: DomElement): string {
   return type === "" ? "text" : type;
 }
 
+/// Every element below `element`, in tree order. Iterative: a page can
+/// build a DOM deeper than any call stack.
 function* descendants(element: DomElement): Generator<DomElement> {
-  for (const child of element.children) {
-    if (child.kind === "element") {
-      yield child;
-      yield* descendants(child);
+  const stack: DomNode[] = [...element.children].reverse();
+  for (let node = stack.pop(); node; node = stack.pop()) {
+    if (node.kind !== "element") continue;
+    yield node;
+    for (let i = node.children.length - 1; i >= 0; i--) {
+      const child = node.children[i];
+      if (child) stack.push(child);
     }
   }
 }
 
+const SKIPPED_IN_LABELS = new Set(["button", "input", "meter", "output", "progress", "select", "textarea"]);
+/// Text collected for one label or option before it is bounded.
+const MAX_TEXT_GATHERED = 4096;
+
+/// The text below `element` in tree order (iterative, and stopping once
+/// enough has been gathered for any bound).
 function textOf(element: DomElement, skipControls: boolean): string {
   const parts: string[] = [];
-  const walk = (node: DomNode): void => {
+  let gathered = 0;
+  const stack: DomNode[] = [element];
+  for (let node = stack.pop(); node && gathered < MAX_TEXT_GATHERED; node = stack.pop()) {
     if (node.kind === "text") {
       parts.push(node.text);
-      return;
+      gathered += node.text.length + 1;
+      continue;
     }
-    if (skipControls && ["button", "input", "meter", "output", "progress", "select", "textarea"].includes(node.tag)) return;
-    for (const child of node.children) walk(child);
-  };
-  walk(element);
+    if (skipControls && node !== element && SKIPPED_IN_LABELS.has(node.tag)) continue;
+    for (let i = node.children.length - 1; i >= 0; i--) {
+      const child = node.children[i];
+      if (child) stack.push(child);
+    }
+  }
   return parts.join(" ");
 }
 
@@ -165,10 +181,28 @@ function formControls(form: DomElement, all: readonly DomElement[]): DomElement[
   return all.filter((element) => owned.has(element));
 }
 
-function labelText(control: DomElement, all: readonly DomElement[]): string {
+interface Context {
+  all: readonly DomElement[];
+  /// `label for=` elements by the id they name.
+  labelsFor: ReadonlyMap<string, readonly DomElement[]>;
+}
+
+function context(all: readonly DomElement[]): Context {
+  const labelsFor = new Map<string, DomElement[]>();
+  for (const element of all) {
+    const target = element.tag === "label" ? attr(element, "for") : undefined;
+    if (!target) continue;
+    const list = labelsFor.get(target);
+    if (list) list.push(element);
+    else labelsFor.set(target, [element]);
+  }
+  return { all, labelsFor };
+}
+
+function labelText(control: DomElement, ctx: Context): string {
   const labels: DomElement[] = [];
   const id = attr(control, "id");
-  if (id) for (const element of all) if (element.tag === "label" && attr(element, "for") === id) labels.push(element);
+  if (id) labels.push(...(ctx.labelsFor.get(id) ?? []));
   for (let up = control.parent; up; up = up.parent) {
     if (up.tag === "label" && !up.attrs.has("for")) {
       labels.push(up);
@@ -181,21 +215,26 @@ function labelText(control: DomElement, all: readonly DomElement[]): string {
     .join("; ");
 }
 
+function isInside(element: DomElement, ancestor: DomElement): boolean {
+  for (let up = element.parent; up; up = up.parent) if (up === ancestor) return true;
+  return false;
+}
+
 function commonFieldset(form: DomElement, controls: readonly DomElement[]): DomElement | undefined {
   const first = controls[0];
   for (let up = first?.parent ?? null; up && up !== form; up = up.parent) {
     if (up.tag !== "fieldset") continue;
-    const inside = new Set(descendants(up));
-    if (controls.every((control) => inside.has(control))) return up;
+    const fieldset = up;
+    if (controls.every((control) => isInside(control, fieldset))) return fieldset;
   }
   return undefined;
 }
 
-function parameterDescription(form: DomElement, controls: readonly DomElement[], all: readonly DomElement[]): string | undefined {
+function parameterDescription(form: DomElement, controls: readonly DomElement[], ctx: Context): string | undefined {
   if (controls.length === 1) {
     const control = controls[0];
     if (!control) return undefined;
-    return attr(control, "toolparamdescription") || labelText(control, all) || attr(control, "aria-description") || undefined;
+    return attr(control, "toolparamdescription") || labelText(control, ctx) || attr(control, "aria-description") || undefined;
   }
   const fieldset = commonFieldset(form, controls);
   return (fieldset && attr(fieldset, "toolparamdescription")) || undefined;
@@ -312,7 +351,7 @@ function isInput(control: DomElement, type: string): boolean {
   return control.tag === "input" && inputType(control) === type;
 }
 
-function parameterSchema(form: DomElement, controls: readonly DomElement[], all: readonly DomElement[]): ParamSchema | undefined {
+function parameterSchema(form: DomElement, controls: readonly DomElement[], ctx: Context): ParamSchema | undefined {
   const [first] = controls;
   if (!first) return undefined;
   let schema: ParamSchema | undefined;
@@ -333,7 +372,7 @@ function parameterSchema(form: DomElement, controls: readonly DomElement[], all:
     schema = inputSchema(first);
   }
   if (!schema) return undefined;
-  const description = parameterDescription(form, controls, all);
+  const description = parameterDescription(form, controls, ctx);
   const dateHint = isInput(first, "date") ? "Dates MUST be provided in 'YYYY-MM-DD' format." : undefined;
   const combined = description && dateHint ? `${description} (${dateHint})` : description || dateHint;
   return combined ? { ...schema, description: bound(combined, LIMITS.paramDescription) } : schema;
@@ -350,6 +389,7 @@ export interface Discovery {
 /// and later duplicates are dropped (as in the donor).
 export function discoverDeclarativeTools(root: DomElement): Discovery {
   const all = [root, ...descendants(root)];
+  const ctx = context(all);
   const tools: DeclaredTool[] = [];
   const names = new Set<string>();
   let truncated = false;
@@ -387,7 +427,7 @@ export function discoverDeclarativeTools(root: DomElement): Discovery {
         truncated = true;
         continue;
       }
-      const schema = parameterSchema(form, group, all);
+      const schema = parameterSchema(form, group, ctx);
       if (!schema) continue;
       if (params.length >= LIMITS.params) {
         truncated = true;
