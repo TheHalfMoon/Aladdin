@@ -14,7 +14,8 @@
 // visibility is hidden, transparent text (colour or text fill, any colour
 // syntax), text with a zero font size or a zero-area box or one past the
 // document's top or left edge, subtrees with opacity (or filter opacity) below 0.01, and
-// subtrees of rendered boxes that clip their content to at most four pixels
+// text inside a box (other than the root or body) that clips its content to
+// at most four pixels, unless it escapes the clip by positioning
 // (the "visually hidden" pattern). Attribute text (an image's alt, a link's
 // href) is used only from elements that are themselves rendered and visible.
 // The donor's viewport threshold does not apply (the whole page is content).
@@ -32,7 +33,8 @@ export const CONTENT_STYLES = [
   "filter",
   "overflow-x",
   "overflow-y",
-  "content-visibility"
+  "content-visibility",
+  "position"
 ] as const;
 type StyleName = (typeof CONTENT_STYLES)[number];
 
@@ -125,6 +127,12 @@ interface Slot {
   /// Under a `content-visibility: auto` box (its unrendered text is lost,
   /// not hidden).
   lazy: boolean;
+  /// Under a box that clips its content to a few pixels: its text is
+  /// hidden, unless it escapes the clip (below).
+  clipped: boolean;
+  /// A positioned element lies between that clip box and here (inclusive of
+  /// the clip box): absolutely positioned descendants stay clipped.
+  positionedSinceClip: boolean;
 }
 
 /// The alpha of a computed colour in any syntax the engine reports: `/ a`
@@ -199,7 +207,7 @@ export function contentModel(snapshot: LayoutSnapshot, deadline = Number.POSITIV
       break;
     }
     const parentAt = parentIndex[i] ?? -1;
-    const parent = parentAt >= 0 ? slots[parentAt] : { element: root, lazy: false };
+    const parent: Slot | null | undefined = parentAt >= 0 ? slots[parentAt] : { element: root, lazy: false, clipped: false, positionedSinceClip: false };
     if (parent === null || parent === undefined) {
       slots[i] = null;
       continue;
@@ -211,8 +219,11 @@ export function contentModel(snapshot: LayoutSnapshot, deadline = Number.POSITIV
       const opacity = Math.min(Number(style(i, "opacity") ?? "1"), filterOpacity(style(i, "filter")));
       const bounds = box(i);
       const clips = ["hidden", "clip"].includes(style(i, "overflow-x") ?? "") || ["hidden", "clip"].includes(style(i, "overflow-y") ?? "");
-      const clippedAway = rendered && clips && bounds !== undefined && (bounds.w <= MAX_CLIPPED_PX || bounds.h <= MAX_CLIPPED_PX);
-      if (SKIPPED.has(tag) || (Number.isFinite(opacity) && opacity < MIN_OPACITY) || clippedAway) {
+      // The root and body never clip the page: their overflow applies to
+      // the viewport.
+      const clipsTiny =
+        tag !== "html" && tag !== "body" && rendered && clips && bounds !== undefined && (bounds.w <= MAX_CLIPPED_PX || bounds.h <= MAX_CLIPPED_PX);
+      if (SKIPPED.has(tag) || (Number.isFinite(opacity) && opacity < MIN_OPACITY)) {
         slots[i] = null;
         continue;
       }
@@ -225,7 +236,21 @@ export function contentModel(snapshot: LayoutSnapshot, deadline = Number.POSITIV
       const shown = rendered && visible(i) && bounds !== undefined && bounds.w > 0 && bounds.h > 0;
       const element: Building = { kind: "element", tag, attrs, children: [], shown };
       parent.element.children.push(element);
-      slots[i] = { element, lazy: parent.lazy || style(i, "content-visibility") === "auto" };
+      // An overflow clip does not apply to a fixed-position descendant, nor to
+      // an absolutely positioned one whose containing block lies outside the
+      // clip box (no positioned element in between).
+      const position = style(i, "position") ?? "static";
+      let clipped = parent.clipped;
+      let positionedSinceClip = parent.positionedSinceClip;
+      if (clipped && (position === "fixed" || (position === "absolute" && !positionedSinceClip))) clipped = false;
+      if (clipped && position !== "static") positionedSinceClip = true;
+      if (clipsTiny) {
+        clipped = true;
+        positionedSinceClip = position !== "static";
+      }
+      // Attribute text of a clipped element is hidden like its text.
+      if (clipped) element.shown = false;
+      slots[i] = { element, lazy: parent.lazy || style(i, "content-visibility") === "auto", clipped, positionedSinceClip };
     } else if (type === 3) {
       const value = text(nodeValue[i]);
       if (!layoutAt.has(i)) {
@@ -239,8 +264,9 @@ export function contentModel(snapshot: LayoutSnapshot, deadline = Number.POSITIV
       const fill = style(i, "-webkit-text-fill-color");
       if (
         !visible(i) ||
-        alphaOf(style(i, "color")) <= 0 ||
-        (fill !== undefined && fill !== "" && alphaOf(fill) <= 0) ||
+        parent.clipped ||
+        alphaOf(style(i, "color")) < MIN_OPACITY ||
+        (fill !== undefined && fill !== "" && alphaOf(fill) < MIN_OPACITY) ||
         (Number.isFinite(fontSize) && fontSize <= 0) ||
         (bounds !== undefined &&
           (bounds.w <= 0 ||
@@ -256,7 +282,7 @@ export function contentModel(snapshot: LayoutSnapshot, deadline = Number.POSITIV
     } else if (type === 11) {
       const shadow: Building = { kind: "element", tag: "#shadow-root", attrs: new Map(), children: [], shown: false };
       parent.element.children.push(shadow);
-      slots[i] = { element: shadow, lazy: parent.lazy };
+      slots[i] = { element: shadow, lazy: parent.lazy, clipped: parent.clipped, positionedSinceClip: parent.positionedSinceClip };
     } else {
       slots[i] = null;
     }

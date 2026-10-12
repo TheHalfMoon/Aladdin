@@ -81,16 +81,16 @@ For the MIT donors no grant is needed, and renaming is allowed. The copyright an
 ## What is imported in this change
 
 The browser-use extraction pipeline, ported to TypeScript as a pure library in `apps/qdral-browser-worker/src/extract/`. It is the Markdown half of slice 6 (native extraction) in `WEB_CAPABILITIES_DECISION.md`:
-- `model.ts`: the rendered content of the main document, from a `DOMSnapshot.captureSnapshot` taken with ten computed styles (`CONTENT_STYLES`) and layout boxes. No page script runs, and live form values are never read. Hidden text, the usual way to smuggle instructions to a model, is dropped:
+- `model.ts`: the rendered content of the main document, from a `DOMSnapshot.captureSnapshot` taken with eleven computed styles (`CONTENT_STYLES`) and layout boxes. No page script runs, and live form values are never read. Hidden text, the usual way to smuggle instructions to a model, is dropped:
   - text without a layout object, or with hidden computed visibility;
-  - transparent text (by colour or text fill, in any colour syntax), text with a zero font size, text with a zero-area box or one past the document's top or left edge;
+  - transparent or near-transparent text (alpha below 0.01, by colour or text fill, in any colour syntax), text with a zero font size, text with a zero-area box or one past the document's top or left edge;
   - subtrees with opacity, or filter opacity, below 0.01;
-  - subtrees of rendered boxes that clip their content to at most four pixels (the "visually hidden" pattern);
+  - text and attribute text inside a box that clips its content to at most four pixels (the "visually hidden" pattern). The root and body never count as clipping, because their overflow applies to the viewport. Descendants that escape an overflow clip stay: fixed-position ones, and absolutely positioned ones with no positioned element between them and the clip box;
   - non-content elements and form controls.
 
   Attribute text (an image's alt, a link's href) is used only from elements that are themselves rendered and visible. Text the engine skipped rendering under `content-visibility: auto` sets `truncated`, so the loss is reported, not silent.
 - `markdown.ts`: content model to Markdown.
-  - Page text is escaped wherever a character could form syntax, so it can never form a link, image, HTML, heading, list, quote, rule or table; only the structure Aladdin emits is live (the donor disables escaping). Characters that cannot form syntax in place (an intraword `_`, a lone `~`, a `!` not before `[`, an `&` not starting an entity) are left alone, so identifiers and URLs in plain text stay readable.
+  - Page text is escaped wherever a character could form syntax, so it can never form a Markdown link or image, HTML, a heading, list, quote, rule, table or strikethrough; only the structure Aladdin emits is live (the donor disables escaping). One exception remains: a renderer with GFM's autolink extension turns bare `http(s)://`, `www.` and e-mail text into links. Those can only be http(s) or mail links, never `javascript:`, and the output is meant for a model, not for rendering. Characters that cannot form syntax in place (an intraword `_`, a `!` not before `[`, an `&` not starting an entity) are left alone, so identifiers and URLs in plain text stay readable.
   - Links and images are opt-in and kept only as resolved http(s) URLs, without credentials, with the characters that end a link destination encoded.
   - Code fences and spans are longer than any backtick run they contain.
   - Tables keep at most 64 columns, and their sections are walked iteratively (up to 50 levels).
@@ -106,9 +106,9 @@ It adds no frame, no host API and no tool. The worker frame, the host-side bound
 - **Unit tests** on CDP-shaped snapshots:
   - `extract/chunk.test.ts` (15 tests): the donor's chunking cases, ported, plus linear-time cases (the chunker has no budget of its own; its input is bounded by the 1,000,000-character output, and it was measured linear: 0.28 s at that size, 0.62 s at twice it, on the slowest shape);
   - `extract/extract.test.ts` (18 tests): conversion, tables, opt-in links and images, every hidden-content rule, cleanup (with a hostile input on which the donor's nested-object regex takes 1.8 s for a tenth of it), escaping of page-injected syntax (rules and setext headings included) with identifiers left readable, URL encoding, fences, a code span that must not swallow the page into one chunk, table and nesting bounds, invisible characters, and a 200,000-character non-breaking-space run, and deep quotes, lists and inline nesting around a large text.
-- **Real-engine tests**, `extract/extract.native.test.ts` (4 tests, Windows, the installed Edge, offline `setContent` with every request aborted):
-  - 22 hidden-content cases leak nothing: `display: none`, `visibility: hidden`, opacity 0 and 0.001, `filter: opacity(0)`, the `hidden` attribute, a zero font size, transparent text in `transparent`, `oklch(… / 0)` and `color(srgb … / 0)`, a transparent text fill, off-screen positioning to the left, one-pixel, two-pixel and zero-height clipped boxes, a closed `<details>`, `<noscript>`, hidden images and an image in a hidden link, a prefilled input, and a textarea default;
-  - visible text, a visible child of a hidden parent, `display: contents` text and a shown image are kept;
+- **Real-engine tests**, `extract/extract.native.test.ts` (5 tests, Windows, the installed Edge, offline `setContent` with every request aborted):
+  - 25 hidden-content cases leak nothing: `display: none`, `visibility: hidden`, opacity 0 and 0.001, `filter: opacity(0)`, the `hidden` attribute, a zero font size, transparent text in `transparent`, `oklch(… / 0)` and `color(srgb … / 0)`, a transparent text fill, off-screen positioning to the left, one-pixel, two-pixel and zero-height clipped boxes (and an image and positioned text inside one), near-zero colour alpha, a closed `<details>`, `<noscript>`, hidden images and an image in a hidden link, a prefilled input, and a textarea default;
+  - visible text, a visible child of a hidden parent, `display: contents` text, a shown image, and absolutely positioned and fixed children escaping a zero-height clip are kept, as is a single-page app whose body clips and is zero height;
   - closed shadow trees and slotted text come out in rendering order;
   - page-injected Markdown and HTML stay literal;
   - off-screen `content-visibility: auto` content is reported as truncated;

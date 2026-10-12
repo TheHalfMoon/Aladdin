@@ -47,6 +47,9 @@ test("hidden text and hidden attribute text never reach the Markdown (real Edge)
     `<p style="-webkit-text-fill-color:transparent">LEAK-text-fill</p>`,
     `<p style="filter:opacity(0)">LEAK-filter-opacity</p>`,
     `<div style="height:2px;overflow:hidden">LEAK-two-pixel-clip</div>`,
+    `<div style="height:2px;overflow:hidden"><img alt="LEAK-clipped-img" src="https://x.test/d.png"></div>`,
+    `<div style="position:relative;height:2px;overflow:hidden"><span style="position:absolute">LEAK-clipped-positioned</span></div>`,
+    `<p style="color:rgba(0,0,0,0.004)">LEAK-near-zero-alpha</p>`,
     `<p style="position:absolute;left:-99999px">LEAK-offscreen</p>`,
     `<p style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)">LEAK-visually-hidden</p>`,
     `<div style="height:0;overflow:hidden">LEAK-zero-height</div>`,
@@ -61,11 +64,13 @@ test("hidden text and hidden attribute text never reach the Markdown (real Edge)
   const html = `<!doctype html><body><p>Visible start</p>${leaks.join("\n")}
 <div style="visibility:hidden"><span style="visibility:visible">Visible child</span></div>
 <p style="display:contents">Visible contents</p>
+<div style="position:relative"><div style="height:0;overflow:hidden"><span style="position:absolute;top:0">Visible escaping child</span></div></div>
+<div style="height:0;overflow:hidden"><span style="position:fixed;top:0">Visible fixed child</span></div>
 <p><img alt="Visible alt" src="https://x.test/v.png"></p>
 <p>Visible end</p></body>`;
   const out = await extract(html, { images: true });
   for (const marker of out.markdown.match(/LEAK-[a-z-]+/g) ?? []) assert.fail(`${marker} leaked:\n${out.markdown}`);
-  for (const visible of ["Visible start", "Visible child", "Visible contents", "![Visible alt](https://x.test/v.png)", "Visible end"]) {
+  for (const visible of ["Visible start", "Visible child", "Visible contents", "Visible escaping child", "Visible fixed child", "![Visible alt](https://x.test/v.png)", "Visible end"]) {
     assert.ok(out.markdown.includes(visible), `${visible} missing:\n${out.markdown}`);
   }
 });
@@ -98,4 +103,10 @@ test("hostile whitespace and wide tables stay within the budget (real Edge)", { 
   // The extraction alone (not the engine launch) stays inside its 4 s budget.
   assert.ok(out.extractMs < 4_500, `extraction took ${out.extractMs} ms`);
   assert.ok(out.markdown.length < 1_000_001);
+});
+
+test("a page whose body clips but is zero height keeps its content (real Edge)", { skip, timeout: 120_000 }, async () => {
+  const html = `<!doctype html><style>html,body{overflow:hidden;margin:0}</style><body><main style="position:absolute;top:0;left:0"><h1>App title</h1><p>App body text</p></main></body>`;
+  const out = await extract(html);
+  assert.equal(out.markdown, "# App title\n\nApp body text");
 });

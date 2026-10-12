@@ -89,14 +89,14 @@ function collapse(text: string): string {
 /// Escape page text so Markdown and HTML syntax in it stays literal, but
 /// only where a character can form syntax, so identifiers and URLs in plain
 /// text stay readable: `\ ` * [ ] < > |` always; `_` only at a word edge
-/// (intraword `_` never forms emphasis); `!` only before `[`; `~` only when
-/// doubled; `&` only before an entity-like name.
+/// (intraword `_` never forms emphasis); `!` only before `[`; `~` always
+/// (GFM strikes through with one); `&` only before an entity-like name.
 function escapeInline(text: string): string {
   return text
     .replace(/[\\`*[\]<>|]/g, (ch) => `\\${ch}`)
     .replace(/(?<![\p{L}\p{N}])_|_(?![\p{L}\p{N}])/gu, "\\_")
     .replace(/!(?=\\\[)/g, "\\!")
-    .replace(/~(?=~)/g, "\\~")
+    .replace(/~/g, "\\~")
     .replace(/&(?=#?[A-Za-z0-9]+;)/g, "\\&");
 }
 

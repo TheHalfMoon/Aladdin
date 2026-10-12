@@ -313,7 +313,7 @@ test("a long run of non-breaking spaces is linear", () => {
 
 test("page text cannot form rules or setext headings, and plain identifiers stay readable", () => {
   const out = md({}, el("p", {}, "---"), el("p", {}, "a", el("br"), "==="), el("p", {}, "2024. A year"), el("p", {}, "snake_case https://ex.test/a_b?x=1&y=2 3*4 _lead trail_ a~b &amp; Wow!"));
-  assert.equal(out, ["\\---", "", "a  ", "\\===", "", "2024\\. A year", "", "snake_case https://ex.test/a_b?x=1&y=2 3\\*4 \\_lead trail\\_ a~b \\&amp; Wow!"].join("\n"));
+  assert.equal(out, ["\\---", "", "a  ", "\\===", "", "2024\\. A year", "", "snake_case https://ex.test/a_b?x=1&y=2 3\\*4 \\_lead trail\\_ a\\~b \\&amp; Wow!"].join("\n"));
 });
 
 test("an inline code span at a line start does not open a fence for the rest of the page", () => {
