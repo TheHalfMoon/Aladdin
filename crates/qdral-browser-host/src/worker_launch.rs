@@ -102,6 +102,17 @@ pub struct CommittedDownload {
     pub source_url: String,
 }
 
+/// The outcome of an executed WebMCP declarative tool: the document the
+/// submission opened, and the structured data (`application/ld+json`) it
+/// carries, as untrusted page text.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ExecutionOutcome {
+    pub url: String,
+    pub status: u16,
+    pub document_generation: u64,
+    pub structured: Vec<crate::webmcp::PageText>,
+}
+
 /// A completed top-level navigation.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NavigationOutcome {
@@ -193,6 +204,11 @@ pub(crate) enum WorkerRequest<'a> {
         reference: &'a str,
         path: &'a str,
     },
+    Execute {
+        exec_id: u64,
+        tool: &'a str,
+        fields: &'a [crate::webmcp::ExecField],
+    },
     Shutdown,
 }
 
@@ -262,6 +278,16 @@ pub(crate) enum WorkerReply {
     },
     DownloadFailed {
         dl_id: u64,
+        reason: String,
+    },
+    Executed {
+        exec_id: u64,
+        url: String,
+        status: u16,
+        structured: Vec<String>,
+    },
+    ExecutionFailed {
+        exec_id: u64,
         reason: String,
     },
     Error {
@@ -915,6 +941,7 @@ mod platform {
         next_disc: u64,
         next_act: u64,
         next_dl: u64,
+        next_exec: u64,
         /// Host-owned staging directory for downloads of this lifetime.
         staging: PathBuf,
         /// The committed document: URL and document generation.
@@ -985,6 +1012,7 @@ mod platform {
             next_disc: 0,
             next_act: 0,
             next_dl: 0,
+            next_exec: 0,
             staging: spec.temp_dir.join(format!(
                 "qdral-sg108-staging-{}-{:x}",
                 std::process::id(),
@@ -1384,6 +1412,148 @@ mod platform {
                 document_generation: generation,
                 truncated,
                 tools,
+            })
+        }
+
+        /// The state an execution approval must name: the tool, a digest of
+        /// its discovered record, its method and resolved action, and the
+        /// canonical arguments, so the one-shot approval covers exactly what
+        /// is submitted where. Refuses tools that cannot execute and
+        /// arguments outside the declared subset.
+        pub fn execution_binding(
+            &self,
+            tool_id: &str,
+            args: &serde_json::Map<String, serde_json::Value>,
+        ) -> Result<String, HostError> {
+            let (url, generation) = self
+                .committed
+                .clone()
+                .ok_or_else(|| HostError::Invalid("no committed document".into()))?;
+            let tool = self
+                .host_tools
+                .get(tool_id)
+                .filter(|tool| tool.document_generation == generation)
+                .ok_or_else(|| HostError::Invalid("stale or unknown tool".into()))?;
+            crate::webmcp::ensure_executable(&tool.record)?;
+            crate::webmcp::validate_arguments(&tool.record, args)?;
+            let action = crate::webmcp::resolve_action(
+                &url,
+                tool.record.action.as_deref().unwrap_or_default(),
+            )?;
+            let method = match tool.record.method {
+                crate::webmcp::FormMethod::Post => "post",
+                _ => "get",
+            };
+            Ok(format!(
+                "execute\n{}\n{}\n{method}\n{action}\n{}",
+                tool.record.name,
+                sha256_hex(format!("{:?}", tool.record).as_bytes()),
+                crate::webmcp::canonical_arguments(args)
+            ))
+        }
+
+        /// Execute a discovered WebMCP declarative tool (SG-000108 slice 5)
+        /// under SG-000077: the tool is discovered again and must be
+        /// unchanged; the arguments are validated host-side; the approval
+        /// (bound to `execution_binding`) is consumed in `dispatch`; the
+        /// worker fills the form through typed Playwright actions and clicks
+        /// its default submit button; the host accepts exactly one
+        /// page-initiated document, the form's action on the page's origin
+        /// (any query for GET). The result is that document and its
+        /// structured data as untrusted page text. A form whose page handles
+        /// the submission without opening a document is not a verified
+        /// execution.
+        pub fn execute_tool(
+            &mut self,
+            target: &crate::actuation::ActuationTarget,
+            approval: &mut crate::actuation::ApprovalToken,
+            args: &serde_json::Map<String, serde_json::Value>,
+            policy_revision: u64,
+            workspace: &str,
+        ) -> Result<ExecutionOutcome, HostError> {
+            self.ensure_alive()?;
+            if target.action != crate::actuation::SupportedAction::Execute {
+                return Err(HostError::Invalid(
+                    "an execution needs an execute approval".into(),
+                ));
+            }
+            let (url, generation) = self
+                .committed
+                .clone()
+                .ok_or_else(|| HostError::Invalid("no committed document".into()))?;
+            let shown = self
+                .host_tools
+                .get(&target.node_id)
+                .filter(|tool| tool.document_generation == generation)
+                .map(|tool| tool.record.clone())
+                .ok_or_else(|| HostError::Invalid("stale or unknown tool".into()))?;
+            // The page may have changed the form since it was discovered.
+            self.discover_tools()?;
+            let fresh = self
+                .host_tools
+                .get(&target.node_id)
+                .map(|tool| tool.record.clone());
+            if fresh.as_ref() != Some(&shown) {
+                self.host_tools.clear();
+                return Err(HostError::Invalid(
+                    "the tool changed since it was discovered".into(),
+                ));
+            }
+            let binding = self.execution_binding(&target.node_id, args)?;
+            let fields = crate::webmcp::validate_arguments(&shown, args)?;
+            let action =
+                crate::webmcp::resolve_action(&url, shown.action.as_deref().unwrap_or_default())?;
+            let any_query = shown.method != crate::webmcp::FormMethod::Post;
+            self.policy.expect_submission(&action, any_query)?;
+            if let Err(error) = crate::actuation::dispatch(
+                target,
+                approval,
+                generation,
+                &binding,
+                policy_revision,
+                workspace,
+            ) {
+                self.policy.finish_activation();
+                return Err(error);
+            }
+            self.next_exec += 1;
+            let exec_id = self.next_exec;
+            let sent = self.send(&WorkerRequest::Execute {
+                exec_id,
+                tool: &shown.name,
+                fields: &fields,
+            });
+            let reply = sent.and_then(|()| self.reply(WORKER_ACTIVATION_TIMEOUT));
+            let opened_expected = self.policy.finish_activation();
+            self.host_nodes.clear();
+            self.host_tools.clear();
+            let (done_url, status, structured) = match reply? {
+                WorkerReply::Executed {
+                    exec_id: done,
+                    url,
+                    status,
+                    structured,
+                } if done == exec_id => (url, status, structured),
+                WorkerReply::ExecutionFailed {
+                    exec_id: done,
+                    reason,
+                } if done == exec_id => return Err(navigation_failure(&reason)),
+                _ => return Err(HostError::Unavailable(UnavailableReason::ProtocolViolation)),
+            };
+            if !opened_expected {
+                return Err(HostError::Invalid(
+                    "postcondition unverified: the submission opened no document".into(),
+                ));
+            }
+            let structured = crate::webmcp::validate_result_blocks(structured)?;
+            self.policy.commit_page_initiated(&done_url)?;
+            let next = generation + 1;
+            self.committed = Some((done_url.clone(), next));
+            Ok(ExecutionOutcome {
+                url: done_url,
+                status,
+                document_generation: next,
+                structured,
             })
         }
 
@@ -1839,6 +2009,31 @@ mod fallback {
         }
 
         /// API parity: no worker ever exists off Windows.
+        pub fn execution_binding(
+            &self,
+            _tool_id: &str,
+            _args: &serde_json::Map<String, serde_json::Value>,
+        ) -> Result<String, HostError> {
+            Err(HostError::Unavailable(
+                UnavailableReason::UnsupportedRuntime,
+            ))
+        }
+
+        /// API parity: no worker ever exists off Windows.
+        pub fn execute_tool(
+            &mut self,
+            _target: &crate::actuation::ActuationTarget,
+            _approval: &mut crate::actuation::ApprovalToken,
+            _args: &serde_json::Map<String, serde_json::Value>,
+            _policy_revision: u64,
+            _workspace: &str,
+        ) -> Result<ExecutionOutcome, HostError> {
+            Err(HostError::Unavailable(
+                UnavailableReason::UnsupportedRuntime,
+            ))
+        }
+
+        /// API parity: no worker ever exists off Windows.
         pub fn discover_tools(&mut self) -> Result<crate::webmcp::DiscoveredTools, HostError> {
             Err(HostError::Unavailable(
                 UnavailableReason::UnsupportedRuntime,
@@ -2284,6 +2479,37 @@ mod tests {
         .is_ok());
         assert!(reply(r#"{"frame":"activation_failed","act_id":2,"reason":"denied"}"#).is_ok());
         assert!(reply(r#"{"frame":"activated","act_id":2,"url":"u","status":200,"x":1}"#).is_err());
+    }
+
+    #[test]
+    fn execution_frames_are_exact() {
+        let json = |request: &WorkerRequest<'_>| serde_json::to_string(request).unwrap();
+        let fields = [crate::webmcp::ExecField {
+            name: "q".into(),
+            control: crate::webmcp::ControlKind::Text,
+            values: vec!["rust".into()],
+        }];
+        assert_eq!(
+            json(&WorkerRequest::Execute {
+                exec_id: 3,
+                tool: "search",
+                fields: &fields
+            }),
+            r#"{"frame":"execute","exec_id":3,"tool":"search","fields":[{"name":"q","control":"text","values":["rust"]}]}"#
+        );
+        let reply = |text: &str| serde_json::from_str::<WorkerReply>(text);
+        assert!(matches!(
+            reply(r#"{"frame":"executed","exec_id":3,"url":"https://fixture.test/search?q=rust","status":200,"structured":["{}"]}"#).unwrap(),
+            WorkerReply::Executed { exec_id: 3, status: 200, .. }
+        ));
+        assert!(matches!(
+            reply(r#"{"frame":"execution_failed","exec_id":3,"reason":"timeout"}"#).unwrap(),
+            WorkerReply::ExecutionFailed { exec_id: 3, .. }
+        ));
+        assert!(reply(
+            r#"{"frame":"executed","exec_id":3,"url":"u","status":200,"structured":[],"extra":1}"#
+        )
+        .is_err());
     }
 
     #[test]

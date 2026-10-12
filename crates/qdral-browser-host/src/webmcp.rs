@@ -566,7 +566,7 @@ pub fn resolve_action(committed_url: &str, action: &str) -> Result<String, HostE
 
 /// Check the structured data the worker read from the result document:
 /// bounded, and carried as page text.
-pub(crate) fn validate_result_blocks(blocks: Vec<String>) -> Result<Vec<PageText>, HostError> {
+pub fn validate_result_blocks(blocks: Vec<String>) -> Result<Vec<PageText>, HostError> {
     if blocks.len() > MAX_RESULT_BLOCKS {
         return Err(violation());
     }

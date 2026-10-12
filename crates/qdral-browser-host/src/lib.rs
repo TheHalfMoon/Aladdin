@@ -104,17 +104,19 @@ pub use uia::{
     UiaProcess, UiaTarget, UiaWindow, MAX_SCROLL_AMOUNT, MAX_UIA_VALUE_CHARS, MIN_SCROLL_AMOUNT,
 };
 pub use webmcp::{
-    validate_tools, ControlKind, DiscoveredTool, DiscoveredTools, FormMethod, HostTool, PageText,
-    ParamType, ToolParam, WireParam, WireTool, MAX_ACTION, MAX_CHOICE, MAX_CHOICES,
-    MAX_PARAM_DESCRIPTION, MAX_PATTERN, MAX_TOOLS, MAX_TOOL_DESCRIPTION, MAX_TOOL_NAME,
+    canonical_arguments, ensure_executable, resolve_action, validate_arguments,
+    validate_result_blocks, validate_tools, ControlKind, DiscoveredTool, DiscoveredTools,
+    ExecField, FormMethod, HostTool, PageText, ParamType, ToolParam, WireParam, WireTool,
+    MAX_ACTION, MAX_ARGUMENT_CHARS, MAX_CHOICE, MAX_CHOICES, MAX_PARAM_DESCRIPTION, MAX_PATTERN,
+    MAX_RESULT_BLOCK, MAX_RESULT_BLOCKS, MAX_TOOLS, MAX_TOOL_DESCRIPTION, MAX_TOOL_NAME,
     MAX_TOOL_PARAMS, MAX_TOOL_TITLE,
 };
 pub use worker_launch::{
     classify_job, launch_worker, worker_environment, worker_node_args, BrowserWorker, CancelHandle,
-    CommittedDownload, HostNode, JobProcess, LiveObservation, NavigationOutcome, ShutdownReport,
-    SnapshotNode, WorkerLaunch, WORKER_ACTIVATION_TIMEOUT, WORKER_HANDSHAKE_TIMEOUT,
-    WORKER_IDENTITY, WORKER_LAUNCH_TIMEOUT, WORKER_NAVIGATION_TIMEOUT, WORKER_NODE_OPTION,
-    WORKER_OBSERVATION_TIMEOUT, WORKER_PROTOCOL_GENERATION, WORKER_REPLY_TIMEOUT,
-    WORKER_SHUTDOWN_TIMEOUT,
+    CommittedDownload, ExecutionOutcome, HostNode, JobProcess, LiveObservation, NavigationOutcome,
+    ShutdownReport, SnapshotNode, WorkerLaunch, WORKER_ACTIVATION_TIMEOUT,
+    WORKER_HANDSHAKE_TIMEOUT, WORKER_IDENTITY, WORKER_LAUNCH_TIMEOUT, WORKER_NAVIGATION_TIMEOUT,
+    WORKER_NODE_OPTION, WORKER_OBSERVATION_TIMEOUT, WORKER_PROTOCOL_GENERATION,
+    WORKER_REPLY_TIMEOUT, WORKER_SHUTDOWN_TIMEOUT,
 };
 pub use worker_navigation::{NavigationPolicy, RouteKind};

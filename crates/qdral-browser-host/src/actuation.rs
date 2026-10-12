@@ -17,6 +17,9 @@ pub enum SupportedAction {
     /// Click a link to download its document into an approved folder; the
     /// target state binds the link, the folder and the file name.
     Download,
+    /// Fill and submit a discovered WebMCP declarative tool form; the target
+    /// state binds the tool record, its action and the exact arguments.
+    Execute,
 }
 
 impl SupportedAction {
@@ -25,6 +28,7 @@ impl SupportedAction {
             Self::Click => "click",
             Self::Fill => "fill",
             Self::Download => "download",
+            Self::Execute => "execute",
         }
     }
 
@@ -33,6 +37,7 @@ impl SupportedAction {
             "click" => Ok(Self::Click),
             "fill" => Ok(Self::Fill),
             "download" => Ok(Self::Download),
+            "execute" => Ok(Self::Execute),
             _ => Err(HostError::Invalid("unsupported actuation action".into())),
         }
     }
@@ -51,6 +56,7 @@ pub fn role_supports_action(role: &str, action: SupportedAction) -> Result<(), H
         SupportedAction::Click => &["button", "link", "hyperlink", "menuitem", "tab", "checkbox"],
         SupportedAction::Fill => &["textbox", "edit", "document", "combobox", "searchbox"],
         SupportedAction::Download => &["link", "hyperlink"],
+        SupportedAction::Execute => &["webmcp-tool"],
     };
     if allowed.iter().any(|entry| lower.contains(entry)) {
         return Ok(());

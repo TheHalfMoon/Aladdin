@@ -64,6 +64,9 @@ pub struct NavigationPolicy {
     /// During an approved activation: the one page-initiated document the
     /// host accepts, and whether it was requested.
     activation: Option<(String, bool)>,
+    /// The expectation matches any query on the expected path (a GET form
+    /// submission, whose query the engine builds from every field).
+    activation_any_query: bool,
 }
 
 impl std::fmt::Debug for RedirectChain {
@@ -83,6 +86,7 @@ impl NavigationPolicy {
             chain: None,
             committed_origin: None,
             activation: None,
+            activation_any_query: false,
         }
     }
 
@@ -151,6 +155,18 @@ impl NavigationPolicy {
             ));
         }
         self.activation = Some((url.to_owned(), false));
+        self.activation_any_query = false;
+        Ok(())
+    }
+
+    /// Expect exactly one page-initiated document for an approved form
+    /// submission to `action`: the exact URL for POST; for GET (`any_query`)
+    /// the same URL with whatever query the engine builds from the form's
+    /// fields, including fields the host never sees.
+    pub fn expect_submission(&mut self, action: &str, any_query: bool) -> Result<(), HostError> {
+        let path = action.split('?').next().unwrap_or(action);
+        self.expect_activation(if any_query { path } else { action })?;
+        self.activation_any_query = any_query;
         Ok(())
     }
 
@@ -158,6 +174,7 @@ impl NavigationPolicy {
     /// requested (a click that requested no document, such as a pushState
     /// or a script action, is not a verified activation).
     pub fn finish_activation(&mut self) -> bool {
+        self.activation_any_query = false;
         matches!(self.activation.take(), Some((_, true)))
     }
 
@@ -209,10 +226,16 @@ impl NavigationPolicy {
                 if self.expected.as_deref() == Some(url) {
                     return Ok(());
                 }
+                let any_query = self.activation_any_query;
                 if let Some((expected, taken)) = self.activation.as_mut() {
                     // An approved activation opens exactly its destination,
                     // once; a script redirect or a changed href goes nowhere.
-                    if expected.as_str() != url || *taken {
+                    let matches = if any_query {
+                        url.split('?').next() == Some(expected.as_str())
+                    } else {
+                        expected.as_str() == url
+                    };
+                    if !matches || *taken {
                         return Err(HostError::Invalid(
                             "the activation opened another document".into(),
                         ));
@@ -424,6 +447,51 @@ mod tests {
         assert!(p
             .decide(RouteKind::Redirect, "https://other.test/moved", HOME)
             .is_err());
+    }
+
+    #[test]
+    fn a_submission_opens_its_action_once_with_any_query_for_get() {
+        let mut p = policy();
+        p.begin("https://fixture.test/").unwrap();
+        p.commit("https://fixture.test/").unwrap();
+        assert!(p
+            .expect_submission("https://other.test/search", true)
+            .is_err());
+        p.expect_submission("https://fixture.test/search?ignored=1", true)
+            .unwrap();
+        assert!(p
+            .decide(RouteKind::Document, "https://fixture.test/searchx?q=1", "")
+            .is_err());
+        assert!(p
+            .decide(
+                RouteKind::Document,
+                "https://fixture.test/search?q=rust&csrf=t",
+                ""
+            )
+            .is_ok());
+        assert!(
+            p.decide(
+                RouteKind::Document,
+                "https://fixture.test/search?q=again",
+                ""
+            )
+            .is_err(),
+            "twice"
+        );
+        assert!(p.finish_activation());
+        // POST: the exact action only.
+        p.expect_submission("https://fixture.test/post", false)
+            .unwrap();
+        assert!(p
+            .decide(RouteKind::Document, "https://fixture.test/post?x=1", "")
+            .is_err());
+        assert!(!p.finish_activation());
+        p.expect_submission("https://fixture.test/post", false)
+            .unwrap();
+        assert!(p
+            .decide(RouteKind::Document, "https://fixture.test/post", "")
+            .is_ok());
+        assert!(p.finish_activation());
     }
 
     #[test]
