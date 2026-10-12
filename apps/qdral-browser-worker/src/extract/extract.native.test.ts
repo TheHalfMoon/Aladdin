@@ -15,7 +15,7 @@ import type { LayoutSnapshot } from "./model.js";
 const EDGE_CANDIDATES = ["C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe", "C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe"];
 const skip = process.platform === "win32" ? false : "native probes are Windows-only evidence";
 
-async function extract(html: string, options: ExtractOptions = {}) {
+async function extract(html: string, options: ExtractOptions = {}): Promise<ReturnType<typeof extractMarkdown> & { extractMs: number }> {
   const engine = EDGE_CANDIDATES.find((path) => existsSync(path));
   assert.ok(engine, "Edge is not installed");
   const browser = await chromium.launch({ executablePath: engine, headless: true });
@@ -25,7 +25,9 @@ async function extract(html: string, options: ExtractOptions = {}) {
     await page.setContent(html);
     const session = await page.context().newCDPSession(page);
     const snapshot = (await session.send("DOMSnapshot.captureSnapshot", { computedStyles: [...CONTENT_STYLES] })) as unknown as LayoutSnapshot;
-    return extractMarkdown(snapshot, options);
+    const started = Date.now();
+    const result = extractMarkdown(snapshot, options);
+    return { ...result, extractMs: Date.now() - started };
   } finally {
     await browser.close();
   }
@@ -40,6 +42,11 @@ test("hidden text and hidden attribute text never reach the Markdown (real Edge)
     `<p hidden>LEAK-hidden-attribute</p>`,
     `<p style="font-size:0">LEAK-font-size</p>`,
     `<p style="color:transparent">LEAK-transparent</p>`,
+    `<p style="color:oklch(0.5 0.1 200 / 0)">LEAK-oklch-alpha</p>`,
+    `<p style="color:color(srgb 1 1 1 / 0)">LEAK-color-function-alpha</p>`,
+    `<p style="-webkit-text-fill-color:transparent">LEAK-text-fill</p>`,
+    `<p style="filter:opacity(0)">LEAK-filter-opacity</p>`,
+    `<div style="height:2px;overflow:hidden">LEAK-two-pixel-clip</div>`,
     `<p style="position:absolute;left:-99999px">LEAK-offscreen</p>`,
     `<p style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)">LEAK-visually-hidden</p>`,
     `<div style="height:0;overflow:hidden">LEAK-zero-height</div>`,
@@ -87,11 +94,8 @@ test("hostile whitespace and wide tables stay within the budget (real Edge)", { 
   const cells = "<td>c</td>".repeat(4_000);
   const rows = "<tr></tr>".repeat(4_000);
   const html = `<!doctype html><body><p>a${"&nbsp;".repeat(200_000)}b</p><table><tr>${cells}</tr>${rows}</table></body>`;
-  const started = Date.now();
   const out = await extract(html);
-  const elapsed = Date.now() - started;
-  // Includes launching the engine; the extraction itself must stay inside
-  // its 4 s budget.
-  assert.ok(elapsed < 20_000, `took ${elapsed} ms`);
+  // The extraction alone (not the engine launch) stays inside its 4 s budget.
+  assert.ok(out.extractMs < 4_500, `extraction took ${out.extractMs} ms`);
   assert.ok(out.markdown.length < 1_000_001);
 });

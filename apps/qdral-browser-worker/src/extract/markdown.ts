@@ -86,14 +86,29 @@ function collapse(text: string): string {
   return text.replace(/[ \t\n\r\f]+/g, " ");
 }
 
-/// Escape page text so Markdown and HTML syntax in it stays literal.
+/// Escape page text so Markdown and HTML syntax in it stays literal, but
+/// only where a character can form syntax, so identifiers and URLs in plain
+/// text stay readable: `\ ` * [ ] < > |` always; `_` only at a word edge
+/// (intraword `_` never forms emphasis); `!` only before `[`; `~` only when
+/// doubled; `&` only before an entity-like name.
 function escapeInline(text: string): string {
-  return text.replace(/[\\`*_[\]<>!|~&]/g, (ch) => `\\${ch}`);
+  return text
+    .replace(/[\\`*[\]<>|]/g, (ch) => `\\${ch}`)
+    .replace(/(?<![\p{L}\p{N}])_|_(?![\p{L}\p{N}])/gu, "\\_")
+    .replace(/!(?=\\\[)/g, "\\!")
+    .replace(/~(?=~)/g, "\\~")
+    .replace(/&(?=#?[A-Za-z0-9]+;)/g, "\\&");
 }
 
-/// Escape what would start a block construct at the start of a line.
+/// Escape what would start a block construct at the start of a line: an ATX
+/// heading, a list marker, a quote, an ordered-list number (escaped as
+/// `1\.`, since a backslash before a digit is not an escape), and a line of
+/// only `-`, `=`, `_` or `*` (a thematic break or setext underline).
 function escapeLineStart(line: string): string {
-  return line.replace(/^(\s*)(#{1,6}(?=\s|$)|[-+=](?=\s|$)|>|\d{1,9}(?=[.)](\s|$)))/, "$1\\$2");
+  if (/^\s*([-=_*])(\s*\1)*\s*$/.test(line)) return line.replace(/^(\s*)(\S)/, "$1\\$2");
+  return line
+    .replace(/^(\s*)(\d{1,9})([.)])(?=\s|$)/, "$1$2\\$3")
+    .replace(/^(\s*)(#{1,6}(?=\s|$)|[-+](?=\s|$)|>)/, "$1\\$2");
 }
 
 /// The longest run of `ch` in `text`.

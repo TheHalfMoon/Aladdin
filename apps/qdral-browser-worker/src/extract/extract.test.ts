@@ -260,7 +260,7 @@ test("page text cannot form links, images, HTML or block syntax", () => {
       "",
       "\\> fake quote",
       "",
-      "\\1. fake item",
+      "1\\. fake item",
       "",
       "[x\\](javascript:alert(2)) \\[y](https://ok.test/)",
       "",
@@ -309,4 +309,18 @@ test("a long run of non-breaking spaces is linear", () => {
   const out = extractMarkdown(snapshot("https://fixture.test/", el("p", {}, "a" + "\u00a0".repeat(200_000) + "b"), el("pre", {}, " ".repeat(200_000) + "x")));
   assert.ok(Date.now() - started < 2_000, `took ${Date.now() - started} ms`);
   assert.ok(out.markdown.startsWith("a"));
+});
+
+test("page text cannot form rules or setext headings, and plain identifiers stay readable", () => {
+  const out = md({}, el("p", {}, "---"), el("p", {}, "a", el("br"), "==="), el("p", {}, "2024. A year"), el("p", {}, "snake_case https://ex.test/a_b?x=1&y=2 3*4 _lead trail_ a~b &amp; Wow!"));
+  assert.equal(out, ["\\---", "", "a  ", "\\===", "", "2024\\. A year", "", "snake_case https://ex.test/a_b?x=1&y=2 3\\*4 \\_lead trail\\_ a~b \\&amp; Wow!"].join("\n"));
+});
+
+test("an inline code span at a line start does not open a fence for the rest of the page", () => {
+  const paragraphs = Array.from({ length: 400 }, (_, i) => el("p", {}, `Paragraph ${i} `.repeat(20)));
+  for (const lead of [el("p", {}, el("code", {}, "``")), el("p", {}, el("code", {}, "a``b"))]) {
+    const result = extractMarkdown(snapshot("https://fixture.test/", lead, ...paragraphs), { chunkChars: 10_000 });
+    assert.ok(result.chunks.length > 5, `${result.chunks.length} chunks`);
+    assert.ok(result.chunks.every((c) => c.content.length < 20_000), "a chunk swallowed the page");
+  }
 });

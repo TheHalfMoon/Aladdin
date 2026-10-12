@@ -56,7 +56,9 @@ function parseAtomicBlocks(content: string): AtomicBlock[] {
       continue;
     }
 
-    if (line.trim().startsWith("```")) {
+    // An opening fence's info string never contains a backtick (CommonMark),
+    // so an inline code span at a line start does not open one.
+    if (/^`{3,}[^`]*$/.test(line.trim())) {
       // Closed only by a line of at least as many backticks (the converter
       // writes fences longer than any backtick run they contain).
       const open = /^`+/.exec(line.trim())?.[0].length ?? 3;

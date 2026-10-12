@@ -115,7 +115,9 @@ export function cleanMarkdown(content: string): string {
       if (run >= fence && line.trim().length === run) fence = 0;
       continue;
     }
-    if (run >= 3) {
+    // An opening fence's info string never contains a backtick (CommonMark),
+    // so an inline code span at a line start does not open one.
+    if (run >= 3 && !line.trim().slice(run).includes("`")) {
       fence = run;
       kept.push(line);
       continue;

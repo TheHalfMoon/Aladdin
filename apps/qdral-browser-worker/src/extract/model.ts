@@ -11,9 +11,10 @@
 // docs/aladdin/notices/browser-use-MIT.txt. Modifications for Aladdin: only
 // rendered, visible text is content. Dropped: text without a layout object
 // (inside `display: none`, collapsed, never rendered), text whose computed
-// visibility is hidden, transparent text, text with a zero font size or a
-// zero-area or off-document box, subtrees with opacity below 0.01, and
-// subtrees of rendered boxes that clip their content to at most one pixel
+// visibility is hidden, transparent text (colour or text fill, any colour
+// syntax), text with a zero font size or a zero-area box or one past the
+// document's top or left edge, subtrees with opacity (or filter opacity) below 0.01, and
+// subtrees of rendered boxes that clip their content to at most four pixels
 // (the "visually hidden" pattern). Attribute text (an image's alt, a link's
 // href) is used only from elements that are themselves rendered and visible.
 // The donor's viewport threshold does not apply (the whole page is content).
@@ -21,13 +22,27 @@
 // never reaches the caller. Live form values are never read.
 
 /// The computed styles requested from the engine, in this order.
-export const CONTENT_STYLES = ["display", "visibility", "opacity", "font-size", "color", "overflow-x", "overflow-y", "content-visibility"] as const;
+export const CONTENT_STYLES = [
+  "display",
+  "visibility",
+  "opacity",
+  "font-size",
+  "color",
+  "-webkit-text-fill-color",
+  "filter",
+  "overflow-x",
+  "overflow-y",
+  "content-visibility"
+] as const;
 type StyleName = (typeof CONTENT_STYLES)[number];
 
 /// Upper bound on snapshot nodes taken into the model.
 export const MAX_CONTENT_NODES = 200_000;
 /// Opacity below this is invisible.
 const MIN_OPACITY = 0.01;
+/// A box that clips its content to this many pixels or fewer (either side)
+/// shows no legible text.
+const MAX_CLIPPED_PX = 4;
 
 export interface ContentElement {
   readonly kind: "element";
@@ -112,11 +127,28 @@ interface Slot {
   lazy: boolean;
 }
 
-function transparent(color: string | undefined): boolean {
-  if (!color) return false;
-  if (color === "transparent") return true;
-  const alpha = /^rgba\([^,]+,[^,]+,[^,]+,\s*([0-9.]+)\s*\)$/.exec(color)?.[1];
-  return alpha !== undefined && Number(alpha) === 0;
+/// The alpha of a computed colour in any syntax the engine reports: `/ a`
+/// in modern syntax (`color()`, `oklch()`, `lab()`, `rgb(r g b / a)`), the
+/// fourth component of `rgba()`, or `transparent`.
+function alphaOf(color: string | undefined): number {
+  if (!color) return 1;
+  if (color === "transparent") return 0;
+  const raw = color.includes("/")
+    ? color.slice(color.lastIndexOf("/") + 1).replace(")", "").trim()
+    : /^rgba\([^,]+,[^,]+,[^,]+,\s*([^)]+)\)$/.exec(color)?.[1]?.trim();
+  if (raw === undefined) return 1;
+  const value = raw.endsWith("%") ? Number.parseFloat(raw) / 100 : Number.parseFloat(raw);
+  return Number.isFinite(value) ? value : 1;
+}
+
+/// The smallest `opacity(...)` in a computed filter, as a fraction.
+function filterOpacity(filter: string | undefined): number {
+  let least = 1;
+  for (const match of (filter ?? "").matchAll(/opacity\(\s*([0-9.]+)(%?)\s*\)/g)) {
+    const value = Number.parseFloat(match[1] ?? "1") / (match[2] ? 100 : 1);
+    if (Number.isFinite(value)) least = Math.min(least, value);
+  }
+  return least;
 }
 
 export function contentModel(snapshot: LayoutSnapshot, deadline = Number.POSITIVE_INFINITY): ContentModel {
@@ -176,10 +208,10 @@ export function contentModel(snapshot: LayoutSnapshot, deadline = Number.POSITIV
     if (type === 1) {
       const tag = text(nodeName[i]).toLowerCase();
       const rendered = layoutAt.has(i);
-      const opacity = Number(style(i, "opacity") ?? "1");
+      const opacity = Math.min(Number(style(i, "opacity") ?? "1"), filterOpacity(style(i, "filter")));
       const bounds = box(i);
       const clips = ["hidden", "clip"].includes(style(i, "overflow-x") ?? "") || ["hidden", "clip"].includes(style(i, "overflow-y") ?? "");
-      const clippedAway = rendered && clips && bounds !== undefined && (bounds.w <= 1 || bounds.h <= 1);
+      const clippedAway = rendered && clips && bounds !== undefined && (bounds.w <= MAX_CLIPPED_PX || bounds.h <= MAX_CLIPPED_PX);
       if (SKIPPED.has(tag) || (Number.isFinite(opacity) && opacity < MIN_OPACITY) || clippedAway) {
         slots[i] = null;
         continue;
@@ -204,11 +236,17 @@ export function contentModel(snapshot: LayoutSnapshot, deadline = Number.POSITIV
       }
       const bounds = box(i);
       const fontSize = Number.parseFloat(style(i, "font-size") ?? "1");
+      const fill = style(i, "-webkit-text-fill-color");
       if (
         !visible(i) ||
-        transparent(style(i, "color")) ||
+        alphaOf(style(i, "color")) <= 0 ||
+        (fill !== undefined && fill !== "" && alphaOf(fill) <= 0) ||
         (Number.isFinite(fontSize) && fontSize <= 0) ||
-        (bounds !== undefined && (bounds.w <= 0 || bounds.h <= 0 || bounds.x + bounds.w <= 0 || bounds.y + bounds.h <= 0))
+        (bounds !== undefined &&
+          (bounds.w <= 0 ||
+            bounds.h <= 0 ||
+            bounds.x + bounds.w <= 0 ||
+            bounds.y + bounds.h <= 0))
       ) {
         continue;
       }

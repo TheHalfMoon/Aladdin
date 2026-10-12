@@ -81,22 +81,22 @@ For the MIT donors no grant is needed, and renaming is allowed. The copyright an
 ## What is imported in this change
 
 The browser-use extraction pipeline, ported to TypeScript as a pure library in `apps/qdral-browser-worker/src/extract/`. It is the Markdown half of slice 6 (native extraction) in `WEB_CAPABILITIES_DECISION.md`:
-- `model.ts`: the rendered content of the main document, from a `DOMSnapshot.captureSnapshot` taken with eight computed styles (`CONTENT_STYLES`) and layout boxes. No page script runs, and live form values are never read. Hidden text, the usual way to smuggle instructions to a model, is dropped:
+- `model.ts`: the rendered content of the main document, from a `DOMSnapshot.captureSnapshot` taken with ten computed styles (`CONTENT_STYLES`) and layout boxes. No page script runs, and live form values are never read. Hidden text, the usual way to smuggle instructions to a model, is dropped:
   - text without a layout object, or with hidden computed visibility;
-  - transparent text, text with a zero font size, text with a zero-area or off-document box;
-  - subtrees with opacity below 0.01;
-  - subtrees of rendered boxes that clip their content to at most one pixel (the "visually hidden" pattern);
+  - transparent text (by colour or text fill, in any colour syntax), text with a zero font size, text with a zero-area box or one past the document's top or left edge;
+  - subtrees with opacity, or filter opacity, below 0.01;
+  - subtrees of rendered boxes that clip their content to at most four pixels (the "visually hidden" pattern);
   - non-content elements and form controls.
 
   Attribute text (an image's alt, a link's href) is used only from elements that are themselves rendered and visible. Text the engine skipped rendering under `content-visibility: auto` sets `truncated`, so the loss is reported, not silent.
 - `markdown.ts`: content model to Markdown.
-  - Page text is escaped, so it can never form a link, image, HTML, heading, list or quote; only the structure Aladdin emits is live (the donor disables escaping).
+  - Page text is escaped wherever a character could form syntax, so it can never form a link, image, HTML, heading, list, quote, rule or table; only the structure Aladdin emits is live (the donor disables escaping). Characters that cannot form syntax in place (an intraword `_`, a lone `~`, a `!` not before `[`, an `&` not starting an entity) are left alone, so identifiers and URLs in plain text stay readable.
   - Links and images are opt-in and kept only as resolved http(s) URLs, without credentials, with the characters that end a link destination encoded.
   - Code fences and spans are longer than any backtick run they contain.
   - Tables keep at most 64 columns, and their sections are walked iteratively.
   - Every emitted part is charged to the size bound (default 1,000,000 characters) and the time bound (default 4 s), and nesting past 100 levels is flattened.
 - `clean.ts`: state-blob cleanup by linear scans (the donor's lazy regexes can be made super-linear), with code-fence lines kept verbatim and trailing whitespace trimmed by a scan. Also the text safety rule: well formed, no controls, no invisible characters that hide text or carry data (bidi controls, zero-width marks, fillers, variation selectors, tag characters).
-- `chunk.ts`: structure-aware chunking. Fences close only on a line of at least as many backticks, and splits use running prefix sizes.
+- `chunk.ts`: structure-aware chunking. A fence opens only on a CommonMark fence line (no backtick in its info string, so an inline code span at a line start never opens one), closes only on a line of at least as many backticks, and splits use running prefix sizes.
 - `index.ts`: `extractMarkdown(snapshot, options)`.
 
 It adds no frame, no host API and no tool. The worker frame, the host-side bounds and the untrusted-page-text labelling come with the slice 6 wiring, after slice 5 (#311) merges, because both change the worker protocol generation. The full provenance is in `docs/aladdin/sg000108_browser_donors_provenance.json`.
@@ -105,21 +105,22 @@ It adds no frame, no host API and no tool. The worker frame, the host-side bound
 
 - **Unit tests** on CDP-shaped snapshots:
   - `extract/chunk.test.ts` (14 tests): the donor's chunking cases, ported, plus a linear-time case;
-  - `extract/extract.test.ts` (15 tests): conversion, tables, opt-in links and images, every hidden-content rule, cleanup (with a hostile input on which the donor's nested-object regex takes 1.8 s for a tenth of it), escaping of page-injected syntax, URL encoding, fences, table and nesting bounds, invisible characters, and a 200,000-character non-breaking-space run.
+  - `extract/extract.test.ts` (17 tests): conversion, tables, opt-in links and images, every hidden-content rule, cleanup (with a hostile input on which the donor's nested-object regex takes 1.8 s for a tenth of it), escaping of page-injected syntax (rules and setext headings included) with identifiers left readable, URL encoding, fences, a code span that must not swallow the page into one chunk, table and nesting bounds, invisible characters, and a 200,000-character non-breaking-space run.
 - **Real-engine tests**, `extract/extract.native.test.ts` (4 tests, Windows, the installed Edge, offline `setContent` with every request aborted):
-  - 17 hidden-content cases leak nothing: `display: none`, `visibility: hidden`, opacity 0 and 0.001, the `hidden` attribute, a zero font size, transparent text, off-screen positioning, a one-pixel clipped box, a zero-height clipped box, a closed `<details>`, `<noscript>`, hidden images and an image in a hidden link, a prefilled input, and a textarea default;
+  - 22 hidden-content cases leak nothing: `display: none`, `visibility: hidden`, opacity 0 and 0.001, `filter: opacity(0)`, the `hidden` attribute, a zero font size, transparent text in `transparent`, `oklch(… / 0)` and `color(srgb … / 0)`, a transparent text fill, off-screen positioning to the left, one-pixel, two-pixel and zero-height clipped boxes, a closed `<details>`, `<noscript>`, hidden images and an image in a hidden link, a prefilled input, and a textarea default;
   - visible text, a visible child of a hidden parent, `display: contents` text and a shown image are kept;
   - closed shadow trees and slotted text come out in rendering order;
   - page-injected Markdown and HTML stay literal;
   - off-screen `content-visibility: auto` content is reported as truncated;
-  - a 200,000 `&nbsp;` run and a 4,000 by 4,000 table stay within the budget.
+  - a 200,000 `&nbsp;` run and a 4,000 by 4,000 table: the extraction itself, timed apart from the engine launch, stays within its 4 s budget.
 
 ### Known limits
 
 - Only the main document is read. Iframe documents and SVG `<text>` are not.
 - `aria-hidden` text is kept, because it is visible on screen.
 - Text the engine does not render (off-screen `content-visibility: auto`) is lost and only reported. The slice 6 wiring must decide whether to render it first.
-- Visual tricks the snapshot cannot see stay possible: text covered by another element, text whose colour matches its background, and text clipped by `clip-path`.
+- Visual tricks the snapshot cannot see stay possible: text covered by another element, text whose colour matches its background, text clipped by `clip-path`, and text positioned far to the right or far below. Absolute positioning enlarges the document itself, so such text cannot be told apart from a wide or long page without dropping legitimate content.
+- A link wrapped around block content (`<a><div>…</div></a>`) keeps its text but loses its target, because the inline box has no area (content is dropped, never leaked).
 - A relative link or image on a document without an http(s) base URL is kept as text only.
 - The state-blob cleanup, like the donor's, removes from a `{"$type":` opener up to the next `}`, which can span several blocks.
 
