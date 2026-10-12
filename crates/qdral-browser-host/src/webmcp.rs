@@ -374,6 +374,216 @@ pub fn validate_tools(
     Ok((tools, index))
 }
 
+// --- Slice 5: execution of declarative tools -------------------------------
+
+/// Upper bound on one string argument (Unicode scalar values).
+pub const MAX_ARGUMENT_CHARS: usize = 1024;
+/// Upper bound on structured-data blocks returned from the result document.
+pub const MAX_RESULT_BLOCKS: usize = 8;
+/// Upper bound on one structured-data block (Unicode scalar values).
+pub const MAX_RESULT_BLOCK: usize = 8192;
+
+/// One form field to enter, as the worker receives it. `values` holds one
+/// entry for single-valued controls ("true"/"false" for a checkbox) and the
+/// selected choices for multi-valued ones.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub struct ExecField {
+    pub name: String,
+    pub control: ControlKind,
+    pub values: Vec<String>,
+}
+
+fn refused(reason: &str) -> HostError {
+    HostError::Invalid(format!("tool execution refused: {reason}"))
+}
+
+/// Whether a discovered tool can be executed at all in this slice: it must
+/// declare `toolautosubmit` (without it, WebMCP leaves submission to the
+/// user), carry no password field, have an action that crossed exactly, use
+/// GET or POST, and have no hidden parameters (they cannot be entered).
+pub fn ensure_executable(tool: &DiscoveredTool) -> Result<(), HostError> {
+    if !tool.autosubmit {
+        return Err(refused("the form leaves submission to the user"));
+    }
+    if tool.has_password {
+        return Err(refused("the form has a password field"));
+    }
+    if tool.action.is_none() {
+        return Err(refused("the form action is unusable"));
+    }
+    if tool.method == FormMethod::Dialog {
+        return Err(refused("dialog forms do not submit"));
+    }
+    if tool.params.iter().any(|p| p.control == ControlKind::Hidden) {
+        return Err(refused("the form has a hidden parameter"));
+    }
+    Ok(())
+}
+
+fn argument_text(value: &str, multiline: bool) -> Result<(), HostError> {
+    let bad = |ch: char| ch.is_control() && !(multiline && matches!(ch, '\n' | '\t'));
+    if value.chars().count() > MAX_ARGUMENT_CHARS || value.chars().any(bad) {
+        return Err(refused(
+            "an argument is too long or carries control characters",
+        ));
+    }
+    if value.chars().any(is_bidi_or_format) {
+        return Err(refused("an argument carries invisible format characters"));
+    }
+    Ok(())
+}
+
+fn number_text(param: &ToolParam, value: &serde_json::Value) -> Result<String, HostError> {
+    let number = value
+        .as_f64()
+        .filter(|n| n.is_finite())
+        .ok_or_else(|| refused("a number argument is not a finite number"))?;
+    if param.minimum.is_some_and(|min| number < min)
+        || param.maximum.is_some_and(|max| number > max)
+    {
+        return Err(refused("a number argument is out of bounds"));
+    }
+    if let Some(step) = param.multiple_of {
+        let base = param.minimum.unwrap_or(0.0);
+        let quotient = (number - base) / step;
+        if (quotient - quotient.round()).abs() > f64::EPSILON * 16.0 * quotient.abs().max(1.0) {
+            return Err(refused("a number argument is off its step"));
+        }
+    }
+    // serde_json prints integers without a fraction and other values in
+    // their shortest round-trip form, both valid for a number input.
+    Ok(value.to_string())
+}
+
+/// Validate caller arguments against a discovered tool and turn them into
+/// form fields. Unknown arguments, missing required ones and anything
+/// outside the declared subset are refused before any approval is spent.
+/// `pattern` and `format` are not evaluated here: the engine's native
+/// constraint validation enforces them when the form is submitted.
+pub fn validate_arguments(
+    tool: &DiscoveredTool,
+    args: &serde_json::Map<String, serde_json::Value>,
+) -> Result<Vec<ExecField>, HostError> {
+    for name in args.keys() {
+        if !tool.params.iter().any(|p| &p.name == name) {
+            return Err(refused("an argument is not declared by the tool"));
+        }
+    }
+    let mut fields = Vec::new();
+    for param in &tool.params {
+        let Some(value) = args.get(&param.name) else {
+            if param.required {
+                return Err(refused("a required argument is missing"));
+            }
+            continue;
+        };
+        let values = match param.kind {
+            ParamType::String => {
+                let text = value
+                    .as_str()
+                    .ok_or_else(|| refused("a string argument is not a string"))?;
+                argument_text(text, param.control == ControlKind::Textarea)?;
+                if param
+                    .choices
+                    .as_ref()
+                    .is_some_and(|choices| !choices.iter().any(|c| c == text))
+                {
+                    return Err(refused("an argument is not one of the declared choices"));
+                }
+                if param.required && text.is_empty() {
+                    return Err(refused("a required argument is empty"));
+                }
+                vec![text.to_owned()]
+            }
+            ParamType::Number => vec![number_text(param, value)?],
+            ParamType::Boolean => {
+                let flag = value
+                    .as_bool()
+                    .ok_or_else(|| refused("a boolean argument is not a boolean"))?;
+                vec![flag.to_string()]
+            }
+            ParamType::Array => {
+                let items = value
+                    .as_array()
+                    .ok_or_else(|| refused("an array argument is not an array"))?;
+                let allowed = param.items_choices.as_deref().unwrap_or_default();
+                let mut chosen: Vec<String> = Vec::new();
+                for item in items {
+                    let text = item
+                        .as_str()
+                        .ok_or_else(|| refused("an array item is not a string"))?;
+                    if !allowed.iter().any(|c| c == text) || chosen.iter().any(|c| c == text) {
+                        return Err(refused("an array item is undeclared or repeated"));
+                    }
+                    chosen.push(text.to_owned());
+                }
+                chosen
+            }
+        };
+        fields.push(ExecField {
+            name: param.name.clone(),
+            control: param.control,
+            values,
+        });
+    }
+    Ok(fields)
+}
+
+/// The arguments in one canonical text (keys sorted), for approvals.
+pub fn canonical_arguments(args: &serde_json::Map<String, serde_json::Value>) -> String {
+    let sorted: std::collections::BTreeMap<&String, &serde_json::Value> = args.iter().collect();
+    serde_json::to_string(&sorted).unwrap_or_default()
+}
+
+/// Resolve a form action against the committed document: empty means the
+/// document itself; absolute `https://` and root-relative actions are
+/// resolved; anything else (relative paths, other schemes, fragments) is
+/// refused rather than guessed.
+pub fn resolve_action(committed_url: &str, action: &str) -> Result<String, HostError> {
+    let action = action.trim();
+    if action.contains('#') {
+        return Err(refused("the form action carries a fragment"));
+    }
+    if action.is_empty() {
+        return Ok(committed_url
+            .split('#')
+            .next()
+            .unwrap_or(committed_url)
+            .to_owned());
+    }
+    let committed = crate::navigation::parse_navigation_url(committed_url)?;
+    let resolved = if action.starts_with("https://") {
+        action.to_owned()
+    } else if action.starts_with('/') && !action.starts_with("//") {
+        // Navigation admits port 443 only, so the origin is the host.
+        format!("https://{}{action}", committed.host)
+    } else {
+        return Err(refused("the form action cannot be resolved"));
+    };
+    crate::navigation::parse_navigation_url(&resolved)?;
+    Ok(resolved)
+}
+
+/// Check the structured data the worker read from the result document:
+/// bounded, and carried as page text.
+pub(crate) fn validate_result_blocks(blocks: Vec<String>) -> Result<Vec<PageText>, HostError> {
+    if blocks.len() > MAX_RESULT_BLOCKS {
+        return Err(violation());
+    }
+    blocks
+        .into_iter()
+        .map(|block| {
+            let bad = |ch: char| {
+                (ch.is_control() && !matches!(ch, '\n' | '\t' | '\r')) || is_bidi_or_format(ch)
+            };
+            if block.chars().count() > MAX_RESULT_BLOCK || block.chars().any(bad) {
+                return Err(violation());
+            }
+            Ok(PageText(block))
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -406,6 +616,116 @@ mod tests {
             assert!(!wire.is_empty(), "{name}: no tools");
             assert!(validate_tools(wire, 3).is_ok(), "{name} was refused");
         }
+    }
+
+    fn search_tool() -> DiscoveredTool {
+        let wire: Vec<WireTool> =
+            serde_json::from_str(&GOOD.replace(r#""autosubmit":false"#, r#""autosubmit":true"#))
+                .unwrap();
+        validate_tools(wire, 7).unwrap().0.remove(0)
+    }
+
+    fn args(json: &str) -> serde_json::Map<String, serde_json::Value> {
+        serde_json::from_str(json).unwrap()
+    }
+
+    #[test]
+    fn arguments_become_typed_fields_or_are_refused_before_dispatch() {
+        let tool = search_tool();
+        assert!(ensure_executable(&tool).is_ok());
+        let fields = validate_arguments(
+            &tool,
+            &args(r#"{"q":"rust","n":3,"cabin":"eco","meal":["veg"],"ok":true}"#),
+        )
+        .unwrap();
+        let shape: Vec<(&str, ControlKind, Vec<String>)> = fields
+            .iter()
+            .map(|f| (f.name.as_str(), f.control, f.values.clone()))
+            .collect();
+        assert_eq!(
+            shape,
+            [
+                ("q", ControlKind::Text, vec!["rust".to_owned()]),
+                ("n", ControlKind::Text, vec!["3".to_owned()]),
+                ("cabin", ControlKind::Select, vec!["eco".to_owned()]),
+                ("meal", ControlKind::Checkboxes, vec!["veg".to_owned()]),
+                ("ok", ControlKind::Checkbox, vec!["true".to_owned()]),
+            ]
+        );
+        for bad in [
+            r#"{}"#,
+            r#"{"q":"rust","extra":1}"#,
+            r#"{"q":5}"#,
+            r#"{"q":""}"#,
+            r#"{"q":"a\u0007b"}"#,
+            r#"{"q":"a\u202eb"}"#,
+            r#"{"q":"rust","n":10}"#,
+            r#"{"q":"rust","n":2.5}"#,
+            r#"{"q":"rust","cabin":"first"}"#,
+            r#"{"q":"rust","meal":["veg","veg"]}"#,
+            r#"{"q":"rust","meal":["fish"]}"#,
+            r#"{"q":"rust","ok":"yes"}"#,
+        ] {
+            assert!(validate_arguments(&tool, &args(bad)).is_err(), "{bad}");
+        }
+        let long = format!(r#"{{"q":"{}"}}"#, "x".repeat(MAX_ARGUMENT_CHARS + 1));
+        assert!(validate_arguments(&tool, &args(&long)).is_err());
+        assert_eq!(
+            canonical_arguments(&args(r#"{"q":"a","cabin":"eco"}"#)),
+            r#"{"cabin":"eco","q":"a"}"#
+        );
+    }
+
+    #[test]
+    fn only_autosubmit_forms_without_secrets_or_hidden_fields_execute() {
+        let mut tool = search_tool();
+        tool.autosubmit = false;
+        assert!(ensure_executable(&tool).is_err());
+        let mut tool = search_tool();
+        tool.has_password = true;
+        assert!(ensure_executable(&tool).is_err());
+        let mut tool = search_tool();
+        tool.action = None;
+        assert!(ensure_executable(&tool).is_err());
+        let mut tool = search_tool();
+        tool.method = FormMethod::Dialog;
+        assert!(ensure_executable(&tool).is_err());
+        let mut tool = search_tool();
+        tool.params[0].control = ControlKind::Hidden;
+        assert!(ensure_executable(&tool).is_err());
+    }
+
+    #[test]
+    fn form_actions_resolve_on_the_page_or_are_refused() {
+        let page = "https://fixture.test/tools?x=1";
+        assert_eq!(resolve_action(page, "").unwrap(), page);
+        assert_eq!(
+            resolve_action(page, "/search").unwrap(),
+            "https://fixture.test/search"
+        );
+        assert!(resolve_action("https://fixture.test:8443/t", "/s").is_err());
+        assert_eq!(
+            resolve_action(page, "https://other.test/x").unwrap(),
+            "https://other.test/x"
+        );
+        for bad in [
+            "search",
+            "//other.test/x",
+            "http://fixture.test/x",
+            "javascript:alert(1)",
+            "/s#frag",
+        ] {
+            assert!(resolve_action(page, bad).is_err(), "{bad}");
+        }
+    }
+
+    #[test]
+    fn result_blocks_are_bounded_page_text() {
+        let ok = validate_result_blocks(vec!["{\n \"a\": 1\n}".into()]).unwrap();
+        assert_eq!(ok[0].untrusted(), "{\n \"a\": 1\n}");
+        assert!(validate_result_blocks(vec!["a\u{7}".into()]).is_err());
+        assert!(validate_result_blocks(vec!["x".repeat(MAX_RESULT_BLOCK + 1)]).is_err());
+        assert!(validate_result_blocks(vec![String::new(); MAX_RESULT_BLOCKS + 1]).is_err());
     }
 
     #[test]
