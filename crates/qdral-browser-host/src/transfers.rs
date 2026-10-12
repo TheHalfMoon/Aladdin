@@ -66,6 +66,13 @@ pub fn validate_relative_destination(destination: &str) -> Result<String, HostEr
             "transfer destination carries control characters".into(),
         ));
     }
+    // Invisible format characters (Unicode Cf: bidi overrides, zero-width
+    // marks) can make a name display with another extension.
+    if destination.chars().any(is_format_character) {
+        return Err(HostError::Invalid(
+            "transfer destination carries format characters".into(),
+        ));
+    }
     let lower = destination.to_ascii_lowercase();
     for prefix in ["/", "\\", "\\\\", "//", "con:", "prn:", "aux:", "nul:"] {
         if lower.starts_with(prefix) {
@@ -104,7 +111,34 @@ pub fn validate_relative_destination(destination: &str) -> Result<String, HostEr
                 "transfer trailing dot or space denied".into(),
             ));
         }
-        let stem = part.split('.').next().unwrap_or(part).to_ascii_lowercase();
+        let stem = part
+            .split('.')
+            .next()
+            .unwrap_or(part)
+            .trim_end_matches(' ')
+            .to_ascii_lowercase();
+        let device_number = |prefix: &str| {
+            stem.strip_prefix(prefix).is_some_and(|rest| {
+                matches!(
+                    rest,
+                    "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9"
+                ) || matches!(rest, "\u{b9}" | "\u{b2}" | "\u{b3}")
+            })
+        };
+        if device_number("com")
+            || device_number("lpt")
+            || matches!(stem.as_str(), "conin$" | "conout$" | "clock$")
+        {
+            return Err(HostError::Invalid("transfer reserved name denied".into()));
+        }
+        // An 8.3 short name ("PROGRA~1") could alias an existing entry.
+        if part
+            .as_bytes()
+            .windows(2)
+            .any(|pair| pair[0] == b'~' && pair[1].is_ascii_digit())
+        {
+            return Err(HostError::Invalid("transfer short name denied".into()));
+        }
         if matches!(
             stem.as_str(),
             "con"
@@ -142,6 +176,25 @@ pub fn validate_relative_destination(destination: &str) -> Result<String, HostEr
         }
     }
     Ok(destination.replace('\\', "/"))
+}
+
+/// A curated set of Unicode format characters (from category Cf) that can
+/// disguise a name: bidi controls, zero-width marks, the BOM, tags.
+fn is_format_character(ch: char) -> bool {
+    matches!(
+        ch,
+        '\u{ad}'
+            | '\u{61c}'
+            | '\u{180e}'
+            | '\u{200b}'..='\u{200f}'
+            | '\u{202a}'..='\u{202e}'
+            | '\u{2060}'..='\u{2064}'
+            | '\u{2066}'..='\u{206f}'
+            | '\u{feff}'
+            | '\u{fff9}'..='\u{fffb}'
+            | '\u{e0001}'
+            | '\u{e0020}'..='\u{e007f}'
+    )
 }
 
 /// Lexical reparse-safe containment: the normalized destination must
@@ -215,6 +268,47 @@ pub fn validate_download_type(
         return Err(HostError::Invalid("transfer content size denied".into()));
     }
     Ok(())
+}
+
+/// The media type of an inert PDF.
+pub const PDF_MEDIA: &str = "application/pdf";
+
+/// SG-000078 amendment (founder decision 2026-10-11, for the SG-000108 PDF
+/// journey): an inert PDF may be staged for a host-approved, create-only
+/// commit into the approved folder. The filename must end in `.pdf`, the
+/// declared media type must be `application/pdf` (parameters allowed), the
+/// content must start with `%PDF-` and match no other denied class, and the
+/// size is bounded. Aladdin never opens, renders, executes or extracts it.
+/// The general allowlist (`validate_download_type`) is unchanged: PDFs stay
+/// denied on every other path.
+pub fn validate_inert_pdf(
+    file_name: &str,
+    declared_media: &str,
+    content: &[u8],
+) -> Result<(), HostError> {
+    let extension = file_name
+        .rsplit_once('.')
+        .map(|(_, ext)| ext.to_ascii_lowercase())
+        .unwrap_or_default();
+    if extension != "pdf" {
+        return Err(HostError::Invalid("inert PDF filename denied".into()));
+    }
+    let media = declared_media
+        .split(';')
+        .next()
+        .unwrap_or("")
+        .trim()
+        .to_ascii_lowercase();
+    if media != PDF_MEDIA {
+        return Err(HostError::Invalid("inert PDF declared type denied".into()));
+    }
+    if content.is_empty() || content.len() as u64 > MAX_TRANSFER_BYTES {
+        return Err(HostError::Invalid("inert PDF size denied".into()));
+    }
+    match sniff_denied_class(content) {
+        Some(DeniedContentClass::Pdf) => Ok(()),
+        _ => Err(HostError::Invalid("inert PDF content is not a PDF".into())),
+    }
 }
 
 /// Validate declared-versus-actual size agreement within the hard bound.
@@ -317,11 +411,56 @@ mod tests {
     use super::*;
 
     #[test]
+    fn inert_pdfs_are_admitted_only_on_their_own_path() {
+        let pdf = b"%PDF-1.4\n1 0 obj << >> endobj\n%%EOF\n";
+        assert!(validate_inert_pdf("report-2026-09-30.pdf", "application/pdf", pdf).is_ok());
+        assert!(validate_inert_pdf("R.PDF", "application/pdf; charset=binary", pdf).is_ok());
+        // Wrong extension, declared type, or content: refused.
+        for (name, media, content) in [
+            ("report.exe", "application/pdf", &pdf[..]),
+            ("report.pdf.exe", "application/pdf", &pdf[..]),
+            ("report", "application/pdf", &pdf[..]),
+            ("report.pdf", "application/octet-stream", &pdf[..]),
+            ("report.pdf", "text/html", &pdf[..]),
+            (
+                "report.pdf",
+                "application/pdf",
+                &b"MZ\x90\x00 disguised"[..],
+            ),
+            ("report.pdf", "application/pdf", &b"PK\x03\x04 zip"[..]),
+            ("report.pdf", "application/pdf", &b"plain text"[..]),
+            ("report.pdf", "application/pdf", &b""[..]),
+        ] {
+            assert!(
+                validate_inert_pdf(name, media, content).is_err(),
+                "{name} {media}"
+            );
+        }
+        let oversized = vec![b' '; (MAX_TRANSFER_BYTES + 1) as usize];
+        let mut big = b"%PDF-".to_vec();
+        big.extend_from_slice(&oversized);
+        assert!(validate_inert_pdf("big.pdf", "application/pdf", &big).is_err());
+        // The general allowlist still refuses PDFs.
+        assert!(validate_download_type("report.pdf", "application/pdf", pdf).is_err());
+    }
+
+    #[test]
     fn canonical_destinations_validate_and_contain() {
         assert_eq!(
             validate_relative_destination("reports/summary.txt").unwrap(),
             "reports/summary.txt"
         );
+        // Ordinary names near the refused ones still pass, non-ASCII included.
+        for fine in [
+            "console.pdf",
+            "com10.pdf",
+            "lpt.pdf",
+            "a~b.pdf",
+            "تقرير.pdf",
+            "café 2026.pdf",
+        ] {
+            assert!(validate_relative_destination(fine).is_ok(), "{fine}");
+        }
         assert_eq!(
             reparse_safe_contained("/staging/root", "a/b.txt").unwrap(),
             "/staging/root/a/b.txt"
@@ -345,6 +484,15 @@ mod tests {
             "aux.txt",
             "bad<name>.txt",
             "nul",
+            "con .pdf",
+            "COM\u{b9}.pdf",
+            "lpt0.pdf",
+            "CONIN$.pdf",
+            "conout$/x.pdf",
+            "PROGRA~1/x.pdf",
+            "a\u{202e}fdp.cmd",
+            "zero\u{200b}width.pdf",
+            "bom\u{feff}.pdf",
         ] {
             assert!(
                 validate_relative_destination(destination).is_err(),

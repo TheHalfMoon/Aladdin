@@ -5,6 +5,7 @@
 // every method writes to stderr, so no library output can corrupt the channel.
 
 import { Console } from "node:console";
+import { existsSync, writeFileSync } from "node:fs";
 import { chromium, type Page } from "playwright-core";
 import { refusedWorkerVariables, startupRefusal } from "./environment.js";
 import { encodeFrame, FrameDecoder, ProtocolViolation, type WorkerFrame } from "./protocol.js";
@@ -36,6 +37,8 @@ const playwrightLauncher: Launcher = {
       args: spec.argv,
       env: spec.env,
       headless: true,
+      // Downloads never happen through the engine: an approved document is
+      // captured by the redirect guard instead (slice 3d).
       acceptDownloads: false,
       // "allow" keeps service-worker requests visible to routing; the
       // route stack refuses every registration (#301).
@@ -101,6 +104,45 @@ const playwrightLauncher: Launcher = {
         if (page.url().startsWith("chrome-error:")) throw new NavigationError("denied");
         return { url: page.url(), status };
       },
+      async download(ref: string, path: string) {
+        if (existsSync(path)) throw new NavigationError("failed");
+        const page = primary;
+        const guard = await routes.guardReady(page);
+        // Arm before clicking: the click's navigation (each request and
+        // redirect hop still decided by the host) ends in a document whose
+        // original bytes are captured and never rendered.
+        const captured = guard.captureNextDocument(30_000);
+        // The capture can settle (for example refused as oversized) while
+        // the click is still in flight; without a handler attached now that
+        // rejection would be unhandled and end the worker (measured).
+        captured.catch(() => {});
+        // On any failure the page is closed: a document arriving after the
+        // capture gave up would otherwise be rendered. The host requires a
+        // fresh navigation (which opens a new page) before acting again.
+        const fail = async (reason: "failed" | "timeout"): Promise<never> => {
+          await page.close().catch(() => {});
+          throw new NavigationError(reason);
+        };
+        try {
+          await page.locator(`aria-ref=${ref}`).click({ timeout: 5_000, noWaitAfter: true });
+        } catch {
+          return fail("failed");
+        }
+        let document;
+        try {
+          document = await captured;
+        } catch (error) {
+          return fail((error as Error).name === "TimeoutError" ? "timeout" : "failed");
+        }
+        if (document.status < 200 || document.status >= 300) return fail("failed");
+        writeFileSync(path, document.body, { flag: "wx" });
+        return {
+          url: document.url,
+          name: suggestedName(document.url, document.disposition),
+          media: document.media,
+          bytes: document.body.length
+        };
+      },
       async observe() {
         const raw: unknown = await primary.ariaSnapshotJSON({ mode: "ai", depth: 16, timeout: 2_000 });
         return { url: primary.url(), snapshot: boundSnapshot(raw) };
@@ -117,6 +159,22 @@ const playwrightLauncher: Launcher = {
     };
   }
 };
+
+/// The file name a download would get: the Content-Disposition filename when
+/// present, else the last URL path segment; never a path.
+function suggestedName(url: string, disposition: string): string {
+  const quoted = /filename="([^"]{1,200})"/i.exec(disposition)?.[1];
+  const bare = /filename=([^;\s]{1,200})/i.exec(disposition)?.[1];
+  let name = quoted ?? bare ?? "";
+  if (!name) {
+    try {
+      name = decodeURIComponent(new URL(url).pathname.split("/").pop() ?? "");
+    } catch {
+      name = "";
+    }
+  }
+  return name.replace(/[\\/:*?"<>|\x00-\x1f]/g, "_").slice(0, 200) || "download";
+}
 
 function send(frame: WorkerFrame): void {
   process.stdout.write(encodeFrame(frame));

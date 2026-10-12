@@ -37,8 +37,9 @@ pub struct JobProcess {
 
 /// Worker protocol generation (apps/qdral-browser-worker/src/protocol.ts).
 /// Generation 2 adds the slice-3a navigation frames, generation 3 slice-3b
-/// observation, generation 4 slice-3c activation.
-pub const WORKER_PROTOCOL_GENERATION: u32 = 4;
+/// observation, generation 4 slice-3c activation, generation 5 slice-3d
+/// downloads.
+pub const WORKER_PROTOCOL_GENERATION: u32 = 5;
 /// Worker identity reported in its hello.
 pub const WORKER_IDENTITY: &str = "qdral-browser-worker";
 /// The only Node option the worker accepts (inspector activation refused).
@@ -90,6 +91,15 @@ pub struct LiveObservation {
     pub page: crate::observation::PageIdentity,
     pub document: crate::observation::DocumentIdentity,
     pub observation: crate::observation::Observation,
+}
+
+/// A download committed create-only into the approved folder.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CommittedDownload {
+    pub path: PathBuf,
+    pub sha256: String,
+    pub bytes: u64,
+    pub source_url: String,
 }
 
 /// A completed top-level navigation.
@@ -174,6 +184,12 @@ pub(crate) enum WorkerRequest<'a> {
         #[serde(rename = "ref")]
         reference: &'a str,
     },
+    Download {
+        dl_id: u64,
+        #[serde(rename = "ref")]
+        reference: &'a str,
+        path: &'a str,
+    },
     Shutdown,
 }
 
@@ -223,6 +239,17 @@ pub(crate) enum WorkerReply {
     },
     ActivationFailed {
         act_id: u64,
+        reason: String,
+    },
+    Downloaded {
+        dl_id: u64,
+        url: String,
+        name: String,
+        media: String,
+        bytes: u64,
+    },
+    DownloadFailed {
+        dl_id: u64,
         reason: String,
     },
     Error {
@@ -283,6 +310,16 @@ pub(crate) fn seed_profile_preferences(profile_dir: &Path) -> Result<(), HostErr
         .as_object_mut()
         .ok_or_else(|| HostError::Invalid("profile `net` preferences are not an object".into()))?;
     net.insert("network_prediction_options".into(), serde_json::json!(2));
+    // PDFs are downloaded (never shown in the built-in viewer), so the host
+    // can validate and commit them; a viewer would render page-supplied PDF.
+    let plugins = root
+        .entry("plugins")
+        .or_insert_with(|| serde_json::json!({}))
+        .as_object_mut()
+        .ok_or_else(|| {
+            HostError::Invalid("profile `plugins` preferences are not an object".into())
+        })?;
+    plugins.insert("always_open_pdf_externally".into(), serde_json::json!(true));
     let text = serde_json::to_string(&value)
         .map_err(|err| HostError::Invalid(format!("profile preferences: {err}")))?;
     std::fs::write(&path, text)
@@ -446,6 +483,101 @@ pub(crate) fn select_latest_dated_link(
         }
         [.., (_, id)] => Ok((*id).clone()),
     }
+}
+
+/// A per-lifetime suffix for host-owned directories.
+#[cfg(any(windows, test))]
+fn unique_suffix() -> u128 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0)
+}
+
+/// Lowercase hex SHA-256.
+#[cfg(any(windows, test))]
+pub(crate) fn sha256_hex(content: &[u8]) -> String {
+    use sha2::{Digest, Sha256};
+    Sha256::digest(content)
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect()
+}
+
+/// Write `content` create-only (an existing file is never replaced), then
+/// verify through the real path that the file is inside `root` (a junction
+/// or symlink in the path would otherwise redirect it); on escape the file
+/// is removed and the commit refused.
+#[cfg(any(windows, test))]
+pub(crate) fn commit_create_only(
+    destination: &Path,
+    root: &Path,
+    content: &[u8],
+) -> Result<(), HostError> {
+    use std::io::Write;
+    let parent = destination
+        .parent()
+        .ok_or_else(|| HostError::Invalid("destination has no folder".into()))?;
+    let real_root = std::fs::canonicalize(root)
+        .map_err(|err| HostError::Platform(format!("approved folder: {err}")))?;
+    let relative_parent = parent
+        .strip_prefix(root)
+        .map_err(|_| HostError::Invalid("destination escapes the approved folder".into()))?;
+    // Each folder is created only after its parent's real path is checked,
+    // so a junction never gets anything created behind it.
+    let mut folder = root.to_path_buf();
+    for part in relative_parent.components() {
+        folder.push(part);
+        if !folder.exists() {
+            let real_parent = folder
+                .parent()
+                .and_then(|p| std::fs::canonicalize(p).ok())
+                .ok_or_else(|| HostError::Platform("destination folder".into()))?;
+            if !real_parent.starts_with(&real_root) {
+                return Err(HostError::Invalid(
+                    "destination escapes the approved folder".into(),
+                ));
+            }
+            std::fs::create_dir(&folder)
+                .map_err(|err| HostError::Platform(format!("destination folder: {err}")))?;
+        }
+        match std::fs::canonicalize(&folder) {
+            Ok(real) if real.starts_with(&real_root) => {}
+            _ => {
+                return Err(HostError::Invalid(
+                    "destination escapes the approved folder".into(),
+                ))
+            }
+        }
+    }
+    let mut file = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(destination)
+        .map_err(|err| {
+            if err.kind() == std::io::ErrorKind::AlreadyExists {
+                HostError::Invalid("destination exists (create-only)".into())
+            } else {
+                HostError::Platform(format!("destination: {err}"))
+            }
+        })?;
+    let written = file.write_all(content).and_then(|()| file.sync_all());
+    drop(file);
+    let contained = match (
+        std::fs::canonicalize(destination),
+        std::fs::canonicalize(root),
+    ) {
+        (Ok(real), Ok(real_root)) => real.starts_with(&real_root),
+        _ => false,
+    };
+    if written.is_err() || !contained {
+        let _ = std::fs::remove_file(destination);
+        return Err(match written {
+            Err(err) => HostError::Platform(format!("destination write: {err}")),
+            Ok(()) => HostError::Invalid("destination escapes the approved folder".into()),
+        });
+    }
+    Ok(())
 }
 
 /// Map a worker navigation failure onto the typed vocabulary.
@@ -726,6 +858,9 @@ mod platform {
         last_request: u64,
         next_obs: u64,
         next_act: u64,
+        next_dl: u64,
+        /// Host-owned staging directory for downloads of this lifetime.
+        staging: PathBuf,
         /// The committed document: URL and document generation.
         committed: Option<(String, u64)>,
         /// Raw names of the last observation, by host-issued node id.
@@ -780,6 +915,12 @@ mod platform {
             policy: NavigationPolicy::new(&spec.destinations),
             next_obs: 0,
             next_act: 0,
+            next_dl: 0,
+            staging: spec.temp_dir.join(format!(
+                "qdral-sg108-staging-{}-{:x}",
+                std::process::id(),
+                unique_suffix()
+            )),
             committed: None,
             host_nodes: std::collections::HashMap::new(),
             name_key: lifetime_key()?,
@@ -1083,6 +1224,25 @@ mod platform {
             )
         }
 
+        /// The state a download approval must name: the link's destination,
+        /// the approved folder's real path and the normalized file path, so
+        /// the one-shot approval covers what is fetched and where it lands.
+        pub fn download_binding(
+            &self,
+            node_id: &str,
+            destination_root: &Path,
+            relative: &str,
+        ) -> Result<String, HostError> {
+            let link = self.link_destination(node_id)?;
+            let normalized = crate::transfers::validate_relative_destination(relative)?;
+            let root = std::fs::canonicalize(destination_root)
+                .ok()
+                .filter(|root| root.is_dir())
+                .ok_or_else(|| HostError::Invalid("the approved folder does not exist".into()))?;
+            let root = path_text(&root, "approved folder")?;
+            Ok(format!("download\n{link}\n{root}\n{normalized}"))
+        }
+
         /// Activate (click) one observed link under SG-000077. The host
         /// does not model element state; the target's `state` must instead
         /// name the link's resolved destination, so the one-shot approval
@@ -1101,6 +1261,11 @@ mod platform {
             policy_revision: u64,
             workspace: &str,
         ) -> Result<NavigationOutcome, HostError> {
+            if target.action != crate::actuation::SupportedAction::Click {
+                return Err(HostError::Invalid(
+                    "activation needs a click approval".into(),
+                ));
+            }
             let (_, generation) = self
                 .committed
                 .clone()
@@ -1162,6 +1327,203 @@ mod platform {
             Ok(outcome)
         }
 
+        /// Download the document behind one observed element under SG-000077
+        /// and SG-000078: `dispatch` consumes the one-shot approval, the
+        /// worker saves the engine's download to a fresh host staging path,
+        /// the host checks its origin, type, content and size, and commits
+        /// it create-only to `relative` inside `destination_root`, re-checking
+        /// containment through the real path. The staging file is always
+        /// removed. Inert PDFs use the SG-000078 amendment; other types the
+        /// general allowlist.
+        #[allow(clippy::too_many_arguments)]
+        pub fn download(
+            &mut self,
+            target: &crate::actuation::ActuationTarget,
+            approval: &mut crate::actuation::ApprovalToken,
+            policy_revision: u64,
+            workspace: &str,
+            destination_root: &Path,
+            relative: &str,
+        ) -> Result<CommittedDownload, HostError> {
+            if target.action != crate::actuation::SupportedAction::Download {
+                return Err(HostError::Invalid(
+                    "a download needs a download approval".into(),
+                ));
+            }
+            let binding = self.download_binding(&target.node_id, destination_root, relative)?;
+            let normalized = crate::transfers::validate_relative_destination(relative)?;
+            let destination = destination_root.join(&normalized);
+            if destination.exists() {
+                return Err(HostError::Invalid(
+                    "destination exists (create-only)".into(),
+                ));
+            }
+            let (_, generation) = self
+                .committed
+                .clone()
+                .ok_or_else(|| HostError::Invalid("no committed document".into()))?;
+            let reference = self
+                .host_nodes
+                .get(&target.node_id)
+                .filter(|node| node.role == target.role)
+                .map(|node| node.reference.clone())
+                .ok_or_else(|| HostError::Invalid("stale or unknown node".into()))?;
+            // As for activation: the approval names the link's destination,
+            // checked against the page's origin before it is consumed, and
+            // the click may open exactly that document.
+            let link = self.link_destination(&target.node_id)?;
+            // A fragment never reaches the request, so the exact-link check
+            // could not match: refused before the approval is spent.
+            if link.contains('#') {
+                return Err(HostError::Invalid(
+                    "a link with a fragment cannot be downloaded".into(),
+                ));
+            }
+            std::fs::create_dir_all(&self.staging)
+                .map_err(|err| HostError::Platform(format!("staging: {err}")))?;
+            self.policy.expect_activation(&link)?;
+            if let Err(error) = crate::actuation::dispatch(
+                target,
+                approval,
+                generation,
+                &binding,
+                policy_revision,
+                workspace,
+            ) {
+                self.policy.finish_activation();
+                return Err(error);
+            }
+            self.next_dl += 1;
+            let dl_id = self.next_dl;
+            let staged = self.staging.join(format!("dl-{dl_id}.part"));
+            let result = self.download_staged(
+                dl_id,
+                &reference,
+                &staged,
+                &link,
+                &destination,
+                destination_root,
+            );
+            let opened_expected = self.policy.finish_activation();
+            let _ = std::fs::remove_file(&staged);
+            // The click navigated the page to the downloaded document, which
+            // the guard replaced with an inert blank page: that is now the
+            // committed document (one generation later).
+            if let Ok(committed) = &result {
+                if self
+                    .policy
+                    .commit_page_initiated(&committed.source_url)
+                    .is_ok()
+                {
+                    self.committed = Some((committed.source_url.clone(), generation + 1));
+                }
+            }
+            let result = match result {
+                Ok(committed) if !opened_expected => {
+                    // The bytes did not come from the approved document.
+                    let _ = std::fs::remove_file(&committed.path);
+                    Err(HostError::Invalid(
+                        "postcondition unverified: the download opened another document".into(),
+                    ))
+                }
+                other => other,
+            };
+            // The page may have changed; earlier node identities are stale.
+            self.host_nodes.clear();
+            result
+        }
+
+        fn download_staged(
+            &mut self,
+            dl_id: u64,
+            reference: &str,
+            staged: &Path,
+            link: &str,
+            destination: &Path,
+            destination_root: &Path,
+        ) -> Result<CommittedDownload, HostError> {
+            let staged_text = path_text(staged, "staging path")?;
+            self.send(&WorkerRequest::Download {
+                dl_id,
+                reference,
+                path: &staged_text,
+            })?;
+            // The worker's suggested name is advisory and never decides the
+            // type check; the approved destination's own name does.
+            let (url, media, declared) = match self.reply(WORKER_NAVIGATION_TIMEOUT)? {
+                WorkerReply::Downloaded {
+                    dl_id: done,
+                    url,
+                    name: _,
+                    media,
+                    bytes,
+                } if done == dl_id => (url, media, bytes),
+                WorkerReply::DownloadFailed {
+                    dl_id: done,
+                    reason,
+                } if done == dl_id => return Err(navigation_failure(&reason)),
+                _ => return Err(HostError::Unavailable(UnavailableReason::ProtocolViolation)),
+            };
+            // Exactly the approved document: redirects are not followed.
+            if url != link {
+                return Err(HostError::Invalid(
+                    "the download is not the approved document".into(),
+                ));
+            }
+            let source = crate::navigation::parse_navigation_url(&url)?;
+            if Some(source.origin.as_str()) != self.policy.committed_origin() {
+                return Err(HostError::Invalid("download left the page's origin".into()));
+            }
+            // One bounded read: the file cannot grow past the bound between
+            // a size check and the read.
+            let mut content = Vec::new();
+            {
+                use std::io::Read;
+                std::fs::File::open(staged)
+                    .and_then(|file| {
+                        file.take(crate::transfers::MAX_TRANSFER_BYTES + 1)
+                            .read_to_end(&mut content)
+                    })
+                    .map_err(|err| HostError::Platform(format!("staged download: {err}")))?;
+            }
+            if content.len() as u64 > crate::transfers::MAX_TRANSFER_BYTES {
+                return Err(HostError::Invalid("transfer size out of bounds".into()));
+            }
+            crate::transfers::validate_transfer_size(declared, content.len() as u64)?;
+            let name = destination
+                .file_name()
+                .and_then(|name| name.to_str())
+                .ok_or_else(|| HostError::Invalid("destination has no file name".into()))?;
+            if name.to_ascii_lowercase().ends_with(".pdf") {
+                crate::transfers::validate_inert_pdf(name, &media, &content)?;
+            } else {
+                crate::transfers::validate_download_type(name, &media, &content)?;
+            }
+            let sha256 = sha256_hex(&content);
+            let mut source_record = crate::transfers::DownloadSource {
+                source_id: format!("dl-{dl_id}"),
+                origin: source.origin,
+                content_digest: sha256.clone(),
+                issued_ms: 0,
+                consumed: false,
+            };
+            source_record.consume(0)?;
+            // The bytes must come from the approved document: checked before
+            // anything is written to the approved folder.
+            if !self.policy.activation_opened() {
+                return Err(HostError::Invalid(
+                    "postcondition unverified: the download opened another document".into(),
+                ));
+            }
+            commit_create_only(destination, destination_root, &content)?;
+            Ok(CommittedDownload {
+                path: destination.to_path_buf(),
+                sha256,
+                bytes: content.len() as u64,
+                source_url: url,
+            })
+        }
+
         /// Test-only view of an observed node: raw names never leave the
         /// host in product builds (callers get typed results such as
         /// `link_destination`).
@@ -1187,6 +1549,7 @@ mod platform {
 
         fn finish(&mut self, graceful: bool) -> ShutdownReport {
             self.finished = true;
+            let _ = std::fs::remove_dir_all(&self.staging);
             let job_empty = self.process.terminate_and_confirm(WORKER_SHUTDOWN_TIMEOUT);
             let profile_removed = match self.profile.take() {
                 Some(profile) => job_empty && remove_profile(&profile),
@@ -1247,6 +1610,34 @@ mod fallback {
 
         /// API parity: no worker ever exists off Windows.
         pub fn link_destination(&self, _node_id: &str) -> Result<String, HostError> {
+            Err(HostError::Unavailable(
+                UnavailableReason::UnsupportedRuntime,
+            ))
+        }
+
+        /// API parity: no worker ever exists off Windows.
+        pub fn download_binding(
+            &self,
+            _node_id: &str,
+            _destination_root: &Path,
+            _relative: &str,
+        ) -> Result<String, HostError> {
+            Err(HostError::Unavailable(
+                UnavailableReason::UnsupportedRuntime,
+            ))
+        }
+
+        /// API parity: no worker ever exists off Windows.
+        #[allow(clippy::too_many_arguments)]
+        pub fn download(
+            &mut self,
+            _target: &crate::actuation::ActuationTarget,
+            _approval: &mut crate::actuation::ApprovalToken,
+            _policy_revision: u64,
+            _workspace: &str,
+            _destination_root: &Path,
+            _relative: &str,
+        ) -> Result<CommittedDownload, HostError> {
             Err(HostError::Unavailable(
                 UnavailableReason::UnsupportedRuntime,
             ))
@@ -1503,6 +1894,7 @@ mod tests {
         // A fresh profile gets the preference.
         seed_profile_preferences(&dir).unwrap();
         assert_eq!(read(&dir)["net"]["network_prediction_options"], 2);
+        assert_eq!(read(&dir)["plugins"]["always_open_pdf_externally"], true);
         // Existing preferences are kept and the value is forced.
         std::fs::write(
             dir.join("Default").join("Preferences"),
@@ -1520,6 +1912,53 @@ mod tests {
             assert!(seed_profile_preferences(&dir).is_err(), "{bad}");
         }
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn downloads_commit_create_only_inside_the_approved_folder() {
+        let root = std::env::temp_dir().join(format!(
+            "qdral-sg108-commit-{}-{:x}",
+            std::process::id(),
+            unique_suffix()
+        ));
+        std::fs::create_dir_all(&root).unwrap();
+        let target = root.join("reports").join("r.pdf");
+        commit_create_only(&target, &root, b"%PDF-1.4").unwrap();
+        assert_eq!(std::fs::read(&target).unwrap(), b"%PDF-1.4");
+        // Never replaces an existing file.
+        assert!(matches!(
+            commit_create_only(&target, &root, b"other"),
+            Err(HostError::Invalid(message)) if message.contains("create-only")
+        ));
+        assert_eq!(std::fs::read(&target).unwrap(), b"%PDF-1.4");
+        // A path that escapes the root is refused and leaves nothing behind.
+        let outside = root
+            .parent()
+            .unwrap()
+            .join(format!("qdral-sg108-outside-{:x}.pdf", unique_suffix()));
+        assert!(commit_create_only(&outside, &root, b"x").is_err());
+        assert!(!outside.exists());
+        assert_eq!(
+            sha256_hex(b"abc"),
+            "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+        );
+        let json = |request: &WorkerRequest<'_>| serde_json::to_string(request).unwrap();
+        assert_eq!(
+            json(&WorkerRequest::Download {
+                dl_id: 1,
+                reference: "e5",
+                path: "C:\\s\\dl-1.part"
+            }),
+            r#"{"frame":"download","dl_id":1,"ref":"e5","path":"C:\\s\\dl-1.part"}"#
+        );
+        let reply = |text: &str| serde_json::from_str::<WorkerReply>(text);
+        assert!(reply(r#"{"frame":"downloaded","dl_id":1,"url":"https://fixture.test/r.pdf","name":"r.pdf","media":"application/pdf","bytes":8}"#).is_ok());
+        assert!(reply(r#"{"frame":"download_failed","dl_id":1,"reason":"denied"}"#).is_ok());
+        assert!(reply(
+            r#"{"frame":"downloaded","dl_id":1,"url":"u","name":"n","media":"m","bytes":1,"x":0}"#
+        )
+        .is_err());
+        let _ = std::fs::remove_dir_all(&root);
     }
 
     #[test]

@@ -161,6 +161,11 @@ impl NavigationPolicy {
         matches!(self.activation.take(), Some((_, true)))
     }
 
+    /// Whether the expected document has been requested so far.
+    pub fn activation_opened(&self) -> bool {
+        matches!(self.activation, Some((_, true)))
+    }
+
     pub fn committed_origin(&self) -> Option<&str> {
         self.committed_origin.as_deref()
     }
@@ -431,9 +436,11 @@ mod tests {
         assert!(p
             .decide(RouteKind::Document, "https://fixture.test/evil", "")
             .is_err());
+        assert!(!p.activation_opened());
         assert!(p
             .decide(RouteKind::Document, "https://fixture.test/report", "")
             .is_ok());
+        assert!(p.activation_opened());
         assert!(
             p.decide(RouteKind::Document, "https://fixture.test/report", "")
                 .is_err(),

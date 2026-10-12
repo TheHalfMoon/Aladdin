@@ -91,10 +91,10 @@ pub use supervise::{
 };
 pub use transfers::{
     execute_automatically, extract_automatically, open_automatically, reparse_safe_contained,
-    sniff_denied_class, validate_download_type, validate_relative_destination,
+    sniff_denied_class, validate_download_type, validate_inert_pdf, validate_relative_destination,
     validate_transfer_size, validate_upload_source, DeniedContentClass, DownloadSource,
     PresentedUpload, RecordedUpload, DOWNLOAD_SOURCE_TTL_MS, MAX_DESTINATION_BYTES,
-    MAX_TRANSFER_BYTES,
+    MAX_TRANSFER_BYTES, PDF_MEDIA,
 };
 pub use uia::{
     invoke, is_protected_uia_surface, keyboard_synthesis, mouse_synthesis, scroll, select,
@@ -103,10 +103,11 @@ pub use uia::{
     UiaProcess, UiaTarget, UiaWindow, MAX_SCROLL_AMOUNT, MAX_UIA_VALUE_CHARS, MIN_SCROLL_AMOUNT,
 };
 pub use worker_launch::{
-    classify_job, launch_worker, worker_environment, worker_node_args, BrowserWorker, HostNode,
-    JobProcess, LiveObservation, NavigationOutcome, ShutdownReport, SnapshotNode, WorkerLaunch,
-    WORKER_ACTIVATION_TIMEOUT, WORKER_HANDSHAKE_TIMEOUT, WORKER_IDENTITY, WORKER_LAUNCH_TIMEOUT,
-    WORKER_NAVIGATION_TIMEOUT, WORKER_NODE_OPTION, WORKER_OBSERVATION_TIMEOUT,
-    WORKER_PROTOCOL_GENERATION, WORKER_REPLY_TIMEOUT, WORKER_SHUTDOWN_TIMEOUT,
+    classify_job, launch_worker, worker_environment, worker_node_args, BrowserWorker,
+    CommittedDownload, HostNode, JobProcess, LiveObservation, NavigationOutcome, ShutdownReport,
+    SnapshotNode, WorkerLaunch, WORKER_ACTIVATION_TIMEOUT, WORKER_HANDSHAKE_TIMEOUT,
+    WORKER_IDENTITY, WORKER_LAUNCH_TIMEOUT, WORKER_NAVIGATION_TIMEOUT, WORKER_NODE_OPTION,
+    WORKER_OBSERVATION_TIMEOUT, WORKER_PROTOCOL_GENERATION, WORKER_REPLY_TIMEOUT,
+    WORKER_SHUTDOWN_TIMEOUT,
 };
 pub use worker_navigation::{NavigationPolicy, RouteKind};
