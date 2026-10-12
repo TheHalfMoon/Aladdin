@@ -36,7 +36,7 @@ test("length bounds and non-JSON bodies are violations before buffering", () => 
 });
 
 test("the host vocabulary is closed and exact", () => {
-  assert.deepEqual(parseHostFrame({ frame: "hello", generation: 1 }), { frame: "hello", generation: 1 });
+  assert.deepEqual(parseHostFrame({ frame: "hello", generation: 2 }), { frame: "hello", generation: 2 });
   const parsed = parseHostFrame(validLaunch());
   assert.deepEqual(JSON.parse(JSON.stringify(parsed)), validLaunch());
   assert.equal(parsed.frame === "launch" && Object.getPrototypeOf(parsed.env), null);
@@ -44,11 +44,11 @@ test("the host vocabulary is closed and exact", () => {
     null,
     [],
     "hello",
-    { generation: 1 },
+    { generation: 2 },
     { frame: "navigate", url: "https://example.com" },
     { frame: "evaluate", script: "1+1" },
     { frame: "cdp", method: "Runtime.evaluate" },
-    { frame: "hello", generation: 1, extra: true },
+    { frame: "hello", generation: 2, extra: true },
     { frame: "hello", generation: "1" },
     { frame: "hello" },
     { frame: "shutdown", now: true },
@@ -169,4 +169,51 @@ test("paths with dot segments are refused and invalid UTF-8 is a violation", () 
   const prefix = Buffer.alloc(4);
   prefix.writeUInt32LE(body.length, 0);
   assert.throws(() => new FrameDecoder().push(Buffer.concat([prefix, body])), ProtocolViolation);
+});
+
+test("navigation frames are exact, bounded and https-only", () => {
+  assert.deepEqual(parseHostFrame({ frame: "navigate", nav_id: 1, url: "https://fixture.test/a" }), {
+    frame: "navigate",
+    nav_id: 1,
+    url: "https://fixture.test/a"
+  });
+  assert.deepEqual(parseHostFrame({ frame: "route_decision", request_id: 3, allow: false }), {
+    frame: "route_decision",
+    request_id: 3,
+    allow: false
+  });
+  for (const bad of [
+    { frame: "navigate", nav_id: 0, url: "https://fixture.test/" },
+    { frame: "navigate", nav_id: 1.5, url: "https://fixture.test/" },
+    { frame: "navigate", nav_id: "1", url: "https://fixture.test/" },
+    { frame: "navigate", nav_id: 1, url: "http://fixture.test/" },
+    { frame: "navigate", nav_id: 1, url: "javascript:alert(1)" },
+    { frame: "navigate", nav_id: 1, url: `https://fixture.test/${"a".repeat(2100)}` },
+    { frame: "navigate", nav_id: 1, url: "https://fixture.test/\n" },
+    { frame: "navigate", nav_id: 1, url: "https://fixture.test/", extra: 1 },
+    { frame: "route_decision", request_id: 1, allow: "yes" },
+    { frame: "route_decision", request_id: -1, allow: true },
+    { frame: "route_decision", request_id: 1 },
+    { frame: "route_request", request_id: 1, kind: "document", url: "https://x.test/", origin: "" }
+  ]) {
+    assert.throws(() => parseHostFrame(bad), ProtocolViolation, JSON.stringify(bad).slice(0, 80));
+  }
+});
+
+test("a trusted test certificate is accepted only with loopback fixture pins", () => {
+  const spki = "--ignore-certificate-errors-spki-list=9WXyCO8+Q/VzmaLHa1slFXl6NaVXmdAETaqFwlDDoQo=";
+  const withCertificate = (argv: string[]): string[] => [...argv.slice(0, -1), spki, argv[argv.length - 1] as string];
+  const publicLaunch = validLaunch(); // pins a public address
+  const loopbackArgv = publicLaunch.argv.map((arg) =>
+    arg.startsWith("--host-resolver-rules=") ? arg.replace("93.184.215.14", "127.0.0.1") : arg
+  );
+  assert.equal(launchRefusal({ ...publicLaunch, argv: loopbackArgv }), null, "the loopback base argv must itself be valid");
+  assert.equal(launchRefusal({ ...publicLaunch, argv: withCertificate(loopbackArgv) }), null);
+  // A public pin makes the certificate flag a refusal.
+  assert.match(launchRefusal({ ...publicLaunch, argv: withCertificate(publicLaunch.argv) }) ?? "", /loopback fixture pins/);
+  // Malformed hashes, other flags in that slot, and a second extra flag.
+  for (const bad of ["--ignore-certificate-errors-spki-list=abc", "--ignore-certificate-errors", "--no-sandbox"]) {
+    assert.notEqual(launchRefusal({ ...publicLaunch, argv: [...loopbackArgv.slice(0, -1), bad, "about:blank"] }), null, bad);
+  }
+  assert.notEqual(launchRefusal({ ...publicLaunch, argv: [...withCertificate(loopbackArgv).slice(0, -1), spki, "about:blank"] }), null);
 });

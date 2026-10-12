@@ -31,6 +31,9 @@ const PROXY_FLAG: &str = "--proxy-server";
 const BYPASS_FLAG: &str = "--proxy-bypass-list";
 const WEBRTC_FLAG: &str = "--webrtc-ip-handling-policy";
 const QUIC_FLAG: &str = "--disable-quic";
+/// SharedWorker requests are never routed (measured), so the API is removed
+/// from the engine (SG-000108 slice 3a amendment).
+const SHARED_WORKER_FLAG: &str = "--disable-blink-features=SharedWorker";
 
 /// The no-route proxy: connecting to 0.0.0.0 fails on Windows even when a
 /// local process listens on port 9 (Windows-only; on Linux it is loopback).
@@ -206,6 +209,7 @@ pub fn build_worker_argv(
     ));
     argv.push(format!("{WEBRTC_FLAG}={WEBRTC_POLICY}"));
     argv.push(QUIC_FLAG.into());
+    argv.push(SHARED_WORKER_FLAG.into());
     argv.push(INITIAL_URL.into());
     Ok(argv)
 }
@@ -456,6 +460,7 @@ mod tests {
             "--proxy-bypass-list=example.com;docs.example.org;<-loopback>",
             "--webrtc-ip-handling-policy=disable_non_proxied_udp",
             "--disable-quic",
+            "--disable-blink-features=SharedWorker",
             "about:blank",
         ]
         .iter()

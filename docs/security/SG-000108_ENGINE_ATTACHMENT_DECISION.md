@@ -184,6 +184,15 @@ absent from the shipped binaries. No runtime configuration may enable it.
 
 ## Residual risks (for review)
 
+- **WebTransport to admitted names (#300, accepted by the founder on
+  2026-10-11).** A page can open a WebTransport session, over QUIC on UDP,
+  to an admitted name. The traffic reaches only that name's host-pinned
+  address, because the resolver refuses unadmitted names and the no-route
+  proxy refuses IP literals. Its contents are not inspected by the SG-000075
+  policy route, which denies the equivalent WebSocket traffic. No Chromium
+  switch disables the API, and patching it out of pages and workers in
+  JavaScript has known bypass classes. Revisit if an engine-level measure
+  appears. The native probe enforces the boundary.
 - **Admitted host is hostile.** An admitted name pinned to its public address
   still serves whatever that host returns. Content is never policy (SG-000076
   redaction and SG-000077 approvals still apply).
@@ -400,13 +409,63 @@ The fixture origin is served over TLS on 127.0.0.1:443, advertising `alt-svc: h3
 |---|---|
 | Alt-Svc HTTP/3 upgrade under the confinement argv | **Holds.** 0 datagrams over two navigations; `--disable-quic` stops it. |
 | WebTransport to an IP literal | **Holds.** 0 datagrams; the no-route proxy refuses it. Control: without the confinement flags, the same attempt sends UDP. |
-| WebTransport to an admitted name | **Gap (#300).** QUIC Initial packets reach the name's pinned address directly, bypassing the SG-000075 policy route. Neither `--disable-features=WebTransport` nor `--disable-features=WebTransportOverHTTP3` stops it, and `--disable-blink-features=WebTransport` leaves the API defined in pages and workers. The switch results come from the manual runs recorded in #300. Tracked as a `todo` probe. |
-| Service-worker block (`serviceWorkers: "block"`) | **Gap (#301).** `ServiceWorkerContainer.prototype.register` registers a real worker, and the fixture sees its script fetch (`Service-Worker: script`). That the fetch is invisible to Playwright routing was measured manually (#301); this probe installs no route. Tracked as a `todo` probe. |
+| WebTransport to an admitted name | **Accepted residual risk (#300; founder decision 2026-10-11).** QUIC Initial packets reach the admitted name's pinned address directly, uninspected by the SG-000075 policy route. No engine switch disables it (`--disable-features=WebTransport`, `WebTransportOverHTTP3` and `--disable-blink-features=WebTransport` were all tested), and Playwright routing does not see it. The probe asserts the boundary that must hold: unadmitted names, unmapped public names and IP literals all fail with `WebTransportError`, and no datagram reaches the pin or the literal for those attempts. It logs the admitted-name datagram count as evidence. |
+| Service-worker denial | **Closed (#301).** The worker launches with `serviceWorkers: "allow"`, which keeps service-worker requests routable, and the route stack aborts every request carrying `Service-Worker: script`, so same-origin registration (direct or through the prototype) fails. A cross-site iframe could still register, because its script fetch never reaches routing. Since slice 3a, the policy route refuses cross-origin frames (`mediate_frame`), so that iframe never loads. A native probe asserts the frame was asked about and refused, `other.test` was never contacted, and no web service worker runs. A second probe pins the route order by running the stack with an allow-everything policy. |
 
-In these probes the no-route proxy refuses the IP literal and nothing leaves the admitted pin. The earlier HTTP-fixture probe covers unadmitted names. Both gaps stay inside admitted destinations, but they evade the policy route, which already denies the equivalent WebSocket traffic. Both must be closed, or accepted as founder-reviewed residual risks, before slice 3 grants live navigation. This is enforced in code. `gaps.ts` lists the known gaps (`KNOWN_GAPS`), which the `todo` probes reference. While that list is non-empty, a conditional type makes `tsc` (build and typecheck) fail if `HostFrame` gains any frame name outside the launch vocabulary, however that frame is written. Named types, quoting, spacing and a widened `string` frame were each verified to fail. The gate covers frame names only: a field added to an existing frame is not caught by it, though `parseHostFrame`'s exact-key checks would have to change visibly for such a field to be accepted. `gaps.test.ts` mirrors the check at runtime (`parseHostFrame` rejects other frame names) and requires every gap to keep its `todo` probe.
+In these probes the no-route proxy refuses the IP literal and nothing leaves the admitted pin. The earlier HTTP-fixture probe covers unadmitted names. Both gaps stayed inside admitted destinations but evaded the policy route, which already denies the equivalent WebSocket traffic. #300 is now a founder-accepted residual risk. #301 is closed by slice 3a, so `KNOWN_GAPS` is empty and the gate is open. This is enforced in code. `gaps.ts` lists the known gaps (`KNOWN_GAPS`), which the `todo` probes reference. While that list is non-empty, a conditional type makes `tsc` (build and typecheck) fail if `HostFrame` gains any frame name outside the launch vocabulary, however that frame is written. Named types, quoting, spacing and a widened `string` frame were each verified to fail. The gate covers frame names only: a field added to an existing frame is not caught by it, though `parseHostFrame`'s exact-key checks would have to change visibly for such a field to be accepted. `gaps.test.ts` mirrors the check at runtime (`parseHostFrame` rejects other frame names) and requires every gap to keep its `todo` probe.
 
 **Still to be done in slice 2b-ii-b:**
-- closing #300 and #301 (engine- or protocol-level measures, each proven by these probes);
+- revisiting #300 if Chromium gains an engine-level WebTransport kill switch;
 - a real public name pinned by the host reaching only its pin;
 - the job process limit under a heavy page;
 - the release packaging of the worker (NOTICE, SBOM, `.bin` strip).
+
+**Slice 3a: live navigation decided by the host.** Code: `worker_navigation.rs`; the worker's `routes.ts`, `redirect-guard.ts` and `routing.ts`; worker protocol generation 2.
+
+The host stays the authority. **An engine lifetime admits exactly one destination** (`validate_launch`). `navigate` first runs `NavigationPolicy::begin`, which requires an HTTPS URL on that admitted name.
+
+Two layers then govern traffic:
+- **Network layer (complete).** The pinned resolver and the no-route proxy make every other host unreachable, whatever issues the request: pages, workers, or the browser process itself. The one exception is the accepted residual #300: WebTransport UDP to the admitted name's own pin.
+- **Per-request layer.** Engine requests on the admitted origin are described to the host as `route_request`s and continue only on an explicit allow, by the means listed below.
+
+A fresh-context judge measured that the browser process issues some requests outside every route and guard: `fetchLater`, Reporting API and CSP reports, FedCM, audio-worklet modules, and NoStatePrefetch (`<link rel=prerender>`). With a second admitted name, those reached it undecided. With one admitted name they can reach only the page's own origin, which SG-000075 permits for subresources anyway. No capability is lost: the policy is exact-origin, and another site means another lifetime.
+
+The per-request means are:
+- **Routed requests.** Documents, frames, popups, fetch and XHR, and other subresources, including dedicated-worker scripts and their imports.
+- **Redirect hops.** Playwright routes never see them. A per-page CDP `Fetch` guard pauses each hop and forwards it as a `redirect` query.
+- **Service workers and SharedWorkers.** Service-worker scripts are refused by the route stack. SharedWorker requests are never routed (measured), so the API is removed from the engine; see the argv amendment below.
+- **Speculation rules.** Speculation-rules prefetch and prerender run in the browser process, outside every route and guard. This was measured: an undecided request to another admitted name, and a prerender whose activation moved the page with no request at all. Engine switches did not stop them (`Prerender2`, `SpeculationRulesPrefetchProxy`, `--disable-blink-features=SpeculationRules`, and CDP `Page.setPrerenderingAllowed` were tested). The profile preference "Preload pages: never" (`net.network_prediction_options` = 2) does stop them, so the host writes it into the profile before every launch (`seed_profile_preferences`). Existing preferences are kept, and malformed ones fail closed.
+
+The decisions are the existing SG-000075 policy:
+- the first document must be the requested URL;
+- a page-initiated top-level navigation must stay on the page's origin;
+- redirects of a navigation are checked by `RedirectChain` (same origin, at most 5 hops, no loops);
+- a later subresource redirect must stay on the page's origin;
+- frames, popups, fetch and subresources are checked by `mediate_*` (exact origin).
+
+All of these are checked against the **host's own** page origin: the begun origin during a navigation, otherwise the committed one. A request whose reported origin disagrees with the host's is refused, so a page that moved itself without a decision gains nothing. The committed document must be on the navigation's origin, and a failed navigation is aborted so its state authorizes nothing.
+
+**Argv amendment (authority delta, narrowing):** the confinement argv gains `--disable-blink-features=SharedWorker`. It is applied by the host builder (`confinement.rs`), required by the worker's exact-argv contract, and covered by the OS command-line verification.
+
+**Implementation findings:**
+- A refused navigation's error page commits late, sometimes more than once, and interrupts the next navigation in the same page. Each host navigation therefore runs in a fresh, guarded page.
+- Edge runs a built-in component extension service worker even with `--disable-extensions`. The probes count only web service workers.
+
+**Known limits:**
+- Browser-process requests (see above) on the admitted origin are not individually decided. They are bounded by the one-destination network layer, but the host cannot decide, log or rate-limit them, and a deferred `fetchLater` POST or a batched report can reach the admitted site after the host has moved on. A later slice that adds write approval or a non-GET audit must account for this. Options are to close these APIs with engine switches, or to close the lifetime before trusting such controls.
+- (Fail closed) The host decides only while it is in a call. A page's own requests made while the host is idle wait for up to 10 s and are then refused.
+- A popup's first navigation is not completed, so popups do not work, but nothing leaks.
+- WebTransport to admitted names remains the founder-accepted residual risk #300.
+
+**Native end-to-end evidence:** the real host, worker and Edge run against a two-name HTTPS fixture (`scripts/https-fixture.mjs`, test only). The ground truth is the fixture's request log.
+- An admitted page loads, and a same-origin redirect commits.
+- A cross-origin redirect, a redirect loop and a 7-hop chain are refused, typed as denied.
+- Non-admitted, `http:` and IP-literal URLs are refused before anything is sent.
+- The mixed page contains cross-origin iframe, image, fetch, `<link rel=prefetch>`, speculation-rules prefetch and prerender, beacon, `EventSource`, a blob worker importing a cross-origin script, a CSS `@import`, `<a ping>`, a SharedWorker, and popups including one that redirects cross-origin. It never contacts `other.test`, while the same-origin resources load.
+- In the prerender-then-activate escape, the page's navigation to `/redirect-evil` is observed and its cross-origin hop is refused.
+
+The mixed page also issues the browser-process requests the judge measured (`fetchLater`, a CSP report-to violation with `Reporting-Endpoints`, FedCM, an audio worklet, `<link rel=prerender>` of a cross-origin redirect); none reaches `other.test`. The judge's runs with two admitted names are the control: with two names admitted, these requests did reach `other.test`.
+
+The test passed in repeated local runs. The fresh-context judge's rounds 1 and 2 on this slice were BLOCK. The speculation-rules, SharedWorker and host-origin findings, and the one-destination rule, are their fixes.
+
+**Test-only certificate trust:** `WorkerLaunch.test_trusted_spki` exists only under `cfg(test)` and appends `--ignore-certificate-errors-spki-list`. The worker accepts that flag only when every admitted pin is loopback; production pins are never loopback. A governance test pins the flag to `cfg(test)` code.

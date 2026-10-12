@@ -9,7 +9,8 @@
 
 import { isIPv4, isIPv6 } from "node:net";
 
-export const WORKER_PROTOCOL_GENERATION = 1;
+/// Generation 2 adds the slice-3a navigation frames.
+export const WORKER_PROTOCOL_GENERATION = 2;
 export const WORKER_IDENTITY = "qdral-browser-worker";
 export const MAX_FRAME_BYTES = 64 * 1024;
 
@@ -18,6 +19,10 @@ export const MAX_ARG_BYTES = 8192;
 export const MAX_PATH_BYTES = 1024;
 export const MAX_ENV_ENTRIES = 16;
 export const MAX_ENV_VALUE_BYTES = 4096;
+/// Mirrors MAX_URL_BYTES in the Rust navigation policy.
+export const MAX_URL_BYTES = 2048;
+/// Mirrors the bound on requesting origins in route requests.
+export const MAX_ORIGIN_BYTES = 512;
 /// Mirrors MAX_ADMITTED_DESTINATIONS in the Rust host.
 export const MAX_ADMITTED_DESTINATIONS = 16;
 
@@ -40,6 +45,8 @@ export const FROZEN_FLAGS: readonly string[] = [
 export const NO_ROUTE_PROXY = "--proxy-server=http://0.0.0.0:9";
 export const WEBRTC_POLICY = "--webrtc-ip-handling-policy=disable_non_proxied_udp";
 export const DISABLE_QUIC = "--disable-quic";
+/// SG-000108 slice 3a: SharedWorker requests are never routed, so the API is removed.
+export const DISABLE_SHARED_WORKER = "--disable-blink-features=SharedWorker";
 export const PIPE = "--remote-debugging-pipe";
 export const INITIAL_URL = "about:blank";
 
@@ -47,7 +54,13 @@ export type HostFrame =
   | { frame: "hello"; generation: number }
   | { frame: "launch"; engine: string; profile_dir: string; argv: string[]; env: Record<string, string> }
   | { frame: "ping"; nonce: string }
+  | { frame: "navigate"; nav_id: number; url: string }
+  | { frame: "route_decision"; request_id: number; allow: boolean }
   | { frame: "shutdown" };
+
+export type RouteKind = "document" | "redirect" | "frame" | "popup" | "fetch" | "subresource" | "service_worker";
+
+export type NavigationFailure = "denied" | "timeout" | "failed" | "busy";
 
 export type ErrorCode = "protocol_violation" | "launch_refused" | "launch_failed" | "engine_exited" | "not_ready";
 
@@ -56,6 +69,9 @@ export type WorkerFrame =
   | { frame: "launched" }
   | { frame: "pong"; nonce: string }
   | { frame: "bye" }
+  | { frame: "route_request"; request_id: number; kind: RouteKind; url: string; origin: string }
+  | { frame: "navigated"; nav_id: number; url: string; status: number }
+  | { frame: "navigation_failed"; nav_id: number; reason: NavigationFailure }
   | { frame: "error"; code: ErrorCode };
 
 export class ProtocolViolation extends Error {}
@@ -131,6 +147,13 @@ function boundedString(value: unknown, maxBytes: number, what: string): string {
   return value;
 }
 
+function positiveId(value: unknown, what: string): number {
+  if (!Number.isSafeInteger(value) || (value as number) < 1) {
+    throw new ProtocolViolation(`${what} is not a positive integer`);
+  }
+  return value as number;
+}
+
 /// Decode one host frame into the closed vocabulary.
 export function parseHostFrame(raw: unknown): HostFrame {
   if (!isPlainObject(raw) || typeof raw.frame !== "string") {
@@ -151,6 +174,19 @@ export function parseHostFrame(raw: unknown): HostFrame {
     case "shutdown": {
       exactKeys(raw, ["frame"]);
       return { frame: "shutdown" };
+    }
+    case "navigate": {
+      exactKeys(raw, ["frame", "nav_id", "url"]);
+      const navId = positiveId(raw.nav_id, "nav_id");
+      const url = boundedString(raw.url, MAX_URL_BYTES, "navigation URL");
+      if (!url.startsWith("https://")) throw new ProtocolViolation("navigation URL is not https");
+      return { frame: "navigate", nav_id: navId, url };
+    }
+    case "route_decision": {
+      exactKeys(raw, ["frame", "request_id", "allow"]);
+      const requestId = positiveId(raw.request_id, "request_id");
+      if (typeof raw.allow !== "boolean") throw new ProtocolViolation("route decision is not a boolean");
+      return { frame: "route_decision", request_id: requestId, allow: raw.allow };
     }
     case "launch": {
       exactKeys(raw, ["frame", "engine", "profile_dir", "argv", "env"]);
@@ -232,9 +268,25 @@ export function launchRefusal(launch: Extract<HostFrame, { frame: "launch" }>): 
   for (let index = 0; index < frozenCount; index++) {
     if (argv[index] !== FROZEN_FLAGS[index]) return "argv does not start with the frozen SG-000074 flags";
   }
-  const rest = argv.slice(frozenCount);
-  if (rest.length !== 8) return "argv does not carry exactly the profile and the six confinement flags";
-  const [profile, pipe, resolver, proxy, bypass, webrtc, quic, initial] = rest;
+  let rest = argv.slice(frozenCount);
+  // Test fixtures only: one trusted certificate hash, accepted solely when
+  // every admitted pin is loopback. Production pins come from the host's
+  // public-address selection and are never loopback, so a release host
+  // cannot use this even by mistake (and it never emits it).
+  if (rest.length === 10) {
+    const certificate = rest[8] ?? "";
+    if (!/^--ignore-certificate-errors-spki-list=[A-Za-z0-9+/]{43}=$/.test(certificate)) {
+      return "argv carries an unexpected flag";
+    }
+    const resolver = rest[2] ?? "";
+    const pins = [...resolver.matchAll(/MAP [^ ,]+ (\S+):443/g)].map((match) => match[1]);
+    if (pins.length === 0 || !pins.every((pin) => pin === "127.0.0.1" || pin === "[::1]")) {
+      return "a trusted test certificate requires loopback fixture pins";
+    }
+    rest = [...rest.slice(0, 8), ...rest.slice(9)];
+  }
+  if (rest.length !== 9) return "argv does not carry exactly the profile and the seven confinement flags";
+  const [profile, pipe, resolver, proxy, bypass, webrtc, quic, sharedWorker, initial] = rest;
   if (profile !== `--user-data-dir=${launch.profile_dir}`) return "argv profile differs from the launch profile";
   if (pipe !== PIPE) return "argv lacks the debugging pipe";
   const resolverPrefix = "--host-resolver-rules=";
@@ -246,6 +298,7 @@ export function launchRefusal(launch: Extract<HostFrame, { frame: "launch" }>): 
   }
   if (webrtc !== WEBRTC_POLICY) return "argv lacks the WebRTC UDP policy";
   if (quic !== DISABLE_QUIC) return "argv lacks the QUIC refusal";
+  if (sharedWorker !== DISABLE_SHARED_WORKER) return "argv lacks the SharedWorker refusal";
   if (initial !== INITIAL_URL) return "argv does not end with the blank page";
   return null;
 }

@@ -36,7 +36,8 @@ pub struct JobProcess {
 }
 
 /// Worker protocol generation (apps/qdral-browser-worker/src/protocol.ts).
-pub const WORKER_PROTOCOL_GENERATION: u32 = 1;
+/// Generation 2 adds the slice-3a navigation frames.
+pub const WORKER_PROTOCOL_GENERATION: u32 = 2;
 /// Worker identity reported in its hello.
 pub const WORKER_IDENTITY: &str = "qdral-browser-worker";
 /// The only Node option the worker accepts (inspector activation refused).
@@ -47,6 +48,15 @@ pub const WORKER_HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(15);
 pub const WORKER_LAUNCH_TIMEOUT: Duration = Duration::from_secs(60);
 pub const WORKER_REPLY_TIMEOUT: Duration = Duration::from_secs(10);
 pub const WORKER_SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(10);
+/// Upper bound for one navigation, including every route decision.
+pub const WORKER_NAVIGATION_TIMEOUT: Duration = Duration::from_secs(45);
+
+/// A completed top-level navigation.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NavigationOutcome {
+    pub url: String,
+    pub status: u16,
+}
 
 /// Everything the launcher needs; every path must be absolute. `node` and
 /// `worker_main` must come from Deskal's install records, never from a
@@ -71,6 +81,11 @@ pub struct WorkerLaunch {
     pub temp_dir: PathBuf,
     /// Destinations admitted into this engine lifetime.
     pub destinations: Vec<AdmittedDestination>,
+    /// Test builds only: a fixture certificate's SPKI hash the engine
+    /// trusts. The worker accepts it only with loopback fixture pins.
+    #[cfg(test)]
+    #[cfg_attr(not(windows), allow(dead_code))]
+    pub(crate) test_trusted_spki: Option<String>,
 }
 
 /// How supervision ended.
@@ -102,6 +117,14 @@ pub(crate) enum WorkerRequest<'a> {
     Ping {
         nonce: &'a str,
     },
+    Navigate {
+        nav_id: u64,
+        url: &'a str,
+    },
+    RouteDecision {
+        request_id: u64,
+        allow: bool,
+    },
     Shutdown,
 }
 
@@ -109,13 +132,35 @@ pub(crate) enum WorkerRequest<'a> {
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(tag = "frame", rename_all = "snake_case", deny_unknown_fields)]
 pub(crate) enum WorkerReply {
-    Hello { generation: u32, worker: String },
+    Hello {
+        generation: u32,
+        worker: String,
+    },
     // Empty struct variants: serde ignores unknown fields on unit
     // variants of an internally tagged enum even with deny_unknown_fields.
     Launched {},
-    Pong { nonce: String },
+    Pong {
+        nonce: String,
+    },
     Bye {},
-    Error { code: String },
+    RouteRequest {
+        request_id: u64,
+        kind: String,
+        url: String,
+        origin: String,
+    },
+    Navigated {
+        nav_id: u64,
+        url: String,
+        status: u16,
+    },
+    NavigationFailed {
+        nav_id: u64,
+        reason: String,
+    },
+    Error {
+        code: String,
+    },
 }
 
 /// Map a worker error code onto the typed vocabulary.
@@ -126,6 +171,70 @@ pub(crate) fn reply_error(code: &str) -> HostError {
         "launch_failed" | "engine_exited" => {
             HostError::Unavailable(UnavailableReason::LaunchFailed)
         }
+        _ => HostError::Unavailable(UnavailableReason::ProtocolViolation),
+    }
+}
+
+/// Largest profile preferences file the host will rewrite.
+#[cfg(any(windows, test))]
+const MAX_PREFERENCES_BYTES: u64 = 8 * 1024 * 1024;
+
+/// Turn off preloading in the profile before the engine starts. Speculation
+/// rules prefetch and prerender run in the browser process, outside every
+/// route and redirect guard (measured: an undecided request to another
+/// admitted name, and a prerender whose activation moved the page). No
+/// engine switch tested disables them; the profile's "Preload pages: never"
+/// preference (`net.network_prediction_options` = 2) does. Existing
+/// preferences are kept; an unreadable or oversized file fails closed.
+#[cfg(any(windows, test))]
+pub(crate) fn seed_profile_preferences(profile_dir: &Path) -> Result<(), HostError> {
+    let dir = profile_dir.join("Default");
+    std::fs::create_dir_all(&dir)
+        .map_err(|err| HostError::Platform(format!("profile preferences: {err}")))?;
+    let path = dir.join("Preferences");
+    let mut value = match std::fs::metadata(&path) {
+        Ok(meta) if meta.len() > MAX_PREFERENCES_BYTES => {
+            return Err(HostError::Invalid(
+                "profile preferences are oversized".into(),
+            ))
+        }
+        Ok(_) => {
+            let text = std::fs::read_to_string(&path)
+                .map_err(|err| HostError::Platform(format!("profile preferences: {err}")))?;
+            serde_json::from_str::<serde_json::Value>(&text)
+                .map_err(|_| HostError::Invalid("profile preferences are not JSON".into()))?
+        }
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => serde_json::json!({}),
+        Err(err) => return Err(HostError::Platform(format!("profile preferences: {err}"))),
+    };
+    let root = value
+        .as_object_mut()
+        .ok_or_else(|| HostError::Invalid("profile preferences are not an object".into()))?;
+    let net = root
+        .entry("net")
+        .or_insert_with(|| serde_json::json!({}))
+        .as_object_mut()
+        .ok_or_else(|| HostError::Invalid("profile `net` preferences are not an object".into()))?;
+    net.insert("network_prediction_options".into(), serde_json::json!(2));
+    let text = serde_json::to_string(&value)
+        .map_err(|err| HostError::Invalid(format!("profile preferences: {err}")))?;
+    std::fs::write(&path, text)
+        .map_err(|err| HostError::Platform(format!("profile preferences: {err}")))
+}
+
+/// Test builds only: the fixture certificate trust flag.
+#[cfg(test)]
+#[cfg_attr(not(windows), allow(dead_code))]
+pub(crate) fn test_certificate_flag(spki: &str) -> String {
+    format!("--ignore-certificate-errors-spki-list={spki}")
+}
+
+/// Map a worker navigation failure onto the typed vocabulary.
+#[cfg(any(windows, test))]
+pub(crate) fn navigation_failure(reason: &str) -> HostError {
+    match reason {
+        "denied" => HostError::Invalid("navigation denied by the browser policy".into()),
+        "timeout" | "failed" | "busy" => HostError::Unavailable(UnavailableReason::LaunchFailed),
         _ => HostError::Unavailable(UnavailableReason::ProtocolViolation),
     }
 }
@@ -173,6 +282,18 @@ fn file_name_is(path: &Path, expected: &str) -> bool {
 /// Validate the launch request before anything is spawned. A missing Node
 /// or worker is a missing prerequisite (typed unavailable).
 pub(crate) fn validate_launch(spec: &WorkerLaunch) -> Result<(), HostError> {
+    // Exactly one destination per engine lifetime. The browser process
+    // issues some requests outside every route and guard (measured:
+    // fetchLater, Reporting/CSP reports, FedCM, audio worklet modules,
+    // NoStatePrefetch). With a single admitted name, the pinned resolver and
+    // the no-route proxy make every other host unreachable, so such requests
+    // can reach only the page's own origin, which SG-000075 permits. The
+    // policy is exact-origin anyway; another site is another lifetime.
+    if spec.destinations.len() != 1 {
+        return Err(HostError::Invalid(
+            "a browser lifetime admits exactly one destination".into(),
+        ));
+    }
     for (path, what) in [
         (spec.node.as_path(), "node"),
         (&spec.worker_main, "worker entry point"),
@@ -361,10 +482,12 @@ pub use fallback::{launch_worker, BrowserWorker};
 mod platform {
     use super::*;
     use crate::proto::{decode_frame, write_frame};
+    use crate::worker_navigation::{NavigationPolicy, RouteKind};
     use crate::worker_process::{spawn, WorkerProcess};
     use std::fs::File;
     use std::io::BufReader;
     use std::sync::mpsc::{self, Receiver, RecvTimeoutError};
+    use std::time::Instant;
 
     /// A supervised browser worker. Dropping it terminates the job and
     /// removes an ephemeral profile.
@@ -379,6 +502,9 @@ mod platform {
         profile: Option<PathBuf>,
         browser_pid: u32,
         finished: bool,
+        policy: NavigationPolicy,
+        next_nav: u64,
+        last_request: u64,
     }
 
     /// Launch the worker and its engine, or fail closed with a typed error
@@ -390,7 +516,14 @@ mod platform {
         validate_launch(spec)?;
         assert_no_managed_policy(spec.engine.kind(), policy)
             .map_err(|_| HostError::Unavailable(UnavailableReason::ManagedPolicy))?;
-        let argv = build_worker_argv(&spec.profile_dir, &spec.destinations)?;
+        #[allow(unused_mut)] // mutated in test builds only
+        let mut argv = build_worker_argv(&spec.profile_dir, &spec.destinations)?;
+        #[cfg(test)]
+        if let Some(spki) = &spec.test_trusted_spki {
+            // Before the trailing blank page, where the worker expects it.
+            argv.insert(argv.len() - 1, test_certificate_flag(spki));
+        }
+        seed_profile_preferences(&spec.profile_dir)?;
         let env = worker_environment(&spec.temp_dir);
         let worker_args = worker_node_args(&spec.worker_main);
         let (process, pipes) = spawn(&spec.node, &worker_args, &env)?;
@@ -417,6 +550,9 @@ mod platform {
             profile: spec.ephemeral_profile.then(|| spec.profile_dir.clone()),
             browser_pid: 0,
             finished: false,
+            policy: NavigationPolicy::new(&spec.destinations),
+            next_nav: 0,
+            last_request: 0,
         };
         worker.handshake(spec)?;
         Ok(worker)
@@ -431,6 +567,47 @@ mod platform {
         /// The next reply within `timeout`. A worker that exits with code 2
         /// before answering refused its runtime (typed unsupported runtime).
         fn reply(&mut self, timeout: Duration) -> Result<WorkerReply, HostError> {
+            let deadline = Instant::now() + timeout;
+            loop {
+                let remaining = deadline.saturating_duration_since(Instant::now());
+                // A worker that keeps sending route requests cannot hold the
+                // host past the deadline.
+                if remaining.is_zero() {
+                    return Err(HostError::Unavailable(UnavailableReason::LaunchFailed));
+                }
+                match self.next_frame(remaining)? {
+                    WorkerReply::RouteRequest {
+                        request_id,
+                        kind,
+                        url,
+                        origin,
+                    } => self.answer_route(request_id, &kind, &url, &origin)?,
+                    reply => return Ok(reply),
+                }
+            }
+        }
+
+        /// Decide one forwarded engine request with the SG-000075 policy.
+        /// Request ids must increase strictly; an unknown kind is refused.
+        fn answer_route(
+            &mut self,
+            request_id: u64,
+            kind: &str,
+            url: &str,
+            origin: &str,
+        ) -> Result<(), HostError> {
+            if request_id <= self.last_request {
+                return Err(HostError::Unavailable(UnavailableReason::ProtocolViolation));
+            }
+            self.last_request = request_id;
+            let allow = match RouteKind::parse(kind) {
+                Some(kind) => self.policy.decide(kind, url, origin).is_ok(),
+                None => false,
+            };
+            self.send(&WorkerRequest::RouteDecision { request_id, allow })
+        }
+
+        fn next_frame(&mut self, timeout: Duration) -> Result<WorkerReply, HostError> {
             match self.replies.recv_timeout(timeout) {
                 Ok(Ok(WorkerReply::Error { code })) => Err(reply_error(&code)),
                 Ok(Ok(reply)) => Ok(reply),
@@ -518,6 +695,51 @@ mod platform {
             }
         }
 
+        /// Navigate the primary page to an admitted HTTPS URL. Every request
+        /// the engine makes meanwhile is decided here by the SG-000075
+        /// policy; the outcome is typed.
+        pub fn navigate(&mut self, url: &str) -> Result<NavigationOutcome, HostError> {
+            let outcome = self.navigate_inner(url);
+            if outcome.is_err() {
+                self.policy.abort();
+            }
+            outcome
+        }
+
+        fn navigate_inner(&mut self, url: &str) -> Result<NavigationOutcome, HostError> {
+            self.policy.begin(url)?;
+            self.next_nav += 1;
+            let nav_id = self.next_nav;
+            self.send(&WorkerRequest::Navigate { nav_id, url })?;
+            match self.reply(WORKER_NAVIGATION_TIMEOUT)? {
+                WorkerReply::Navigated {
+                    nav_id: done,
+                    url: committed,
+                    status,
+                } if done == nav_id => {
+                    self.policy.commit(&committed)?;
+                    Ok(NavigationOutcome {
+                        url: committed,
+                        status,
+                    })
+                }
+                WorkerReply::NavigationFailed {
+                    nav_id: done,
+                    reason,
+                } if done == nav_id => {
+                    #[cfg(test)]
+                    eprintln!("SG108-DIAG navigation {url} failed: {reason}");
+                    Err(navigation_failure(&reason))
+                }
+                other => {
+                    #[cfg(test)]
+                    eprintln!("SG108-DIAG navigation {url} unexpected reply: {other:?}");
+                    let _ = other;
+                    Err(HostError::Unavailable(UnavailableReason::ProtocolViolation))
+                }
+            }
+        }
+
         /// Graceful shutdown with a forced fallback: ask the worker to stop,
         /// wait for `bye` and its exit, then terminate the job regardless and
         /// confirm it is empty, then remove an ephemeral profile.
@@ -574,6 +796,13 @@ mod fallback {
                 job_empty: true,
                 profile_removed: true,
             }
+        }
+
+        /// API parity: no worker ever exists off Windows.
+        pub fn navigate(&mut self, _url: &str) -> Result<NavigationOutcome, HostError> {
+            Err(HostError::Unavailable(
+                UnavailableReason::UnsupportedRuntime,
+            ))
         }
     }
 
@@ -789,11 +1018,119 @@ mod tests {
     }
 
     #[test]
+    fn profile_preferences_turn_preloading_off_and_keep_the_rest() {
+        let dir = std::env::temp_dir().join(format!(
+            "qdral-sg108-prefs-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0)
+        ));
+        let read = |dir: &Path| -> serde_json::Value {
+            serde_json::from_str(
+                &std::fs::read_to_string(dir.join("Default").join("Preferences")).unwrap(),
+            )
+            .unwrap()
+        };
+        // A fresh profile gets the preference.
+        seed_profile_preferences(&dir).unwrap();
+        assert_eq!(read(&dir)["net"]["network_prediction_options"], 2);
+        // Existing preferences are kept and the value is forced.
+        std::fs::write(
+            dir.join("Default").join("Preferences"),
+            r#"{"keep":1,"net":{"network_prediction_options":0,"other":true}}"#,
+        )
+        .unwrap();
+        seed_profile_preferences(&dir).unwrap();
+        let value = read(&dir);
+        assert_eq!(value["keep"], 1);
+        assert_eq!(value["net"]["other"], true);
+        assert_eq!(value["net"]["network_prediction_options"], 2);
+        // Malformed preferences fail closed.
+        for bad in ["not json", "[1]", r#"{"net":5}"#] {
+            std::fs::write(dir.join("Default").join("Preferences"), bad).unwrap();
+            assert!(seed_profile_preferences(&dir).is_err(), "{bad}");
+        }
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn navigation_frames_match_the_typescript_vocabulary() {
+        let json = |request: &WorkerRequest<'_>| serde_json::to_string(request).unwrap();
+        assert_eq!(
+            json(&WorkerRequest::Navigate {
+                nav_id: 3,
+                url: "https://fixture.test/a"
+            }),
+            r#"{"frame":"navigate","nav_id":3,"url":"https://fixture.test/a"}"#
+        );
+        assert_eq!(
+            json(&WorkerRequest::RouteDecision {
+                request_id: 9,
+                allow: false
+            }),
+            r#"{"frame":"route_decision","request_id":9,"allow":false}"#
+        );
+        let reply = |text: &str| serde_json::from_str::<WorkerReply>(text);
+        assert_eq!(
+            reply(r#"{"frame":"route_request","request_id":1,"kind":"frame","url":"https://x.test/","origin":"https://fixture.test"}"#).unwrap(),
+            WorkerReply::RouteRequest {
+                request_id: 1,
+                kind: "frame".into(),
+                url: "https://x.test/".into(),
+                origin: "https://fixture.test".into()
+            }
+        );
+        assert_eq!(
+            reply(
+                r#"{"frame":"navigated","nav_id":3,"url":"https://fixture.test/a","status":200}"#
+            )
+            .unwrap(),
+            WorkerReply::Navigated {
+                nav_id: 3,
+                url: "https://fixture.test/a".into(),
+                status: 200
+            }
+        );
+        assert_eq!(
+            reply(r#"{"frame":"navigation_failed","nav_id":3,"reason":"denied"}"#).unwrap(),
+            WorkerReply::NavigationFailed {
+                nav_id: 3,
+                reason: "denied".into()
+            }
+        );
+        // Unknown fields, negative ids and out-of-range statuses are refused.
+        assert!(reply(r#"{"frame":"navigated","nav_id":3,"url":"u","status":200,"x":1}"#).is_err());
+        assert!(reply(
+            r#"{"frame":"route_request","request_id":-1,"kind":"frame","url":"u","origin":""}"#
+        )
+        .is_err());
+        assert!(reply(r#"{"frame":"navigated","nav_id":3,"url":"u","status":70000}"#).is_err());
+        // Failure reasons map onto the typed vocabulary.
+        assert!(matches!(
+            navigation_failure("denied"),
+            HostError::Invalid(_)
+        ));
+        for reason in ["timeout", "failed", "busy"] {
+            assert!(matches!(
+                navigation_failure(reason),
+                HostError::Unavailable(UnavailableReason::LaunchFailed)
+            ));
+        }
+        assert!(matches!(
+            navigation_failure("other"),
+            HostError::Unavailable(UnavailableReason::ProtocolViolation)
+        ));
+        assert_eq!(WORKER_NAVIGATION_TIMEOUT, Duration::from_secs(45));
+    }
+
+    #[test]
     fn worker_frames_match_the_typescript_vocabulary() {
         let json = |request: &WorkerRequest<'_>| serde_json::to_string(request).unwrap();
         assert_eq!(
-            json(&WorkerRequest::Hello { generation: 1 }),
-            r#"{"frame":"hello","generation":1}"#
+            json(&WorkerRequest::Hello { generation: 2 }),
+            r#"{"frame":"hello","generation":2}"#
         );
         assert_eq!(json(&WorkerRequest::Shutdown), r#"{"frame":"shutdown"}"#);
         assert_eq!(
@@ -854,18 +1191,63 @@ mod tests {
     }
 
     #[test]
+    fn a_lifetime_admits_exactly_one_destination() {
+        let base = std::env::temp_dir();
+        let engine = Engine::for_tests(base.join("msedge.exe"), crate::discovery::EngineKind::Edge);
+        let destination = |host: &str| {
+            crate::confinement::AdmittedDestination::fixture(
+                host,
+                std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
+            )
+            .unwrap()
+        };
+        let launch = |destinations| WorkerLaunch {
+            test_trusted_spki: None,
+            node: base.join("node.exe"),
+            worker_main: base.join("main.js"),
+            engine: engine.clone(),
+            profile_dir: base.clone(),
+            ephemeral_profile: false,
+            temp_dir: base.clone(),
+            destinations,
+        };
+        for destinations in [
+            Vec::new(),
+            vec![destination("fixture.test"), destination("other.test")],
+        ] {
+            assert!(matches!(
+                validate_launch(&launch(destinations)),
+                Err(HostError::Invalid(message)) if message.contains("exactly one destination")
+            ));
+        }
+        // One destination passes this rule (and then fails on the missing
+        // runtime, as a typed prerequisite).
+        assert!(matches!(
+            validate_launch(&launch(vec![destination("fixture.test")])),
+            Err(HostError::Unavailable(
+                UnavailableReason::UnsupportedRuntime
+            ))
+        ));
+    }
+
+    #[test]
     fn missing_prerequisites_are_typed_and_nothing_is_spawned() {
         let base = std::env::temp_dir();
         // Built from temp_dir so the path is absolute on every platform.
         let engine = Engine::for_tests(base.join("msedge.exe"), crate::discovery::EngineKind::Edge);
         let spec = |node: PathBuf, main: PathBuf| WorkerLaunch {
+            test_trusted_spki: None,
             node,
             worker_main: main,
             engine: engine.clone(),
             profile_dir: base.clone(),
             ephemeral_profile: false,
             temp_dir: base.clone(),
-            destinations: Vec::new(),
+            destinations: vec![crate::confinement::AdmittedDestination::fixture(
+                "fixture.test",
+                std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
+            )
+            .unwrap()],
         };
         let missing = base.join("qdral-sg108-missing");
         // A missing Node or worker is a missing prerequisite.

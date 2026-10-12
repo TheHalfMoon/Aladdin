@@ -22,7 +22,9 @@ import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { chromium, type BrowserContext } from "playwright-core";
 import { splitWindowsCommandLine } from "./cmdline.js";
-import { KNOWN_GAPS } from "./gaps.js";
+import { installRoutes } from "./routes.js";
+import { originOf, type RouteQuery } from "./routing.js";
+import { denyServiceWorkerScripts } from "./service-workers.js";
 import { encodeFrame, FrameDecoder, launchRefusal, type HostFrame, type WorkerFrame } from "./protocol.js";
 
 const EDGE_CANDIDATES = [
@@ -67,11 +69,13 @@ function confinedArgv(profile: string, destinations: Destination[]): string[] {
     `--proxy-bypass-list=${bypass}`,
     WEBRTC_POLICY,
     "--disable-quic",
+    "--disable-blink-features=SharedWorker",
     "about:blank"
   ];
 }
 
 const FIXTURE: Destination[] = [{ host: "fixture.test", pin: "127.0.0.1" }];
+const TWO_SITES: Destination[] = [...FIXTURE, { host: "other.test", pin: "127.0.0.1" }];
 
 /// Per-test cleanup that runs last-in, first-out and always runs every step
 /// (node:test runs `t.after` hooks in registration order and a failing hook
@@ -265,8 +269,8 @@ async function launchDirect(
 nativeTest("the worker drives the installed engine with exactly the host argv and leaves nothing behind", async (t) => {
   const profile = profileFor(t, "native");
   const worker = new WorkerProcess(t);
-  worker.send({ frame: "hello", generation: 1 });
-  assert.deepEqual(await worker.reply(1), { frame: "hello", generation: 1, worker: "qdral-browser-worker" });
+  worker.send({ frame: "hello", generation: 2 });
+  assert.deepEqual(await worker.reply(1), { frame: "hello", generation: 2, worker: "qdral-browser-worker" });
   const launch = launchFrame(profile, FIXTURE);
   worker.send(launch);
   assert.deepEqual(await worker.reply(2), { frame: "launched" });
@@ -291,7 +295,7 @@ nativeTest("the worker drives the installed engine with exactly the host argv an
 nativeTest("killing the worker takes the engine down with its pipe", async (t) => {
   const profile = profileFor(t, "native-kill");
   const worker = new WorkerProcess(t);
-  worker.send({ frame: "hello", generation: 1 });
+  worker.send({ frame: "hello", generation: 2 });
   await worker.reply(1);
   worker.send(launchFrame(profile, FIXTURE));
   assert.deepEqual(await worker.reply(2), { frame: "launched" });
@@ -442,7 +446,7 @@ nativeTest("a same-user process cannot activate the worker's inspector when it r
   const attempt = async (flags: string[]) => {
     const worker = new WorkerProcess(t, flags);
     // The worker is fully started once it answers hello.
-    worker.send({ frame: "hello", generation: 1 });
+    worker.send({ frame: "hello", generation: 2 });
     await worker.reply(1);
     const before = await listening(9229);
     let threw = false;
@@ -495,7 +499,7 @@ function tlsFixture(t: Cleanup): TlsFixture {
     [
       "req", "-x509", "-newkey", "ec", "-pkeyopt", "ec_paramgen_curve:prime256v1", "-nodes",
       "-keyout", join(dir, "key.pem"), "-out", join(dir, "cert.pem"), "-days", "2",
-      "-subj", "/CN=fixture.test", "-addext", "subjectAltName=DNS:fixture.test"
+      "-subj", "/CN=fixture.test", "-addext", "subjectAltName=DNS:fixture.test,DNS:other.test"
     ],
     { stdio: "ignore" }
   );
@@ -525,7 +529,7 @@ async function httpsFixture(
   const hits: string[] = [];
   const server = createHttpsServer({ key: tls.key, cert: tls.cert }, (request, response) => {
     const url = request.url ?? "";
-    hits.push(url);
+    hits.push(`${(request.headers.host ?? "").split(":")[0]}${url}`);
     response.setHeader("alt-svc", 'h3=":443"; ma=86400');
     if (url.endsWith(".js")) {
       response.setHeader("content-type", "text/javascript");
@@ -533,7 +537,11 @@ async function httpsFixture(
       return;
     }
     response.setHeader("content-type", "text/html");
-    response.end(url === "/sw" ? SERVICE_WORKER_PAGE : "<p>secure fixture</p>");
+    const pages: Record<string, string> = {
+      "/sw": SERVICE_WORKER_PAGE,
+      "/sw-cross": `<!doctype html><body><iframe src="https://other.test/sw"></iframe></body>`
+    };
+    response.end(pages[url] ?? "<p>secure fixture</p>");
   });
   await listen(t, server, FIXTURE_PORT, "127.0.0.1");
   const counts = new Map<number, number>();
@@ -563,6 +571,17 @@ async function httpsFixture(
   }
   t.after(() => assert.deepEqual(socketErrors, [], "a UDP listener failed"));
   return { hits, admittedUdp: () => counts.get(FIXTURE_PORT) ?? 0, literalUdp: () => counts.get(4433) ?? 0 };
+}
+
+/// Running web service workers by URL. Edge's built-in component extension
+/// runs its own (chrome-extension://) service worker even with
+/// --disable-extensions; that is not a page registration and is excluded.
+/// URLs (not Worker objects) keep a failing assertion's diff small.
+function webServiceWorkers(context: BrowserContext): string[] {
+  return context
+    .serviceWorkers()
+    .map((worker) => worker.url())
+    .filter((url) => url.startsWith("http"));
 }
 
 /// Try a WebTransport session from an open page; the outcome name only.
@@ -637,36 +656,107 @@ nativeTest("over HTTPS the confined engine sends no Alt-Svc QUIC and no WebTrans
   assert.ok(await waitFor(() => fixture.literalUdp() > 0, 10_000), "the control sent no UDP, so the probe proves nothing");
 });
 
-nativeTest(
-  "WebTransport to an admitted name sends no UDP under confinement",
-  async (t) => {
-    const tls = tlsFixture(t);
-    const fixture = await httpsFixture(t, tls);
-    const profile = profileFor(t, "native-https-wt");
-    const context = await launchDirect(t, profile, confinedHttpsArgv(profile, tls.spki));
-    await tryWebTransport(context, "https://fixture.test/x");
-    await new Promise((resolve) => setTimeout(resolve, 700));
-    assert.equal(fixture.admittedUdp(), 0, "WebTransport sent QUIC to the admitted name's pinned address");
-  },
-  KNOWN_GAPS.webTransport
-);
+// Accepted residual risk #300 (founder decision 2026-10-11): WebTransport
+// to an admitted name reaches that name's host-pinned address, uninspected
+// by the policy route. The boundary that must hold: nothing beyond admitted
+// names. The admitted case is observed (not asserted absent) so a change in
+// engine behavior is visible in the log.
+nativeTest("WebTransport reaches nothing beyond admitted names under confinement", async (t) => {
+  const tls = tlsFixture(t);
+  const fixture = await httpsFixture(t, tls);
+  const profile = profileFor(t, "native-https-wt");
+  const context = await launchDirect(t, profile, confinedHttpsArgv(profile, tls.spki));
+  // Unadmitted names resolve nowhere (MAP * ~NOTFOUND); IP literals are
+  // refused by the no-route proxy.
+  for (const url of ["https://unmapped.test/x", "https://example.com/x", "https://127.0.0.1:4433/x"]) {
+    assert.equal(await tryWebTransport(context, url), "WebTransportError", url);
+  }
+  await new Promise((resolve) => setTimeout(resolve, 700));
+  assert.equal(fixture.literalUdp(), 0, "WebTransport reached an IP literal");
+  assert.equal(fixture.admittedUdp(), 0, "a non-admitted WebTransport attempt reached the admitted pin");
+  await tryWebTransport(context, "https://fixture.test/x");
+  await new Promise((resolve) => setTimeout(resolve, 700));
+  console.error(`SG108-EVIDENCE accepted residual #300: admitted-name WebTransport datagrams=${fixture.admittedUdp()}`);
+});
 
-nativeTest(
-  "the service-worker block holds against prototype registration",
-  async (t) => {
-    const tls = tlsFixture(t);
-    const fixture = await httpsFixture(t, tls);
-    const profile = profileFor(t, "native-sw");
-    // The production worker launches with serviceWorkers: "block" (main.ts).
-    const context = await launchDirect(t, profile, confinedHttpsArgv(profile, tls.spki), { serviceWorkers: "block" });
-    const page = await context.newPage();
-    await page.goto("https://fixture.test/sw", { timeout: 15_000 });
-    await page.waitForFunction(() => document.title.includes("proto:"), undefined, { timeout: 15_000 });
-    await new Promise((resolve) => setTimeout(resolve, 1_000));
-    const registered = await page.evaluate(async () => (await navigator.serviceWorker.getRegistrations()).length);
-    await page.close();
-    assert.deepEqual(fixture.hits.filter((hit) => hit.endsWith(".js")), [], "a service-worker script was fetched");
-    assert.equal(registered, 0, "a service worker registered");
-  },
-  KNOWN_GAPS.serviceWorkers
-);
+nativeTest("the worker's service-worker denial refuses same-origin registration, and the control registers", async (t) => {
+  const tls = tlsFixture(t);
+  const fixture = await httpsFixture(t, tls);
+  const scripts = (): string[] => fixture.hits.filter((hit) => hit.endsWith(".js"));
+
+  // Exactly the production configuration (main.ts): serviceWorkers "allow"
+  // plus denyServiceWorkerScripts. The page tries direct and prototype
+  // registration.
+  const profile = profileFor(t, "native-sw");
+  const context = await launchDirect(t, profile, confinedHttpsArgv(profile, tls.spki), { serviceWorkers: "allow" });
+  await denyServiceWorkerScripts(context);
+  const page = await context.newPage();
+  await page.goto("https://fixture.test/sw", { timeout: 15_000 });
+  await page.waitForFunction(() => document.title.includes("proto:"), undefined, { timeout: 15_000 });
+  const outcome = await page.title();
+  await new Promise((resolve) => setTimeout(resolve, 1_000));
+  const registered = await page.evaluate(async () => (await navigator.serviceWorker.getRegistrations()).length);
+  await page.close();
+  assert.match(outcome, /^direct:TypeError proto:TypeError$/, outcome);
+  assert.equal(registered, 0, "a service worker registered");
+  assert.deepEqual(scripts(), [], "a service-worker script reached the fixture");
+
+  // Positive control: the same configuration without the denial route
+  // registers the worker and fetches its scripts.
+  const controlProfile = profileFor(t, "native-sw-control");
+  const control = await launchDirect(t, controlProfile, confinedHttpsArgv(controlProfile, tls.spki), {
+    serviceWorkers: "allow"
+  });
+  const controlPage = await control.newPage();
+  await controlPage.goto("https://fixture.test/sw", { timeout: 15_000 });
+  await controlPage.waitForFunction(() => document.title.includes("proto:"), undefined, { timeout: 15_000 });
+  assert.match(await controlPage.title(), /proto:ok/);
+  assert.ok(await waitFor(() => scripts().length > 0, 10_000), "the control fetched no service-worker script");
+  await controlPage.close();
+});
+
+nativeTest("the route stack refuses service workers even when the policy allows everything", async (t) => {
+  // Pins the route order of installRoutes: the service-worker denial must
+  // run before the policy route, whatever the policy answers.
+  const tls = tlsFixture(t);
+  const fixture = await httpsFixture(t, tls);
+  const profile = profileFor(t, "native-route-order");
+  const context = await launchDirect(t, profile, confinedHttpsArgv(profile, tls.spki), { serviceWorkers: "allow" });
+  const primary = context.pages()[0] ?? (await context.newPage());
+  await installRoutes(context, () => primary, { decide: async () => true });
+  await primary.goto("https://fixture.test/sw", { timeout: 15_000 });
+  await primary.waitForFunction(() => document.title.includes("proto:"), undefined, { timeout: 15_000 });
+  assert.match(await primary.title(), /^direct:TypeError proto:TypeError$/);
+  assert.deepEqual(fixture.hits.filter((hit) => hit.endsWith(".js")), [], "a service-worker script was fetched");
+  assert.deepEqual(webServiceWorkers(context), [], "a web service worker is running");
+});
+
+nativeTest("a cross-site iframe is refused by the policy route, so it cannot register a service worker", async (t) => {
+  const tls = tlsFixture(t);
+  const fixture = await httpsFixture(t, tls);
+  const profile = profileFor(t, "native-sw-cross");
+  const args = [...confinedArgv(profile, TWO_SITES).slice(0, -1), `--ignore-certificate-errors-spki-list=${tls.spki}`, "about:blank"];
+  const context = await launchDirect(t, profile, args, { serviceWorkers: "allow" });
+  const primary = context.pages()[0] ?? (await context.newPage());
+  // The host's frame rule (SG-000075 mediate_frame: exact origin), proven
+  // for the host in worker_navigation.rs; every other kind is allowed here
+  // so only the frame decision is under test.
+  const asked: Array<RouteQuery & { allowed: boolean }> = [];
+  await installRoutes(context, () => primary, {
+    decide: async (query) => {
+      const allowed = query.kind !== "frame" || originOf(query.url) === query.origin;
+      asked.push({ ...query, allowed });
+      return allowed;
+    }
+  });
+  await primary.goto("https://fixture.test/sw-cross", { timeout: 15_000 });
+  await new Promise((resolve) => setTimeout(resolve, 3_000));
+  // The cross-site frame was asked about and refused, and never contacted.
+  assert.ok(
+    asked.some((q) => q.kind === "frame" && q.url === "https://other.test/sw" && q.origin === "https://fixture.test" && !q.allowed),
+    `the cross-site frame was not refused: ${JSON.stringify(asked)}`
+  );
+  assert.deepEqual(fixture.hits.filter((hit) => hit.startsWith("other.test")), [], "other.test was contacted");
+  assert.deepEqual(fixture.hits.filter((hit) => hit.endsWith(".js")), [], "a service-worker script was fetched");
+  assert.deepEqual(webServiceWorkers(context), [], "a web service worker is running");
+});
