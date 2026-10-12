@@ -11,8 +11,9 @@ import { isIPv4, isIPv6 } from "node:net";
 import type { SnapshotNode } from "./snapshot.js";
 
 /// Generation 2 adds the slice-3a navigation frames, generation 3 slice-3b
-/// observation, generation 4 slice-3c activation.
-export const WORKER_PROTOCOL_GENERATION = 4;
+/// observation, generation 4 slice-3c activation, generation 5 slice-3d
+/// downloads.
+export const WORKER_PROTOCOL_GENERATION = 5;
 export const WORKER_IDENTITY = "qdral-browser-worker";
 export const MAX_FRAME_BYTES = 64 * 1024;
 
@@ -60,6 +61,7 @@ export type HostFrame =
   | { frame: "route_decision"; request_id: number; allow: boolean }
   | { frame: "observe"; obs_id: number }
   | { frame: "activate"; act_id: number; ref: string }
+  | { frame: "download"; dl_id: number; ref: string; path: string }
   | { frame: "shutdown" };
 
 export type RouteKind = "document" | "redirect" | "frame" | "popup" | "fetch" | "subresource" | "service_worker";
@@ -80,6 +82,8 @@ export type WorkerFrame =
   | { frame: "observation_failed"; obs_id: number }
   | { frame: "activated"; act_id: number; url: string; status: number }
   | { frame: "activation_failed"; act_id: number; reason: NavigationFailure }
+  | { frame: "downloaded"; dl_id: number; url: string; name: string; media: string; bytes: number }
+  | { frame: "download_failed"; dl_id: number; reason: NavigationFailure }
   | { frame: "error"; code: ErrorCode };
 
 export class ProtocolViolation extends Error {}
@@ -189,6 +193,18 @@ export function parseHostFrame(raw: unknown): HostFrame {
       const url = boundedString(raw.url, MAX_URL_BYTES, "navigation URL");
       if (!url.startsWith("https://")) throw new ProtocolViolation("navigation URL is not https");
       return { frame: "navigate", nav_id: navId, url };
+    }
+    case "download": {
+      exactKeys(raw, ["frame", "dl_id", "ref", "path"]);
+      const dlId = positiveId(raw.dl_id, "dl_id");
+      if (typeof raw.ref !== "string" || !/^(?:f\d{1,4})?e\d{1,6}$/.test(raw.ref)) {
+        throw new ProtocolViolation("download ref is malformed");
+      }
+      const path = boundedString(raw.path, MAX_PATH_BYTES, "download path");
+      if (!isAbsoluteWindowsPath(path) || !path.toLowerCase().endsWith(".part")) {
+        throw new ProtocolViolation("download path is not an absolute .part path");
+      }
+      return { frame: "download", dl_id: dlId, ref: raw.ref, path };
     }
     case "activate": {
       exactKeys(raw, ["frame", "act_id", "ref"]);

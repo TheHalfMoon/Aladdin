@@ -217,6 +217,47 @@ pub fn validate_download_type(
     Ok(())
 }
 
+/// The media type of an inert PDF.
+pub const PDF_MEDIA: &str = "application/pdf";
+
+/// SG-000078 amendment (founder decision 2026-10-12, for the SG-000108 PDF
+/// journey): an inert PDF may be staged for a host-approved, create-only
+/// commit into the approved folder. The filename must end in `.pdf`, the
+/// declared media type must be `application/pdf` (parameters allowed), the
+/// content must start with `%PDF-` and match no other denied class, and the
+/// size is bounded. Aladdin never opens, renders, executes or extracts it.
+/// The general allowlist (`validate_download_type`) is unchanged: PDFs stay
+/// denied on every other path.
+pub fn validate_inert_pdf(
+    file_name: &str,
+    declared_media: &str,
+    content: &[u8],
+) -> Result<(), HostError> {
+    let extension = file_name
+        .rsplit_once('.')
+        .map(|(_, ext)| ext.to_ascii_lowercase())
+        .unwrap_or_default();
+    if extension != "pdf" {
+        return Err(HostError::Invalid("inert PDF filename denied".into()));
+    }
+    let media = declared_media
+        .split(';')
+        .next()
+        .unwrap_or("")
+        .trim()
+        .to_ascii_lowercase();
+    if media != PDF_MEDIA {
+        return Err(HostError::Invalid("inert PDF declared type denied".into()));
+    }
+    if content.is_empty() || content.len() as u64 > MAX_TRANSFER_BYTES {
+        return Err(HostError::Invalid("inert PDF size denied".into()));
+    }
+    match sniff_denied_class(content) {
+        Some(DeniedContentClass::Pdf) => Ok(()),
+        _ => Err(HostError::Invalid("inert PDF content is not a PDF".into())),
+    }
+}
+
 /// Validate declared-versus-actual size agreement within the hard bound.
 pub fn validate_transfer_size(declared: u64, actual: u64) -> Result<(), HostError> {
     if declared != actual {
@@ -315,6 +356,40 @@ pub fn extract_automatically(_path: &str) -> Result<(), HostError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn inert_pdfs_are_admitted_only_on_their_own_path() {
+        let pdf = b"%PDF-1.4\n1 0 obj << >> endobj\n%%EOF\n";
+        assert!(validate_inert_pdf("report-2026-09-30.pdf", "application/pdf", pdf).is_ok());
+        assert!(validate_inert_pdf("R.PDF", "application/pdf; charset=binary", pdf).is_ok());
+        // Wrong extension, declared type, or content: refused.
+        for (name, media, content) in [
+            ("report.exe", "application/pdf", &pdf[..]),
+            ("report.pdf.exe", "application/pdf", &pdf[..]),
+            ("report", "application/pdf", &pdf[..]),
+            ("report.pdf", "application/octet-stream", &pdf[..]),
+            ("report.pdf", "text/html", &pdf[..]),
+            (
+                "report.pdf",
+                "application/pdf",
+                &b"MZ\x90\x00 disguised"[..],
+            ),
+            ("report.pdf", "application/pdf", &b"PK\x03\x04 zip"[..]),
+            ("report.pdf", "application/pdf", &b"plain text"[..]),
+            ("report.pdf", "application/pdf", &b""[..]),
+        ] {
+            assert!(
+                validate_inert_pdf(name, media, content).is_err(),
+                "{name} {media}"
+            );
+        }
+        let oversized = vec![b' '; (MAX_TRANSFER_BYTES + 1) as usize];
+        let mut big = b"%PDF-".to_vec();
+        big.extend_from_slice(&oversized);
+        assert!(validate_inert_pdf("big.pdf", "application/pdf", &big).is_err());
+        // The general allowlist still refuses PDFs.
+        assert!(validate_download_type("report.pdf", "application/pdf", pdf).is_err());
+    }
 
     #[test]
     fn canonical_destinations_validate_and_contain() {

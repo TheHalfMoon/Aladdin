@@ -54,6 +54,9 @@ export interface EngineSession {
   /// Click the element with this snapshot ref and wait for the resulting
   /// navigation to load; rejects with NavigationError.
   activate(ref: string): Promise<{ url: string; status: number }>;
+  /// Click the element with this snapshot ref, expect a download, and save
+  /// it to `path` (which must not exist); rejects with NavigationError.
+  download(ref: string, path: string): Promise<{ url: string; name: string; media: string; bytes: number }>;
   /// Called once if the engine goes away without `close`.
   onUnexpectedExit(listener: () => void): void;
 }
@@ -157,6 +160,16 @@ export class Worker {
       case "hello":
       case "route_decision":
         return this.fail("protocol_violation");
+      case "download": {
+        if (this.state !== "launched" || !this.session) return this.fail("not_ready");
+        if (this.navigating) {
+          this.send({ frame: "download_failed", dl_id: frame.dl_id, reason: "busy" });
+          return;
+        }
+        this.navigating = true;
+        void this.runDownload(this.session, frame.dl_id, frame.ref, frame.path);
+        return;
+      }
       case "activate": {
         if (this.state !== "launched" || !this.session) return this.fail("not_ready");
         if (this.navigating) {
@@ -226,6 +239,19 @@ export class Worker {
     } catch (error) {
       const reason: NavigationFailure = error instanceof NavigationError ? error.reason : "failed";
       outcome = { frame: "navigation_failed", nav_id: navId, reason };
+    }
+    this.navigating = false;
+    if (this.state === "launched" && this.session === session) this.send(outcome);
+  }
+
+  private async runDownload(session: EngineSession, dlId: number, ref: string, path: string): Promise<void> {
+    let outcome: WorkerFrame;
+    try {
+      const result = await session.download(ref, path);
+      outcome = { frame: "downloaded", dl_id: dlId, ...result };
+    } catch (error) {
+      const reason: NavigationFailure = error instanceof NavigationError ? error.reason : "failed";
+      outcome = { frame: "download_failed", dl_id: dlId, reason };
     }
     this.navigating = false;
     if (this.state === "launched" && this.session === session) this.send(outcome);

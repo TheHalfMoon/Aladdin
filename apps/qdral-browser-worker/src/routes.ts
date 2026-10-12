@@ -13,14 +13,15 @@
 // before navigating it.
 
 import type { BrowserContext, Page } from "playwright-core";
-import { attachRedirectGuard } from "./redirect-guard.js";
+import { attachRedirectGuard, type RedirectGuard } from "./redirect-guard.js";
 import { classifyRequest } from "./routing.js";
 import { denyServiceWorkerScripts } from "./service-workers.js";
 import type { RoutePolicy } from "./worker.js";
 
 export interface RouteStack {
-  /// Resolves once `page` has its redirect guard (rejects if it cannot).
-  guardReady(page: Page): Promise<void>;
+  /// Resolves with `page`'s redirect guard once attached (rejects if it
+  /// cannot be attached).
+  guardReady(page: Page): Promise<RedirectGuard>;
 }
 
 export async function installRoutes(
@@ -47,8 +48,8 @@ export async function installRoutes(
   });
   await denyServiceWorkerScripts(context);
 
-  const guards = new WeakMap<Page, Promise<void>>();
-  const guard = (page: Page): Promise<void> => {
+  const guards = new WeakMap<Page, Promise<RedirectGuard>>();
+  const guard = (page: Page): Promise<RedirectGuard> => {
     let ready = guards.get(page);
     if (!ready) {
       ready = attachRedirectGuard(context, page, policy);

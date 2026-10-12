@@ -1060,3 +1060,119 @@ fn an_approved_activation_follows_the_latest_dated_link_and_nothing_else() {
     assert!(report.job_empty, "the job did not empty");
     assert_profile_gone(report.profile_removed, &profile);
 }
+
+#[test]
+#[ignore = "requires the built browser worker and Edge; run by npm run browser-launcher:native"]
+fn the_journey_downloads_the_latest_report_create_only_and_verified() {
+    let fixture = HttpsFixture::start();
+    let profile = temp_profile("download");
+    let approved = temp_profile("approved-folder");
+    let mut launch = spec(&profile, true);
+    launch.destinations =
+        vec![
+            AdmittedDestination::fixture("fixture.test", IpAddr::V4(Ipv4Addr::LOCALHOST))
+                .expect("fixture.test"),
+        ];
+    launch.test_trusted_spki = Some(fixture.spki.clone());
+    let mut worker = launch_worker(&launch, &Policy(PolicyKeyState::Absent)).expect("launch");
+    let scope = crate::observation::ObservationScope {
+        workspace: "workspace".into(),
+        profile_identity: "profile".into(),
+    };
+
+    // Open the controlled site and let the host select the latest report.
+    worker
+        .navigate("https://fixture.test/reports")
+        .expect("reports");
+    let live = worker.observe(&scope).expect("observe");
+    let latest = worker.select_latest_dated_link().expect("latest report");
+    assert_eq!(
+        worker
+            .host_node(&latest)
+            .and_then(|n| n.url.clone())
+            .as_deref(),
+        Some("/reports/2026-09-30.pdf")
+    );
+    // Path traversal is refused before anything is dispatched.
+    let (target, mut approval) = approved_click(&live, &latest);
+    assert!(worker
+        .download(
+            &target,
+            &mut approval,
+            1,
+            "workspace",
+            &approved,
+            "../escape.pdf"
+        )
+        .is_err());
+    assert!(
+        !approval.consumed,
+        "a refused destination consumed the approval"
+    );
+    // The approved download, committed create-only.
+    let committed = worker
+        .download(
+            &target,
+            &mut approval,
+            1,
+            "workspace",
+            &approved,
+            "reports/latest.pdf",
+        )
+        .expect("approved download");
+    assert!(approval.consumed);
+    assert_eq!(committed.path, approved.join("reports").join("latest.pdf"));
+    // Independent check: the exact fixture bytes and their SHA-256.
+    let expected = b"%PDF-1.4\n% /reports/2026-09-30.pdf\n1 0 obj << /Type /Catalog >> endobj\ntrailer << /Root 1 0 R >>\n%%EOF\n";
+    let on_disk = std::fs::read(&committed.path).expect("read committed file");
+    assert_eq!(on_disk, expected.to_vec(), "committed bytes differ");
+    assert_eq!(committed.sha256, sha256_hex(expected));
+    assert_eq!(committed.bytes, expected.len() as u64);
+    assert_eq!(
+        committed.source_url,
+        "https://fixture.test/reports/2026-09-30.pdf"
+    );
+
+    // An existing file is never replaced.
+    let live = worker.observe(&scope).expect("observe again");
+    let latest = worker.select_latest_dated_link().expect("latest");
+    let (target, mut again) = approved_click(&live, &latest);
+    assert!(matches!(
+        worker.download(&target, &mut again, 1, "workspace", &approved, "reports/latest.pdf"),
+        Err(HostError::Invalid(message)) if message.contains("create-only")
+    ));
+    assert_eq!(std::fs::read(&committed.path).unwrap(), expected.to_vec());
+
+    // An oversized file and an executable disguised as a PDF are refused,
+    // and nothing is committed for them.
+    worker
+        .navigate("https://fixture.test/files")
+        .expect("files");
+    for (name, out) in [
+        ("Oversized 2026-01-01", "oversized.pdf"),
+        ("Disguised 2026-01-02", "fake.pdf"),
+    ] {
+        let live = worker.observe(&scope).expect("observe files");
+        let node = live
+            .observation
+            .nodes
+            .iter()
+            .flat_map(|n| std::iter::once(n).chain(n.children.iter()))
+            .flat_map(|n| std::iter::once(n).chain(n.children.iter()))
+            .find(|n| worker.host_node(&n.node_id).is_some_and(|h| h.name == name))
+            .map(|n| n.node_id.clone())
+            .expect("file link");
+        let (target, mut approval) = approved_click(&live, &node);
+        assert!(
+            worker
+                .download(&target, &mut approval, 1, "workspace", &approved, out)
+                .is_err(),
+            "{name} was committed"
+        );
+        assert!(!approved.join(out).exists(), "{name} left a file");
+    }
+    let report = worker.shutdown();
+    assert!(report.job_empty, "the job did not empty");
+    assert_profile_gone(report.profile_removed, &profile);
+    let _ = std::fs::remove_dir_all(&approved);
+}
