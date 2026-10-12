@@ -1012,6 +1012,17 @@ mod platform {
             Ok(())
         }
 
+        /// The stored reason of an ended (or cancelled) lifetime.
+        fn ensure_alive(&mut self) -> Result<(), HostError> {
+            if self.cancelled.load(Ordering::SeqCst) {
+                return Err(self.fail_closed(UnavailableReason::Cancelled));
+            }
+            match self.failed {
+                Some(reason) => Err(HostError::Unavailable(reason)),
+                None => Ok(()),
+            }
+        }
+
         /// A handle that cancels this lifetime from another thread.
         pub fn cancel_handle(&self) -> CancelHandle {
             CancelHandle {
@@ -1440,6 +1451,8 @@ mod platform {
             policy_revision: u64,
             workspace: &str,
         ) -> Result<NavigationOutcome, HostError> {
+            // An ended lifetime refuses before any approval is spent.
+            self.ensure_alive()?;
             if target.action != crate::actuation::SupportedAction::Click {
                 return Err(HostError::Invalid(
                     "activation needs a click approval".into(),
@@ -1526,6 +1539,7 @@ mod platform {
             destination_root: &Path,
             relative: &str,
         ) -> Result<CommittedDownload, HostError> {
+            self.ensure_alive()?;
             if target.action != crate::actuation::SupportedAction::Download {
                 return Err(HostError::Invalid(
                     "a download needs a download approval".into(),
@@ -1696,6 +1710,11 @@ mod platform {
                 return Err(HostError::Invalid(
                     "postcondition unverified: the download opened another document".into(),
                 ));
+            }
+            // A cancellation that arrived after the reply still wins: nothing
+            // is written to the approved folder.
+            if self.cancelled.load(Ordering::SeqCst) {
+                return Err(self.fail_closed(UnavailableReason::Cancelled));
             }
             commit_create_only(destination, destination_root, &content)?;
             Ok(CommittedDownload {
