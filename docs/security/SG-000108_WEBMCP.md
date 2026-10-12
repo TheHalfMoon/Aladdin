@@ -92,3 +92,66 @@ Native test `webmcp_declarative_tools_are_discovered_read_only_and_bound_to_the_
 Unit tests:
 - the worker's `webmcp/declarative.test.ts` covers schema rules, values, passwords, duplicates, disabled, read-only, nested and `form=`-owned controls, bounds, code-point cuts and control removal, and the snapshot model including shadow roots;
 - the host's `webmcp.rs` and `discovery_frames_are_exact` cover validation and the frame shapes.
+
+# Slice 5: approval-gated execution of declarative tools
+
+Status: implementation record for slice 5 of SG-000108 (worker protocol generation 7). Execution is available as a host API only. **No MCP-facing tool is added**: exposing page tools to a model is a later change under SG-000079, with its own approval policy.
+
+## What executes
+
+`BrowserWorker::execute_tool` runs a tool discovered in slice 4 only when all of these hold. Anything else is refused before the approval is checked, so nothing is spent:
+- the form declares `toolautosubmit`. Without it, WebMCP leaves submission to the user, and Aladdin's isolated browser has no user to submit;
+- it carries no password-like field;
+- its `action` crossed exactly;
+- its method is GET or POST;
+- it has no hidden parameters, which cannot be entered.
+
+## How approval binds
+
+- A new SG-000077 action, `execute` (role `webmcp-tool`), is required. A click or download approval is refused.
+- The target's `state` is `execution_binding`: the tool name, a digest of its discovered record, the method, the resolved action, and the canonical arguments with keys sorted. The one-shot approval therefore covers exactly what is submitted, and where.
+- An approval for other arguments, a forged approval and undeclared arguments are all refused unspent.
+
+## What happens
+
+1. **Fresh discovery.** The host discovers the page's tools again. The tool's record must be identical to the one the approval was given for, otherwise execution is refused as "the tool changed".
+2. **Argument validation.** Arguments are checked host-side against the bounded schema:
+   - types, required parameters and declared choices;
+   - number bounds and step;
+   - string length (1024 code points), with no controls (newlines and tabs are allowed in a textarea) and no invisible format characters.
+
+   `pattern` and `format` are not evaluated by the host. The engine's native constraint validation enforces them when the form is submitted, and a form that fails validation opens no document, so the execution is not verified.
+3. **Action.** The form's `action` is resolved against the committed page. It may be empty, absolute `https://`, or root-relative; anything else is refused. The host then expects exactly one page-initiated document request:
+   - for POST, the exact action;
+   - for GET, the action's path with whatever query the engine builds. That query includes fields the host never sees, such as hidden CSRF tokens, which the browser submits as usual.
+
+   An action on another origin is refused before dispatch.
+4. **Dispatch.** `dispatch` consumes the approval.
+5. **Filling.** The worker locates the form by `toolname` (exactly one match) and enters each field through Playwright's typed actions (`fill`, `selectOption`, `setChecked`, `check`), on host-built selectors with quoted names. Discovery stays read-only; only execution enters values. The worker then clicks the form's default submit button.
+6. **Verification.** A submission that opens no document is not a verified execution. Examples are a page script that calls `preventDefault`, or a field that fails native validation. A script that navigates elsewhere is refused at the request.
+7. **Result.** The result is the opened document's URL and status, plus its `<script type="application/ld+json">` blocks (WebMCP's cross-document response). They are read from the engine's DOM snapshot without running script, and bounded to 8 blocks of 8192 code points as untrusted `PageText`. The document is committed one generation later, and every earlier node and tool identity is stale.
+
+## Page code
+
+Aladdin evaluates no page-, model- or caller-supplied script. It calls no page-registered function (`executeTool`, `getTools`) and no `respondWith`. The page's own submit handlers do run when the form is submitted, exactly as they run for any SG-000077 click; that is how the page does what its tool declares. The SG-000108 invariant therefore holds as written, and declarative execution needs no amendment. Executing imperative tools (`document.modelContext.executeTool`) would invoke a page-registered handler directly. It stays out of scope until that amendment is made.
+
+## Known limits
+
+- The host cannot see the HTTP method, the same limit as for activation. A GET form whose page turns the request into a POST to the same path is accepted.
+- An `<option>` without a `value` is matched by its reported text. If that differs from the submitted value (see slice 4), the selection fails, which fails closed.
+- Controls associated with the form only through a `form=` attribute outside it, and controls in a shadow tree, are not located by the descendant selectors. Such a tool fails to execute, which also fails closed.
+
+## Evidence
+
+Native test `webmcp_tools_execute_only_with_approval_and_return_the_verified_result` (local, Edge 155, HTTPS fixture `/exec`):
+- **GET.** `search_reports` with `{"q":"rust","year":"2025","exact":true}` opens `/search?q=rust&year=2025&exact=on&csrf=csrf-123`; the fixture log is the ground truth, and it shows the hidden field submitted by the browser. The returned JSON-LD echoes the query.
+- **Refused unspent:** a forged approval, an approval for other arguments, and an undeclared argument.
+- **Refused after use:** a replay, and the stale tool identity.
+- **POST.** `post_note` with a multi-line note opens exactly `/note`, and returns `{"saved":true}`.
+- **Not executable:** `needs_user` (no autosubmit) gets no binding. `escape` (action on `other.test`) is refused before dispatch, with its approval unspent.
+- **No document:** `script_handled` (`preventDefault`) opens nothing, so it is not verified.
+- **Elsewhere:** `redirecting` (script moves to `/elsewhere`) is refused at the request.
+- **Changed:** `mutating`, whose description changes after discovery, is refused as changed, with its approval unspent.
+- **Never requested,** per the fixture log: `other.test`, `/elsewhere`, and the refused arguments.
+
+The host's unit tests cover the argument rules, executability, action resolution and result bounds. The worker's unit tests cover the generation-7 frames.
