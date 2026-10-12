@@ -13,6 +13,7 @@ import { installRoutes } from "./routes.js";
 import { boundSnapshot } from "./snapshot.js";
 import { discoverDeclarativeTools, DISCOVERY_BUDGET_MS } from "./webmcp/declarative.js";
 import { CAPTURE_TIMEOUT_MS, DISCOVERY_TOTAL_MS, fitTools } from "./webmcp/fit.js";
+import { captureWithin } from "./webmcp/capture.js";
 import { documentModel, type CapturedSnapshot } from "./webmcp/dom-snapshot.js";
 import { NavigationError, Worker, type EngineSession, type Launcher, type LaunchSpec, type RoutePolicy } from "./worker.js";
 
@@ -156,22 +157,16 @@ const playwrightLauncher: Launcher = {
         const started = Date.now();
         const before = primary.url();
         const session = await context.newCDPSession(primary);
-        let captured: CapturedSnapshot;
-        let timer: NodeJS.Timeout | undefined;
-        try {
-          // Playwright's protocol typings name this result differently;
-          // documentModel reads every field defensively (missing arrays are
-          // empty, a missing document throws into discovery_failed).
-          const capture = session.send("DOMSnapshot.captureSnapshot", { computedStyles: [] }) as unknown as Promise<CapturedSnapshot>;
-          capture.catch(() => {});
-          const deadline = new Promise<never>((_, reject) => {
-            timer = setTimeout(() => reject(new Error("the DOM snapshot timed out")), CAPTURE_TIMEOUT_MS);
-          });
-          captured = await Promise.race([capture, deadline]);
-        } finally {
-          clearTimeout(timer);
-          await session.detach().catch(() => {});
-        }
+        // Playwright's protocol typings name this result differently;
+        // documentModel reads every field defensively (missing arrays are
+        // empty, a missing document throws into discovery_failed).
+        const captured = (await captureWithin(
+          {
+            capture: () => session.send("DOMSnapshot.captureSnapshot", { computedStyles: [] }),
+            detach: () => session.detach()
+          },
+          CAPTURE_TIMEOUT_MS
+        )) as CapturedSnapshot;
         const model = documentModel(captured);
         // The snapshot must be of the page's document: if the page moved
         // during the capture, the result is stale and is refused.

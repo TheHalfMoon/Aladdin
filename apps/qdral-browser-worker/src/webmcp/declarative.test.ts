@@ -5,6 +5,7 @@ import { documentModel, MAX_SNAPSHOT_NODES, type CapturedSnapshot } from "./dom-
 import { readFileSync } from "node:fs";
 import { vectorCases } from "./vectors.fixture.js";
 import { fitTools } from "./fit.js";
+import { captureWithin, DETACH_WAIT_MS } from "./capture.js";
 import { encodeFrame } from "../protocol.js";
 
 let nextNode = 1;
@@ -341,4 +342,19 @@ test("the frame fit is linear and keeps the longest prefix that fits", () => {
   const small = discoverDeclarativeTools(doc(el("form", { toolname: "a", tooldescription: "d" }), el("form", { toolname: "b", tooldescription: "d" })));
   const kept = fitTools(1, "https://fixture.test/", false, small.tools);
   assert.deepEqual([kept.truncated, kept.tools.length], [false, 2]);
+});
+
+test("a capture that never settles fails on time, even if detaching hangs too", async () => {
+  const never = new Promise<never>(() => {});
+  let detaches = 0;
+  const hung = { capture: () => never, detach: () => (detaches++, never) };
+  const started = Date.now();
+  await assert.rejects(captureWithin(hung, 100), /timed out/);
+  assert.ok(Date.now() - started < 300, `took ${Date.now() - started} ms`);
+  assert.equal(detaches, 1, "the session was not released");
+  // A capture that finishes waits at most briefly for a hanging detach.
+  const quick = { capture: async () => ({ documents: [], strings: [] }), detach: () => never };
+  const begun = Date.now();
+  assert.deepEqual(await captureWithin(quick, 1_000), { documents: [], strings: [] });
+  assert.ok(Date.now() - begun < DETACH_WAIT_MS + 150, `took ${Date.now() - begun} ms`);
 });
