@@ -86,6 +86,15 @@ const playwrightLauncher: Launcher = {
         // field names are quoted as CSS strings.
         const quoted = (value: string): string => `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
         const form = page.locator(`form[toolname=${quoted(tool)}]`);
+        // One budget for locating and filling every field: a page that keeps
+        // a control unactionable cannot hold the call past the host's
+        // deadline (filling 10 s, then the click and load, then the capture).
+        const fillDeadline = Date.now() + FILL_BUDGET_MS;
+        const timeout = (): number => {
+          const remaining = fillDeadline - Date.now();
+          if (remaining <= 0) throw new NavigationError("timeout");
+          return Math.min(5_000, remaining);
+        };
         try {
           if ((await form.count()) !== 1) throw new NavigationError("failed");
           for (const field of fields) {
@@ -98,29 +107,29 @@ const playwrightLauncher: Launcher = {
             };
             switch (field.control) {
               case "text":
-                await (await one(`input${name}`)).fill(field.values[0] ?? "", { timeout: 5_000 });
+                await (await one(`input${name}`)).fill(field.values[0] ?? "", { timeout: timeout() });
                 break;
               case "textarea":
-                await (await one(`textarea${name}`)).fill(field.values[0] ?? "", { timeout: 5_000 });
+                await (await one(`textarea${name}`)).fill(field.values[0] ?? "", { timeout: timeout() });
                 break;
               case "select":
               case "select_multiple":
                 await (await one(`select${name}`)).selectOption(
                   field.values.map((value) => ({ value })),
-                  { timeout: 5_000 }
+                  { timeout: timeout() }
                 );
                 break;
               case "checkbox":
-                await (await one(`input[type="checkbox"]${name}`)).setChecked(field.values[0] === "true", { timeout: 5_000 });
+                await (await one(`input[type="checkbox"]${name}`)).setChecked(field.values[0] === "true", { timeout: timeout() });
                 break;
               case "checkboxes": {
                 const all = form.locator(`input[type="checkbox"]${name}`);
-                for (const box of await all.all()) await box.setChecked(false, { timeout: 5_000 });
-                for (const value of field.values) await (await one(`input[type="checkbox"]${name}${valueOf(value)}`)).setChecked(true, { timeout: 5_000 });
+                for (const box of await all.all()) await box.setChecked(false, { timeout: timeout() });
+                for (const value of field.values) await (await one(`input[type="checkbox"]${name}${valueOf(value)}`)).setChecked(true, { timeout: timeout() });
                 break;
               }
               case "radio":
-                await (await one(`input[type="radio"]${name}${valueOf(field.values[0] ?? "")}`)).check({ timeout: 5_000 });
+                await (await one(`input[type="radio"]${name}${valueOf(field.values[0] ?? "")}`)).check({ timeout: timeout() });
                 break;
               default:
                 throw new NavigationError("failed");
@@ -231,6 +240,9 @@ const playwrightLauncher: Launcher = {
     };
   }
 };
+
+/// The worker's budget for locating and filling a tool's fields.
+const FILL_BUDGET_MS = 10_000;
 
 /// Click `target` and wait for the main frame's resulting document to load;
 /// returns its URL and status. The host decides every request on the way.

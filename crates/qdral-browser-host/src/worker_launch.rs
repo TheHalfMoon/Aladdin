@@ -57,6 +57,11 @@ pub const WORKER_NAVIGATION_TIMEOUT: Duration = Duration::from_secs(45);
 /// click, 30 s for the navigation and 30 s for its load).
 pub const WORKER_ACTIVATION_TIMEOUT: Duration = Duration::from_secs(75);
 
+/// Upper bound for one tool execution (above the worker's worst case: 10 s
+/// filling, a 5 s click, 30 s for the navigation, 30 s for its load and a
+/// 3 s result snapshot).
+pub const WORKER_EXECUTION_TIMEOUT: Duration = Duration::from_secs(90);
+
 /// Upper bound for one observation round trip.
 pub const WORKER_OBSERVATION_TIMEOUT: Duration = Duration::from_secs(10);
 
@@ -1523,7 +1528,7 @@ mod platform {
                 tool: &shown.name,
                 fields: &fields,
             });
-            let reply = sent.and_then(|()| self.reply(WORKER_ACTIVATION_TIMEOUT));
+            let reply = sent.and_then(|()| self.reply(WORKER_EXECUTION_TIMEOUT));
             let opened_expected = self.policy.finish_activation();
             self.host_nodes.clear();
             self.host_tools.clear();
