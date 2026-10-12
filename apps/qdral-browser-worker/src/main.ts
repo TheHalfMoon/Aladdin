@@ -124,7 +124,7 @@ const playwrightLauncher: Launcher = {
           throw new NavigationError(reason);
         };
         try {
-          await page.locator(`aria-ref=${ref}`).click({ timeout: 5_000 });
+          await page.locator(`aria-ref=${ref}`).click({ timeout: 5_000, noWaitAfter: true });
         } catch {
           return fail("failed");
         }

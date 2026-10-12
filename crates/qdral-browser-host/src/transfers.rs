@@ -66,6 +66,13 @@ pub fn validate_relative_destination(destination: &str) -> Result<String, HostEr
             "transfer destination carries control characters".into(),
         ));
     }
+    // Invisible format characters (Unicode Cf: bidi overrides, zero-width
+    // marks) can make a name display with another extension.
+    if destination.chars().any(is_format_character) {
+        return Err(HostError::Invalid(
+            "transfer destination carries format characters".into(),
+        ));
+    }
     let lower = destination.to_ascii_lowercase();
     for prefix in ["/", "\\", "\\\\", "//", "con:", "prn:", "aux:", "nul:"] {
         if lower.starts_with(prefix) {
@@ -104,7 +111,34 @@ pub fn validate_relative_destination(destination: &str) -> Result<String, HostEr
                 "transfer trailing dot or space denied".into(),
             ));
         }
-        let stem = part.split('.').next().unwrap_or(part).to_ascii_lowercase();
+        let stem = part
+            .split('.')
+            .next()
+            .unwrap_or(part)
+            .trim_end_matches(' ')
+            .to_ascii_lowercase();
+        let device_number = |prefix: &str| {
+            stem.strip_prefix(prefix).is_some_and(|rest| {
+                matches!(
+                    rest,
+                    "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9"
+                ) || matches!(rest, "\u{b9}" | "\u{b2}" | "\u{b3}")
+            })
+        };
+        if device_number("com")
+            || device_number("lpt")
+            || matches!(stem.as_str(), "conin$" | "conout$" | "clock$")
+        {
+            return Err(HostError::Invalid("transfer reserved name denied".into()));
+        }
+        // An 8.3 short name ("PROGRA~1") could alias an existing entry.
+        if part
+            .as_bytes()
+            .windows(2)
+            .any(|pair| pair[0] == b'~' && pair[1].is_ascii_digit())
+        {
+            return Err(HostError::Invalid("transfer short name denied".into()));
+        }
         if matches!(
             stem.as_str(),
             "con"
@@ -142,6 +176,24 @@ pub fn validate_relative_destination(destination: &str) -> Result<String, HostEr
         }
     }
     Ok(destination.replace('\\', "/"))
+}
+
+/// Unicode format characters (category Cf) that can disguise a name.
+fn is_format_character(ch: char) -> bool {
+    matches!(
+        ch,
+        '\u{ad}'
+            | '\u{61c}'
+            | '\u{180e}'
+            | '\u{200b}'..='\u{200f}'
+            | '\u{202a}'..='\u{202e}'
+            | '\u{2060}'..='\u{2064}'
+            | '\u{2066}'..='\u{206f}'
+            | '\u{feff}'
+            | '\u{fff9}'..='\u{fffb}'
+            | '\u{e0001}'
+            | '\u{e0020}'..='\u{e007f}'
+    )
 }
 
 /// Lexical reparse-safe containment: the normalized destination must
@@ -220,7 +272,7 @@ pub fn validate_download_type(
 /// The media type of an inert PDF.
 pub const PDF_MEDIA: &str = "application/pdf";
 
-/// SG-000078 amendment (founder decision 2026-10-12, for the SG-000108 PDF
+/// SG-000078 amendment (founder decision 2026-10-11, for the SG-000108 PDF
 /// journey): an inert PDF may be staged for a host-approved, create-only
 /// commit into the approved folder. The filename must end in `.pdf`, the
 /// declared media type must be `application/pdf` (parameters allowed), the
@@ -397,6 +449,17 @@ mod tests {
             validate_relative_destination("reports/summary.txt").unwrap(),
             "reports/summary.txt"
         );
+        // Ordinary names near the refused ones still pass, non-ASCII included.
+        for fine in [
+            "console.pdf",
+            "com10.pdf",
+            "lpt.pdf",
+            "a~b.pdf",
+            "تقرير.pdf",
+            "café 2026.pdf",
+        ] {
+            assert!(validate_relative_destination(fine).is_ok(), "{fine}");
+        }
         assert_eq!(
             reparse_safe_contained("/staging/root", "a/b.txt").unwrap(),
             "/staging/root/a/b.txt"
@@ -420,6 +483,15 @@ mod tests {
             "aux.txt",
             "bad<name>.txt",
             "nul",
+            "con .pdf",
+            "COM\u{b9}.pdf",
+            "lpt0.pdf",
+            "CONIN$.pdf",
+            "conout$/x.pdf",
+            "PROGRA~1/x.pdf",
+            "a\u{202e}fdp.cmd",
+            "zero\u{200b}width.pdf",
+            "bom\u{feff}.pdf",
         ] {
             assert!(
                 validate_relative_destination(destination).is_err(),

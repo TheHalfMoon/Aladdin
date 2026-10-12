@@ -499,30 +499,56 @@ A fresh-context judge's first round on these slices was BLOCK. The byte-safe dat
 
 **Slice 3d: the approved inert-PDF download journey** (worker protocol generation 5).
 
-- **Founder amendment to SG-000078 (2026-10-11): inert PDFs.** `validate_inert_pdf` admits a download only if every check holds: the name ends in `.pdf`, the declared media type is `application/pdf` (parameters allowed), the content sniffs as PDF, and the size is within `MAX_TRANSFER_BYTES`. "Inert" describes how Aladdin treats the bytes: the engine never renders them, and the host never opens or executes them; it only stores them. Every other type still goes through the general `validate_download_type` allowlist.
-- **Approval.** A download is an activation (SG-000077) that is bound in the same way. The target's `state` is the link's host-resolved destination, and that destination is checked against the page's origin before the approval is consumed. During the click, the host accepts exactly one page-initiated document request, and it must be that destination.
-- **Capture (measured).** Headless Edge renders a PDF navigation in its built-in viewer. It raises no download event, and the navigation's response body is the viewer's wrapper page. Seeding `plugins.always_open_pdf_externally` did not change this. While a download is armed, the worker's per-page CDP `Fetch` guard pauses the next main-frame document at the response stage. It takes the original bytes with `Fetch.getResponseBody`, which sends no new request, and bounds them to 8 MiB. It then fulfils the navigation with an empty `text/plain` page, so the document is never rendered; if fulfilling fails, the request is failed instead. Response-stage pausing ends after each capture or timeout. If a download fails after the click (no document, a non-2xx status, a timeout, an oversized body), the worker closes the page, so a document arriving late cannot render. Playwright's `acceptDownloads` stays off.
-- **Staging and commit.** The worker writes the bytes create-only (`wx`) to a staging path chosen by the host, inside the lifetime's own staging directory. The protocol accepts only an absolute `.part` path and refuses relative, UNC and other paths. The host then:
-  - checks that the source URL is on the page's origin;
-  - re-reads the staged file with a bound;
-  - checks the declared size against the actual size;
-  - applies the type check;
-  - requires that the approved destination was the document requested;
-  - records the SHA-256 digest;
-  - commits create-only (`create_new`) to the caller's relative destination, re-checking containment through the real path.
+- **Founder amendment to SG-000078 (2026-10-11): inert PDFs.** `validate_inert_pdf` admits a download only if every check holds:
+  - the **file name actually written** (the approved destination's own name) ends in `.pdf`;
+  - the declared media type is `application/pdf` (parameters allowed);
+  - the content sniffs as PDF;
+  - the size is within `MAX_TRANSFER_BYTES`.
 
-  An existing destination is refused before anything is sent. The staging file is always removed, and the staging directory is removed at shutdown.
+  The worker's suggested name (from Content-Disposition or the URL) is advisory and never decides the check, so a PDF-headed polyglot cannot be committed as `.cmd` or `.html`. Every other destination name goes through the general `validate_download_type` allowlist. "Inert" describes how Aladdin treats the bytes: the engine never renders them, and the host never opens or executes them; it only stores them.
+- **Destination names.** `validate_relative_destination` additionally refuses:
+  - Unicode format characters (bidi overrides, zero-width marks, the BOM), which could make a name display with another extension;
+  - device names with trailing spaces before the extension (`con .pdf`), `COM0`–`COM9`/`LPT0`–`LPT9` including the superscript digits, and `CONIN$`, `CONOUT$` and `CLOCK$`;
+  - 8.3 short names (`~` followed by a digit), which could alias an existing entry.
+
+  Non-ASCII names stay allowed.
+- **Approval.** A download needs its own SG-000077 action, `download` (a `click` approval is refused, and an activation refuses a `download` approval). The target's `state` is the host's `download_binding`: the link's host-resolved destination, the approved folder's real path and the normalized file path. The one-shot approval therefore covers what is fetched and where it lands, and an approval for another folder or file is refused without being consumed. The link is checked against the page's origin before the approval is consumed. During the click, the host accepts exactly one page-initiated document request, and it must be that link.
+- **Capture (measured).** Headless Edge renders a PDF navigation in its built-in viewer. It raises no download event, and the navigation's response body is the viewer's wrapper page. Seeding `plugins.always_open_pdf_externally` did not change this.
+  - While a download is armed, the worker's per-page CDP `Fetch` guard pauses the next main-frame document at the response stage.
+  - It reads the original bytes as a stream (`Fetch.takeResponseBodyAsStream` and bounded `IO.read` calls), sending no new request, and stops at 8 MiB, so an oversized body without a `content-length` is never held whole.
+  - A non-2xx response, including a redirect, is refused: redirects are not followed.
+  - It then fulfils the navigation with an empty `text/plain` page, so the document is never rendered; if fulfilling fails, the request is failed instead. Response-stage pausing ends after each capture.
+  - Once a capture has timed out, any later main-frame document of that page is failed, and the worker closes the page whenever a download fails after the click.
+  - The click does not wait for the navigation, so a slow server is bounded by the capture's own 30 s timeout.
+  - Playwright's `acceptDownloads` stays off. The per-page `Page.setPrerenderingAllowed(false)` switch is kept as a second layer behind the seeded preference.
+- **Staging and commit.** The worker writes the bytes create-only (`wx`) to a staging path chosen by the host, inside the lifetime's own staging directory. The protocol accepts only an absolute `.part` path and refuses relative, UNC and other paths. The host then:
+  - requires the captured URL to equal the approved link exactly, on the page's origin;
+  - reads the staged file once, through a bound;
+  - checks the declared size against the actual size;
+  - applies the type check to the destination's name;
+  - requires that the approved link was the document requested;
+  - records the SHA-256 digest;
+  - commits create-only (`create_new`). Each missing folder is created only after its parent's real path is checked to be inside the approved folder, so a junction gets nothing created behind it, and the file's real path is re-checked after writing.
+
+  An existing destination is refused before anything is sent. The staging directory exists before the approval is consumed. The staging file is always removed, and the staging directory is removed at shutdown.
 - **After a download**, the committed document is the inert blank page, one generation later, and every earlier node identity is stale. A caller observes again only after navigating again.
 
 **Known limits:**
 - The host cannot see the HTTP method, the same limit as for activation.
-- A same-origin server redirect from the approved link is decided hop by hop, so the stored bytes are those of the redirect's final target on the same origin.
+- A link whose server redirects, even within the same origin, cannot be downloaded. It fails closed, and the approval is spent.
 - A PDF can still contain active content. Aladdin does not render or open it, but a user who opens the stored file later is outside this boundary.
+- The junction check has no native test: creating a junction in a test needs a shell or `DeviceIoControl`, and the governance test bans the shell. The fresh-context judge verified the earlier residue by experiment, and the fix is covered by reading.
 
 **Evidence (local, Edge 155), from the native journey E2E test on the HTTPS fixture** (`the_journey_downloads_the_latest_report_create_only_and_verified`):
 - The host selects the latest dated report. The approved download stores exactly the fixture's bytes, verified independently along with their SHA-256 digest, at the approved relative path.
 - A traversal destination is refused before dispatch, and its approval is not consumed.
+- A click approval, and a download approval naming another file, are both refused without being consumed.
 - A second download to the same destination is refused (create-only), and the first file is unchanged.
-- An oversized PDF (9 MiB) and an executable disguised as a PDF (`MZ` bytes served as `application/pdf`) are refused, and neither leaves a file.
+- Each of the following is refused, and none leaves a file:
+  - an oversized PDF (9 MiB);
+  - an executable disguised as a PDF (`MZ` bytes served as `application/pdf`);
+  - a PDF-headed batch/HTML polyglot committed as `evil.cmd`, as `evil.html`, or under a right-to-left-override name.
 
-The worker's unit tests cover the generation-5 frames, the staging-path rules, and typed download failures.
+The worker's unit tests cover the generation-5 frames, the staging-path rules, and typed download failures. The host's unit tests cover the new destination-name rules, with non-ASCII controls.
+
+A fresh-context judge's first round on this slice was BLOCK. The destination-name type check, the `download` action and its binding, the exact-URL check, the junction-safe folder creation, the bounded reads, the restored prerender switch and the post-timeout failing of documents are its fixes.

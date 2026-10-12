@@ -14,6 +14,9 @@ use crate::error::HostError;
 pub enum SupportedAction {
     Click,
     Fill,
+    /// Click a link to download its document into an approved folder; the
+    /// target state binds the link, the folder and the file name.
+    Download,
 }
 
 impl SupportedAction {
@@ -21,6 +24,7 @@ impl SupportedAction {
         match self {
             Self::Click => "click",
             Self::Fill => "fill",
+            Self::Download => "download",
         }
     }
 
@@ -28,6 +32,7 @@ impl SupportedAction {
         match text {
             "click" => Ok(Self::Click),
             "fill" => Ok(Self::Fill),
+            "download" => Ok(Self::Download),
             _ => Err(HostError::Invalid("unsupported actuation action".into())),
         }
     }
@@ -45,6 +50,7 @@ pub fn role_supports_action(role: &str, action: SupportedAction) -> Result<(), H
     let allowed: &[&str] = match action {
         SupportedAction::Click => &["button", "link", "hyperlink", "menuitem", "tab", "checkbox"],
         SupportedAction::Fill => &["textbox", "edit", "document", "combobox", "searchbox"],
+        SupportedAction::Download => &["link", "hyperlink"],
     };
     if allowed.iter().any(|entry| lower.contains(entry)) {
         return Ok(());

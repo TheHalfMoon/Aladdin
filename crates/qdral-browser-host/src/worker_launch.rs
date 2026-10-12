@@ -518,8 +518,38 @@ pub(crate) fn commit_create_only(
     let parent = destination
         .parent()
         .ok_or_else(|| HostError::Invalid("destination has no folder".into()))?;
-    std::fs::create_dir_all(parent)
-        .map_err(|err| HostError::Platform(format!("destination folder: {err}")))?;
+    let real_root = std::fs::canonicalize(root)
+        .map_err(|err| HostError::Platform(format!("approved folder: {err}")))?;
+    let relative_parent = parent
+        .strip_prefix(root)
+        .map_err(|_| HostError::Invalid("destination escapes the approved folder".into()))?;
+    // Each folder is created only after its parent's real path is checked,
+    // so a junction never gets anything created behind it.
+    let mut folder = root.to_path_buf();
+    for part in relative_parent.components() {
+        folder.push(part);
+        if !folder.exists() {
+            let real_parent = folder
+                .parent()
+                .and_then(|p| std::fs::canonicalize(p).ok())
+                .ok_or_else(|| HostError::Platform("destination folder".into()))?;
+            if !real_parent.starts_with(&real_root) {
+                return Err(HostError::Invalid(
+                    "destination escapes the approved folder".into(),
+                ));
+            }
+            std::fs::create_dir(&folder)
+                .map_err(|err| HostError::Platform(format!("destination folder: {err}")))?;
+        }
+        match std::fs::canonicalize(&folder) {
+            Ok(real) if real.starts_with(&real_root) => {}
+            _ => {
+                return Err(HostError::Invalid(
+                    "destination escapes the approved folder".into(),
+                ))
+            }
+        }
+    }
     let mut file = std::fs::OpenOptions::new()
         .write(true)
         .create_new(true)
@@ -1194,6 +1224,25 @@ mod platform {
             )
         }
 
+        /// The state a download approval must name: the link's destination,
+        /// the approved folder's real path and the normalized file path, so
+        /// the one-shot approval covers what is fetched and where it lands.
+        pub fn download_binding(
+            &self,
+            node_id: &str,
+            destination_root: &Path,
+            relative: &str,
+        ) -> Result<String, HostError> {
+            let link = self.link_destination(node_id)?;
+            let normalized = crate::transfers::validate_relative_destination(relative)?;
+            let root = std::fs::canonicalize(destination_root)
+                .ok()
+                .filter(|root| root.is_dir())
+                .ok_or_else(|| HostError::Invalid("the approved folder does not exist".into()))?;
+            let root = path_text(&root, "approved folder")?;
+            Ok(format!("download\n{link}\n{root}\n{normalized}"))
+        }
+
         /// Activate (click) one observed link under SG-000077. The host
         /// does not model element state; the target's `state` must instead
         /// name the link's resolved destination, so the one-shot approval
@@ -1212,6 +1261,11 @@ mod platform {
             policy_revision: u64,
             workspace: &str,
         ) -> Result<NavigationOutcome, HostError> {
+            if target.action != crate::actuation::SupportedAction::Click {
+                return Err(HostError::Invalid(
+                    "activation needs a click approval".into(),
+                ));
+            }
             let (_, generation) = self
                 .committed
                 .clone()
@@ -1291,12 +1345,13 @@ mod platform {
             destination_root: &Path,
             relative: &str,
         ) -> Result<CommittedDownload, HostError> {
-            let normalized = crate::transfers::validate_relative_destination(relative)?;
-            if !destination_root.is_dir() {
+            if target.action != crate::actuation::SupportedAction::Download {
                 return Err(HostError::Invalid(
-                    "the approved folder does not exist".into(),
+                    "a download needs a download approval".into(),
                 ));
             }
+            let binding = self.download_binding(&target.node_id, destination_root, relative)?;
+            let normalized = crate::transfers::validate_relative_destination(relative)?;
             let destination = destination_root.join(&normalized);
             if destination.exists() {
                 return Err(HostError::Invalid(
@@ -1317,25 +1372,31 @@ mod platform {
             // checked against the page's origin before it is consumed, and
             // the click may open exactly that document.
             let link = self.link_destination(&target.node_id)?;
+            std::fs::create_dir_all(&self.staging)
+                .map_err(|err| HostError::Platform(format!("staging: {err}")))?;
             self.policy.expect_activation(&link)?;
             if let Err(error) = crate::actuation::dispatch(
                 target,
                 approval,
                 generation,
-                &link,
+                &binding,
                 policy_revision,
                 workspace,
             ) {
                 self.policy.finish_activation();
                 return Err(error);
             }
-            std::fs::create_dir_all(&self.staging)
-                .map_err(|err| HostError::Platform(format!("staging: {err}")))?;
             self.next_dl += 1;
             let dl_id = self.next_dl;
             let staged = self.staging.join(format!("dl-{dl_id}.part"));
-            let result =
-                self.download_staged(dl_id, &reference, &staged, &destination, destination_root);
+            let result = self.download_staged(
+                dl_id,
+                &reference,
+                &staged,
+                &link,
+                &destination,
+                destination_root,
+            );
             let opened_expected = self.policy.finish_activation();
             let _ = std::fs::remove_file(&staged);
             // The click navigated the page to the downloaded document, which
@@ -1370,6 +1431,7 @@ mod platform {
             dl_id: u64,
             reference: &str,
             staged: &Path,
+            link: &str,
             destination: &Path,
             destination_root: &Path,
         ) -> Result<CommittedDownload, HostError> {
@@ -1379,37 +1441,56 @@ mod platform {
                 reference,
                 path: &staged_text,
             })?;
-            let (url, name, media, declared) = match self.reply(WORKER_NAVIGATION_TIMEOUT)? {
+            // The worker's suggested name is advisory and never decides the
+            // type check; the approved destination's own name does.
+            let (url, media, declared) = match self.reply(WORKER_NAVIGATION_TIMEOUT)? {
                 WorkerReply::Downloaded {
                     dl_id: done,
                     url,
-                    name,
+                    name: _,
                     media,
                     bytes,
-                } if done == dl_id => (url, name, media, bytes),
+                } if done == dl_id => (url, media, bytes),
                 WorkerReply::DownloadFailed {
                     dl_id: done,
                     reason,
                 } if done == dl_id => return Err(navigation_failure(&reason)),
                 _ => return Err(HostError::Unavailable(UnavailableReason::ProtocolViolation)),
             };
+            // Exactly the approved document: redirects are not followed.
+            if url != link {
+                return Err(HostError::Invalid(
+                    "the download is not the approved document".into(),
+                ));
+            }
             let source = crate::navigation::parse_navigation_url(&url)?;
             if Some(source.origin.as_str()) != self.policy.committed_origin() {
                 return Err(HostError::Invalid("download left the page's origin".into()));
             }
-            let size = std::fs::metadata(staged)
-                .map_err(|err| HostError::Platform(format!("staged download: {err}")))?
-                .len();
-            if size > crate::transfers::MAX_TRANSFER_BYTES {
+            // One bounded read: the file cannot grow past the bound between
+            // a size check and the read.
+            let mut content = Vec::new();
+            {
+                use std::io::Read;
+                std::fs::File::open(staged)
+                    .and_then(|file| {
+                        file.take(crate::transfers::MAX_TRANSFER_BYTES + 1)
+                            .read_to_end(&mut content)
+                    })
+                    .map_err(|err| HostError::Platform(format!("staged download: {err}")))?;
+            }
+            if content.len() as u64 > crate::transfers::MAX_TRANSFER_BYTES {
                 return Err(HostError::Invalid("transfer size out of bounds".into()));
             }
-            let content = std::fs::read(staged)
-                .map_err(|err| HostError::Platform(format!("staged download: {err}")))?;
             crate::transfers::validate_transfer_size(declared, content.len() as u64)?;
+            let name = destination
+                .file_name()
+                .and_then(|name| name.to_str())
+                .ok_or_else(|| HostError::Invalid("destination has no file name".into()))?;
             if name.to_ascii_lowercase().ends_with(".pdf") {
-                crate::transfers::validate_inert_pdf(&name, &media, &content)?;
+                crate::transfers::validate_inert_pdf(name, &media, &content)?;
             } else {
-                crate::transfers::validate_download_type(&name, &media, &content)?;
+                crate::transfers::validate_download_type(name, &media, &content)?;
             }
             let sha256 = sha256_hex(&content);
             let mut source_record = crate::transfers::DownloadSource {
@@ -1522,6 +1603,18 @@ mod fallback {
 
         /// API parity: no worker ever exists off Windows.
         pub fn link_destination(&self, _node_id: &str) -> Result<String, HostError> {
+            Err(HostError::Unavailable(
+                UnavailableReason::UnsupportedRuntime,
+            ))
+        }
+
+        /// API parity: no worker ever exists off Windows.
+        pub fn download_binding(
+            &self,
+            _node_id: &str,
+            _destination_root: &Path,
+            _relative: &str,
+        ) -> Result<String, HostError> {
             Err(HostError::Unavailable(
                 UnavailableReason::UnsupportedRuntime,
             ))

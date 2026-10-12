@@ -997,6 +997,33 @@ fn approved_click(
     (target, approval)
 }
 
+/// A download approval: it names the link, the approved folder and the
+/// file name (the host's `download_binding`).
+fn approved_download(
+    worker: &BrowserWorker,
+    live: &LiveObservation,
+    node_id: &str,
+    root: &Path,
+    relative: &str,
+) -> (
+    crate::actuation::ActuationTarget,
+    crate::actuation::ApprovalToken,
+) {
+    let (mut target, _) = approved_click(worker, live, node_id);
+    target.action = crate::actuation::SupportedAction::Download;
+    target.state = worker
+        .download_binding(node_id, root, relative)
+        .unwrap_or_default();
+    let approval = crate::actuation::ApprovalToken {
+        approval_id: "approval-dl".into(),
+        target_digest: crate::actuation::target_digest(&target),
+        workspace: "workspace".into(),
+        policy_revision: 1,
+        consumed: false,
+    };
+    (target, approval)
+}
+
 #[test]
 #[ignore = "requires the built browser worker and Edge; run by npm run browser-launcher:native"]
 fn an_approved_activation_follows_the_latest_dated_link_and_nothing_else() {
@@ -1175,7 +1202,8 @@ fn the_journey_downloads_the_latest_report_create_only_and_verified() {
         Some("/reports/2026-09-30.pdf")
     );
     // Path traversal is refused before anything is dispatched.
-    let (target, mut approval) = approved_click(&worker, &live, &latest);
+    let (target, mut approval) =
+        approved_download(&worker, &live, &latest, &approved, "../escape.pdf");
     assert!(worker
         .download(
             &target,
@@ -1190,7 +1218,39 @@ fn the_journey_downloads_the_latest_report_create_only_and_verified() {
         !approval.consumed,
         "a refused destination consumed the approval"
     );
+    // A click approval is not a download approval, and a download approval
+    // names one folder and file: neither is spent on a mismatch.
+    let (click, mut click_approval) = approved_click(&worker, &live, &latest);
+    assert!(worker
+        .download(
+            &click,
+            &mut click_approval,
+            1,
+            "workspace",
+            &approved,
+            "reports/latest.pdf"
+        )
+        .is_err());
+    assert!(
+        !click_approval.consumed,
+        "a click approval was spent on a download"
+    );
+    let (target, mut approval) =
+        approved_download(&worker, &live, &latest, &approved, "reports/other.pdf");
+    assert!(worker
+        .download(
+            &target,
+            &mut approval,
+            1,
+            "workspace",
+            &approved,
+            "reports/latest.pdf"
+        )
+        .is_err());
+    assert!(!approval.consumed, "an approval for another file was spent");
     // The approved download, committed create-only.
+    let (target, mut approval) =
+        approved_download(&worker, &live, &latest, &approved, "reports/latest.pdf");
     let committed = worker
         .download(
             &target,
@@ -1221,7 +1281,8 @@ fn the_journey_downloads_the_latest_report_create_only_and_verified() {
         .expect("reports again");
     let live = worker.observe(&scope).expect("observe again");
     let latest = worker.select_latest_dated_link().expect("latest");
-    let (target, mut again) = approved_click(&worker, &live, &latest);
+    let (target, mut again) =
+        approved_download(&worker, &live, &latest, &approved, "reports/latest.pdf");
     assert!(matches!(
         worker.download(&target, &mut again, 1, "workspace", &approved, "reports/latest.pdf"),
         Err(HostError::Invalid(message)) if message.contains("create-only")
@@ -1230,9 +1291,30 @@ fn the_journey_downloads_the_latest_report_create_only_and_verified() {
 
     // An oversized file and an executable disguised as a PDF are refused,
     // and nothing is committed for them.
-    for (name, out) in [
-        ("Oversized 2026-01-01", "oversized.pdf"),
-        ("Disguised 2026-01-02", "fake.pdf"),
+    // The type check uses the name actually written: a PDF-headed polyglot
+    // is never committed as a script or a page, and a bidi override cannot
+    // disguise the extension.
+    // The same polyglot under a `.pdf` name is an admitted inert PDF: the
+    // control that the refusals below come from the name rule.
+    for (name, out, refusal) in [
+        ("Oversized 2026-01-01", "oversized.pdf", None),
+        ("Disguised 2026-01-02", "fake.pdf", None),
+        (
+            "Polyglot 2026-01-03",
+            "evil.cmd",
+            Some("filename type denied"),
+        ),
+        (
+            "Polyglot 2026-01-03",
+            "evil.html",
+            Some("declared type denied"),
+        ),
+        (
+            "Polyglot 2026-01-03",
+            "a\u{202e}fdp.cmd",
+            Some("format characters"),
+        ),
+        ("Polyglot 2026-01-03", "poly.pdf", Some("")),
     ] {
         // Each refused attempt leaves the page on the replaced document: the
         // host requires a fresh navigation (stale), so start from the list.
@@ -1249,10 +1331,23 @@ fn the_journey_downloads_the_latest_report_create_only_and_verified() {
             .find(|n| worker.host_node(&n.node_id).is_some_and(|h| h.name == name))
             .map(|n| n.node_id.clone())
             .expect("file link");
-        let (target, mut approval) = approved_click(&worker, &live, &node);
-        let refused = worker.download(&target, &mut approval, 1, "workspace", &approved, out);
-        assert!(refused.is_err(), "{name} was committed");
-        assert!(!approved.join(out).exists(), "{name} left a file");
+        let (target, mut approval) = approved_download(&worker, &live, &node, &approved, out);
+        let result = worker.download(&target, &mut approval, 1, "workspace", &approved, out);
+        if refusal == Some("") {
+            let committed = result.expect("the polyglot as an inert PDF");
+            assert!(std::fs::read(&committed.path)
+                .unwrap()
+                .starts_with(b"%PDF-1.4\r\n@echo POLYGLOT"));
+            continue;
+        }
+        match (&result, refusal) {
+            (Err(HostError::Invalid(message)), Some(expected)) => {
+                assert!(message.contains(expected), "{out}: {message}")
+            }
+            (Err(_), None) => {}
+            (other, _) => assert!(other.is_err() && refusal.is_none(), "{out}: {other:?}"),
+        }
+        assert!(!approved.join(out).exists(), "{name} left a file as {out}");
     }
     let report = worker.shutdown();
     assert!(report.job_empty, "the job did not empty");

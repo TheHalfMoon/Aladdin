@@ -73,7 +73,8 @@ const REPORTS = `<!doctype html><title>Reports</title><h1>Reports</h1><ul>
 <label>Password <input type=password value="hunter2-secret"></label><button>Sign in</button></form>`;
 const FILES = `<!doctype html><title>Files</title><ul>
 <li><a href="/files/oversized.pdf">Oversized 2026-01-01</a></li>
-<li><a href="/files/fake.pdf">Disguised 2026-01-02</a></li></ul>`;
+<li><a href="/files/fake.pdf">Disguised 2026-01-02</a></li>
+<li><a href="/files/poly.pdf">Polyglot 2026-01-03</a></li></ul>`;
 const ARCHIVE = `<!doctype html><title>Archive</title><ul>
 <li><a href="/archive/2026-06-30">Annual review 2026-06-30</a></li>
 <li><a href="/archive/2026-09-30">Annual review 2026-09-30</a></li>
@@ -136,6 +137,11 @@ trailer << /Root 1 0 R >>
   if (path === "/files/oversized.pdf") {
     response.setHeader("content-type", "application/pdf");
     return response.end(Buffer.concat([Buffer.from("%PDF-1.4\n"), Buffer.alloc(9 * 1024 * 1024, 0x20)]));
+  }
+  if (path === "/files/poly.pdf") {
+    // A real PDF header that is also a batch script and HTML.
+    response.setHeader("content-type", "application/pdf");
+    return response.end("%PDF-1.4\r\n@echo POLYGLOT\r\n<script>alert(1)</script>\r\n");
   }
   if (path === "/files/fake.pdf") {
     // An executable disguised as a PDF.

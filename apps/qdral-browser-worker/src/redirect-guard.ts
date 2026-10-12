@@ -61,28 +61,65 @@ export async function attachRedirectGuard(context: BrowserContext, page: Page, p
   // requesting origin is the origin of the response that redirected it.
   const urls = new Map<string, string>();
   let capture: { resolve: (doc: CapturedDocument) => void; reject: (error: Error) => void } | null = null;
+  // Set once a capture gave up (timeout): any later main-frame document of
+  // this page is failed rather than rendered.
+  let spent = false;
+
+  const fail = (requestId: string): Promise<unknown> =>
+    session.send("Fetch.failRequest", { requestId, errorReason: "BlockedByClient" }).catch(() => {});
+
+  // Read the paused response body as a stream in bounded chunks, so an
+  // oversized body (even without a content-length) is never held whole.
+  const boundedBody = async (requestId: string): Promise<Buffer> => {
+    const { stream } = (await session.send("Fetch.takeResponseBodyAsStream", { requestId })) as { stream: string };
+    const chunks: Buffer[] = [];
+    let total = 0;
+    try {
+      for (;;) {
+        const chunk = (await session.send("IO.read", { handle: stream, size: 64 * 1024 })) as {
+          data: string;
+          base64Encoded?: boolean;
+          eof: boolean;
+        };
+        const bytes = Buffer.from(chunk.data, chunk.base64Encoded ? "base64" : "utf8");
+        total += bytes.length;
+        if (total > MAX_CAPTURE_BYTES) throw new Error("oversized");
+        chunks.push(bytes);
+        if (chunk.eof) return Buffer.concat(chunks);
+      }
+    } finally {
+      await session.send("IO.close", { handle: stream }).catch(() => {});
+    }
+  };
 
   const onResponse = async (event: RequestPaused): Promise<void> => {
     const { requestId } = event;
     const pending = capture;
-    // Only the main frame's document is captured; anything else (an iframe
-    // racing the capture) continues untouched.
-    if (!pending || event.frameId !== mainFrame) {
+    if (event.frameId !== mainFrame) {
+      // Only the main frame's document is captured; anything else (an
+      // iframe racing the capture) continues untouched.
       await session.send("Fetch.continueRequest", { requestId });
+      return;
+    }
+    if (!pending) {
+      if (spent) await fail(requestId);
+      else await session.send("Fetch.continueRequest", { requestId });
       return;
     }
     capture = null;
     const header = (name: string): string =>
       event.responseHeaders?.find((h) => h.name.toLowerCase() === name)?.value ?? "";
+    const status = event.responseStatusCode ?? 0;
     try {
+      // Redirects are not followed: the approved document is exactly the
+      // link the host approved.
+      if (status < 200 || status >= 300) throw new Error("status");
       const declared = Number(header("content-length"));
       if (Number.isFinite(declared) && declared > MAX_CAPTURE_BYTES) throw new Error("oversized");
-      const result = (await session.send("Fetch.getResponseBody", { requestId })) as { body: string; base64Encoded: boolean };
-      const body = Buffer.from(result.body, result.base64Encoded ? "base64" : "utf8");
-      if (body.length > MAX_CAPTURE_BYTES) throw new Error("oversized");
+      const body = await boundedBody(requestId);
       pending.resolve({
         url: event.request.url,
-        status: event.responseStatusCode ?? 0,
+        status,
         media: header("content-type"),
         disposition: header("content-disposition"),
         body
@@ -101,7 +138,7 @@ export async function attachRedirectGuard(context: BrowserContext, page: Page, p
           body: ""
         });
       } catch {
-        await session.send("Fetch.failRequest", { requestId, errorReason: "BlockedByClient" }).catch(() => {});
+        await fail(requestId);
       }
       await session.send("Fetch.enable", { patterns: REQUEST_STAGE }).catch(() => {});
     }
@@ -138,11 +175,15 @@ export async function attachRedirectGuard(context: BrowserContext, page: Page, p
   });
   const tree = (await session.send("Page.getFrameTree")) as { frameTree: { frame: { id: string } } };
   const mainFrame = tree.frameTree.frame.id;
+  // Speculation-rules prerendering loads pages in hidden targets that
+  // neither routes nor this guard see; the seeded profile preference stops
+  // it, and this per-page switch stays as a second layer.
+  await session.send("Page.setPrerenderingAllowed", { isAllowed: false });
   await session.send("Fetch.enable", { patterns: REQUEST_STAGE });
 
   return {
     async captureNextDocument(timeoutMs: number): Promise<CapturedDocument> {
-      if (capture) throw new Error("a capture is already armed");
+      if (capture || spent) throw new Error("a capture is already armed or spent");
       const captured = new Promise<CapturedDocument>((resolve, reject) => {
         capture = { resolve, reject };
       });
@@ -156,6 +197,9 @@ export async function attachRedirectGuard(context: BrowserContext, page: Page, p
       } finally {
         clearTimeout(timer);
         if (capture) {
+          // Gave up: from now on this page's main-frame documents are
+          // failed, never rendered (the worker closes the page).
+          spent = true;
           capture = null;
           await session.send("Fetch.enable", { patterns: REQUEST_STAGE }).catch(() => {});
         }
