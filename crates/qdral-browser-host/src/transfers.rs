@@ -178,7 +178,8 @@ pub fn validate_relative_destination(destination: &str) -> Result<String, HostEr
     Ok(destination.replace('\\', "/"))
 }
 
-/// Unicode format characters (category Cf) that can disguise a name.
+/// A curated set of Unicode format characters (from category Cf) that can
+/// disguise a name: bidi controls, zero-width marks, the BOM, tags.
 fn is_format_character(ch: char) -> bool {
     matches!(
         ch,

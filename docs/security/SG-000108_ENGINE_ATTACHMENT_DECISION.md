@@ -507,7 +507,7 @@ A fresh-context judge's first round on these slices was BLOCK. The byte-safe dat
 
   The worker's suggested name (from Content-Disposition or the URL) is advisory and never decides the check, so a PDF-headed polyglot cannot be committed as `.cmd` or `.html`. Every other destination name goes through the general `validate_download_type` allowlist. "Inert" describes how Aladdin treats the bytes: the engine never renders them, and the host never opens or executes them; it only stores them.
 - **Destination names.** `validate_relative_destination` additionally refuses:
-  - Unicode format characters (bidi overrides, zero-width marks, the BOM), which could make a name display with another extension;
+  - a curated set of Unicode format characters (bidi controls, zero-width marks, the BOM, tag characters; not every Cf character), which could make a name display with another extension;
   - device names with trailing spaces before the extension (`con .pdf`), `COM0`–`COM9`/`LPT0`–`LPT9` including the superscript digits, and `CONIN$`, `CONOUT$` and `CLOCK$`;
   - 8.3 short names (`~` followed by a digit), which could alias an existing entry.
 
@@ -536,6 +536,7 @@ A fresh-context judge's first round on these slices was BLOCK. The byte-safe dat
 **Known limits:**
 - The host cannot see the HTTP method, the same limit as for activation.
 - A link whose server redirects, even within the same origin, cannot be downloaded. It fails closed, and the approval is spent.
+- A link with a fragment (`#...`) cannot be downloaded. It is refused before the approval is consumed.
 - A PDF can still contain active content. Aladdin does not render or open it, but a user who opens the stored file later is outside this boundary.
 - The junction check has no native test: creating a junction in a test needs a shell or `DeviceIoControl`, and the governance test bans the shell. The fresh-context judge verified the earlier residue by experiment, and the fix is covered by reading.
 

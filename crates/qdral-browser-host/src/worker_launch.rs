@@ -1372,6 +1372,13 @@ mod platform {
             // checked against the page's origin before it is consumed, and
             // the click may open exactly that document.
             let link = self.link_destination(&target.node_id)?;
+            // A fragment never reaches the request, so the exact-link check
+            // could not match: refused before the approval is spent.
+            if link.contains('#') {
+                return Err(HostError::Invalid(
+                    "a link with a fragment cannot be downloaded".into(),
+                ));
+            }
             std::fs::create_dir_all(&self.staging)
                 .map_err(|err| HostError::Platform(format!("staging: {err}")))?;
             self.policy.expect_activation(&link)?;

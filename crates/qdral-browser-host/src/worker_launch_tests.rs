@@ -1314,6 +1314,7 @@ fn the_journey_downloads_the_latest_report_create_only_and_verified() {
             "a\u{202e}fdp.cmd",
             Some("format characters"),
         ),
+        ("Fragment 2026-01-04", "frag.pdf", Some("fragment")),
         ("Polyglot 2026-01-03", "poly.pdf", Some("")),
     ] {
         // Each refused attempt leaves the page on the replaced document: the
@@ -1348,6 +1349,9 @@ fn the_journey_downloads_the_latest_report_create_only_and_verified() {
             (other, _) => assert!(other.is_err() && refusal.is_none(), "{out}: {other:?}"),
         }
         assert!(!approved.join(out).exists(), "{name} left a file as {out}");
+        if refusal == Some("fragment") {
+            assert!(!approval.consumed, "a fragment link spent its approval");
+        }
     }
     let report = worker.shutdown();
     assert!(report.job_empty, "the job did not empty");

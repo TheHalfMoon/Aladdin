@@ -74,7 +74,8 @@ const REPORTS = `<!doctype html><title>Reports</title><h1>Reports</h1><ul>
 const FILES = `<!doctype html><title>Files</title><ul>
 <li><a href="/files/oversized.pdf">Oversized 2026-01-01</a></li>
 <li><a href="/files/fake.pdf">Disguised 2026-01-02</a></li>
-<li><a href="/files/poly.pdf">Polyglot 2026-01-03</a></li></ul>`;
+<li><a href="/files/poly.pdf">Polyglot 2026-01-03</a></li>
+<li><a href="/reports/2026-09-30.pdf#page=2">Fragment 2026-01-04</a></li></ul>`;
 const ARCHIVE = `<!doctype html><title>Archive</title><ul>
 <li><a href="/archive/2026-06-30">Annual review 2026-06-30</a></li>
 <li><a href="/archive/2026-09-30">Annual review 2026-09-30</a></li>
