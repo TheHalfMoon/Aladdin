@@ -4,13 +4,13 @@ Status: founder request (2026-10-12) to study these projects and copy what is va
 
 ## Donor pins
 
-All three are cloned read-only at exact commits under `C:\Users\Shehr\donors`. No donor script, install step or test was run; the probes described below ran Aladdin's own code.
+All four are cloned read-only at exact commits under `C:\Users\Shehr\donors` (Firecrawl since 2026-10-11). No donor script, install step or test was run; the probes described below ran Aladdin's own code.
 
 | Donor | Commit | License | Disposition |
 |---|---|---|---|
 | [browser-use/browser-use](https://github.com/browser-use/browser-use/tree/c75e8476e26d18b7617643bc2ae082fae8eae431) | `c75e8476e26d18b7617643bc2ae082fae8eae431` | MIT, © 2024 Gregor Zunic (LICENSE blob `1ea3836c`) | **Port the extraction pipeline now** (below). The rest is reference. |
 | [browserbase/stagehand](https://github.com/browserbase/stagehand/tree/f261c38b4dc50c39485f924e8599c1d3c6e37dc7) | `f261c38b4dc50c39485f924e8599c1d3c6e37dc7` | MIT, © 2024 Browserbase Inc. (LICENSE blob `683c709c`) | **Adapt later**: the CDP WebMCP client and the cross-frame accessibility snapshot. Nothing is imported in this change. |
-| [Skyvern-AI/skyvern](https://github.com/Skyvern-AI/skyvern/tree/f5f3f28a9ce0021a1db24286928a7bff6582a1eb) | `f5f3f28a9ce0021a1db24286928a7bff6582a1eb` | AGPL-3.0 for the whole repository (LICENSE blob `0ad25db4`; no sub-package carries another license) | **May be adapted under the founder's permission** (`SOURCE_PERMISSIONS.md`). No module fits Aladdin's architecture yet, so nothing is imported (see "Skyvern and the AGPL"). |
+| [Skyvern-AI/skyvern](https://github.com/Skyvern-AI/skyvern/tree/f5f3f28a9ce0021a1db24286928a7bff6582a1eb) | `f5f3f28a9ce0021a1db24286928a7bff6582a1eb` | AGPL-3.0 at the root (LICENSE blob `0ad25db4`). Some files and packages carry other licenses: Apache-2.0 files with SPDX headers (e.g. `skyvern/forge/sdk/api/llm/ui_tars_llm_caller.py`), the Apache-2.0 package `skyvern/cli/mcpb/claude_desktop`, and a third-party MIT dataset (`evaluation/datasets/ODYSSEYS_ATTRIBUTION.md`) | **May be adapted under the founder's permission** (`SOURCE_PERMISSIONS.md`). No module fits Aladdin's architecture yet, so nothing is imported (see "Skyvern and the AGPL"). |
 | [firecrawl/firecrawl](https://github.com/firecrawl/firecrawl/tree/f84845c864b6e2af22791c18fcf89ac2a21f1434) | `f84845c864b6e2af22791c18fcf89ac2a21f1434` | AGPL-3.0 (engine) | **Adapt next, under the founder's permission**: `apps/api/native/src/crawler.rs` for the slice 7 crawl queue (see "Firecrawl, after the permission"). |
 
 ## How each maps onto Aladdin
@@ -21,7 +21,7 @@ Aladdin's browser stack fixes the frame:
 - no caller-, model- or page-supplied script is evaluated;
 - the model is outside the browser layer (`ALADDIN_AI_SERVER_ARCHITECTURE.md`): Aladdin serves tools, it does not run a second planner.
 
-All three donors are, at their core, an LLM agent loop wrapped around a browser. That loop is the part Aladdin does not take. The value is in the browser-side mechanics.
+browser-use, Stagehand and Skyvern are, at their core, an LLM agent loop wrapped around a browser. That loop is the part Aladdin does not take; the value is in the browser-side mechanics. Firecrawl is different: a hosted scraping and crawling service, whose value for Aladdin is its crawl-scope and sitemap logic.
 
 ### browser-use (Python)
 
@@ -39,7 +39,7 @@ All three donors are, at their core, an LLM agent loop wrapped around a browser.
 | Module | What it does | Verdict |
 |---|---|---|
 | `packages/extension/understudy/page.ts`: WebMCP | Native WebMCP over the CDP `WebMCP` domain (`WebMCP.enable`, `toolsAdded`/`toolsRemoved`, `invokeTool`, `toolResponded`, `cancelInvocation`) | **Adapt later.** It is the native route that slices 4 and 5 deliberately did not take: Edge 155 exposes it only behind an experimental flag the SG-000074 argv allowlist does not admit. Admitting that flag is a reviewed argv amendment; this client would follow it. |
-| `understudy/a11y/snapshot/*` (`capture.ts`, `a11yTree.ts`, `domTree.ts`, `treeFormatUtils.ts`) | Hybrid DOM plus accessibility snapshot using only `DOM.getDocument`, `DOM.describeNode` and `Accessibility.getFullAXTree`, stitched across frames and out-of-process iframes, with XPath maps | **Adapt later**, for observation across iframes. Aladdin admits one destination per lifetime today, so cross-origin frames are not yet in scope. |
+| `understudy/a11y/snapshot/*` (`capture.ts`, `a11yTree.ts`, `domTree.ts`, `treeFormatUtils.ts`) | Hybrid DOM plus accessibility snapshot built mainly from `DOM.getDocument`, `DOM.describeNode`, `DOM.getFrameOwner` and `Accessibility.getFullAXTree` (with `Runtime.enable`), stitched across frames and out-of-process iframes, with XPath maps. Its focus path resolves nodes through `Runtime.evaluate` and `Runtime.callFunctionOn` (`resolveObjectIdForXPath` in `a11yTree.ts`, `activeElement.ts`) | **Adapt later**, for observation across iframes, without the `Runtime` focus path (SG-000108 forbids page-context evaluation). Aladdin admits one destination per lifetime today, so cross-origin frames are not yet in scope. |
 | `understudy/domainPolicy.ts` | Allow and block lists turned into `Fetch` patterns | Rejected. SG-000075 (host-decided requests, pinned resolution, no route) is stronger. |
 | `extension/` runtime: service worker, content script, `llm/`, `inference.ts`, act/extract/observe, `cacheService.ts` | A Chrome extension that runs the agent and LLM calls in the browser | Rejected. `WEB_CAPABILITIES_DECISION.md` rules out extensions and a second channel into the browser, and the model stays outside the browser. Action caching is noted as an idea below. |
 
@@ -76,41 +76,52 @@ Firecrawl's engine (AGPL-3.0) was reference-only until the founder's permission 
 
 Its crates (`regex`, `url`, `texting_robots`, `roxmltree`) are separate works under their own licenses and are admitted with the slice 7 import.
 
-For the two MIT donors no grant is needed, and renaming is allowed. The copyright and permission notice must travel with the copied code, so `docs/aladdin/notices/browser-use-MIT.txt` holds it, and each ported file names its source path and commit.
+For the MIT donors no grant is needed, and renaming is allowed. The copyright and permission notice must travel with the copied code, so `docs/aladdin/notices/browser-use-MIT.txt` holds it, and each ported file names its source path and commit.
 
 ## What is imported in this change
 
 The browser-use extraction pipeline, ported to TypeScript as a pure library in `apps/qdral-browser-worker/src/extract/`. It is the Markdown half of slice 6 (native extraction) in `WEB_CAPABILITIES_DECISION.md`:
-- `model.ts`: the rendered content of the main document from a `DOMSnapshot.captureSnapshot` taken with three computed styles (`display`, `visibility`, `opacity`). No page script runs. A text node is content only if the engine rendered it (it has a layout object) and its computed visibility is visible. Subtrees with opacity 0 are dropped, as are non-content elements and form controls. Hidden text, the usual way to smuggle instructions to a model, never reaches the caller. Live form values are never read.
-- `markdown.ts`: content model to Markdown. Links and images are opt-in and kept only as resolved http(s) URLs. Output is bounded in size (default 1,000,000 characters) and time (default 4 s), and nesting past 100 levels is flattened. Every step is linear in the input (the donor's lazy blob regexes and quadratic chunk splitting are replaced).
-- `clean.ts`: state-blob cleanup, plus the text safety rule (well formed, no controls, no invisible format characters).
-- `chunk.ts`: structure-aware chunking.
+- `model.ts`: the rendered content of the main document, from a `DOMSnapshot.captureSnapshot` taken with eight computed styles (`CONTENT_STYLES`) and layout boxes. No page script runs, and live form values are never read. Hidden text, the usual way to smuggle instructions to a model, is dropped:
+  - text without a layout object, or with hidden computed visibility;
+  - transparent text, text with a zero font size, text with a zero-area or off-document box;
+  - subtrees with opacity below 0.01;
+  - subtrees of rendered boxes that clip their content to at most one pixel (the "visually hidden" pattern);
+  - non-content elements and form controls.
+
+  Attribute text (an image's alt, a link's href) is used only from elements that are themselves rendered and visible. Text the engine skipped rendering under `content-visibility: auto` sets `truncated`, so the loss is reported, not silent.
+- `markdown.ts`: content model to Markdown.
+  - Page text is escaped, so it can never form a link, image, HTML, heading, list or quote; only the structure Aladdin emits is live (the donor disables escaping).
+  - Links and images are opt-in and kept only as resolved http(s) URLs, without credentials, with the characters that end a link destination encoded.
+  - Code fences and spans are longer than any backtick run they contain.
+  - Tables keep at most 64 columns, and their sections are walked iteratively.
+  - Every emitted part is charged to the size bound (default 1,000,000 characters) and the time bound (default 4 s), and nesting past 100 levels is flattened.
+- `clean.ts`: state-blob cleanup by linear scans (the donor's lazy regexes can be made super-linear), with code-fence lines kept verbatim and trailing whitespace trimmed by a scan. Also the text safety rule: well formed, no controls, no invisible characters that hide text or carry data (bidi controls, zero-width marks, fillers, variation selectors, tag characters).
+- `chunk.ts`: structure-aware chunking. Fences close only on a line of at least as many backticks, and splits use running prefix sizes.
 - `index.ts`: `extractMarkdown(snapshot, options)`.
 
 It adds no frame, no host API and no tool. The worker frame, the host-side bounds and the untrusted-page-text labelling come with the slice 6 wiring, after slice 5 (#311) merges, because both change the worker protocol generation. The full provenance is in `docs/aladdin/sg000108_browser_donors_provenance.json`.
 
 ### Evidence
 
-- **Unit tests.** `extract/chunk.test.ts` holds the donor's chunking cases, ported (13 tests). `extract/extract.test.ts` (8 tests) runs on CDP-shaped snapshots and covers:
-  - headings, emphasis, line breaks, nested and numbered lists, quotes, code blocks, rules;
-  - tables (header rows, escaped pipes, short rows, captions);
-  - opt-in links and images;
-  - every hidden-content rule;
-  - state-blob cleanup;
-  - shadow trees;
-  - size, time and chunking bounds;
-  - 5,000-deep nesting.
-- **Real Edge 155 probe** (offline `setContent`, Aladdin's built module on a real `DOMSnapshot`; the probe stayed outside the tree):
-  - the expected Markdown came out;
-  - dropped: `display: none`, `visibility: hidden`, `opacity: 0`, the `hidden` attribute, `<noscript>`, a closed `<details>`, a prefilled input, a value typed by script, and a textarea default;
-  - kept: a visible child of a `visibility: hidden` parent, `display: contents` text, and closed-shadow-root content.
+- **Unit tests** on CDP-shaped snapshots:
+  - `extract/chunk.test.ts` (14 tests): the donor's chunking cases, ported, plus a linear-time case;
+  - `extract/extract.test.ts` (15 tests): conversion, tables, opt-in links and images, every hidden-content rule, cleanup (with a hostile input on which the donor's nested-object regex takes 1.8 s for a tenth of it), escaping of page-injected syntax, URL encoding, fences, table and nesting bounds, invisible characters, and a 200,000-character non-breaking-space run.
+- **Real-engine tests**, `extract/extract.native.test.ts` (4 tests, Windows, the installed Edge, offline `setContent` with every request aborted):
+  - 17 hidden-content cases leak nothing: `display: none`, `visibility: hidden`, opacity 0 and 0.001, the `hidden` attribute, a zero font size, transparent text, off-screen positioning, a one-pixel clipped box, a zero-height clipped box, a closed `<details>`, `<noscript>`, hidden images and an image in a hidden link, a prefilled input, and a textarea default;
+  - visible text, a visible child of a hidden parent, `display: contents` text and a shown image are kept;
+  - closed shadow trees and slotted text come out in rendering order;
+  - page-injected Markdown and HTML stay literal;
+  - off-screen `content-visibility: auto` content is reported as truncated;
+  - a 200,000 `&nbsp;` run and a 4,000 by 4,000 table stay within the budget.
 
 ### Known limits
 
-- Only the main document is read. Iframe documents are not.
-- Slotted light-DOM text follows its shadow host's content instead of appearing at its slot.
-- `aria-hidden` and visually hidden ("screen-reader only") text is kept, because it is rendered.
+- Only the main document is read. Iframe documents and SVG `<text>` are not.
+- `aria-hidden` text is kept, because it is visible on screen.
+- Text the engine does not render (off-screen `content-visibility: auto`) is lost and only reported. The slice 6 wiring must decide whether to render it first.
+- Visual tricks the snapshot cannot see stay possible: text covered by another element, text whose colour matches its background, and text clipped by `clip-path`.
 - A relative link or image on a document without an http(s) base URL is kept as text only.
+- The state-blob cleanup, like the donor's, removes from a `{"$type":` opener up to the next `}`, which can span several blocks.
 
 ## Ideas worth carrying, not code
 

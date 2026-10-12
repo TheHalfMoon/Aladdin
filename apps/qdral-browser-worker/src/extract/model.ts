@@ -9,18 +9,25 @@
 // browser-use/browser-use c75e8476e26d18b7617643bc2ae082fae8eae431,
 // MIT License, Copyright (c) 2024 Gregor Zunic; the full notice is in
 // docs/aladdin/notices/browser-use-MIT.txt. Modifications for Aladdin: only
-// rendered text is content. A text node without a layout object (inside
-// `display: none`, collapsed, or never rendered) is dropped, as is text
-// whose computed visibility is hidden, and every subtree with opacity 0;
-// the donor's viewport threshold does not apply (the whole page is
-// content). Hidden text is the classic way to smuggle instructions to a
-// model, so it never reaches the caller. Live form values are never read.
+// rendered, visible text is content. Dropped: text without a layout object
+// (inside `display: none`, collapsed, never rendered), text whose computed
+// visibility is hidden, transparent text, text with a zero font size or a
+// zero-area or off-document box, subtrees with opacity below 0.01, and
+// subtrees of rendered boxes that clip their content to at most one pixel
+// (the "visually hidden" pattern). Attribute text (an image's alt, a link's
+// href) is used only from elements that are themselves rendered and visible.
+// The donor's viewport threshold does not apply (the whole page is content).
+// Hidden text is the classic way to smuggle instructions to a model, so it
+// never reaches the caller. Live form values are never read.
 
 /// The computed styles requested from the engine, in this order.
-export const CONTENT_STYLES = ["display", "visibility", "opacity"] as const;
+export const CONTENT_STYLES = ["display", "visibility", "opacity", "font-size", "color", "overflow-x", "overflow-y", "content-visibility"] as const;
+type StyleName = (typeof CONTENT_STYLES)[number];
 
 /// Upper bound on snapshot nodes taken into the model.
 export const MAX_CONTENT_NODES = 200_000;
+/// Opacity below this is invisible.
+const MIN_OPACITY = 0.01;
 
 export interface ContentElement {
   readonly kind: "element";
@@ -28,6 +35,9 @@ export interface ContentElement {
   readonly tag: string;
   readonly attrs: ReadonlyMap<string, string>;
   readonly children: readonly ContentNode[];
+  /// The element itself is rendered and visible: its attribute text (alt,
+  /// href) may become content.
+  readonly shown: boolean;
 }
 
 export interface ContentText {
@@ -51,6 +61,7 @@ export interface LayoutSnapshot {
     layout?: {
       nodeIndex?: number[];
       styles?: number[][];
+      bounds?: number[][];
     };
   }>;
   strings?: string[];
@@ -59,7 +70,8 @@ export interface LayoutSnapshot {
 export interface ContentModel {
   root: ContentElement;
   url: string;
-  /// Nodes past the bound or the budget were dropped.
+  /// Content was dropped by a bound or the budget, or was not rendered by
+  /// the engine (`content-visibility: auto` off screen).
   truncated: boolean;
 }
 
@@ -90,6 +102,21 @@ interface Building {
   tag: string;
   attrs: Map<string, string>;
   children: ContentNode[];
+  shown: boolean;
+}
+
+interface Slot {
+  element: Building;
+  /// Under a `content-visibility: auto` box (its unrendered text is lost,
+  /// not hidden).
+  lazy: boolean;
+}
+
+function transparent(color: string | undefined): boolean {
+  if (!color) return false;
+  if (color === "transparent") return true;
+  const alpha = /^rgba\([^,]+,[^,]+,[^,]+,\s*([0-9.]+)\s*\)$/.exec(color)?.[1];
+  return alpha !== undefined && Number(alpha) === 0;
 }
 
 export function contentModel(snapshot: LayoutSnapshot, deadline = Number.POSITIVE_INFINITY): ContentModel {
@@ -104,23 +131,34 @@ export function contentModel(snapshot: LayoutSnapshot, deadline = Number.POSITIV
   const nodeValue = nodes.nodeValue ?? [];
   const attributes = nodes.attributes ?? [];
 
-  // Layout: which nodes render, and their computed styles.
-  const styleOf = new Map<number, number[]>();
-  const layoutIndex = doc.layout?.nodeIndex ?? [];
-  const layoutStyles = doc.layout?.styles ?? [];
-  layoutIndex.forEach((node, at) => {
-    if (!styleOf.has(node)) styleOf.set(node, layoutStyles[at] ?? []);
+  // Layout: which nodes render, their computed styles and their boxes.
+  const layoutAt = new Map<number, number>();
+  (doc.layout?.nodeIndex ?? []).forEach((node, at) => {
+    if (!layoutAt.has(node)) layoutAt.set(node, at);
   });
-  const style = (node: number, name: (typeof CONTENT_STYLES)[number]): string | undefined => {
-    const styles = styleOf.get(node);
-    const at = CONTENT_STYLES.indexOf(name);
-    return styles ? text(styles[at]).toLowerCase() : undefined;
+  const layoutStyles = doc.layout?.styles ?? [];
+  const layoutBounds = doc.layout?.bounds ?? [];
+  const style = (node: number, name: StyleName): string | undefined => {
+    const at = layoutAt.get(node);
+    if (at === undefined) return undefined;
+    return text(layoutStyles[at]?.[CONTENT_STYLES.indexOf(name)]).trim().toLowerCase();
+  };
+  const box = (node: number): { x: number; y: number; w: number; h: number } | undefined => {
+    const at = layoutAt.get(node);
+    const bounds = at === undefined ? undefined : layoutBounds[at];
+    if (!bounds || bounds.length < 4) return undefined;
+    const [x = 0, y = 0, w = 0, h = 0] = bounds;
+    return { x, y, w, h };
+  };
+  const visible = (node: number): boolean => {
+    const visibility = style(node, "visibility");
+    return visibility !== "hidden" && visibility !== "collapse";
   };
 
-  const root: Building = { kind: "element", tag: "#root", attrs: new Map(), children: [] };
-  // Each snapshot index maps to the element its children attach to, or to
-  // null when its subtree is dropped.
-  const slots: Array<Building | null | undefined> = [];
+  const root: Building = { kind: "element", tag: "#root", attrs: new Map(), children: [], shown: false };
+  // Each snapshot index maps to the slot its children attach to, or to null
+  // when its subtree is dropped.
+  const slots: Array<Slot | null | undefined> = [];
   const count = Math.min(nodeType.length, MAX_CONTENT_NODES);
   let truncated = nodeType.length > MAX_CONTENT_NODES;
   for (let i = 0; i < count; i++) {
@@ -129,7 +167,7 @@ export function contentModel(snapshot: LayoutSnapshot, deadline = Number.POSITIV
       break;
     }
     const parentAt = parentIndex[i] ?? -1;
-    const parent = parentAt >= 0 ? slots[parentAt] : root;
+    const parent = parentAt >= 0 ? slots[parentAt] : { element: root, lazy: false };
     if (parent === null || parent === undefined) {
       slots[i] = null;
       continue;
@@ -137,8 +175,12 @@ export function contentModel(snapshot: LayoutSnapshot, deadline = Number.POSITIV
     const type = nodeType[i];
     if (type === 1) {
       const tag = text(nodeName[i]).toLowerCase();
+      const rendered = layoutAt.has(i);
       const opacity = Number(style(i, "opacity") ?? "1");
-      if (SKIPPED.has(tag) || (Number.isFinite(opacity) && opacity <= 0)) {
+      const bounds = box(i);
+      const clips = ["hidden", "clip"].includes(style(i, "overflow-x") ?? "") || ["hidden", "clip"].includes(style(i, "overflow-y") ?? "");
+      const clippedAway = rendered && clips && bounds !== undefined && (bounds.w <= 1 || bounds.h <= 1);
+      if (SKIPPED.has(tag) || (Number.isFinite(opacity) && opacity < MIN_OPACITY) || clippedAway) {
         slots[i] = null;
         continue;
       }
@@ -148,21 +190,35 @@ export function contentModel(snapshot: LayoutSnapshot, deadline = Number.POSITIV
         const name = text(flat[a]);
         if (name && !attrs.has(name)) attrs.set(name, text(flat[a + 1]));
       }
-      const element: Building = { kind: "element", tag, attrs, children: [] };
-      parent.children.push(element);
-      slots[i] = element;
+      const shown = rendered && visible(i) && bounds !== undefined && bounds.w > 0 && bounds.h > 0;
+      const element: Building = { kind: "element", tag, attrs, children: [], shown };
+      parent.element.children.push(element);
+      slots[i] = { element, lazy: parent.lazy || style(i, "content-visibility") === "auto" };
     } else if (type === 3) {
-      // Only rendered text is content.
-      if (!styleOf.has(i)) continue;
-      const visibility = style(i, "visibility");
-      if (visibility === "hidden" || visibility === "collapse") continue;
-      parent.children.push({ kind: "text", text: text(nodeValue[i]) });
+      const value = text(nodeValue[i]);
+      if (!layoutAt.has(i)) {
+        // Text the engine skipped rendering (off-screen lazy content) is
+        // lost, not hidden: say so.
+        if (parent.lazy && value.trim()) truncated = true;
+        continue;
+      }
+      const bounds = box(i);
+      const fontSize = Number.parseFloat(style(i, "font-size") ?? "1");
+      if (
+        !visible(i) ||
+        transparent(style(i, "color")) ||
+        (Number.isFinite(fontSize) && fontSize <= 0) ||
+        (bounds !== undefined && (bounds.w <= 0 || bounds.h <= 0 || bounds.x + bounds.w <= 0 || bounds.y + bounds.h <= 0))
+      ) {
+        continue;
+      }
+      parent.element.children.push({ kind: "text", text: value });
     } else if (type === 9) {
       slots[i] = parent;
     } else if (type === 11) {
-      const shadow: Building = { kind: "element", tag: "#shadow-root", attrs: new Map(), children: [] };
-      parent.children.push(shadow);
-      slots[i] = shadow;
+      const shadow: Building = { kind: "element", tag: "#shadow-root", attrs: new Map(), children: [], shown: false };
+      parent.element.children.push(shadow);
+      slots[i] = { element: shadow, lazy: parent.lazy };
     } else {
       slots[i] = null;
     }

@@ -7,9 +7,11 @@
 // c75e8476e26d18b7617643bc2ae082fae8eae431, MIT License, Copyright (c) 2024
 // Gregor Zunic; the full notice is in docs/aladdin/notices/browser-use-MIT.txt.
 // The donor serialises to HTML and converts it with the Python `markdownify`
-// package; Aladdin converts its own content model directly, following the
-// conventions the donor configures (ATX headings, `-` bullets, no escaping,
-// no autolinks), with no new dependency. No markdownify code is copied.
+// package; Aladdin converts its own content model directly (ATX headings,
+// `-` bullets, GFM tables), with no new dependency. No markdownify code is
+// copied. Unlike the donor (which disables escaping), page text is escaped:
+// it can never form a link, image, HTML, heading, list or quote, so only the
+// structure Aladdin emits is live Markdown.
 
 import { cleanMarkdown, safeText } from "./clean.js";
 import type { ContentElement, ContentNode } from "./model.js";
@@ -73,6 +75,8 @@ const HEADINGS = new Map([
 const BLOCK_LIKE = new Set(["pre", "blockquote", "ul", "ol", "table", "hr", "li"]);
 /// Nesting beyond this is flattened into plain text (iteratively).
 const MAX_DEPTH = 100;
+/// Columns kept in one table.
+const MAX_COLUMNS = 64;
 
 function attr(element: ContentElement, name: string): string | undefined {
   return element.attrs.get(name);
@@ -82,7 +86,29 @@ function collapse(text: string): string {
   return text.replace(/[ \t\n\r\f]+/g, " ");
 }
 
-/// All text below `node`, iteratively (for flattening deep nesting).
+/// Escape page text so Markdown and HTML syntax in it stays literal.
+function escapeInline(text: string): string {
+  return text.replace(/[\\`*_[\]<>!|~&]/g, (ch) => `\\${ch}`);
+}
+
+/// Escape what would start a block construct at the start of a line.
+function escapeLineStart(line: string): string {
+  return line.replace(/^(\s*)(#{1,6}(?=\s|$)|[-+=](?=\s|$)|>|\d{1,9}(?=[.)](\s|$)))/, "$1\\$2");
+}
+
+/// The longest run of `ch` in `text`.
+function longestRun(text: string, ch: string): number {
+  let longest = 0;
+  let run = 0;
+  for (const c of text) {
+    run = c === ch ? run + 1 : 0;
+    if (run > longest) longest = run;
+  }
+  return longest;
+}
+
+/// All text below `node`, iteratively (for flattening deep nesting and for
+/// code, where the text is literal).
 function plainText(node: ContentNode): string {
   const parts: string[] = [];
   const stack: ContentNode[] = [node];
@@ -104,9 +130,11 @@ class Stop extends Error {}
 class Converter {
   private produced = 0;
   truncated = false;
+  private readonly blockMemo = new WeakMap<ContentElement, boolean>();
 
   constructor(private readonly options: MarkdownOptions) {}
 
+  /// Charge `chars` produced characters; stop past the size or time bound.
   private budget(chars: number): void {
     this.produced += chars;
     if (this.produced > this.options.maxChars || Date.now() > this.options.deadline) {
@@ -115,13 +143,21 @@ class Converter {
     }
   }
 
+  /// Escaped, collapsed page text, charged to the budget.
+  private text(raw: string): string {
+    this.budget(raw.length);
+    return escapeInline(collapse(safeText(raw)));
+  }
+
   private url(raw: string | undefined): string | undefined {
     if (!raw || raw.trim().toLowerCase().startsWith("data:")) return undefined;
     try {
       const url = new URL(raw.trim(), this.options.baseUrl);
       if (url.protocol !== "https:" && url.protocol !== "http:") return undefined;
-      // Markdown link syntax: spaces and parentheses must not end the URL.
-      return url.href.replace(/[ ()]/g, (ch) => encodeURIComponent(ch));
+      url.username = "";
+      url.password = "";
+      // Characters that would end or break a Markdown link destination.
+      return url.href.replace(/[ ()<>\\]/g, (ch) => `%${ch.charCodeAt(0).toString(16).toUpperCase().padStart(2, "0")}`);
     } catch {
       return undefined;
     }
@@ -130,11 +166,8 @@ class Converter {
   /// Inline Markdown for `node`'s content. `<br>` becomes "\n" (made a hard
   /// break when the paragraph is emitted); other whitespace collapses.
   inline(node: ContentNode, depth: number): string {
-    if (node.kind === "text") {
-      this.budget(node.text.length);
-      return collapse(safeText(node.text));
-    }
-    if (depth > MAX_DEPTH) return collapse(plainText(node));
+    if (node.kind === "text") return this.text(node.text);
+    if (depth > MAX_DEPTH) return this.text(plainText(node));
     const inner = (): string => node.children.map((child) => this.inline(child, depth + 1)).join("");
     const wrap = (mark: string): string => {
       const text = inner();
@@ -158,21 +191,29 @@ class Converter {
         return wrap("~~");
       case "code": {
         if (this.hiddenData(node)) return "";
-        const text = collapse(plainText(node)).trim();
+        const raw = plainText(node);
+        this.budget(raw.length);
+        const text = collapse(safeText(raw)).trim();
         if (!text) return "";
-        const fence = text.includes("`") ? "``" : "`";
-        return `${fence}${text.includes("`") ? ` ${text} ` : text}${fence}`;
+        // A fence longer than any backtick run inside, padded when the text
+        // starts or ends with a backtick.
+        const fence = "`".repeat(longestRun(text, "`") + 1);
+        const pad = text.startsWith("`") || text.endsWith("`") ? " " : "";
+        return `${fence}${pad}${text}${pad}${fence}`;
       }
       case "a": {
         const text = inner();
-        const href = this.options.links ? this.url(attr(node, "href")) : undefined;
+        const href = this.options.links && node.shown ? this.url(attr(node, "href")) : undefined;
+        if (href) this.budget(href.length);
         return href && text.trim() ? `[${text.trim()}](${href})` : text;
       }
       case "img": {
-        const alt = collapse(attr(node, "alt") ?? "").trim();
+        if (!node.shown) return "";
         const src = attr(node, "src") ?? "";
         if (src.trim().toLowerCase().startsWith("data:")) return "";
+        const alt = this.text(attr(node, "alt") ?? "").trim();
         const url = this.options.images ? this.url(src) : undefined;
+        if (url) this.budget(url.length);
         return url ? `![${alt}](${url})` : alt;
       }
       default:
@@ -195,7 +236,7 @@ class Converter {
       line = [];
       const paragraph = text
         .split("\n")
-        .map((part) => part.replace(/ {2,}/g, " ").trim())
+        .map((part) => escapeLineStart(part.replace(/ {2,}/g, " ").trim()))
         .filter(Boolean)
         .join("  \n");
       if (paragraph) out.push(paragraph);
@@ -210,8 +251,6 @@ class Converter {
     }
     flush();
   }
-
-  private readonly blockMemo = new WeakMap<ContentElement, boolean>();
 
   /// Known block elements, and any other element (a custom element, a
   /// shadow host) with a block among its children: it lays out as a block.
@@ -241,8 +280,8 @@ class Converter {
 
   private block(element: ContentElement, out: string[], depth: number): void {
     if (depth > MAX_DEPTH) {
-      const text = collapse(plainText(element)).trim();
-      if (text) out.push(text);
+      const text = this.text(plainText(element)).trim();
+      if (text) out.push(escapeLineStart(text));
       return;
     }
     const level = HEADINGS.get(element.tag);
@@ -256,10 +295,13 @@ class Converter {
         out.push("---");
         return;
       case "pre": {
-        const text = safeText(plainText(element)).replace(/\n$/, "");
-        this.budget(text.length);
+        const raw = plainText(element);
+        this.budget(raw.length);
+        const text = safeText(raw).replace(/\n$/, "");
         if (!text.trim()) return;
-        const fence = text.includes("```") ? "~~~" : "```";
+        // A fence longer than any backtick run inside cannot be closed by
+        // the content.
+        const fence = "`".repeat(Math.max(3, longestRun(text, "`") + 1));
         out.push(`${fence}\n${text}\n${fence}`);
         return;
       }
@@ -285,12 +327,12 @@ class Converter {
   private list(element: ContentElement, out: string[], depth: number): void {
     const ordered = element.tag === "ol";
     let number = Number.parseInt(attr(element, "start") ?? "1", 10);
-    if (!Number.isFinite(number)) number = 1;
+    if (!Number.isFinite(number) || number < 0 || number > 999_999_999) number = 1;
     const items: string[] = [];
     for (const child of element.children) {
       if (child.kind !== "element" || child.tag !== "li") {
-        // Stray content in a list: kept as its own text.
-        const text = child.kind === "text" ? collapse(child.text).trim() : collapse(plainText(child)).trim();
+        // Stray content in a list: kept as its own item.
+        const text = (child.kind === "text" ? this.text(child.text) : this.text(plainText(child))).trim();
         if (text) items.push(`- ${text}`);
         continue;
       }
@@ -306,29 +348,37 @@ class Converter {
   }
 
   private table(element: ContentElement, out: string[], depth: number): void {
-    // Rows in order, whether directly under the table or in its sections.
+    // Rows in order, whether directly under the table or in its sections,
+    // found iteratively (a page can nest sections without limit).
     const rows: Array<{ cells: string[]; header: boolean }> = [];
     let headed = false;
-    const visit = (node: ContentElement, inHead: boolean): void => {
+    const stack: Array<{ node: ContentElement; inHead: boolean; level: number }> = [{ node: element, inHead: false, level: 0 }];
+    const pending: Array<{ node: ContentElement; inHead: boolean; level: number }> = [];
+    while (stack.length > 0) {
+      const { node, inHead, level } = stack.pop() as { node: ContentElement; inHead: boolean; level: number };
       for (const child of node.children) {
         if (child.kind !== "element") continue;
         if (child.tag === "thead" || child.tag === "tbody" || child.tag === "tfoot") {
-          visit(child, child.tag === "thead");
-        } else if (child.tag === "tr") {
-          const cells = child.children.filter((c): c is ContentElement => c.kind === "element" && (c.tag === "td" || c.tag === "th"));
+          if (level < MAX_DEPTH) pending.push({ node: child, inHead: child.tag === "thead", level: level + 1 });
+          continue;
+        }
+        if (child.tag === "tr") {
+          const cells = child.children.filter((c): c is ContentElement => c.kind === "element" && (c.tag === "td" || c.tag === "th")).slice(0, MAX_COLUMNS);
           const header = inHead || (rows.length === 0 && cells.length > 0 && cells.every((c) => c.tag === "th"));
           headed ||= header;
-          rows.push({
-            header,
-            cells: cells.map((cell) => collapse(this.inline(cell, depth + 1)).trim().replace(/\|/g, "\\|"))
-          });
+          rows.push({ header, cells: cells.map((cell) => collapse(this.inline(cell, depth + 1)).trim()) });
         } else if (child.tag === "caption") {
           const caption = collapse(this.inline(child, depth + 1)).trim();
-          if (caption) out.push(caption);
+          if (caption) out.push(escapeLineStart(caption));
         }
       }
-    };
-    visit(element, false);
+      // Sections in document order.
+      for (let i = pending.length - 1; i >= 0; i--) {
+        const section = pending[i];
+        if (section) stack.push(section);
+      }
+      pending.length = 0;
+    }
     if (rows.length === 0) return;
     // The donor's normalisation: a header row (thead, or a first row of th)
     // leads; without one the first row serves as the header.
@@ -336,14 +386,20 @@ class Converter {
     const [header] = rows.splice(Math.max(0, headerAt), 1);
     if (!header) return;
     const width = rows.reduce((most, row) => Math.max(most, row.cells.length), Math.max(header.cells.length, 1));
-    const line = (cells: string[]): string => `| ${Array.from({ length: width }, (_, i) => cells[i] ?? "").join(" | ")} |`;
-    const lines = [line(header.cells), `| ${Array.from({ length: width }, () => "---").join(" | ")} |`, ...rows.map((row) => line(row.cells))];
+    const line = (cells: string[]): string => {
+      const text = `| ${Array.from({ length: width }, (_, i) => cells[i] ?? "").join(" | ")} |`;
+      this.budget(text.length);
+      return text;
+    };
+    const lines = [line(header.cells), line(Array.from({ length: width }, () => "---"))];
+    for (const row of rows) lines.push(line(row.cells));
     out.push(lines.join("\n"));
   }
 }
 
-/// Convert a content model to Markdown: safe text (well formed, no controls
-/// or invisible marks), cleaned of SPA state blobs, bounded in size and time.
+/// Convert a content model to Markdown: escaped, safe text (well formed, no
+/// controls or invisible marks), cleaned of SPA state blobs, bounded in size
+/// and time.
 export function toMarkdown(root: ContentElement, options: MarkdownOptions): MarkdownResult {
   const converter = new Converter(options);
   const out: string[] = [];
@@ -352,7 +408,7 @@ export function toMarkdown(root: ContentElement, options: MarkdownOptions): Mark
   } catch (error) {
     if (!(error instanceof Stop)) throw error;
   }
-  let markdown = cleanMarkdown(safeText(out.join("\n\n")));
+  let markdown = cleanMarkdown(out.join("\n\n"));
   let truncated = converter.truncated;
   if (markdown.length > options.maxChars) {
     markdown = Array.from(markdown).slice(0, options.maxChars).join("");

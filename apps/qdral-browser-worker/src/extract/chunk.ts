@@ -7,8 +7,10 @@
 // docs/aladdin/notices/browser-use-MIT.txt and the import record in
 // docs/aladdin/sg000108_browser_donors_provenance.json. Modifications for
 // Aladdin: TypeScript; names in Aladdin style; offsets count UTF-16 code
-// units (JavaScript string indices) rather than Python code points; the
-// chunk size and overlap are bounded by the caller.
+// units (JavaScript string indices) rather than Python code points; a code
+// fence closes only on a line of at least as many backticks (the donor
+// closes on any line starting with three); header-preferred splits use
+// running prefix sizes (the donor's are quadratic in a chunk's blocks).
 
 export interface MarkdownChunk {
   content: string;
@@ -55,6 +57,9 @@ function parseAtomicBlocks(content: string): AtomicBlock[] {
     }
 
     if (line.trim().startsWith("```")) {
+      // Closed only by a line of at least as many backticks (the converter
+      // writes fences longer than any backtick run they contain).
+      const open = /^`+/.exec(line.trim())?.[0].length ?? 3;
       const fence = [line];
       let fenceEnd = offset + lineLength;
       i++;
@@ -63,7 +68,8 @@ function parseAtomicBlocks(content: string): AtomicBlock[] {
         fence.push(next);
         fenceEnd += next.length + 1;
         i++;
-        if (next.trim().startsWith("```") && fence.length > 1) break;
+        const closing = next.trim();
+        if (closing.length >= open && /^`+$/.test(closing)) break;
       }
       blocks.push({ type: "code_fence", lines: fence, start: offset, end: fenceEnd });
       offset = fenceEnd;

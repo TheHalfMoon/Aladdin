@@ -18,10 +18,10 @@
       "destination": "apps/qdral-browser-worker/src/extract/chunk.ts",
       "reuse": "PORT",
       "modified": true,
-      "modification_summary": "Python to TypeScript, line for line in algorithm: atomic blocks (headers, code fences, table header plus separator, table rows, list items with continuations, paragraphs, blanks), greedy assembly with header-preferred splits that keep at least half a chunk, overlap lines and table-header carry across every continuation, start offset. Offsets count UTF-16 code units. Names in Aladdin style. Header-preferred splits use running prefix sizes (the donor sums inside its backward scan, which is quadratic in a chunk's blocks).",
+      "modification_summary": "Python to TypeScript, line for line in algorithm: atomic blocks (headers, code fences, table header plus separator, table rows, list items with continuations, paragraphs, blanks), greedy assembly with header-preferred splits that keep at least half a chunk, overlap lines and table-header carry across every continuation, start offset. Changes: offsets count UTF-16 code units; a code fence closes only on a line of at least as many backticks (the donor closes on any line starting with three); header-preferred splits use running prefix sizes (the donor sums inside its backward scan, which is quadratic in a chunk's blocks). Names in Aladdin style.",
       "authority_delta": "None: a pure function over a string.",
       "qualification": [
-        "extract/chunk.test.ts (the donor's tests/ci/test_markdown_chunking.py unit cases, ported)"
+        "extract/chunk.test.ts (the donor's tests/ci/test_markdown_chunking.py unit cases, ported; its overlap case made non-vacuous)"
       ]
     },
     {
@@ -30,10 +30,11 @@
       "destination": "apps/qdral-browser-worker/src/extract/clean.ts",
       "reuse": "PORT",
       "modified": true,
-      "modification_summary": "SPA state blob removal (JSON in inline code, $type objects, nested objects, long lines that parse as JSON). The donor's lazy regexes are replaced by linear scans, with blobs bounded to 64 KiB; blank lines between blocks are kept (one at most) instead of all removed; Markdown hard breaks are kept. Adds Aladdin's text safety rule (well formed, no controls, no invisible format characters).",
+      "modification_summary": "SPA state-blob removal (JSON in inline code, $type objects, nested objects, long lines that parse as JSON once the converter's escapes are undone). The donor's lazy regexes are replaced by linear scans with blobs bounded to 64 KiB; code-fence lines are kept verbatim; blank lines between blocks are kept (one at most) instead of all removed; trailing whitespace is trimmed by a scan, keeping Markdown hard breaks. Adds Aladdin's text safety rule: well formed (lone surrogates become U+FFFD), no controls, and no invisible characters that hide text or carry data (bidi controls, zero-width marks, fillers, variation selectors, tag characters).",
       "authority_delta": "None: a pure function over a string.",
       "qualification": [
-        "extract/extract.test.ts"
+        "extract/extract.test.ts",
+        "extract/extract.native.test.ts"
       ]
     },
     {
@@ -42,11 +43,11 @@
       "destination": "apps/qdral-browser-worker/src/extract/markdown.ts",
       "reuse": "ADAPT",
       "modified": true,
-      "modification_summary": "Keeps the donor's rules: non-content elements are skipped, hidden inline-JSON code (its id patterns) and inline data: images are dropped, a header row (thead, or a first row of th) leads the table. The donor serialises to HTML and converts with the Python markdownify package; Aladdin converts its own content model straight to Markdown with the conventions the donor configures (ATX headings, '-' bullets, no escaping, no autolinks). No markdownify code is copied and no dependency is added. Links and images are opt-in and limited to resolved http(s) URLs; nesting past 100 levels is flattened iteratively; output is bounded in size and time.",
+      "modification_summary": "Keeps the donor's rules: non-content elements are skipped, hidden inline-JSON code (its id patterns) and inline data: images are dropped, a header row (thead, or a first row of th) leads the table. The donor serialises to HTML and converts with the Python markdownify package; Aladdin converts its own content model straight to Markdown (ATX headings, '-' bullets, GFM tables). No markdownify code is copied and no dependency is added. Unlike the donor, page text is escaped so it cannot form links, images, HTML or block syntax. Links and images are opt-in, limited to resolved http(s) URLs without credentials and with destination-ending characters encoded, and taken only from shown elements; fences and code spans are longer than any backtick run inside; tables keep at most 64 columns and are walked iteratively; every emitted part is charged to the size and time bounds; nesting past 100 levels is flattened.",
       "authority_delta": "None: a pure function over a content model.",
       "qualification": [
         "extract/extract.test.ts",
-        "real-Edge probe of a DOMSnapshot (recorded in the decision)"
+        "extract/extract.native.test.ts (real Edge)"
       ]
     },
     {
@@ -55,11 +56,11 @@
       "destination": "apps/qdral-browser-worker/src/extract/model.ts",
       "reuse": "ADAPT",
       "modified": true,
-      "modification_summary": "The donor's CSS visibility rule (display none, visibility hidden, opacity 0) and its parsing of DOMSnapshot layout styles, applied to content: only text with a layout object and visible computed visibility is kept, and subtrees with opacity 0 are dropped. The donor's viewport threshold is not used, its Runtime.evaluate calls (readyState, iframe scroll, getEventListeners) are not used, and live input values (inputValue, textValue) are never read.",
+      "modification_summary": "The donor's CSS visibility rule (display none, visibility hidden, opacity 0) and its parsing of DOMSnapshot layout styles, applied to content and extended: only text with a layout object, visible computed visibility, a non-transparent colour, a non-zero font size and a non-empty on-document box is kept; subtrees with opacity below 0.01 and subtrees of boxes clipped to at most one pixel are dropped; attribute text is used only from rendered, visible elements; text the engine skipped under content-visibility auto is reported as truncated. The donor's viewport threshold is not used, its Runtime.evaluate calls (readyState, iframe scroll, getEventListeners) are not used, and live input values (inputValue, textValue) are never read.",
       "authority_delta": "None: a pure function over a DOMSnapshot.",
       "qualification": [
         "extract/extract.test.ts",
-        "real-Edge probe of a DOMSnapshot (recorded in the decision)"
+        "extract/extract.native.test.ts (real Edge, 17 hidden-content cases)"
       ]
     }
   ],

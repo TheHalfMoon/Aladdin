@@ -107,12 +107,14 @@ test("startFrom returns the chunk containing the offset, nothing past the end, e
 });
 
 test("overlap carries the previous chunk's last lines, never into the first chunk", () => {
-  const content = Array.from({ length: 100 }, (_, i) => `Line ${i}`).join("\n");
+  // Separate paragraphs (the donor's single-paragraph input never split, so
+  // its assertions never ran).
+  const content = Array.from({ length: 100 }, (_, i) => `Line ${i}`).join("\n\n");
   const chunks = chunkMarkdown(content, 200, 3);
-  if (chunks.length > 1) {
-    assert.notEqual(chunks[1]?.overlap, "");
-    assert.ok((chunks[1]?.overlap.split("\n").length ?? 0) <= 5);
-  }
+  assert.ok(chunks.length > 1, `${chunks.length} chunks`);
+  assert.notEqual(chunks[1]?.overlap, "");
+  assert.ok((chunks[1]?.overlap.split("\n").length ?? 0) <= 3);
+  assert.ok(chunks[0]?.content.endsWith(chunks[1]?.overlap.split("\n").at(-1) ?? "?"), "the overlap is the previous chunk's tail");
   assert.equal(chunkMarkdown("# A\n\nSome content.\n\n# B\n\nMore content.", 25)[0]?.overlap, "");
 });
 

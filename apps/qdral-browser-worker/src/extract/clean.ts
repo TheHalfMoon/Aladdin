@@ -6,16 +6,20 @@
 // browser-use/browser-use c75e8476e26d18b7617643bc2ae082fae8eae431,
 // MIT License, Copyright (c) 2024 Gregor Zunic; the full notice is in
 // docs/aladdin/notices/browser-use-MIT.txt. Modifications for Aladdin:
-// TypeScript; the JSON-blob patterns are bounded (no lazy match across the
-// whole document) so a page cannot make them run in quadratic time; blank
-// lines between blocks are kept (one at most), where the donor drops them
-// all and so merges paragraphs.
+// TypeScript; the donor's lazy blob regexes are replaced by linear scans;
+// blank lines between blocks are kept (one at most), where the donor drops
+// them all and so merges paragraphs; lines inside code fences are kept
+// verbatim; trailing whitespace is trimmed by a scan (a regex anchored at
+// the line end is quadratic on long whitespace runs).
 
-// Controls other than newline and tab, and invisible format characters
-// (bidi controls, zero-width marks, the BOM, the soft hyphen, interlinear
-// annotation marks and tag characters), written as escapes.
+// Controls other than newline and tab, and invisible characters that hide
+// text or carry hidden data: bidi controls, zero-width marks, the BOM, the
+// soft hyphen, the combining grapheme joiner, Hangul, Khmer and Mongolian
+// fillers and selectors, the blank braille pattern, variation selectors,
+// interlinear annotation marks and tag characters. Written as escapes.
 const CONTROLS = /[\u0000-\u0008\u000b-\u001f\u007f-\u009f]/g;
-const INVISIBLE = /[\u{61c}\u{ad}\u{200b}-\u{200f}\u{202a}-\u{202e}\u{2060}-\u{2064}\u{2066}-\u{206f}\u{feff}\u{fff9}-\u{fffb}\u{e0000}-\u{e007f}]/gu;
+const INVISIBLE =
+  /[\u{61c}\u{ad}\u{34f}\u{115f}\u{1160}\u{17b4}\u{17b5}\u{180b}-\u{180f}\u{200b}-\u{200f}\u{202a}-\u{202e}\u{2060}-\u{2064}\u{2066}-\u{206f}\u{2800}\u{3164}\u{fe00}-\u{fe0f}\u{feff}\u{ffa0}\u{fff9}-\u{fffb}\u{e0000}-\u{e007f}\u{e0100}-\u{e01ef}]/gu;
 const LONE_SURROGATES = /[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/g;
 
 /// Make text safe to carry as page data: well formed (a lone surrogate
@@ -101,23 +105,61 @@ export function cleanMarkdown(content: string): string {
   const withoutCode = cut(content, codeJsonSpans(content));
   const out = cut(withoutCode, stateObjectSpans(withoutCode));
   const kept: string[] = [];
+  let fence = 0;
   for (const line of out.split("\n")) {
+    // Code fences (as the converter writes them: a run of three or more
+    // backticks) keep their lines verbatim.
+    const run = backtickRun(line);
+    if (fence > 0) {
+      kept.push(line);
+      if (run >= fence && line.trim().length === run) fence = 0;
+      continue;
+    }
+    if (run >= 3) {
+      fence = run;
+      kept.push(line);
+      continue;
+    }
     const stripped = line.trim();
     if (!stripped) {
       if (kept.length > 0 && kept[kept.length - 1] !== "") kept.push("");
       continue;
     }
-    // A long line that parses as JSON is SPA state, not content (a prefix
-    // check alone would drop Markdown links and images).
-    if (stripped.length > 100 && (stripped[0] === "{" || stripped[0] === "[")) {
+    // A long line that parses as JSON (once the converter's escapes are
+    // undone) is SPA state, not content; a prefix check alone would drop
+    // Markdown links and images.
+    const plain = stripped.length > 100 ? unescapeMarkdown(stripped) : "";
+    if (plain && (plain[0] === "{" || plain[0] === "[")) {
       try {
-        JSON.parse(stripped);
+        JSON.parse(plain);
         continue;
       } catch {
         // Not JSON: keep it.
       }
     }
-    kept.push(line.replace(/\s+$/, (trailing) => (trailing === "  " ? trailing : "")));
+    kept.push(trimEnd(line));
   }
   return kept.join("\n").trim();
+}
+
+/// The length of the run of backticks a line starts with (after spaces).
+function backtickRun(line: string): number {
+  let i = 0;
+  while (i < line.length && line[i] === " ") i++;
+  const start = i;
+  while (i < line.length && line[i] === "`") i++;
+  return i - start;
+}
+
+/// Undo the converter's backslash escapes.
+function unescapeMarkdown(text: string): string {
+  return text.replace(/\\([\\`*_[\]<>!|~&#+=.)-])/g, "$1");
+}
+
+/// Trim trailing whitespace by a backward scan, keeping exactly two spaces
+/// before the end (a Markdown hard break).
+function trimEnd(line: string): string {
+  let end = line.length;
+  while (end > 0 && /\s/.test(line[end - 1] ?? "")) end--;
+  return line.slice(end) === "  " ? line : line.slice(0, end);
 }

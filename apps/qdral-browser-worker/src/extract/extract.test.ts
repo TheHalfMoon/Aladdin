@@ -51,9 +51,23 @@ function snapshot(url: string, ...body: Spec[]): LayoutSnapshot {
     attributes.push(Object.entries(attrs).flatMap(([k, v]) => [id(k), id(v)]));
     return nodeType.length - 1;
   };
+  const bounds: number[][] = [];
+  // Every rendered node gets a visible box and ordinary styles unless the
+  // spec overrides them.
   const layout = (index: number, style: { visibility: string; opacity: string }): void => {
     layoutIndex.push(index);
-    styles.push(CONTENT_STYLES.map((name) => id(name === "display" ? "block" : name === "visibility" ? style.visibility : style.opacity)));
+    bounds.push([10, 10, 100, 20]);
+    const values: Record<string, string> = {
+      display: "block",
+      visibility: style.visibility,
+      opacity: style.opacity,
+      "font-size": "16px",
+      color: "rgb(0, 0, 0)",
+      "overflow-x": "visible",
+      "overflow-y": "visible",
+      "content-visibility": "visible"
+    };
+    styles.push(CONTENT_STYLES.map((name) => id(values[name] ?? "")));
   };
   const walk = (spec: Spec, parent: number, rendered: boolean, visibility: string): void => {
     if (spec.kind === "shadow") {
@@ -82,7 +96,7 @@ function snapshot(url: string, ...body: Spec[]): LayoutSnapshot {
   for (const spec of body) walk(spec, bodyAt, true, "visible");
   return {
     strings,
-    documents: [{ documentURL: id(url), nodes: { parentIndex, nodeType, nodeName, nodeValue, attributes }, layout: { nodeIndex: layoutIndex, styles } }]
+    documents: [{ documentURL: id(url), nodes: { parentIndex, nodeType, nodeName, nodeValue, attributes }, layout: { nodeIndex: layoutIndex, styles, bounds } }]
   };
 }
 
@@ -225,4 +239,74 @@ test("state-blob cleanup removes what the donor removes, in linear time", () => 
   const started = Date.now();
   cleanMarkdown(hostile);
   assert.ok(Date.now() - started < 1_000, `took ${Date.now() - started} ms`);
+});
+
+test("page text cannot form links, images, HTML or block syntax", () => {
+  const out = md(
+    { links: true, images: true },
+    el("p", {}, "[click](javascript:alert(1)) ![t](https://evil.test/x.png) <img src=x onerror=alert(1)> *bold* `code`"),
+    el("p", {}, "# fake heading"),
+    el("p", {}, "> fake quote"),
+    el("p", {}, "1. fake item"),
+    el("p", {}, el("a", { href: "https://ok.test/" }, "x](javascript:alert(2)) [y")),
+    el("p", {}, el("img", { src: "https://ok.test/i.png", alt: "a] (b" }))
+  );
+  assert.equal(
+    out,
+    [
+      "\\[click\\](javascript:alert(1)) \\!\\[t\\](https://evil.test/x.png) \\<img src=x onerror=alert(1)\\> \\*bold\\* \\`code\\`",
+      "",
+      "\\# fake heading",
+      "",
+      "\\> fake quote",
+      "",
+      "\\1. fake item",
+      "",
+      "[x\\](javascript:alert(2)) \\[y](https://ok.test/)",
+      "",
+      "![a\\] (b](https://ok.test/i.png)"
+    ].join("\n")
+  );
+});
+
+test("link URLs drop credentials and encode characters that end a destination", () => {
+  const out = md({ links: true }, el("p", {}, el("a", { href: "https://u:p@ok.test/a(b)c d<e>" }, "go")));
+  assert.equal(out, "[go](https://ok.test/a%28b%29c%20d%3Ce%3E)");
+});
+
+test("code fences and inline code cannot be closed by their content", () => {
+  const out = md({}, el("pre", {}, "before\n```\n~~~\n````x\nafter"), el("p", {}, el("code", {}, "a``b")));
+  assert.equal(out, ["`````", "before", "```", "~~~", "````x", "after", "`````", "", "```a``b```"].join("\n"));
+  // The chunker keeps such a fence whole.
+  const chunks = extractMarkdown(snapshot("https://fixture.test/", el("pre", {}, "x\n```\n" + "y\n".repeat(200))), { chunkChars: 50 }).chunks;
+  const holding = chunks.filter((c) => c.content.includes("````"));
+  assert.equal(holding.length, 1, "the fence was split");
+  assert.equal(holding[0]?.content.split("\n").filter((l) => l === "````").length, 2, "both fence lines in one chunk");
+  // Blank lines inside a fence survive cleanup.
+  assert.equal(md({}, el("pre", {}, "a\n\n\n\nb")), "```\na\n\n\n\nb\n```");
+});
+
+test("tables are bounded in columns, size and time, and nested sections do not recurse", () => {
+  const wide = el("table", {}, el("tr", {}, ...Array.from({ length: 4_000 }, () => el("td", {}, "c"))), ...Array.from({ length: 4_000 }, () => el("tr")));
+  const started = Date.now();
+  const result = extractMarkdown(snapshot("https://fixture.test/", wide));
+  assert.ok(Date.now() - started < 2_000, `took ${Date.now() - started} ms`);
+  assert.equal((result.markdown.split("\n")[0]?.match(/\|/g) ?? []).length, 65, "64 columns");
+  let nested = el("tbody", {}, el("tr", {}, el("td", {}, "deep")));
+  // 2,000 levels, far past the 100-level cap (the test's own snapshot
+  // builder recurses, so it cannot go much deeper).
+  for (let i = 0; i < 2_000; i++) nested = el("tbody", {}, nested);
+  assert.doesNotThrow(() => extractMarkdown(snapshot("https://fixture.test/", el("table", {}, nested))));
+});
+
+test("invisible characters that hide data are removed", () => {
+  const hidden = "a\u{e0100}\ufe0f\u180e\u3164\u034f\u17b4\u2800b";
+  assert.equal(md({}, el("p", {}, hidden)), "ab");
+});
+
+test("a long run of non-breaking spaces is linear", () => {
+  const started = Date.now();
+  const out = extractMarkdown(snapshot("https://fixture.test/", el("p", {}, "a" + "\u00a0".repeat(200_000) + "b"), el("pre", {}, " ".repeat(200_000) + "x")));
+  assert.ok(Date.now() - started < 2_000, `took ${Date.now() - started} ms`);
+  assert.ok(out.markdown.startsWith("a"));
 });
