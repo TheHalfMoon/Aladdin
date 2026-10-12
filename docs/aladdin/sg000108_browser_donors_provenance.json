@@ -60,7 +60,7 @@
       "authority_delta": "None: a pure function over a DOMSnapshot.",
       "qualification": [
         "extract/extract.test.ts",
-        "extract/extract.native.test.ts (real Edge, 29 hidden-content cases)"
+        "extract/extract.native.test.ts (real Edge, 30 hidden-content cases)"
       ]
     }
   ],

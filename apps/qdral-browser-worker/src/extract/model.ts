@@ -39,6 +39,7 @@ export const CONTENT_STYLES = [
   "perspective",
   "backdrop-filter",
   "contain",
+  "container-type",
   "will-change"
 ] as const;
 type StyleName = (typeof CONTENT_STYLES)[number];
@@ -275,6 +276,8 @@ export function contentModel(snapshot: LayoutSnapshot, deadline = Number.POSITIV
         (style(i, "filter") ?? "none") !== "none" ||
         (style(i, "backdrop-filter") ?? "none") !== "none" ||
         /\b(layout|paint|strict|content)\b/.test(contain) ||
+        // A size container applies layout containment.
+        (style(i, "container-type") ?? "normal") !== "normal" ||
         /\b(transform|perspective|filter|contain)\b/.test(willChange);
       let clips: Clips = parent.clips;
       if (position === "fixed") clips = { free: 0, positioned: 0, contained: clips.contained };

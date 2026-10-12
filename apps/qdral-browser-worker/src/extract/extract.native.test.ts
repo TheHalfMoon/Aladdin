@@ -54,6 +54,7 @@ test("hidden text and hidden attribute text never reach the Markdown (real Edge)
     `<div style="overflow:hidden;width:1px;height:1px;transform:translateZ(0)"><span style="position:fixed">LEAK-transform-fixed</span></div>`,
     `<div style="overflow:hidden;width:1px;height:1px;transform:translateZ(0)"><span style="position:absolute">LEAK-transform-absolute</span></div>`,
     `<div style="contain:paint;width:1px;height:1px"><span style="position:absolute">LEAK-contain-paint</span></div>`,
+    `<div style="container-type:inline-size;overflow:hidden;width:1px;height:1px"><span style="position:fixed">LEAK-size-container</span></div>`,
     `<p style="position:absolute;left:-99999px">LEAK-offscreen</p>`,
     `<p style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)">LEAK-visually-hidden</p>`,
     `<div style="height:0;overflow:hidden">LEAK-zero-height</div>`,
