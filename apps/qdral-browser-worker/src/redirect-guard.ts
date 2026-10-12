@@ -90,14 +90,20 @@ export async function attachRedirectGuard(context: BrowserContext, page: Page, p
     } catch (error) {
       pending.reject(error as Error);
     } finally {
-      // The document is never rendered: an inert blank page replaces it.
-      await session.send("Fetch.fulfillRequest", {
-        requestId,
-        responseCode: 200,
-        responseHeaders: [{ name: "content-type", value: "text/plain" }],
-        body: ""
-      });
-      await session.send("Fetch.enable", { patterns: REQUEST_STAGE });
+      // The document is never rendered: an inert blank page replaces it
+      // (or, if that fails, the request fails), and response-stage pausing
+      // ends either way.
+      try {
+        await session.send("Fetch.fulfillRequest", {
+          requestId,
+          responseCode: 200,
+          responseHeaders: [{ name: "content-type", value: "text/plain" }],
+          body: ""
+        });
+      } catch {
+        await session.send("Fetch.failRequest", { requestId, errorReason: "BlockedByClient" }).catch(() => {});
+      }
+      await session.send("Fetch.enable", { patterns: REQUEST_STAGE }).catch(() => {});
     }
   };
 
