@@ -1622,9 +1622,11 @@ mod tests {
             r#"{"frame":"observed","obs_id":4,"url":"https://fixture.test/r","truncated":false,"nodes":[{"ref":"e1","role":"list","name":"","children":[{"ref":"e2","role":"link","name":"Report 2026-09-30","url":"/r.pdf","children":[]}]}]}"#,
         )
         .unwrap();
-        let WorkerReply::Observed { nodes, .. } = observed else {
-            panic!("not an observation")
+        let nodes = match observed {
+            WorkerReply::Observed { nodes, .. } => nodes,
+            _ => Vec::new(),
         };
+        assert_eq!(nodes.len(), 1, "not an observation");
         // Unknown fields (for example a field value) are refused anywhere.
         assert!(reply(r#"{"frame":"observed","obs_id":4,"url":"u","truncated":false,"nodes":[{"ref":"e1","role":"textbox","name":"","value":"secret","children":[]}]}"#).is_err());
         assert!(reply(r#"{"frame":"observation_failed","obs_id":4,"x":1}"#).is_err());
