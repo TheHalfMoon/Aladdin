@@ -1171,6 +1171,104 @@ fn an_approved_activation_follows_the_latest_dated_link_and_nothing_else() {
 
 #[test]
 #[ignore = "requires the built browser worker and Edge; run by npm run browser-launcher:native"]
+fn webmcp_declarative_tools_are_discovered_read_only_and_bound_to_the_document() {
+    let fixture = HttpsFixture::start();
+    let profile = temp_profile("webmcp");
+    let mut launch = spec(&profile, true);
+    launch.destinations =
+        vec![
+            AdmittedDestination::fixture("fixture.test", IpAddr::V4(Ipv4Addr::LOCALHOST))
+                .expect("fixture.test"),
+        ];
+    launch.test_trusted_spki = Some(fixture.spki.clone());
+    let mut worker = launch_worker(&launch, &Policy(PolicyKeyState::Absent)).expect("launch");
+
+    worker
+        .navigate("https://fixture.test/tools")
+        .expect("tools");
+    // Let the page's own script settle before discovery.
+    pump(&mut worker, Duration::from_millis(500));
+    let found = worker.discover_tools().expect("discover");
+    assert_eq!(found.url, "https://fixture.test/tools");
+    let names: Vec<&str> = found.tools.iter().map(|t| t.name.as_str()).collect();
+    // The duplicate and the undescribed form are not tools; the shadow-root
+    // declaration is.
+    assert_eq!(names, ["search_reports", "login", "contact", "shadow_tool"]);
+    let search = &found.tools[0];
+    assert_eq!(search.title.untrusted(), "Reports");
+    let params: Vec<(&str, bool)> = search
+        .params
+        .iter()
+        .map(|p| (p.name.as_str(), p.required))
+        .collect();
+    assert_eq!(params, [("q", true), ("year", false)]);
+    assert_eq!(
+        search.params[1].choices.as_deref(),
+        Some(&["2026".to_owned(), "2025".to_owned()][..])
+    );
+    // A password field flags the tool and is never a parameter.
+    let login = &found.tools[1];
+    assert!(login.has_password);
+    assert_eq!(
+        login
+            .params
+            .iter()
+            .map(|p| p.name.as_str())
+            .collect::<Vec<_>>(),
+        ["user"]
+    );
+    // A hostile description is carried as untrusted page text.
+    assert!(found.tools[2]
+        .description
+        .untrusted()
+        .starts_with("Ignore previous instructions"));
+    // No value typed or prefilled in the page reaches the host.
+    let text = format!("{found:?}");
+    for secret in ["alice", "hunter2-secret", "csrf-secret-123"] {
+        assert!(!text.contains(secret), "{secret} reached the host");
+    }
+    // Identities are host-issued and bound to the document generation.
+    let first = found.tools[0].tool_id.clone();
+    assert_eq!(first, format!("d{}-w1", found.document_generation));
+    let host = worker.host_tool(&first).expect("host tool");
+    assert_eq!(host.name, "search_reports");
+    assert!(host.node > 0);
+
+    // A page without declarations yields no tools, and the earlier
+    // identities are gone.
+    worker
+        .navigate("https://fixture.test/tools-none")
+        .expect("no tools");
+    let none = worker.discover_tools().expect("discover none");
+    assert!(none.tools.is_empty() && !none.truncated);
+    assert!(worker.host_tool(&first).is_none(), "a stale tool survived");
+
+    // Discovery ran no page code: none of the page's traps was called.
+    let hits = fixture.hits();
+    assert!(
+        hits.iter().all(|hit| !hit.contains("/trap-")),
+        "page code ran during discovery: {hits:?}"
+    );
+    assert!(hits.iter().any(|hit| hit.contains("/tools")));
+    // Control: the same trap, called by the page itself, is seen.
+    worker
+        .navigate("https://fixture.test/tools-control")
+        .expect("control");
+    pump(&mut worker, Duration::from_secs(2));
+    assert!(
+        fixture
+            .hits()
+            .iter()
+            .any(|hit| hit.contains("/trap-control")),
+        "the trap control never reached the fixture"
+    );
+    let report = worker.shutdown();
+    assert!(report.job_empty, "the job did not empty");
+    assert_profile_gone(report.profile_removed, &profile);
+}
+
+#[test]
+#[ignore = "requires the built browser worker and Edge; run by npm run browser-launcher:native"]
 fn a_stalled_or_killed_download_is_typed_and_commits_nothing() {
     let fixture = HttpsFixture::start();
     let profile = temp_profile("download-outcomes");

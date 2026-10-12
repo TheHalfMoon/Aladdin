@@ -39,7 +39,7 @@ pub struct JobProcess {
 /// Generation 2 adds the slice-3a navigation frames, generation 3 slice-3b
 /// observation, generation 4 slice-3c activation, generation 5 slice-3d
 /// downloads.
-pub const WORKER_PROTOCOL_GENERATION: u32 = 5;
+pub const WORKER_PROTOCOL_GENERATION: u32 = 6;
 /// Worker identity reported in its hello.
 pub const WORKER_IDENTITY: &str = "qdral-browser-worker";
 /// The only Node option the worker accepts (inspector activation refused).
@@ -179,6 +179,9 @@ pub(crate) enum WorkerRequest<'a> {
     Observe {
         obs_id: u64,
     },
+    Discover {
+        disc_id: u64,
+    },
     Activate {
         act_id: u64,
         #[serde(rename = "ref")]
@@ -194,7 +197,7 @@ pub(crate) enum WorkerRequest<'a> {
 }
 
 #[cfg(any(windows, test))]
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(tag = "frame", rename_all = "snake_case", deny_unknown_fields)]
 pub(crate) enum WorkerReply {
     Hello {
@@ -231,6 +234,15 @@ pub(crate) enum WorkerReply {
     },
     ObservationFailed {
         obs_id: u64,
+    },
+    Discovered {
+        disc_id: u64,
+        url: String,
+        truncated: bool,
+        tools: Vec<crate::webmcp::WireTool>,
+    },
+    DiscoveryFailed {
+        disc_id: u64,
     },
     Activated {
         act_id: u64,
@@ -858,6 +870,7 @@ mod platform {
         next_nav: u64,
         last_request: u64,
         next_obs: u64,
+        next_disc: u64,
         next_act: u64,
         next_dl: u64,
         /// Host-owned staging directory for downloads of this lifetime.
@@ -868,6 +881,8 @@ mod platform {
         host_nodes: std::collections::HashMap<String, HostNode>,
         /// This lifetime's secret for keyed names.
         name_key: [u8; 32],
+        /// Tools of the last discovery, by host-issued tool id.
+        host_tools: std::collections::HashMap<String, crate::webmcp::HostTool>,
     }
 
     /// Launch the worker and its engine, or fail closed with a typed error
@@ -915,6 +930,7 @@ mod platform {
             finished: false,
             policy: NavigationPolicy::new(&spec.destinations),
             next_obs: 0,
+            next_disc: 0,
             next_act: 0,
             next_dl: 0,
             staging: spec.temp_dir.join(format!(
@@ -925,6 +941,7 @@ mod platform {
             committed: None,
             host_nodes: std::collections::HashMap::new(),
             name_key: lifetime_key()?,
+            host_tools: std::collections::HashMap::new(),
             next_nav: 0,
             last_request: 0,
         };
@@ -1104,6 +1121,7 @@ mod platform {
                         .map_or(1, |(_, generation)| generation + 1);
                     self.committed = Some((committed.clone(), next));
                     self.host_nodes.clear();
+                    self.host_tools.clear();
                     Ok(NavigationOutcome {
                         url: committed,
                         status,
@@ -1200,6 +1218,54 @@ mod platform {
                 document,
                 observation,
             })
+        }
+
+        /// Discover the committed document's WebMCP declarative tools
+        /// (SG-000108 slice 4, read only). The worker reads them from an
+        /// engine DOM snapshot, so no page script runs; the host re-checks
+        /// every bound, issues identities bound to the document generation,
+        /// and returns names, titles and descriptions as untrusted page
+        /// text. A page with no declared tools yields an empty list (the
+        /// caller falls back to observation). Nothing here grants execution.
+        pub fn discover_tools(&mut self) -> Result<crate::webmcp::DiscoveredTools, HostError> {
+            let (url, generation) = self
+                .committed
+                .clone()
+                .ok_or_else(|| HostError::Invalid("no committed document to discover".into()))?;
+            self.next_disc += 1;
+            let disc_id = self.next_disc;
+            self.send(&WorkerRequest::Discover { disc_id })?;
+            let (found_url, truncated, wire) = match self.reply(WORKER_OBSERVATION_TIMEOUT)? {
+                WorkerReply::Discovered {
+                    disc_id: done,
+                    url,
+                    truncated,
+                    tools,
+                } if done == disc_id => (url, truncated, tools),
+                WorkerReply::DiscoveryFailed { disc_id: done } if done == disc_id => {
+                    return Err(HostError::Unavailable(UnavailableReason::ActionFailed))
+                }
+                _ => return Err(HostError::Unavailable(UnavailableReason::ProtocolViolation)),
+            };
+            if found_url != url {
+                return Err(HostError::Invalid(
+                    "stale page: the document changed".into(),
+                ));
+            }
+            let (tools, index) = crate::webmcp::validate_tools(wire, generation)?;
+            self.host_tools = index;
+            Ok(crate::webmcp::DiscoveredTools {
+                url,
+                document_generation: generation,
+                truncated,
+                tools,
+            })
+        }
+
+        /// Test-only view of a discovered tool.
+        #[cfg(test)]
+        pub(crate) fn host_tool(&self, tool_id: &str) -> Option<&crate::webmcp::HostTool> {
+            self.host_tools.get(tool_id)
         }
 
         /// Host-side typed selection: the observed link whose accessible
@@ -1316,11 +1382,13 @@ mod platform {
                 } if done == act_id => {
                     // The page may have moved; nothing from before is valid.
                     self.host_nodes.clear();
+                    self.host_tools.clear();
                     return Err(navigation_failure(&reason));
                 }
                 _ => return Err(HostError::Unavailable(UnavailableReason::ProtocolViolation)),
             };
             self.host_nodes.clear();
+            self.host_tools.clear();
             if !opened_expected {
                 return Err(HostError::Invalid(
                     "postcondition unverified: the activation opened no document".into(),
@@ -1435,6 +1503,7 @@ mod platform {
             };
             // The page may have changed; earlier node identities are stale.
             self.host_nodes.clear();
+            self.host_tools.clear();
             result
         }
 
@@ -1614,6 +1683,13 @@ mod fallback {
             &mut self,
             _scope: &crate::observation::ObservationScope,
         ) -> Result<LiveObservation, HostError> {
+            Err(HostError::Unavailable(
+                UnavailableReason::UnsupportedRuntime,
+            ))
+        }
+
+        /// API parity: no worker ever exists off Windows.
+        pub fn discover_tools(&mut self) -> Result<crate::webmcp::DiscoveredTools, HostError> {
             Err(HostError::Unavailable(
                 UnavailableReason::UnsupportedRuntime,
             ))
@@ -2058,6 +2134,34 @@ mod tests {
         .is_ok());
         assert!(reply(r#"{"frame":"activation_failed","act_id":2,"reason":"denied"}"#).is_ok());
         assert!(reply(r#"{"frame":"activated","act_id":2,"url":"u","status":200,"x":1}"#).is_err());
+    }
+
+    #[test]
+    fn discovery_frames_are_exact() {
+        let json = |request: &WorkerRequest<'_>| serde_json::to_string(request).unwrap();
+        assert_eq!(
+            json(&WorkerRequest::Discover { disc_id: 2 }),
+            r#"{"frame":"discover","disc_id":2}"#
+        );
+        let reply = |text: &str| serde_json::from_str::<WorkerReply>(text);
+        let tools = match reply(
+            r#"{"frame":"discovered","disc_id":2,"url":"https://fixture.test/t","truncated":false,"tools":[{"name":"t","title":"","description":"d","autosubmit":false,"node":3,"has_password":false,"params":[]}]}"#,
+        )
+        .unwrap()
+        {
+            WorkerReply::Discovered { tools, .. } => tools,
+            _ => Vec::new(),
+        };
+        assert_eq!(tools.len(), 1, "not a discovery");
+        assert!(matches!(
+            reply(r#"{"frame":"discovery_failed","disc_id":2}"#).unwrap(),
+            WorkerReply::DiscoveryFailed { disc_id: 2 }
+        ));
+        // Unknown fields anywhere in a tool are refused.
+        assert!(reply(
+            r#"{"frame":"discovered","disc_id":2,"url":"u","truncated":false,"tools":[{"name":"t","title":"","description":"d","autosubmit":false,"node":3,"has_password":false,"params":[],"run":"x"}]}"#
+        )
+        .is_err());
     }
 
     #[test]

@@ -2,8 +2,9 @@
 //
 // Adapted from MCP-B `packages/webmcp-polyfill/src/declarative-forms.ts`
 // (WebMCP-org/npm-packages 7db816b5a280c2d1d4b86559696e993c497c021a),
-// MIT License, Copyright (c) 2025 mcp-b contributors. See
-// THIRD_PARTY_NOTICES. Modifications for Aladdin:
+// MIT License, Copyright (c) 2025 mcp-b contributors; the full notice is in
+// docs/aladdin/notices/WebMCP-org-npm-packages-MIT.txt and the import record
+// in docs/aladdin/sg000108_webmcp_provenance.json. Modifications for Aladdin:
 // - Works on an attribute-only DOM model taken from a CDP DOMSnapshot, so
 //   no page script runs and nothing in the page changes (the donor reads the
 //   live DOM, registers tools and listens for submits).
