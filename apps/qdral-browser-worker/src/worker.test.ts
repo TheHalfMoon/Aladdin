@@ -341,3 +341,16 @@ test("malformed activation refs are protocol violations", async () => {
     assert.deepEqual(sent.at(-1), { frame: "error", code: "protocol_violation" }, ref);
   }
 });
+
+test("downloads report the captured document or a typed failure", async () => {
+  const { worker, sent, engine } = await launched();
+  await worker.receive({ frame: "download", dl_id: 1, ref: "e5", path: "C:\\s\\dl-1.part" });
+  await settle();
+  assert.deepEqual(sent.at(-1), { frame: "downloaded", dl_id: 1, url: "https://fixture.test/r.pdf", name: "r.pdf", media: "application/pdf", bytes: 10 });
+  engine.downloadBehavior = async () => {
+    throw new NavigationError("timeout");
+  };
+  await worker.receive({ frame: "download", dl_id: 2, ref: "e5", path: "C:\\s\\dl-2.part" });
+  await settle();
+  assert.deepEqual(sent.at(-1), { frame: "download_failed", dl_id: 2, reason: "timeout" });
+});

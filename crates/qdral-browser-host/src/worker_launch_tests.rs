@@ -1215,6 +1215,10 @@ fn the_journey_downloads_the_latest_report_create_only_and_verified() {
     );
 
     // An existing file is never replaced.
+    // The page now shows the inert replacement of the PDF; return to the list.
+    worker
+        .navigate("https://fixture.test/reports")
+        .expect("reports again");
     let live = worker.observe(&scope).expect("observe again");
     let latest = worker.select_latest_dated_link().expect("latest");
     let (target, mut again) = approved_click(&worker, &live, &latest);
@@ -1226,13 +1230,15 @@ fn the_journey_downloads_the_latest_report_create_only_and_verified() {
 
     // An oversized file and an executable disguised as a PDF are refused,
     // and nothing is committed for them.
-    worker
-        .navigate("https://fixture.test/files")
-        .expect("files");
     for (name, out) in [
         ("Oversized 2026-01-01", "oversized.pdf"),
         ("Disguised 2026-01-02", "fake.pdf"),
     ] {
+        // Each refused attempt leaves the page on the replaced document: the
+        // host requires a fresh navigation (stale), so start from the list.
+        worker
+            .navigate("https://fixture.test/files")
+            .expect("files");
         let live = worker.observe(&scope).expect("observe files");
         let node = live
             .observation
@@ -1244,12 +1250,8 @@ fn the_journey_downloads_the_latest_report_create_only_and_verified() {
             .map(|n| n.node_id.clone())
             .expect("file link");
         let (target, mut approval) = approved_click(&worker, &live, &node);
-        assert!(
-            worker
-                .download(&target, &mut approval, 1, "workspace", &approved, out)
-                .is_err(),
-            "{name} was committed"
-        );
+        let refused = worker.download(&target, &mut approval, 1, "workspace", &approved, out);
+        assert!(refused.is_err(), "{name} was committed");
         assert!(!approved.join(out).exists(), "{name} left a file");
     }
     let report = worker.shutdown();

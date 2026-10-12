@@ -1338,6 +1338,18 @@ mod platform {
                 self.download_staged(dl_id, &reference, &staged, &destination, destination_root);
             let opened_expected = self.policy.finish_activation();
             let _ = std::fs::remove_file(&staged);
+            // The click navigated the page to the downloaded document, which
+            // the guard replaced with an inert blank page: that is now the
+            // committed document (one generation later).
+            if let Ok(committed) = &result {
+                if self
+                    .policy
+                    .commit_page_initiated(&committed.source_url)
+                    .is_ok()
+                {
+                    self.committed = Some((committed.source_url.clone(), generation + 1));
+                }
+            }
             let result = match result {
                 Ok(committed) if !opened_expected => {
                     // The bytes did not come from the approved document.
