@@ -52,6 +52,10 @@ pub const WORKER_SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(10);
 /// Upper bound for one navigation, including every route decision.
 pub const WORKER_NAVIGATION_TIMEOUT: Duration = Duration::from_secs(45);
 
+/// Upper bound for one activation (above the worker's worst case: a 5 s
+/// click, 30 s for the navigation and 30 s for its load).
+pub const WORKER_ACTIVATION_TIMEOUT: Duration = Duration::from_secs(75);
+
 /// Upper bound for one observation round trip.
 pub const WORKER_OBSERVATION_TIMEOUT: Duration = Duration::from_secs(10);
 
@@ -294,11 +298,16 @@ pub(crate) fn test_certificate_flag(spki: &str) -> String {
 
 /// Map a worker snapshot node onto an SG-000076 input node with a
 /// host-issued identity, recording the raw name host-side. The value is
-/// always empty: the worker never sends field values.
+/// always empty: the worker never sends field values. An accessible name can
+/// still carry a field's text (for example a button labelled by a password
+/// field through aria-labelledby), so the name entering SG-000076 is first
+/// keyed with this lifetime's secret: the caller-visible digest cannot be
+/// checked against guesses, and the raw name never leaves the host.
 #[cfg(any(windows, test))]
 pub(crate) fn input_node(
     node: &SnapshotNode,
     generation: u64,
+    key: &[u8; 32],
     index: &mut std::collections::HashMap<String, HostNode>,
 ) -> crate::observation::InputNode {
     let node_id = format!("d{generation}-{}", node.reference);
@@ -318,14 +327,73 @@ pub(crate) fn input_node(
             document_generation: generation,
         },
         role: node.role.clone(),
-        name: node.name.clone(),
+        name: keyed_name(key, &node.name),
         value: String::new(),
         children: node
             .children
             .iter()
-            .map(|child| input_node(child, generation, index))
+            .map(|child| input_node(child, generation, key, index))
             .collect(),
     }
+}
+
+/// SHA-256 over this lifetime's key and the name (hex).
+#[cfg(any(windows, test))]
+pub(crate) fn keyed_name(key: &[u8; 32], name: &str) -> String {
+    use sha2::{Digest, Sha256};
+    let mut hasher = Sha256::new();
+    hasher.update(key);
+    hasher.update(name.as_bytes());
+    hasher
+        .finalize()
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect()
+}
+
+/// A random per-lifetime key from the system RNG.
+#[cfg(windows)]
+pub(crate) fn lifetime_key() -> Result<[u8; 32], HostError> {
+    use windows_sys::Win32::Security::Cryptography::{
+        BCryptGenRandom, BCRYPT_USE_SYSTEM_PREFERRED_RNG,
+    };
+    let mut key = [0u8; 32];
+    // SAFETY: the buffer and length describe `key`; the system RNG needs no
+    // algorithm handle with BCRYPT_USE_SYSTEM_PREFERRED_RNG.
+    let status = unsafe {
+        BCryptGenRandom(
+            std::ptr::null_mut(),
+            key.as_mut_ptr(),
+            key.len() as u32,
+            BCRYPT_USE_SYSTEM_PREFERRED_RNG,
+        )
+    };
+    if status != 0 {
+        return Err(HostError::Platform("system RNG unavailable".into()));
+    }
+    Ok(key)
+}
+
+/// Resolve an observed link URL against the committed document's origin:
+/// absolute https URLs and root-relative paths only; anything else (relative
+/// paths, other schemes, protocol-relative) is refused rather than guessed.
+#[cfg(any(windows, test))]
+pub(crate) fn resolve_link(committed_origin: &str, link: &str) -> Result<String, HostError> {
+    let origin = crate::navigation::parse_navigation_url(committed_origin)?;
+    let base = if origin.port == 443 {
+        format!("https://{}", origin.host)
+    } else {
+        format!("https://{}:{}", origin.host, origin.port)
+    };
+    let resolved = if link.starts_with("https://") {
+        link.to_owned()
+    } else if link.starts_with('/') && !link.starts_with("//") {
+        format!("{base}{link}")
+    } else {
+        return Err(HostError::Invalid("the link URL cannot be resolved".into()));
+    };
+    crate::navigation::parse_navigation_url(&resolved)?;
+    Ok(resolved)
 }
 
 /// The observed link whose name carries the latest ISO date; ties and
@@ -334,20 +402,33 @@ pub(crate) fn input_node(
 pub(crate) fn select_latest_dated_link(
     nodes: &std::collections::HashMap<String, HostNode>,
 ) -> Result<String, HostError> {
+    // Bytes only: slicing the string at byte offsets would panic inside a
+    // multi-byte character ("Café 2026-09-30").
     fn date_in(name: &str) -> Option<(u16, u8, u8)> {
         let bytes = name.as_bytes();
+        if bytes.len() < 10 {
+            return None;
+        }
         let mut best = None;
-        for start in 0..bytes.len().saturating_sub(9) {
-            let window = &name[start..start + 10];
-            let b = window.as_bytes();
-            let digits = |range: std::ops::Range<usize>| b[range].iter().all(u8::is_ascii_digit);
-            if digits(0..4) && b[4] == b'-' && digits(5..7) && b[7] == b'-' && digits(8..10) {
-                let year: u16 = window[0..4].parse().ok()?;
-                let month: u8 = window[5..7].parse().ok()?;
-                let day: u8 = window[8..10].parse().ok()?;
-                if (1..=12).contains(&month) && (1..=31).contains(&day) {
-                    best = best.max(Some((year, month, day)));
-                }
+        for window in bytes.windows(10) {
+            let digits =
+                |range: std::ops::Range<usize>| window[range].iter().all(u8::is_ascii_digit);
+            if !(digits(0..4)
+                && window[4] == b'-'
+                && digits(5..7)
+                && window[7] == b'-'
+                && digits(8..10))
+            {
+                continue;
+            }
+            let number = |range: std::ops::Range<usize>| {
+                window[range]
+                    .iter()
+                    .fold(0u32, |acc, digit| acc * 10 + u32::from(digit - b'0'))
+            };
+            let (year, month, day) = (number(0..4), number(5..7), number(8..10));
+            if (1..=12).contains(&month) && (1..=31).contains(&day) {
+                best = best.max(Some((year as u16, month as u8, day as u8)));
             }
         }
         best
@@ -649,6 +730,8 @@ mod platform {
         committed: Option<(String, u64)>,
         /// Raw names of the last observation, by host-issued node id.
         host_nodes: std::collections::HashMap<String, HostNode>,
+        /// This lifetime's secret for keyed names.
+        name_key: [u8; 32],
     }
 
     /// Launch the worker and its engine, or fail closed with a typed error
@@ -699,6 +782,7 @@ mod platform {
             next_act: 0,
             committed: None,
             host_nodes: std::collections::HashMap::new(),
+            name_key: lifetime_key()?,
             next_nav: 0,
             last_request: 0,
         };
@@ -918,18 +1002,19 @@ mod platform {
             let obs_id = self.next_obs;
             let started = Instant::now();
             self.send(&WorkerRequest::Observe { obs_id })?;
-            let (observed_url, nodes) = match self.reply(WORKER_OBSERVATION_TIMEOUT)? {
-                WorkerReply::Observed {
-                    obs_id: done,
-                    url: observed_url,
-                    truncated: _,
-                    nodes,
-                } if done == obs_id => (observed_url, nodes),
-                WorkerReply::ObservationFailed { obs_id: done } if done == obs_id => {
-                    return Err(HostError::Unavailable(UnavailableReason::LaunchFailed))
-                }
-                _ => return Err(HostError::Unavailable(UnavailableReason::ProtocolViolation)),
-            };
+            let (observed_url, worker_truncated, nodes) =
+                match self.reply(WORKER_OBSERVATION_TIMEOUT)? {
+                    WorkerReply::Observed {
+                        obs_id: done,
+                        url: observed_url,
+                        truncated,
+                        nodes,
+                    } if done == obs_id => (observed_url, truncated, nodes),
+                    WorkerReply::ObservationFailed { obs_id: done } if done == obs_id => {
+                        return Err(HostError::Unavailable(UnavailableReason::LaunchFailed))
+                    }
+                    _ => return Err(HostError::Unavailable(UnavailableReason::ProtocolViolation)),
+                };
             if observed_url != url {
                 return Err(HostError::Invalid(
                     "stale page: the document changed".into(),
@@ -948,10 +1033,21 @@ mod platform {
             let mut index = std::collections::HashMap::new();
             let roots: Vec<crate::observation::InputNode> = nodes
                 .iter()
-                .map(|node| input_node(node, generation, &mut index))
+                .map(|node| input_node(node, generation, &self.name_key, &mut index))
                 .collect();
-            let observation =
+            let mut observation =
                 crate::observation::observe_snapshot(scope, &page, &document, &roots, elapsed)?;
+            // The worker's own ceilings count as truncation too.
+            observation.truncated |= worker_truncated;
+            // Only nodes the caller actually received can be acted on.
+            let mut kept = std::collections::HashSet::new();
+            let mut stack: Vec<&crate::observation::ObservedNode> =
+                observation.nodes.iter().collect();
+            while let Some(node) = stack.pop() {
+                kept.insert(node.node_id.clone());
+                stack.extend(node.children.iter());
+            }
+            index.retain(|id, _| kept.contains(id));
             self.host_nodes = index;
             Ok(LiveObservation {
                 page,
@@ -967,11 +1063,37 @@ mod platform {
             select_latest_dated_link(&self.host_nodes)
         }
 
-        /// Activate (click) one observed element under SG-000077: the
-        /// target must be in the current observation, `dispatch` verifies
-        /// it against the live document and consumes the one-shot approval
-        /// bound to its digest, and the resulting document must commit on
-        /// the same origin with the generation advanced by exactly one.
+        /// The destination an activation of this observed link would open
+        /// (what an approval must name as the target's `state`).
+        pub fn link_destination(&self, node_id: &str) -> Result<String, HostError> {
+            let node = self
+                .host_nodes
+                .get(node_id)
+                .filter(|node| node.role == "link")
+                .ok_or_else(|| HostError::Invalid("stale or unknown link".into()))?;
+            let origin = self
+                .policy
+                .committed_origin()
+                .ok_or_else(|| HostError::Invalid("no committed origin".into()))?;
+            resolve_link(
+                origin,
+                node.url
+                    .as_deref()
+                    .ok_or_else(|| HostError::Invalid("the link has no URL".into()))?,
+            )
+        }
+
+        /// Activate (click) one observed link under SG-000077. The host
+        /// does not model element state; the target's `state` must instead
+        /// name the link's resolved destination, so the one-shot approval
+        /// (bound to the target digest) covers where the click goes.
+        /// `dispatch` verifies the target against the committed document
+        /// and the host's own destination, then consumes the approval.
+        /// During the click the host accepts exactly one page-initiated
+        /// document, that destination (a changed href or a script redirect
+        /// is refused at the request), and a click that requests no document
+        /// is not a verified activation. The result commits on the same
+        /// origin as a new document generation.
         pub fn activate(
             &mut self,
             target: &crate::actuation::ActuationTarget,
@@ -989,21 +1111,30 @@ mod platform {
                 .filter(|node| node.role == target.role)
                 .map(|node| node.reference.clone())
                 .ok_or_else(|| HostError::Invalid("stale or unknown node".into()))?;
-            crate::actuation::dispatch(
+            let destination = self.link_destination(&target.node_id)?;
+            // Checked before the approval is consumed: a destination off the
+            // page's origin is refused without spending it.
+            self.policy.expect_activation(&destination)?;
+            if let Err(error) = crate::actuation::dispatch(
                 target,
                 approval,
                 generation,
-                &target.state,
+                &destination,
                 policy_revision,
                 workspace,
-            )?;
+            ) {
+                self.policy.finish_activation();
+                return Err(error);
+            }
             self.next_act += 1;
             let act_id = self.next_act;
             self.send(&WorkerRequest::Activate {
                 act_id,
                 reference: &reference,
             })?;
-            let outcome = match self.reply(WORKER_NAVIGATION_TIMEOUT)? {
+            let reply = self.reply(WORKER_ACTIVATION_TIMEOUT);
+            let opened_expected = self.policy.finish_activation();
+            let outcome = match reply? {
                 WorkerReply::Activated {
                     act_id: done,
                     url,
@@ -1020,15 +1151,22 @@ mod platform {
                 _ => return Err(HostError::Unavailable(UnavailableReason::ProtocolViolation)),
             };
             self.host_nodes.clear();
+            if !opened_expected {
+                return Err(HostError::Invalid(
+                    "postcondition unverified: the activation opened no document".into(),
+                ));
+            }
             self.policy.commit_page_initiated(&outcome.url)?;
             let next = generation + 1;
             self.committed = Some((outcome.url.clone(), next));
-            crate::actuation::verify_postcondition(generation, next)?;
             Ok(outcome)
         }
 
-        /// Host-only view of an observed node (for typed selection).
-        pub fn host_node(&self, node_id: &str) -> Option<&HostNode> {
+        /// Test-only view of an observed node: raw names never leave the
+        /// host in product builds (callers get typed results such as
+        /// `link_destination`).
+        #[cfg(test)]
+        pub(crate) fn host_node(&self, node_id: &str) -> Option<&HostNode> {
             self.host_nodes.get(node_id)
         }
 
@@ -1108,8 +1246,10 @@ mod fallback {
         }
 
         /// API parity: no worker ever exists off Windows.
-        pub fn host_node(&self, _node_id: &str) -> Option<&HostNode> {
-            None
+        pub fn link_destination(&self, _node_id: &str) -> Result<String, HostError> {
+            Err(HostError::Unavailable(
+                UnavailableReason::UnsupportedRuntime,
+            ))
         }
 
         /// API parity: no worker ever exists off Windows.
@@ -1383,6 +1523,50 @@ mod tests {
     }
 
     #[test]
+    fn links_resolve_only_to_absolute_or_root_relative_https() {
+        let origin = "https://fixture.test:443";
+        assert_eq!(
+            resolve_link(origin, "/archive/2026-09-30").unwrap(),
+            "https://fixture.test/archive/2026-09-30"
+        );
+        assert_eq!(
+            resolve_link(origin, "https://fixture.test/x").unwrap(),
+            "https://fixture.test/x"
+        );
+        for link in [
+            "archive/x",
+            "//evil.test/x",
+            "http://fixture.test/x",
+            "javascript:alert(1)",
+            "",
+        ] {
+            assert!(resolve_link(origin, link).is_err(), "{link}");
+        }
+        // Names entering SG-000076 are keyed per lifetime: the same name
+        // gives unrelated digests under different keys.
+        assert_ne!(
+            keyed_name(&[1u8; 32], "HUNTER2PW"),
+            keyed_name(&[2u8; 32], "HUNTER2PW")
+        );
+        assert_eq!(keyed_name(&[1u8; 32], "x").len(), 64);
+    }
+
+    #[test]
+    fn dates_in_non_ascii_names_never_panic() {
+        let link = |name: &str| HostNode {
+            reference: "e1".into(),
+            role: "link".into(),
+            name: name.into(),
+            url: None,
+        };
+        let mut nodes = std::collections::HashMap::new();
+        nodes.insert("d1-e1".to_string(), link("Rapport — 2026-09-30"));
+        nodes.insert("d1-e2".to_string(), link("Café 2026-06-30 ☕"));
+        nodes.insert("d1-e3".to_string(), link("日本語レポート"));
+        assert_eq!(select_latest_dated_link(&nodes).unwrap(), "d1-e1");
+    }
+
+    #[test]
     fn the_latest_dated_link_is_selected_and_ambiguity_refused() {
         let link = |name: &str| HostNode {
             reference: "e1".into(),
@@ -1447,7 +1631,11 @@ mod tests {
         // Identities are host-issued and bound to the document generation;
         // the raw name stays in the host index; values are always empty.
         let mut index = std::collections::HashMap::new();
-        let roots: Vec<_> = nodes.iter().map(|n| input_node(n, 7, &mut index)).collect();
+        let key = [7u8; 32];
+        let roots: Vec<_> = nodes
+            .iter()
+            .map(|n| input_node(n, 7, &key, &mut index))
+            .collect();
         assert_eq!(roots[0].identity.node_id, "d7-e1");
         assert_eq!(roots[0].children[0].identity.node_id, "d7-e2");
         assert_eq!(roots[0].children[0].identity.document_generation, 7);

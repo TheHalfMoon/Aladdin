@@ -81,6 +81,14 @@ const ARCHIVE = `<!doctype html><title>Archive</title><ul>
 const ARCHIVE_HOSTILE = `<!doctype html><title>Hostile archive</title><ul>
 <li><a href="/archive/2026-09-30">Annual review 2026-09-30</a></li>
 <li><a href="https://other.test/archive/2099-12-31">Annual review 2099-12-31</a></li></ul>`;
+// Slice 3c attacks a judge verified: a click redirected by script, an href
+// swapped after observation, and a button named by a password field.
+const ARCHIVE_TRICKY = `<!doctype html><title>Tricky archive</title><ul>
+<li><a id=js href="/archive/2026-09-30" onclick="event.preventDefault(); location.href='/js-dest';">Annual review 2026-09-30</a></li>
+<li><a id=swap href="/archive/2026-06-30">Annual review 2026-06-30</a></li></ul>
+<script>setTimeout(() => { document.getElementById("swap").href = "/evil"; }, 1500);</script>`;
+const SECRET_NAME = `<!doctype html><title>Secret name</title>
+<input type=password id=pw value="HUNTER2PW"><button aria-labelledby=pw>x</button>`;
 const SELF_MOVE = `<!doctype html><title>moving</title><script>setTimeout(() => { location.href = "/landing"; }, 300);</script>`;
 
 // The escape a judge proved against slice 3a: prerender a same-origin page
@@ -148,7 +156,7 @@ trailer << /Root 1 0 R >>
     response.setHeader("reporting-endpoints", 'csp="https://other.test/reports"');
     response.setHeader("content-security-policy", "img-src 'self'; report-to csp");
   }
-  const pages = { "/mixed": MIXED, "/spec-escape": SPEC_ESCAPE, "/reports": REPORTS, "/self-move": SELF_MOVE, "/archive": ARCHIVE, "/archive-hostile": ARCHIVE_HOSTILE, "/files": FILES };
+  const pages = { "/mixed": MIXED, "/spec-escape": SPEC_ESCAPE, "/reports": REPORTS, "/self-move": SELF_MOVE, "/archive": ARCHIVE, "/archive-hostile": ARCHIVE_HOSTILE, "/files": FILES, "/archive-tricky": ARCHIVE_TRICKY, "/secret-name": SECRET_NAME };
   response.end(pages[path] ?? `<!doctype html><title>${host}${path}</title><p>fixture</p>`);
 });
 server.listen({ port: 443, host: "127.0.0.1" }, () => process.stdout.write(`READY ${spki}\n`));

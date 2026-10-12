@@ -925,6 +925,29 @@ fn observation_is_bounded_redacted_and_bound_to_the_committed_document() {
         .iter()
         .all(|(_, url)| url.as_deref().is_some_and(|u| u.starts_with("/reports/"))));
 
+    // A button named by a password field (aria-labelledby): the raw secret
+    // never reaches the caller, and its digest is keyed (not checkable
+    // against a guessed value).
+    worker
+        .navigate("https://fixture.test/secret-name")
+        .expect("secret-name page");
+    let live = worker.observe(&scope).expect("observe secret-name");
+    assert!(!format!("{:?}", live.observation).contains("HUNTER2PW"));
+    let unkeyed = crate::observation::short_digest("HUNTER2PW");
+    let mut stack: Vec<&crate::observation::ObservedNode> = live.observation.nodes.iter().collect();
+    let mut buttons = 0;
+    while let Some(node) = stack.pop() {
+        if node.role == "button" {
+            buttons += 1;
+            assert_ne!(
+                node.name_digest, unkeyed,
+                "the name digest is dictionary-checkable"
+            );
+        }
+        stack.extend(node.children.iter());
+    }
+    assert_eq!(buttons, 1, "the secret-named button was not observed");
+
     // A page that moved itself is stale until the host navigates again.
     worker
         .navigate("https://fixture.test/self-move")
@@ -943,19 +966,23 @@ fn observation_is_bounded_redacted_and_bound_to_the_committed_document() {
 /// An SG-000077 target and a matching one-shot approval for a node of the
 /// current observation.
 fn approved_click(
+    worker: &BrowserWorker,
     live: &LiveObservation,
     node_id: &str,
 ) -> (
     crate::actuation::ActuationTarget,
     crate::actuation::ApprovalToken,
 ) {
+    // The approval names where the click goes: the host-resolved link
+    // destination is the target's state.
+    let state = worker.link_destination(node_id).unwrap_or_default();
     let target = crate::actuation::ActuationTarget {
         page_id: live.page.page_id.clone(),
         origin: live.page.origin.clone(),
         document_generation: live.document.document_generation,
         node_id: node_id.to_owned(),
         role: "link".into(),
-        state: String::new(),
+        state,
         action: crate::actuation::SupportedAction::Click,
         workspace: "workspace".into(),
         policy_revision: 1,
@@ -1000,13 +1027,13 @@ fn an_approved_activation_follows_the_latest_dated_link_and_nothing_else() {
         Some("Annual review 2026-09-30")
     );
     // A digest that does not match the target is refused before any click.
-    let (target, mut forged) = approved_click(&live, &latest);
+    let (target, mut forged) = approved_click(&worker, &live, &latest);
     forged.target_digest = "0000000000000000".into();
     assert!(worker
         .activate(&target, &mut forged, 1, "workspace")
         .is_err());
     // The approved click navigates to the selected document.
-    let (target, mut approval) = approved_click(&live, &latest);
+    let (target, mut approval) = approved_click(&worker, &live, &latest);
     let opened = worker
         .activate(&target, &mut approval, 1, "workspace")
         .expect("approved activation");
@@ -1016,7 +1043,7 @@ fn an_approved_activation_follows_the_latest_dated_link_and_nothing_else() {
     assert!(worker
         .activate(&target, &mut approval, 1, "workspace")
         .is_err());
-    let (target, mut fresh) = approved_click(&live, &latest);
+    let (target, mut fresh) = approved_click(&worker, &live, &latest);
     assert!(
         worker
             .activate(&target, &mut fresh, 1, "workspace")
@@ -1041,13 +1068,67 @@ fn an_approved_activation_follows_the_latest_dated_link_and_nothing_else() {
         worker.host_node(&latest).map(|n| n.name.as_str()),
         Some("Annual review 2099-12-31")
     );
-    let (target, mut approval) = approved_click(&live, &latest);
+    let (target, mut approval) = approved_click(&worker, &live, &latest);
     assert!(
         worker
             .activate(&target, &mut approval, 1, "workspace")
             .is_err(),
         "a cross-origin activation was followed"
     );
+    assert!(
+        !approval.consumed,
+        "a refused destination consumed the approval"
+    );
+
+    // A click redirected by script, and an href swapped after observation:
+    // both open another document than the approved destination: refused.
+    let find = |worker: &BrowserWorker, live: &LiveObservation, name: &str| {
+        let mut stack: Vec<&crate::observation::ObservedNode> =
+            live.observation.nodes.iter().collect();
+        while let Some(node) = stack.pop() {
+            if worker
+                .host_node(&node.node_id)
+                .is_some_and(|h| h.name == name)
+            {
+                return node.node_id.clone();
+            }
+            stack.extend(node.children.iter());
+        }
+        panic!("no node named {name}");
+    };
+    worker
+        .navigate("https://fixture.test/archive-tricky")
+        .expect("tricky");
+    let live = worker.observe(&scope).expect("observe tricky");
+    let scripted = find(&worker, &live, "Annual review 2026-09-30");
+    let (target, mut approval) = approved_click(&worker, &live, &scripted);
+    assert!(
+        worker
+            .activate(&target, &mut approval, 1, "workspace")
+            .is_err(),
+        "script redirect followed"
+    );
+    worker
+        .navigate("https://fixture.test/archive-tricky")
+        .expect("tricky again");
+    let live = worker.observe(&scope).expect("observe tricky again");
+    let swapped = find(&worker, &live, "Annual review 2026-06-30");
+    pump(&mut worker, Duration::from_millis(2_500));
+    let (target, mut approval) = approved_click(&worker, &live, &swapped);
+    assert!(
+        worker
+            .activate(&target, &mut approval, 1, "workspace")
+            .is_err(),
+        "swapped href followed"
+    );
+    pump(&mut worker, Duration::from_secs(1));
+    let hits = fixture.hits();
+    for path in ["/js-dest", "/evil"] {
+        assert!(
+            !hits.contains(&format!("fixture.test {path}")),
+            "{path} was requested: {hits:?}"
+        );
+    }
     pump(&mut worker, Duration::from_secs(1));
     assert!(
         !fixture
