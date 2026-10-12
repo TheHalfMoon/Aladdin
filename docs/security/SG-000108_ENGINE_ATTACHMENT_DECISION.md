@@ -553,3 +553,27 @@ A fresh-context judge's first round on these slices was BLOCK. The byte-safe dat
 The worker's unit tests cover the generation-5 frames, the staging-path rules, and typed download failures. The host's unit tests cover the new destination-name rules, with non-ASCII controls.
 
 A fresh-context judge's first round on this slice was BLOCK. The destination-name type check, the `download` action and its binding, the exact-URL check, the junction-safe folder creation, the bounded reads, the restored prerender switch and the post-timeout failing of documents are its fixes.
+
+**Slice 3e: typed outcomes for timeouts, cancellation and crashes** (acceptance A6; issue #307, item 1).
+
+- **Typed failure reasons.** `UnavailableReason` gains `TimedOut`, `ActionFailed`, `WorkerExited` and `Cancelled`. Before this slice:
+  - worker-reported `timeout`, `failed` and `busy` mapped to `LaunchFailed`;
+  - a worker that died mid-operation mapped to `ProtocolViolation`.
+
+  Worker-reported `denied` stays `Invalid`, and unknown reasons stay `ProtocolViolation`.
+- **The lifetime ends on a channel failure, a host deadline or a cancellation.** After the handshake, the host terminates the whole job at once, so nothing stays in flight, and every later call returns the same reason. The reasons:
+  - a malformed or cut-short frame is `ProtocolViolation`, whatever the worker does next;
+  - output that ends cleanly while the worker still runs is `ProtocolViolation`;
+  - a worker that has exited is `WorkerExited`;
+  - the host's own deadline is `TimedOut` (the worker's own reported timeouts are ordinary typed results, and the lifetime stays usable);
+  - a cancellation outranks whatever symptom it caused.
+
+  During the handshake, the deadline stays `LaunchFailed`, and exit code 2 is `UnsupportedRuntime`; neither mapping applies after it.
+- **Cancellation.** `BrowserWorker::cancel_handle` returns a `CancelHandle`. It is `Send`, `Clone`, holds only a weak reference to the job (so it never keeps the job alive), and grants nothing else. `cancel()` may be called from any thread while an operation runs: it terminates the job, and the blocked call returns `Cancelled`. A cancellation that arrives after the worker's reply still wins: the host checks the flag again just before the create-only commit, so nothing is written. An ended or cancelled lifetime refuses `activate` and `download` before the approval is checked, so the approval is not spent.
+- **Evidence (local, Edge 155), from the native test `a_stalled_cancelled_or_killed_download_is_typed_and_commits_nothing`.** It uses a fixture PDF whose body never ends. Each trigger fires only after the fixture has logged the stalled request, so the download is provably in flight.
+  - **Timeout:** the request is logged, and the download fails as `TimedOut` after at least 29 s and before the host's 45 s deadline. The approval is spent, nothing is committed or staged, and the worker still answers `ping`.
+  - **Cancellation:** another thread cancels mid-download. The outcome is `Cancelled`, and the approval is spent. A later download on the cancelled lifetime returns `Cancelled` and leaves its approval unspent. Nothing is committed or staged, every job member dies, and a later `ping` reports `Cancelled`. `kill` reports the job empty and removes the staging folder and the profile.
+  - **Crash:** in a second lifetime, the worker is killed mid-download. The outcome is `WorkerExited`, the approval is spent, nothing is committed or staged, and every member dies. A later `navigate` reports `WorkerExited`, and `kill` cleans up as above.
+- **Known limits (follow-ups in #309).**
+  - A worker that writes the staged `.part` file and then dies before replying is handled by reading only: the host removes the staged file on every outcome, and the staging folder at the end of the lifetime. No test reaches that path.
+  - A host crash is outside A6, which is about the worker and its operations. It can leave an empty or partial file in the approved folder (between `create_new` and the post-write check) and the staging folder in `temp_dir`.

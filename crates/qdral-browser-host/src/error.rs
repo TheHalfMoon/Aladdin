@@ -24,6 +24,19 @@ pub enum UnavailableReason {
     /// A mandatory managed browser policy is present or unreadable; it would
     /// outrank the confinement flags, so the engine is not launched.
     ManagedPolicy,
+    /// A browser operation (navigation, activation, download) ran past its
+    /// deadline; nothing was committed.
+    TimedOut,
+    /// The engine could not carry out a browser operation (for example the
+    /// element could not be clicked, or no document arrived); nothing was
+    /// committed.
+    ActionFailed,
+    /// The worker process exited during an operation; the lifetime is over
+    /// and nothing was committed.
+    WorkerExited,
+    /// The caller cancelled the lifetime (`CancelHandle::cancel`); nothing
+    /// in flight was committed.
+    Cancelled,
 }
 
 impl fmt::Display for UnavailableReason {
@@ -37,6 +50,10 @@ impl fmt::Display for UnavailableReason {
                 write!(f, "browser worker runtime is missing or unsupported")
             }
             Self::ManagedPolicy => write!(f, "a managed browser policy prevents confinement"),
+            Self::TimedOut => write!(f, "the browser operation timed out"),
+            Self::ActionFailed => write!(f, "the browser action failed"),
+            Self::WorkerExited => write!(f, "the browser worker exited"),
+            Self::Cancelled => write!(f, "the browser operation was cancelled"),
         }
     }
 }

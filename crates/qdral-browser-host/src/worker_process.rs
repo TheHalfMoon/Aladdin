@@ -52,7 +52,7 @@ const MAX_JOB_SNAPSHOT: usize = 64;
 
 /// The worker process and its job. Dropping it terminates the job.
 pub(crate) struct WorkerProcess {
-    job: Job,
+    job: std::sync::Arc<Job>,
     process: OwnedHandle,
     pid: u32,
 }
@@ -330,7 +330,7 @@ pub(crate) fn spawn(
     let stdout = unsafe { File::from_raw_handle(host_stdout.into_raw() as _) };
     Ok((
         WorkerProcess {
-            job,
+            job: std::sync::Arc::new(job),
             process,
             pid: info.dwProcessId,
         },
@@ -426,6 +426,12 @@ impl WorkerProcess {
         let ids_offset = std::mem::size_of::<u32>() * 2;
         let ids = &buffer[ids_offset / std::mem::size_of::<usize>()..][..listed];
         Ok(ids.iter().map(|&pid| pid as u32).collect())
+    }
+
+    /// A reference to the job that never keeps it alive (for cancellation
+    /// from another thread).
+    pub(crate) fn job_weak(&self) -> std::sync::Weak<Job> {
+        std::sync::Arc::downgrade(&self.job)
     }
 
     /// Terminate the whole job and wait until no process remains.

@@ -103,7 +103,7 @@ pub use uia::{
     UiaProcess, UiaTarget, UiaWindow, MAX_SCROLL_AMOUNT, MAX_UIA_VALUE_CHARS, MIN_SCROLL_AMOUNT,
 };
 pub use worker_launch::{
-    classify_job, launch_worker, worker_environment, worker_node_args, BrowserWorker,
+    classify_job, launch_worker, worker_environment, worker_node_args, BrowserWorker, CancelHandle,
     CommittedDownload, HostNode, JobProcess, LiveObservation, NavigationOutcome, ShutdownReport,
     SnapshotNode, WorkerLaunch, WORKER_ACTIVATION_TIMEOUT, WORKER_HANDSHAKE_TIMEOUT,
     WORKER_IDENTITY, WORKER_LAUNCH_TIMEOUT, WORKER_NAVIGATION_TIMEOUT, WORKER_NODE_OPTION,

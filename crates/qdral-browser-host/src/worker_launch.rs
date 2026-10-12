@@ -585,7 +585,8 @@ pub(crate) fn commit_create_only(
 pub(crate) fn navigation_failure(reason: &str) -> HostError {
     match reason {
         "denied" => HostError::Invalid("navigation denied by the browser policy".into()),
-        "timeout" | "failed" | "busy" => HostError::Unavailable(UnavailableReason::LaunchFailed),
+        "timeout" => HostError::Unavailable(UnavailableReason::TimedOut),
+        "failed" | "busy" => HostError::Unavailable(UnavailableReason::ActionFailed),
         _ => HostError::Unavailable(UnavailableReason::ProtocolViolation),
     }
 }
@@ -824,10 +825,10 @@ pub(crate) fn remove_profile(path: &Path) -> bool {
 }
 
 #[cfg(windows)]
-pub use platform::{launch_worker, BrowserWorker};
+pub use platform::{launch_worker, BrowserWorker, CancelHandle};
 
 #[cfg(not(windows))]
-pub use fallback::{launch_worker, BrowserWorker};
+pub use fallback::{launch_worker, BrowserWorker, CancelHandle};
 
 #[cfg(windows)]
 mod platform {
@@ -836,16 +837,58 @@ mod platform {
     use crate::worker_navigation::{NavigationPolicy, RouteKind};
     use crate::worker_process::{spawn, WorkerProcess};
     use std::fs::File;
+    use std::io::BufRead;
     use std::io::BufReader;
+    use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::mpsc::{self, Receiver, RecvTimeoutError};
+    use std::sync::{Arc, Weak};
     use std::time::Instant;
+
+    /// What the reader thread saw on the worker's output.
+    enum ReaderEvent {
+        Frame(WorkerReply),
+        /// The output ended cleanly at a frame boundary.
+        Eof,
+        /// A frame was malformed or cut short.
+        Malformed,
+    }
+
+    /// Cancels a worker's lifetime from any thread, including while an
+    /// operation is running: it terminates the whole job, and the blocked
+    /// call returns `Cancelled`. It never keeps the job alive (a dropped
+    /// worker makes it a no-op) and grants nothing else.
+    #[derive(Debug, Clone)]
+    pub struct CancelHandle {
+        job: Weak<crate::supervise::platform::Job>,
+        cancelled: Arc<AtomicBool>,
+    }
+
+    impl CancelHandle {
+        /// Cancel; true if a live job was terminated.
+        pub fn cancel(&self) -> bool {
+            self.cancelled.store(true, Ordering::SeqCst);
+            match self.job.upgrade() {
+                Some(job) => {
+                    job.terminate();
+                    true
+                }
+                None => false,
+            }
+        }
+    }
 
     /// A supervised browser worker. Dropping it terminates the job and
     /// removes an ephemeral profile.
     pub struct BrowserWorker {
         pub(super) process: WorkerProcess,
         stdin: File,
-        replies: Receiver<Result<WorkerReply, HostError>>,
+        replies: Receiver<ReaderEvent>,
+        /// Set by a `CancelHandle`.
+        cancelled: Arc<AtomicBool>,
+        /// The handshake completed; failures after it end the lifetime.
+        handshaken: bool,
+        /// The reason the lifetime ended early; every later call returns it.
+        failed: Option<UnavailableReason>,
         node: PathBuf,
         worker_args: Vec<String>,
         engine: PathBuf,
@@ -894,9 +937,16 @@ mod platform {
         std::thread::spawn(move || {
             let mut reader = BufReader::new(stdout);
             loop {
-                let frame = decode_frame::<WorkerReply, _>(&mut reader);
-                let stop = frame.is_err();
-                if sender.send(frame).is_err() || stop {
+                let event = match reader.fill_buf() {
+                    Ok([]) => ReaderEvent::Eof,
+                    Ok(_) => match decode_frame::<WorkerReply, _>(&mut reader) {
+                        Ok(frame) => ReaderEvent::Frame(frame),
+                        Err(_) => ReaderEvent::Malformed,
+                    },
+                    Err(_) => ReaderEvent::Malformed,
+                };
+                let stop = !matches!(event, ReaderEvent::Frame(_));
+                if sender.send(event).is_err() || stop {
                     return;
                 }
             }
@@ -905,6 +955,9 @@ mod platform {
             process,
             stdin: pipes.stdin,
             replies,
+            cancelled: Arc::new(AtomicBool::new(false)),
+            handshaken: false,
+            failed: None,
             node: spec.node.clone(),
             worker_args,
             engine: spec.engine.path().to_path_buf(),
@@ -933,8 +986,50 @@ mod platform {
 
     impl BrowserWorker {
         fn send(&mut self, request: &WorkerRequest<'_>) -> Result<(), HostError> {
-            write_frame(&mut self.stdin, request)
-                .map_err(|_| HostError::Unavailable(UnavailableReason::ProtocolViolation))
+            if let Some(reason) = self.failed {
+                return Err(HostError::Unavailable(reason));
+            }
+            if write_frame(&mut self.stdin, request).is_err() {
+                return Err(self.fail_closed(UnavailableReason::ProtocolViolation));
+            }
+            Ok(())
+        }
+
+        /// The stored reason of an ended (or cancelled) lifetime.
+        fn ensure_alive(&mut self) -> Result<(), HostError> {
+            if self.cancelled.load(Ordering::SeqCst) {
+                return Err(self.fail_closed(UnavailableReason::Cancelled));
+            }
+            match self.failed {
+                Some(reason) => Err(HostError::Unavailable(reason)),
+                None => Ok(()),
+            }
+        }
+
+        /// A handle that cancels this lifetime from another thread.
+        pub fn cancel_handle(&self) -> CancelHandle {
+            CancelHandle {
+                job: self.process.job_weak(),
+                cancelled: Arc::clone(&self.cancelled),
+            }
+        }
+
+        /// After the handshake, a channel failure, a deadline or a
+        /// cancellation ends the lifetime: the job is terminated now (nothing
+        /// stays in flight) and every later call returns the same reason. A
+        /// cancellation outranks whatever symptom it caused.
+        fn fail_closed(&mut self, reason: UnavailableReason) -> HostError {
+            let reason = if self.cancelled.load(Ordering::SeqCst) {
+                UnavailableReason::Cancelled
+            } else {
+                reason
+            };
+            if !self.handshaken {
+                return HostError::Unavailable(reason);
+            }
+            let reason = *self.failed.get_or_insert(reason);
+            self.process.terminate_and_confirm(WORKER_SHUTDOWN_TIMEOUT);
+            HostError::Unavailable(reason)
         }
 
         /// The next reply within `timeout`. A worker that exits with code 2
@@ -946,7 +1041,7 @@ mod platform {
                 // A worker that keeps sending route requests cannot hold the
                 // host past the deadline.
                 if remaining.is_zero() {
-                    return Err(HostError::Unavailable(UnavailableReason::LaunchFailed));
+                    return Err(self.deadline_passed());
                 }
                 match self.next_frame(remaining)? {
                     WorkerReply::RouteRequest {
@@ -980,21 +1075,49 @@ mod platform {
             self.send(&WorkerRequest::RouteDecision { request_id, allow })
         }
 
+        /// The host's own deadline: during the handshake a launch failure,
+        /// afterwards a typed timeout that ends the lifetime.
+        fn deadline_passed(&mut self) -> HostError {
+            if self.handshaken {
+                self.fail_closed(UnavailableReason::TimedOut)
+            } else {
+                HostError::Unavailable(UnavailableReason::LaunchFailed)
+            }
+        }
+
         fn next_frame(&mut self, timeout: Duration) -> Result<WorkerReply, HostError> {
+            if let Some(reason) = self.failed {
+                return Err(HostError::Unavailable(reason));
+            }
             match self.replies.recv_timeout(timeout) {
-                Ok(Ok(WorkerReply::Error { code })) => Err(reply_error(&code)),
-                Ok(Ok(reply)) => Ok(reply),
-                Ok(Err(_)) | Err(RecvTimeoutError::Disconnected) => {
-                    match self.process.wait_exit(Duration::from_secs(2)) {
-                        Some(2) => Err(HostError::Unavailable(
-                            UnavailableReason::UnsupportedRuntime,
-                        )),
-                        _ => Err(HostError::Unavailable(UnavailableReason::ProtocolViolation)),
-                    }
+                Ok(ReaderEvent::Frame(WorkerReply::Error { code })) => {
+                    let error = reply_error(&code);
+                    Err(match error {
+                        HostError::Unavailable(reason) if self.handshaken => {
+                            self.fail_closed(reason)
+                        }
+                        other => other,
+                    })
                 }
-                Err(RecvTimeoutError::Timeout) => {
-                    Err(HostError::Unavailable(UnavailableReason::LaunchFailed))
+                Ok(ReaderEvent::Frame(reply)) => Ok(reply),
+                // Malformed output is a violation, whatever the worker does
+                // next.
+                Ok(ReaderEvent::Malformed) => {
+                    Err(self.fail_closed(UnavailableReason::ProtocolViolation))
                 }
+                Ok(ReaderEvent::Eof) | Err(RecvTimeoutError::Disconnected) => {
+                    let reason = match self.process.wait_exit(Duration::from_secs(2)) {
+                        // Exit code 2 is the runtime refusal, before the
+                        // handshake completes.
+                        Some(2) if !self.handshaken => UnavailableReason::UnsupportedRuntime,
+                        // The worker died: the lifetime is over.
+                        Some(_) => UnavailableReason::WorkerExited,
+                        // Output ended but the worker still runs.
+                        None => UnavailableReason::ProtocolViolation,
+                    };
+                    Err(self.fail_closed(reason))
+                }
+                Err(RecvTimeoutError::Timeout) => Err(self.deadline_passed()),
             }
         }
 
@@ -1030,6 +1153,7 @@ mod platform {
                 _ => return Err(HostError::Unavailable(UnavailableReason::ProtocolViolation)),
             }
             self.browser_pid = self.verify()?;
+            self.handshaken = true;
             Ok(())
         }
 
@@ -1261,6 +1385,8 @@ mod platform {
             policy_revision: u64,
             workspace: &str,
         ) -> Result<NavigationOutcome, HostError> {
+            // An ended lifetime refuses before any approval is spent.
+            self.ensure_alive()?;
             if target.action != crate::actuation::SupportedAction::Click {
                 return Err(HostError::Invalid(
                     "activation needs a click approval".into(),
@@ -1345,6 +1471,7 @@ mod platform {
             destination_root: &Path,
             relative: &str,
         ) -> Result<CommittedDownload, HostError> {
+            self.ensure_alive()?;
             if target.action != crate::actuation::SupportedAction::Download {
                 return Err(HostError::Invalid(
                     "a download needs a download approval".into(),
@@ -1515,6 +1642,11 @@ mod platform {
                     "postcondition unverified: the download opened another document".into(),
                 ));
             }
+            // A cancellation that arrived after the reply still wins: nothing
+            // is written to the approved folder.
+            if self.cancelled.load(Ordering::SeqCst) {
+                return Err(self.fail_closed(UnavailableReason::Cancelled));
+            }
             commit_create_only(destination, destination_root, &content)?;
             Ok(CommittedDownload {
                 path: destination.to_path_buf(),
@@ -1522,6 +1654,12 @@ mod platform {
                 bytes: content.len() as u64,
                 source_url: url,
             })
+        }
+
+        /// Test-only: this lifetime's download staging directory.
+        #[cfg(test)]
+        pub(crate) fn staging_dir(&self) -> &Path {
+            &self.staging
         }
 
         /// Test-only view of an observed node: raw names never leave the
@@ -1582,7 +1720,24 @@ mod fallback {
         _private: (),
     }
 
+    /// API parity: there is never a lifetime to cancel off Windows.
+    #[derive(Debug, Clone)]
+    pub struct CancelHandle {
+        _private: (),
+    }
+
+    impl CancelHandle {
+        pub fn cancel(&self) -> bool {
+            false
+        }
+    }
+
     impl BrowserWorker {
+        /// API parity: no worker ever exists off Windows.
+        pub fn cancel_handle(&self) -> CancelHandle {
+            CancelHandle { _private: () }
+        }
+
         pub fn shutdown(self) -> ShutdownReport {
             ShutdownReport {
                 graceful: false,
@@ -2170,10 +2325,14 @@ mod tests {
             navigation_failure("denied"),
             HostError::Invalid(_)
         ));
-        for reason in ["timeout", "failed", "busy"] {
+        assert!(matches!(
+            navigation_failure("timeout"),
+            HostError::Unavailable(UnavailableReason::TimedOut)
+        ));
+        for reason in ["failed", "busy"] {
             assert!(matches!(
                 navigation_failure(reason),
-                HostError::Unavailable(UnavailableReason::LaunchFailed)
+                HostError::Unavailable(UnavailableReason::ActionFailed)
             ));
         }
         assert!(matches!(
