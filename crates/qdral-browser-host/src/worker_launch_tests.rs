@@ -1226,8 +1226,10 @@ fn a_stalled_cancelled_or_killed_download_is_typed_and_commits_nothing() {
             while stall_requests(&hits) < nth && Instant::now() < deadline {
                 std::thread::sleep(Duration::from_millis(50));
             }
+            let reached = stall_requests(&hits) >= nth;
             std::thread::sleep(Duration::from_millis(500));
             act();
+            reached
         })
     };
     let no_residue = |worker: &BrowserWorker, out: &str| {
@@ -1298,7 +1300,10 @@ fn a_stalled_cancelled_or_killed_download_is_typed_and_commits_nothing() {
         &approved,
         "cancel.pdf",
     );
-    canceller.join().expect("canceller thread");
+    assert!(
+        canceller.join().expect("canceller thread"),
+        "the download never reached the network"
+    );
     assert!(
         matches!(
             outcome,
@@ -1319,6 +1324,23 @@ fn a_stalled_cancelled_or_killed_download_is_typed_and_commits_nothing() {
         worker.ping("after-cancel"),
         Err(HostError::Unavailable(UnavailableReason::Cancelled))
     ));
+    let (unspent, mut unspent_approval) = (target.clone(), approval.clone());
+    unspent_approval.consumed = false;
+    assert!(matches!(
+        worker.download(
+            &unspent,
+            &mut unspent_approval,
+            1,
+            "workspace",
+            &approved,
+            "cancel.pdf"
+        ),
+        Err(HostError::Unavailable(UnavailableReason::Cancelled))
+    ));
+    assert!(
+        !unspent_approval.consumed,
+        "an ended lifetime spent an approval"
+    );
     let staging = worker.staging_dir().to_path_buf();
     let report = worker.kill();
     assert!(
@@ -1347,7 +1369,10 @@ fn a_stalled_cancelled_or_killed_download_is_typed_and_commits_nothing() {
         &approved,
         "crash.pdf",
     );
-    killer.join().expect("killer thread");
+    assert!(
+        killer.join().expect("killer thread"),
+        "the download never reached the network"
+    );
     assert!(
         matches!(
             outcome,
