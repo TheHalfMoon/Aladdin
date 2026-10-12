@@ -105,8 +105,9 @@ pub use uia::{
 pub use worker_launch::{
     classify_job, launch_worker, worker_environment, worker_node_args, BrowserWorker,
     CommittedDownload, HostNode, JobProcess, LiveObservation, NavigationOutcome, ShutdownReport,
-    SnapshotNode, WorkerLaunch, WORKER_HANDSHAKE_TIMEOUT, WORKER_IDENTITY, WORKER_LAUNCH_TIMEOUT,
-    WORKER_NAVIGATION_TIMEOUT, WORKER_NODE_OPTION, WORKER_OBSERVATION_TIMEOUT,
-    WORKER_PROTOCOL_GENERATION, WORKER_REPLY_TIMEOUT, WORKER_SHUTDOWN_TIMEOUT,
+    SnapshotNode, WorkerLaunch, WORKER_ACTIVATION_TIMEOUT, WORKER_HANDSHAKE_TIMEOUT,
+    WORKER_IDENTITY, WORKER_LAUNCH_TIMEOUT, WORKER_NAVIGATION_TIMEOUT, WORKER_NODE_OPTION,
+    WORKER_OBSERVATION_TIMEOUT, WORKER_PROTOCOL_GENERATION, WORKER_REPLY_TIMEOUT,
+    WORKER_SHUTDOWN_TIMEOUT,
 };
 pub use worker_navigation::{NavigationPolicy, RouteKind};

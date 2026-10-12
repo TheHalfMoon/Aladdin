@@ -61,6 +61,9 @@ pub struct NavigationPolicy {
     begun_origin: Option<String>,
     chain: Option<RedirectChain>,
     committed_origin: Option<String>,
+    /// During an approved activation: the one page-initiated document the
+    /// host accepts, and whether it was requested.
+    activation: Option<(String, bool)>,
 }
 
 impl std::fmt::Debug for RedirectChain {
@@ -79,6 +82,7 @@ impl NavigationPolicy {
             begun_origin: None,
             chain: None,
             committed_origin: None,
+            activation: None,
         }
     }
 
@@ -136,6 +140,27 @@ impl NavigationPolicy {
         Ok(())
     }
 
+    /// Expect exactly one page-initiated document, `url`, for an approved
+    /// activation: any other page-initiated top-level document is refused
+    /// while the expectation stands.
+    pub fn expect_activation(&mut self, url: &str) -> Result<(), HostError> {
+        let target = self.admitted_target(url)?;
+        if self.committed_origin.as_deref() != Some(target.origin.as_str()) {
+            return Err(HostError::Invalid(
+                "activation leaves the page's origin".into(),
+            ));
+        }
+        self.activation = Some((url.to_owned(), false));
+        Ok(())
+    }
+
+    /// End the activation expectation; true if the expected document was
+    /// requested (a click that requested no document, such as a pushState
+    /// or a script action, is not a verified activation).
+    pub fn finish_activation(&mut self) -> bool {
+        matches!(self.activation.take(), Some((_, true)))
+    }
+
     pub fn committed_origin(&self) -> Option<&str> {
         self.committed_origin.as_deref()
     }
@@ -177,6 +202,18 @@ impl NavigationPolicy {
         match kind {
             RouteKind::Document => {
                 if self.expected.as_deref() == Some(url) {
+                    return Ok(());
+                }
+                if let Some((expected, taken)) = self.activation.as_mut() {
+                    // An approved activation opens exactly its destination,
+                    // once; a script redirect or a changed href goes nowhere.
+                    if expected.as_str() != url || *taken {
+                        return Err(HostError::Invalid(
+                            "the activation opened another document".into(),
+                        ));
+                    }
+                    *taken = true;
+                    self.chain = Some(RedirectChain::start(url)?);
                     return Ok(());
                 }
                 // A page-initiated top-level navigation stays within the
@@ -382,6 +419,34 @@ mod tests {
         assert!(p
             .decide(RouteKind::Redirect, "https://other.test/moved", HOME)
             .is_err());
+    }
+
+    #[test]
+    fn an_activation_opens_exactly_its_destination_once() {
+        let mut p = policy();
+        p.begin("https://fixture.test/").unwrap();
+        p.commit("https://fixture.test/").unwrap();
+        assert!(p.expect_activation("https://other.test/x").is_err());
+        p.expect_activation("https://fixture.test/report").unwrap();
+        assert!(p
+            .decide(RouteKind::Document, "https://fixture.test/evil", "")
+            .is_err());
+        assert!(p
+            .decide(RouteKind::Document, "https://fixture.test/report", "")
+            .is_ok());
+        assert!(
+            p.decide(RouteKind::Document, "https://fixture.test/report", "")
+                .is_err(),
+            "twice"
+        );
+        assert!(p.finish_activation());
+        // A click that requested no document is not verified.
+        p.expect_activation("https://fixture.test/report").unwrap();
+        assert!(!p.finish_activation());
+        // Without an expectation, same-origin page navigation is as before.
+        assert!(p
+            .decide(RouteKind::Document, "https://fixture.test/next", "")
+            .is_ok());
     }
 
     #[test]
