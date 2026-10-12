@@ -74,7 +74,7 @@ const HEADINGS = new Map([
 ]);
 const BLOCK_LIKE = new Set(["pre", "blockquote", "ul", "ol", "table", "hr", "li"]);
 /// Nesting beyond this is flattened into plain text (iteratively).
-const MAX_DEPTH = 100;
+const MAX_DEPTH = 50;
 /// Columns kept in one table.
 const MAX_COLUMNS = 64;
 
@@ -105,10 +105,27 @@ function escapeInline(text: string): string {
 /// `1\.`, since a backslash before a digit is not an escape), and a line of
 /// only `-`, `=`, `_` or `*` (a thematic break or setext underline).
 function escapeLineStart(line: string): string {
-  if (/^\s*([-=_*])(\s*\1)*\s*$/.test(line)) return line.replace(/^(\s*)(\S)/, "$1\\$2");
+  if (onlyRuleCharacters(line)) return line.replace(/^(\s*)(\S)/, "$1\\$2");
   return line
     .replace(/^(\s*)(\d{1,9})([.)])(?=\s|$)/, "$1$2\\$3")
     .replace(/^(\s*)(#{1,6}(?=\s|$)|[-+](?=\s|$)|>)/, "$1\\$2");
+}
+
+/// Whether a line holds only one of `-`, `=`, `_`, `*` (with whitespace):
+/// a thematic break or setext underline. A linear scan (a backreference
+/// regex backtracks on long whitespace runs).
+function onlyRuleCharacters(line: string): boolean {
+  let mark = "";
+  for (const ch of line) {
+    if (/\s/.test(ch)) continue;
+    if (mark === "") {
+      if (ch !== "-" && ch !== "=" && ch !== "_" && ch !== "*") return false;
+      mark = ch;
+    } else if (ch !== mark) {
+      return false;
+    }
+  }
+  return mark !== "";
 }
 
 /// The longest run of `ch` in `text`.

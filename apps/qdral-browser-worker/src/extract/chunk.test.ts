@@ -133,3 +133,13 @@ test("splitting stays linear when a chunk holds many tiny blocks", () => {
   assert.ok(Date.now() - started < 1_000, `took ${Date.now() - started} ms`);
   assert.equal(chunks.at(-1)?.end, content.length);
 });
+
+test("chunking the largest output the converter can produce stays fast on adversarial shapes", () => {
+  // The chunker has no budget of its own: its input is bounded by the
+  // converter's maxChars (1,000,000), and it is linear in that input.
+  for (const text of ["\n".repeat(1_000_000), "# h\n".repeat(250_000), "| a |\n".repeat(166_000), "- i\n" + "  c\n".repeat(250_000), "```\n" + "x\n".repeat(500_000)]) {
+    const started = Date.now();
+    chunkMarkdown(text, 50_000, 5);
+    assert.ok(Date.now() - started < 2_000, `took ${Date.now() - started} ms`);
+  }
+});

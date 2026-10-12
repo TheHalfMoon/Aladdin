@@ -293,7 +293,7 @@ test("tables are bounded in columns, size and time, and nested sections do not r
   assert.ok(Date.now() - started < 2_000, `took ${Date.now() - started} ms`);
   assert.equal((result.markdown.split("\n")[0]?.match(/\|/g) ?? []).length, 65, "64 columns");
   let nested = el("tbody", {}, el("tr", {}, el("td", {}, "deep")));
-  // 2,000 levels, far past the 100-level cap (the test's own snapshot
+  // 2,000 levels, far past the 50-level cap (the test's own snapshot
   // builder recurses, so it cannot go much deeper).
   for (let i = 0; i < 2_000; i++) nested = el("tbody", {}, nested);
   assert.doesNotThrow(() => extractMarkdown(snapshot("https://fixture.test/", el("table", {}, nested))));
@@ -323,4 +323,25 @@ test("an inline code span at a line start does not open a fence for the rest of 
     assert.ok(result.chunks.length > 5, `${result.chunks.length} chunks`);
     assert.ok(result.chunks.every((c) => c.content.length < 20_000), "a chunk swallowed the page");
   }
+});
+
+test("deep quotes, lists and inline nesting around a large text stay within the budget", () => {
+  const big = "word ".repeat(150_000);
+  let quote = el("p", {}, big);
+  let list = el("li", {}, big);
+  let inline = el("span", {}, big);
+  for (let i = 0; i < 1_000; i++) {
+    quote = el("blockquote", {}, quote);
+    list = el("ul", {}, el("li", {}, list));
+    inline = el("span", {}, inline);
+  }
+  for (const body of [quote, el("ul", {}, list), el("p", {}, inline)]) {
+    const started = Date.now();
+    extractMarkdown(snapshot("https://fixture.test/", body));
+    assert.ok(Date.now() - started < 3_000, `took ${Date.now() - started} ms`);
+  }
+  const line = "-" + " ".repeat(100_000) + "x";
+  const started = Date.now();
+  md({}, el("p", {}, line));
+  assert.ok(Date.now() - started < 1_000, `rule check took ${Date.now() - started} ms`);
 });

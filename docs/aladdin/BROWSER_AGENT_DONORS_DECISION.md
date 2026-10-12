@@ -93,8 +93,8 @@ The browser-use extraction pipeline, ported to TypeScript as a pure library in `
   - Page text is escaped wherever a character could form syntax, so it can never form a link, image, HTML, heading, list, quote, rule or table; only the structure Aladdin emits is live (the donor disables escaping). Characters that cannot form syntax in place (an intraword `_`, a lone `~`, a `!` not before `[`, an `&` not starting an entity) are left alone, so identifiers and URLs in plain text stay readable.
   - Links and images are opt-in and kept only as resolved http(s) URLs, without credentials, with the characters that end a link destination encoded.
   - Code fences and spans are longer than any backtick run they contain.
-  - Tables keep at most 64 columns, and their sections are walked iteratively.
-  - Every emitted part is charged to the size bound (default 1,000,000 characters) and the time bound (default 4 s), and nesting past 100 levels is flattened.
+  - Tables keep at most 64 columns, and their sections are walked iteratively (up to 50 levels).
+  - Every emitted part is charged to the size bound (default 1,000,000 characters) and the time bound (default 4 s), and nesting past 50 levels is flattened.
 - `clean.ts`: state-blob cleanup by linear scans (the donor's lazy regexes can be made super-linear), with code-fence lines kept verbatim and trailing whitespace trimmed by a scan. Also the text safety rule: well formed, no controls, no invisible characters that hide text or carry data (bidi controls, zero-width marks, fillers, variation selectors, tag characters).
 - `chunk.ts`: structure-aware chunking. A fence opens only on a CommonMark fence line (no backtick in its info string, so an inline code span at a line start never opens one), closes only on a line of at least as many backticks, and splits use running prefix sizes.
 - `index.ts`: `extractMarkdown(snapshot, options)`.
@@ -104,8 +104,8 @@ It adds no frame, no host API and no tool. The worker frame, the host-side bound
 ### Evidence
 
 - **Unit tests** on CDP-shaped snapshots:
-  - `extract/chunk.test.ts` (14 tests): the donor's chunking cases, ported, plus a linear-time case;
-  - `extract/extract.test.ts` (17 tests): conversion, tables, opt-in links and images, every hidden-content rule, cleanup (with a hostile input on which the donor's nested-object regex takes 1.8 s for a tenth of it), escaping of page-injected syntax (rules and setext headings included) with identifiers left readable, URL encoding, fences, a code span that must not swallow the page into one chunk, table and nesting bounds, invisible characters, and a 200,000-character non-breaking-space run.
+  - `extract/chunk.test.ts` (15 tests): the donor's chunking cases, ported, plus linear-time cases (the chunker has no budget of its own; its input is bounded by the 1,000,000-character output, and it was measured linear: 0.28 s at that size, 0.62 s at twice it, on the slowest shape);
+  - `extract/extract.test.ts` (18 tests): conversion, tables, opt-in links and images, every hidden-content rule, cleanup (with a hostile input on which the donor's nested-object regex takes 1.8 s for a tenth of it), escaping of page-injected syntax (rules and setext headings included) with identifiers left readable, URL encoding, fences, a code span that must not swallow the page into one chunk, table and nesting bounds, invisible characters, and a 200,000-character non-breaking-space run, and deep quotes, lists and inline nesting around a large text.
 - **Real-engine tests**, `extract/extract.native.test.ts` (4 tests, Windows, the installed Edge, offline `setContent` with every request aborted):
   - 22 hidden-content cases leak nothing: `display: none`, `visibility: hidden`, opacity 0 and 0.001, `filter: opacity(0)`, the `hidden` attribute, a zero font size, transparent text in `transparent`, `oklch(… / 0)` and `color(srgb … / 0)`, a transparent text fill, off-screen positioning to the left, one-pixel, two-pixel and zero-height clipped boxes, a closed `<details>`, `<noscript>`, hidden images and an image in a hidden link, a prefilled input, and a textarea default;
   - visible text, a visible child of a hidden parent, `display: contents` text and a shown image are kept;
