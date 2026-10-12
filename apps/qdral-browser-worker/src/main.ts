@@ -154,6 +154,9 @@ const playwrightLauncher: Launcher = {
         const session = await context.newCDPSession(primary);
         let captured: CapturedSnapshot;
         try {
+          // Playwright's protocol typings name this result differently;
+          // documentModel reads every field defensively (missing arrays are
+          // empty, a missing document throws into discovery_failed).
           captured = (await session.send("DOMSnapshot.captureSnapshot", { computedStyles: [] })) as unknown as CapturedSnapshot;
         } finally {
           await session.detach().catch(() => {});

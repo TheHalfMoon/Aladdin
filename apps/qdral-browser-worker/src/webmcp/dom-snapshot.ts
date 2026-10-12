@@ -41,9 +41,9 @@ export interface DocumentModel {
 /// lowercased; text nodes keep their value; comments, doctypes and other
 /// node kinds are skipped. Nodes past the bound are dropped (truncated).
 export function documentModel(snapshot: CapturedSnapshot): DocumentModel {
-  const doc = snapshot.documents[0];
+  const doc = snapshot.documents?.[0];
   if (!doc) throw new Error("no document");
-  const { strings } = snapshot;
+  const strings = snapshot.strings ?? [];
   const nodes = doc.nodes;
   const parentIndex = nodes.parentIndex ?? [];
   const nodeType = nodes.nodeType ?? [];
