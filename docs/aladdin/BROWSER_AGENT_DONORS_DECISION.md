@@ -1,6 +1,6 @@
-# Browser-agent donors: browser-use, Stagehand, Skyvern
+# Browser-agent donors: browser-use, Stagehand, Skyvern, Firecrawl
 
-Status: founder request (2026-10-12) to study these three projects and copy what is valuable. This record grants no authority: every capability still needs its own exact-head qualified slice inside SG-000108, and every new tool its own approval policy.
+Status: founder request (2026-10-12) to study these projects and copy what is valuable, revised the same day by the founder's attested permission to copy the source of all donors (`SOURCE_PERMISSIONS.md`). This record grants no authority: every capability still needs its own exact-head qualified slice inside SG-000108, and every new tool its own approval policy.
 
 ## Donor pins
 
@@ -10,7 +10,8 @@ All three are cloned read-only at exact commits under `C:\Users\Shehr\donors`. N
 |---|---|---|---|
 | [browser-use/browser-use](https://github.com/browser-use/browser-use/tree/c75e8476e26d18b7617643bc2ae082fae8eae431) | `c75e8476e26d18b7617643bc2ae082fae8eae431` | MIT, © 2024 Gregor Zunic (LICENSE blob `1ea3836c`) | **Port the extraction pipeline now** (below). The rest is reference. |
 | [browserbase/stagehand](https://github.com/browserbase/stagehand/tree/f261c38b4dc50c39485f924e8599c1d3c6e37dc7) | `f261c38b4dc50c39485f924e8599c1d3c6e37dc7` | MIT, © 2024 Browserbase Inc. (LICENSE blob `683c709c`) | **Adapt later**: the CDP WebMCP client and the cross-frame accessibility snapshot. Nothing is imported in this change. |
-| [Skyvern-AI/skyvern](https://github.com/Skyvern-AI/skyvern/tree/f5f3f28a9ce0021a1db24286928a7bff6582a1eb) | `f5f3f28a9ce0021a1db24286928a7bff6582a1eb` | AGPL-3.0 for the whole repository (LICENSE blob `0ad25db4`; no sub-package carries another license) | **Behavioural reference only**. No code is copied (see "Skyvern and the AGPL"). |
+| [Skyvern-AI/skyvern](https://github.com/Skyvern-AI/skyvern/tree/f5f3f28a9ce0021a1db24286928a7bff6582a1eb) | `f5f3f28a9ce0021a1db24286928a7bff6582a1eb` | AGPL-3.0 for the whole repository (LICENSE blob `0ad25db4`; no sub-package carries another license) | **May be adapted under the founder's permission** (`SOURCE_PERMISSIONS.md`). No module fits Aladdin's architecture yet, so nothing is imported (see "Skyvern and the AGPL"). |
+| [firecrawl/firecrawl](https://github.com/firecrawl/firecrawl/tree/f84845c864b6e2af22791c18fcf89ac2a21f1434) | `f84845c864b6e2af22791c18fcf89ac2a21f1434` | AGPL-3.0 (engine) | **Adapt next, under the founder's permission**: `apps/api/native/src/crawler.rs` for the slice 7 crawl queue (see "Firecrawl, after the permission"). |
 
 ## How each maps onto Aladdin
 
@@ -52,7 +53,28 @@ All three donors are, at their core, an LLM agent loop wrapped around a browser.
 
 ## Skyvern and the AGPL
 
-Skyvern is AGPL-3.0 and Aladdin is Apache-2.0. The founder's request says permission is held to copy and rename the source. `SOURCE_REUSE_MATRIX.md` applies the same rule here as to Firecrawl: AGPL code is copied only after a **written grant from the copyright holders** (Skyvern-AI) is filed in the repository and verified at source admission. No such grant is on file, so no Skyvern code is copied. If the grant is filed, module-level reuse can be reconsidered. The useful parts are Python and page-injected script, so the realistic yield would still be design ideas rather than code.
+Skyvern is AGPL-3.0 and Aladdin is Apache-2.0. On 2026-10-12 the founder attested official permission to copy and use the source code of every donor (`SOURCE_PERMISSIONS.md`), which lifts the license barrier for Skyvern and Firecrawl. The permission documents are to be filed in `docs/aladdin/grants/`.
+
+The license barrier was not the only one. With the permission in place, every Skyvern module was re-checked against the architecture:
+- `webeye/scraper/domUtils.js` is a page-injected script, and SG-000108 forbids evaluating it.
+- `core/script_generations` generates and runs programs, which Aladdin never does.
+- `webeye/actions/handler.py`, `forge/` and the rest are Python, built around its own LLM loop and hosted product, and duplicate the host's typed actuation (SG-000077).
+
+No Skyvern module is imported, by architecture rather than license. Its ideas are listed below, and any future Skyvern import names `SOURCE_PERMISSIONS.md` in its provenance.
+
+## Firecrawl, after the permission
+
+Firecrawl's engine (AGPL-3.0) was reference-only until the founder's permission of 2026-10-12. Its native Rust crate, `apps/api/native` (`firecrawl_rs`, napi bindings), is the closest fit for the planned slice 7 crawl queue, which lives in Aladdin's Rust host (`WEB_CAPABILITIES_DECISION.md`):
+
+| Module | What it does | Verdict |
+|---|---|---|
+| `src/crawler.rs`: `filter_links`, `filter_url`, `validate_regexes` | Crawl-scope filtering: include and exclude patterns (regex), depth, backward crawling, subdomains, external links, robots.txt (`texting_robots`), with denial reasons | **Adapt in slice 7.** It drops the napi bindings and the tokio blocking-task wrappers. Its admitted-origin and SG-000075 checks stay the host's. Patterns are compiled with size limits. |
+| `src/crawler.rs`: `parse_sitemap_xml`, `process_sitemap`, `exceeds_element_depth` | Sitemap and sitemap-index parsing (`roxmltree`), with a guard against deeply nested XML | **Adapt in slice 7**, for map. |
+| `src/html.rs`: `extract_links`, `extract_metadata`, `extract_base_href`, `post_process_markdown` | Raw-HTML parsing (`lol_html`, `kuchikiki`) | Reference. Aladdin reads pages through the engine's DOMSnapshot, not raw HTML. The metadata fields (title, description, Open Graph) are a target for the slice 6 wiring. |
+| `src/document.rs`, `src/pdf.rs` | Office and PDF to Markdown | Not now: SG-000078 keeps downloads inert, and opening or extracting them is out of scope. |
+| `scrapeURL/lib/promptInjectionGuard.ts`, LLM extract, the hosted API, queues, billing | Model calls and service infrastructure | Rejected: the model is outside the browser layer, and Aladdin is not a hosted service. |
+
+Its crates (`regex`, `url`, `texting_robots`, `roxmltree`) are separate works under their own licenses and are admitted with the slice 7 import.
 
 For the two MIT donors no grant is needed, and renaming is allowed. The copyright and permission notice must travel with the copied code, so `docs/aladdin/notices/browser-use-MIT.txt` holds it, and each ported file names its source path and commit.
 
