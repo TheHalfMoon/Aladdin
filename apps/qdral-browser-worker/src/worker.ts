@@ -23,6 +23,7 @@ import {
   WORKER_IDENTITY,
   WORKER_PROTOCOL_GENERATION,
   type ErrorCode,
+  type ExecField,
   type HostFrame,
   type NavigationFailure,
   type WorkerFrame
@@ -55,6 +56,10 @@ export interface EngineSession {
   /// The primary page's declarative WebMCP tools, read without running
   /// page script; bounded so the reply frame fits.
   discover(discId: number): Promise<{ url: string; truncated: boolean; tools: DeclaredTool[] }>;
+  /// Fill the declared tool form with host-validated fields, click its
+  /// default submit button and wait for the resulting document; returns it
+  /// with its structured data. Rejects with NavigationError.
+  execute(tool: string, fields: ExecField[]): Promise<{ url: string; status: number; structured: string[] }>;
   /// Click the element with this snapshot ref and wait for the resulting
   /// navigation to load; rejects with NavigationError.
   activate(ref: string): Promise<{ url: string; status: number }>;
@@ -184,6 +189,16 @@ export class Worker {
         void this.runActivation(this.session, frame.act_id, frame.ref);
         return;
       }
+      case "execute": {
+        if (this.state !== "launched" || !this.session) return this.fail("not_ready");
+        if (this.navigating) {
+          this.send({ frame: "execution_failed", exec_id: frame.exec_id, reason: "busy" });
+          return;
+        }
+        this.navigating = true;
+        void this.runExecution(this.session, frame.exec_id, frame.tool, frame.fields);
+        return;
+      }
       case "discover": {
         if (this.state !== "launched" || !this.session) return this.fail("not_ready");
         try {
@@ -279,6 +294,19 @@ export class Worker {
     } catch (error) {
       const reason: NavigationFailure = error instanceof NavigationError ? error.reason : "failed";
       outcome = { frame: "activation_failed", act_id: actId, reason };
+    }
+    this.navigating = false;
+    if (this.state === "launched" && this.session === session) this.send(outcome);
+  }
+
+  private async runExecution(session: EngineSession, execId: number, tool: string, fields: ExecField[]): Promise<void> {
+    let outcome: WorkerFrame;
+    try {
+      const result = await session.execute(tool, fields);
+      outcome = { frame: "executed", exec_id: execId, url: result.url, status: result.status, structured: result.structured };
+    } catch (error) {
+      const reason: NavigationFailure = error instanceof NavigationError ? error.reason : "failed";
+      outcome = { frame: "execution_failed", exec_id: execId, reason };
     }
     this.navigating = false;
     if (this.state === "launched" && this.session === session) this.send(outcome);

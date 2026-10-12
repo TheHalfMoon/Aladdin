@@ -143,6 +143,15 @@ function bound(text: string, max: number): string {
   return points.length > max ? points.slice(0, max).join("") : clean;
 }
 
+/// A block of structured page data: well formed, without controls other
+/// than JSON whitespace (newline, tab, carriage return) and without invisible
+/// format characters, cut at `max` code points.
+export function sanitizeBlock(text: string, max: number): string {
+  const clean = wellFormedText(text).replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f]/g, "").replace(BIDIS, "").trim();
+  const points = Array.from(clean);
+  return points.length > max ? points.slice(0, max).join("") : clean;
+}
+
 function codePoints(text: string): number {
   return Array.from(text).length;
 }

@@ -36,7 +36,7 @@ test("length bounds and non-JSON bodies are violations before buffering", () => 
 });
 
 test("the host vocabulary is closed and exact", () => {
-  assert.deepEqual(parseHostFrame({ frame: "hello", generation: 6 }), { frame: "hello", generation: 6 });
+  assert.deepEqual(parseHostFrame({ frame: "hello", generation: 7 }), { frame: "hello", generation: 7 });
   const parsed = parseHostFrame(validLaunch());
   assert.deepEqual(JSON.parse(JSON.stringify(parsed)), validLaunch());
   assert.equal(parsed.frame === "launch" && Object.getPrototypeOf(parsed.env), null);
@@ -44,11 +44,11 @@ test("the host vocabulary is closed and exact", () => {
     null,
     [],
     "hello",
-    { generation: 6 },
+    { generation: 7 },
     { frame: "navigate", url: "https://example.com" },
     { frame: "evaluate", script: "1+1" },
     { frame: "cdp", method: "Runtime.evaluate" },
-    { frame: "hello", generation: 6, extra: true },
+    { frame: "hello", generation: 7, extra: true },
     { frame: "hello", generation: "1" },
     { frame: "hello" },
     { frame: "shutdown", now: true },
@@ -241,5 +241,24 @@ test("discover frames carry only a positive id", () => {
   assert.deepEqual(parseHostFrame({ frame: "discover", disc_id: 4 }), { frame: "discover", disc_id: 4 });
   for (const bad of [{ frame: "discover", disc_id: 0 }, { frame: "discover", disc_id: 1, script: "x" }, { frame: "discover" }]) {
     assert.throws(() => parseHostFrame(bad), ProtocolViolation, JSON.stringify(bad));
+  }
+});
+
+test("execute frames carry a valid tool name and bounded typed fields", () => {
+  const ok = { frame: "execute", exec_id: 3, tool: "search_reports", fields: [{ name: "q", control: "text", values: ["rust"] }] };
+  assert.deepEqual(parseHostFrame(ok), ok);
+  for (const bad of [
+    { ...ok, tool: "bad name" },
+    { ...ok, tool: 'x"]' },
+    { ...ok, exec_id: 0 },
+    { ...ok, fields: [{ name: "q", control: "hidden", values: ["x"] }] },
+    { ...ok, fields: [{ name: "q", control: "text", values: [1] }] },
+    { ...ok, fields: [{ name: "q\u0007", control: "text", values: ["x"] }] },
+    { ...ok, fields: [{ name: "q", control: "text", values: ["x"], script: "y" }] },
+    { ...ok, fields: Array.from({ length: 33 }, (_, i) => ({ name: `f${i}`, control: "text", values: [] })) },
+    { ...ok, fields: [{ name: "q", control: "text", values: ["x".repeat(1025)] }] },
+    { ...ok, extra: true }
+  ]) {
+    assert.throws(() => parseHostFrame(bad), ProtocolViolation, JSON.stringify(bad).slice(0, 80));
   }
 });

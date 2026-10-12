@@ -39,7 +39,7 @@ pub struct JobProcess {
 /// Generation 2 adds the slice-3a navigation frames, generation 3 slice-3b
 /// observation, generation 4 slice-3c activation, generation 5 slice-3d
 /// downloads.
-pub const WORKER_PROTOCOL_GENERATION: u32 = 6;
+pub const WORKER_PROTOCOL_GENERATION: u32 = 7;
 /// Worker identity reported in its hello.
 pub const WORKER_IDENTITY: &str = "qdral-browser-worker";
 /// The only Node option the worker accepts (inspector activation refused).
