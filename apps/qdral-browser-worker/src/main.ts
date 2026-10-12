@@ -11,6 +11,10 @@ import { refusedWorkerVariables, startupRefusal } from "./environment.js";
 import { encodeFrame, FrameDecoder, ProtocolViolation, type WorkerFrame } from "./protocol.js";
 import { installRoutes } from "./routes.js";
 import { boundSnapshot } from "./snapshot.js";
+import { discoverDeclarativeTools, DISCOVERY_BUDGET_MS } from "./webmcp/declarative.js";
+import { CAPTURE_TIMEOUT_MS, DISCOVERY_TOTAL_MS, fitTools } from "./webmcp/fit.js";
+import { captureWithin } from "./webmcp/capture.js";
+import { documentModel, type CapturedSnapshot } from "./webmcp/dom-snapshot.js";
 import { NavigationError, Worker, type EngineSession, type Launcher, type LaunchSpec, type RoutePolicy } from "./worker.js";
 
 const startup = startupRefusal(process.execArgv, process.version);
@@ -146,6 +150,31 @@ const playwrightLauncher: Launcher = {
       async observe() {
         const raw: unknown = await primary.ariaSnapshotJSON({ mode: "ai", depth: 16, timeout: 2_000 });
         return { url: primary.url(), snapshot: boundSnapshot(raw) };
+      },
+      async discover(discId: number) {
+        // The engine serialises its own DOM: no page script runs. The whole
+        // call (capture, discovery, fit) stays inside DISCOVERY_TOTAL_MS.
+        const started = Date.now();
+        const before = primary.url();
+        const session = await context.newCDPSession(primary);
+        // Playwright's protocol typings name this result differently;
+        // documentModel reads every field defensively (missing arrays are
+        // empty, a missing document throws into discovery_failed).
+        const captured = (await captureWithin(
+          {
+            capture: () => session.send("DOMSnapshot.captureSnapshot", { computedStyles: [] }),
+            detach: () => session.detach()
+          },
+          CAPTURE_TIMEOUT_MS
+        )) as CapturedSnapshot;
+        const model = documentModel(captured);
+        // The snapshot must be of the page's document: if the page moved
+        // during the capture, the result is stale and is refused.
+        const url = primary.url();
+        if (model.url !== url || before !== url) throw new Error("the document changed during discovery");
+        const remaining = Math.max(0, DISCOVERY_TOTAL_MS - CAPTURE_TIMEOUT_MS / 2 - (Date.now() - started));
+        const found = discoverDeclarativeTools(model.root, Math.min(DISCOVERY_BUDGET_MS, remaining));
+        return fitTools(discId, url, model.truncated || found.truncated, found.tools);
       },
       async close() {
         closing = true;

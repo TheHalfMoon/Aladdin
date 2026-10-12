@@ -9,11 +9,12 @@
 
 import { isIPv4, isIPv6 } from "node:net";
 import type { SnapshotNode } from "./snapshot.js";
+import type { DeclaredTool } from "./webmcp/declarative.js";
 
 /// Generation 2 adds the slice-3a navigation frames, generation 3 slice-3b
 /// observation, generation 4 slice-3c activation, generation 5 slice-3d
-/// downloads.
-export const WORKER_PROTOCOL_GENERATION = 5;
+/// downloads, generation 6 slice-4 WebMCP discovery.
+export const WORKER_PROTOCOL_GENERATION = 6;
 export const WORKER_IDENTITY = "qdral-browser-worker";
 export const MAX_FRAME_BYTES = 64 * 1024;
 
@@ -60,6 +61,7 @@ export type HostFrame =
   | { frame: "navigate"; nav_id: number; url: string }
   | { frame: "route_decision"; request_id: number; allow: boolean }
   | { frame: "observe"; obs_id: number }
+  | { frame: "discover"; disc_id: number }
   | { frame: "activate"; act_id: number; ref: string }
   | { frame: "download"; dl_id: number; ref: string; path: string }
   | { frame: "shutdown" };
@@ -80,6 +82,8 @@ export type WorkerFrame =
   | { frame: "navigation_failed"; nav_id: number; reason: NavigationFailure }
   | { frame: "observed"; obs_id: number; url: string; truncated: boolean; nodes: SnapshotNode[] }
   | { frame: "observation_failed"; obs_id: number }
+  | { frame: "discovered"; disc_id: number; url: string; truncated: boolean; tools: DeclaredTool[] }
+  | { frame: "discovery_failed"; disc_id: number }
   | { frame: "activated"; act_id: number; url: string; status: number }
   | { frame: "activation_failed"; act_id: number; reason: NavigationFailure }
   | { frame: "downloaded"; dl_id: number; url: string; name: string; media: string; bytes: number }
@@ -217,6 +221,10 @@ export function parseHostFrame(raw: unknown): HostFrame {
     case "observe": {
       exactKeys(raw, ["frame", "obs_id"]);
       return { frame: "observe", obs_id: positiveId(raw.obs_id, "obs_id") };
+    }
+    case "discover": {
+      exactKeys(raw, ["frame", "disc_id"]);
+      return { frame: "discover", disc_id: positiveId(raw.disc_id, "disc_id") };
     }
     case "route_decision": {
       exactKeys(raw, ["frame", "request_id", "allow"]);

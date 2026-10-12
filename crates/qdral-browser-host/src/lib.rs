@@ -19,6 +19,7 @@ mod remote_leases;
 mod supervise;
 mod transfers;
 mod uia;
+mod webmcp;
 mod worker_launch;
 mod worker_navigation;
 #[cfg(windows)]
@@ -101,6 +102,11 @@ pub use uia::{
     set_value, toggle, uia_coordinate_fallback, uia_target_digest, verify_pattern_support,
     verify_uia_target, ScrollDirection, SupportedPattern, UiaApproval, UiaElement, UiaLive,
     UiaProcess, UiaTarget, UiaWindow, MAX_SCROLL_AMOUNT, MAX_UIA_VALUE_CHARS, MIN_SCROLL_AMOUNT,
+};
+pub use webmcp::{
+    validate_tools, DiscoveredTool, DiscoveredTools, HostTool, PageText, ParamType, ToolParam,
+    WireParam, WireTool, MAX_CHOICE, MAX_CHOICES, MAX_PARAM_DESCRIPTION, MAX_PATTERN, MAX_TOOLS,
+    MAX_TOOL_DESCRIPTION, MAX_TOOL_NAME, MAX_TOOL_PARAMS, MAX_TOOL_TITLE,
 };
 pub use worker_launch::{
     classify_job, launch_worker, worker_environment, worker_node_args, BrowserWorker, CancelHandle,
