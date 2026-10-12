@@ -123,3 +123,11 @@ test("paragraphs are separate blocks, and a single oversized block is allowed", 
   assert.equal(chunks.length, 1);
   assert.equal(chunks[0]?.content, big);
 });
+
+test("splitting stays linear when a chunk holds many tiny blocks", () => {
+  const content = Array.from({ length: 60_000 }, (_, i) => (i % 2 === 0 ? "x" : "")).join("\n") + "\n# Late header\n\nTail.";
+  const started = Date.now();
+  const chunks = chunkMarkdown(content, 50_000);
+  assert.ok(Date.now() - started < 1_000, `took ${Date.now() - started} ms`);
+  assert.equal(chunks.at(-1)?.end, content.length);
+});

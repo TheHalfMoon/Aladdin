@@ -166,11 +166,14 @@ export function chunkMarkdown(content: string, maxChars = 100_000, overlapLines 
   let currentSize = 0;
   for (const block of blocks) {
     if (currentSize + size(block) > maxChars && current.length > 0) {
+      // Prefix sizes once per split (the donor sums inside the loop, which
+      // is quadratic in the blocks of a chunk).
+      const prefix: number[] = [0];
+      for (const b of current) prefix.push((prefix[prefix.length - 1] ?? 0) + size(b));
       let split = current.length;
       for (let j = current.length - 1; j > 0; j--) {
         if (current[j]?.type !== "header") continue;
-        const prefix = current.slice(0, j).reduce((sum, b) => sum + size(b), 0);
-        if (prefix >= maxChars * 0.5) {
+        if ((prefix[j] ?? 0) >= maxChars * 0.5) {
           split = j;
           break;
         }

@@ -72,7 +72,7 @@ const HEADINGS = new Map([
 ]);
 const BLOCK_LIKE = new Set(["pre", "blockquote", "ul", "ol", "table", "hr", "li"]);
 /// Nesting beyond this is flattened into plain text (iteratively).
-const MAX_DEPTH = 200;
+const MAX_DEPTH = 100;
 
 function attr(element: ContentElement, name: string): string | undefined {
   return element.attrs.get(name);

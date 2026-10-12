@@ -60,7 +60,7 @@ For the two MIT donors no grant is needed, and renaming is allowed. The copyrigh
 
 The browser-use extraction pipeline, ported to TypeScript as a pure library in `apps/qdral-browser-worker/src/extract/`. It is the Markdown half of slice 6 (native extraction) in `WEB_CAPABILITIES_DECISION.md`:
 - `model.ts`: the rendered content of the main document from a `DOMSnapshot.captureSnapshot` taken with three computed styles (`display`, `visibility`, `opacity`). No page script runs. A text node is content only if the engine rendered it (it has a layout object) and its computed visibility is visible. Subtrees with opacity 0 are dropped, as are non-content elements and form controls. Hidden text, the usual way to smuggle instructions to a model, never reaches the caller. Live form values are never read.
-- `markdown.ts`: content model to Markdown. Links and images are opt-in and kept only as resolved http(s) URLs. Output is bounded in size (default 1,000,000 characters) and time (default 4 s), and nesting past 200 levels is flattened.
+- `markdown.ts`: content model to Markdown. Links and images are opt-in and kept only as resolved http(s) URLs. Output is bounded in size (default 1,000,000 characters) and time (default 4 s), and nesting past 100 levels is flattened. Every step is linear in the input (the donor's lazy blob regexes and quadratic chunk splitting are replaced).
 - `clean.ts`: state-blob cleanup, plus the text safety rule (well formed, no controls, no invisible format characters).
 - `chunk.ts`: structure-aware chunking.
 - `index.ts`: `extractMarkdown(snapshot, options)`.

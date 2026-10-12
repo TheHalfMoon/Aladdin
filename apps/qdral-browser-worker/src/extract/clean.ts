@@ -29,16 +29,77 @@ export function safeText(text: string): string {
 /// stays: removal is a convenience, not a guarantee).
 const MAX_BLOB = 65_536;
 
-const CODE_JSON = new RegExp(`\`\\{["\\w][^\`]{0,${MAX_BLOB}}\\}\``, "g");
-const TYPED_JSON = new RegExp(`\\{"\\$type":[^}]{100,${MAX_BLOB}}\\}`, "g");
-const NESTED_JSON = new RegExp(`\\{"[^"]{5,256}":\\{[^}]{100,${MAX_BLOB}}\\}`, "g");
+/// Remove the spans `[start, end)` from `text` (sorted, non-overlapping).
+function cut(text: string, spans: Array<[number, number]>): string {
+  if (spans.length === 0) return text;
+  const parts: string[] = [];
+  let at = 0;
+  for (const [start, end] of spans) {
+    parts.push(text.slice(at, start));
+    at = end;
+  }
+  parts.push(text.slice(at));
+  return parts.join("");
+}
+
+/// Inline code holding a JSON object (`` `{"…}` `` or `` `{word…}` ``).
+/// Linear: each backtick is examined once. (The donor uses a lazy regex
+/// across the whole document.)
+function codeJsonSpans(text: string): Array<[number, number]> {
+  const spans: Array<[number, number]> = [];
+  let open = text.indexOf("`{");
+  while (open >= 0) {
+    const close = text.indexOf("`", open + 1);
+    if (close < 0) break;
+    const inner = text.slice(open + 1, close);
+    const second = inner[1] ?? "";
+    if (inner.endsWith("}") && inner.length - 1 <= MAX_BLOB && (second === '"' || /\w/.test(second))) {
+      spans.push([open, close + 1]);
+      open = text.indexOf("`{", close + 1);
+    } else {
+      open = text.indexOf("`{", open + 1);
+    }
+  }
+  return spans;
+}
+
+/// Objects `{"<key>":` + at least 100 characters other than `}` + `}`,
+/// where `<key>` is `$type` (the donor's `$type` pattern) or a nested
+/// object's key of 5 to 256 characters followed by `{` (its nested
+/// pattern). Linear: the next `}` is found once per region, not per start.
+function stateObjectSpans(text: string): Array<[number, number]> {
+  const spans: Array<[number, number]> = [];
+  let nextBrace = -1;
+  let from = 0;
+  for (let start = text.indexOf('{"', from); start >= 0; start = text.indexOf('{"', from)) {
+    from = start + 2;
+    let body = -1;
+    if (text.startsWith('{"$type":', start)) {
+      body = start + 9;
+    } else {
+      const quote = text.indexOf('"', start + 2);
+      const keyLength = quote - (start + 2);
+      if (quote > 0 && keyLength >= 5 && keyLength <= 256 && text.startsWith('":{', quote)) body = quote + 3;
+    }
+    if (body < 0) continue;
+    if (nextBrace < body) nextBrace = text.indexOf("}", body);
+    if (nextBrace < 0) break;
+    const length = nextBrace - body;
+    if (length >= 100 && length <= MAX_BLOB) {
+      spans.push([start, nextBrace + 1]);
+      from = nextBrace + 1;
+    }
+  }
+  return spans;
+}
 
 /// Remove SPA state blobs and tidy blank lines: JSON in inline code, long
 /// `$type` objects and nested objects, and whole lines that parse as long
 /// JSON are removed; whitespace-only lines become blank, and blank runs a
-/// single blank line.
+/// single blank line. Linear in the input.
 export function cleanMarkdown(content: string): string {
-  const out = content.replace(CODE_JSON, "").replace(TYPED_JSON, "").replace(NESTED_JSON, "");
+  const withoutCode = cut(content, codeJsonSpans(content));
+  const out = cut(withoutCode, stateObjectSpans(withoutCode));
   const kept: string[] = [];
   for (const line of out.split("\n")) {
     const stripped = line.trim();

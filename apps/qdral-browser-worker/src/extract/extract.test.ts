@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { extractMarkdown, type ExtractOptions } from "./index.js";
+import { cleanMarkdown } from "./clean.js";
 import { CONTENT_STYLES, type LayoutSnapshot } from "./model.js";
 
 // A CDP-shaped DOMSnapshot builder. Elements render (have a layout object)
@@ -209,4 +210,19 @@ test("deep nesting is flattened instead of overflowing the stack", () => {
   let deep: Spec = el("p", {}, "Deep text");
   for (let i = 0; i < 5_000; i++) deep = el("div", {}, deep);
   assert.equal(md({}, deep), "Deep text");
+});
+
+test("state-blob cleanup removes what the donor removes, in linear time", () => {
+  const long = "a".repeat(120);
+  assert.equal(cleanMarkdown(`keep \`{"a":"${long}"}\` this`), "keep  this");
+  assert.equal(cleanMarkdown(`before {"$type":"${long}"} after`), "before  after");
+  assert.equal(cleanMarkdown(`x {"someKey":{"v":"${long}"} y`), "x  y");
+  assert.equal(cleanMarkdown(`short {"$type":"x"} stays`), 'short {"$type":"x"} stays');
+  assert.equal(cleanMarkdown("`{not closed and `code` here"), "`{not closed and `code` here");
+  // Many unclosed openers: the donor's lazy patterns would rescan the rest
+  // of the document from each one.
+  const hostile = ("`{a " + '{"$type":' + '{"abcdefg":{').repeat(30_000) + "x".repeat(200_000);
+  const started = Date.now();
+  cleanMarkdown(hostile);
+  assert.ok(Date.now() - started < 1_000, `took ${Date.now() - started} ms`);
 });
