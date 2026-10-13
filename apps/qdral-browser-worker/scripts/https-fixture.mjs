@@ -213,7 +213,10 @@ const FILES = `<!doctype html><title>Files</title><ul>
 <li><a href="/files/fake.pdf">Disguised 2026-01-02</a></li>
 <li><a href="/files/poly.pdf">Polyglot 2026-01-03</a></li>
 <li><a href="/reports/2026-09-30.pdf#page=2">Fragment 2026-01-04</a></li>
-<li><a href="/files/stall.pdf">Stalled 2026-01-05</a></li></ul>`;
+<li><a href="/files/stall.pdf">Stalled 2026-01-05</a></li>
+<li><a href="/files/missing.pdf">Missing 2026-01-06</a></li>
+<li><a href="/files/moved.pdf">Moved 2026-01-07</a></li>
+<li><a href="/files/plain.pdf">Plain 2026-01-08</a></li></ul>`;
 const ARCHIVE = `<!doctype html><title>Archive</title><ul>
 <li><a href="/archive/2026-06-30">Annual review 2026-06-30</a></li>
 <li><a href="/archive/2026-09-30">Annual review 2026-09-30</a></li>
@@ -316,6 +319,17 @@ trailer << /Root 1 0 R >>
     response.setHeader("content-type", "application/pdf");
     response.setHeader("content-length", String(body.length));
     return response.end(body);
+  }
+  // #307: typed download failures, and a plain PDF for the junction case.
+  if (path === "/files/missing.pdf") {
+    response.statusCode = 404;
+    response.setHeader("content-type", "text/html");
+    return response.end("<!doctype html><title>Missing</title>");
+  }
+  if (path === "/files/moved.pdf") return redirect("/files/plain.pdf");
+  if (path === "/files/plain.pdf") {
+    response.setHeader("content-type", "application/pdf");
+    return response.end("%PDF-1.4\n% plain\n");
   }
   if (path === "/files/oversized.pdf") {
     response.setHeader("content-type", "application/pdf");

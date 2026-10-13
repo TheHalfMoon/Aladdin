@@ -209,7 +209,7 @@ const playwrightLauncher: Launcher = {
         // On any failure the page is closed: a document arriving after the
         // capture gave up would otherwise be rendered. The host requires a
         // fresh navigation (which opens a new page) before acting again.
-        const fail = async (reason: "failed" | "timeout"): Promise<never> => {
+        const fail = async (reason: "failed" | "timeout" | "http_status" | "oversized"): Promise<never> => {
           await page.close().catch(() => {});
           throw new NavigationError(reason);
         };
@@ -222,9 +222,14 @@ const playwrightLauncher: Launcher = {
         try {
           document = await captured;
         } catch (error) {
-          return fail((error as Error).name === "TimeoutError" ? "timeout" : "failed");
+          // The capture's own refusals are typed (#307).
+          const { name, message } = error as Error;
+          if (name === "TimeoutError") return fail("timeout");
+          if (message === "status") return fail("http_status");
+          if (message === "oversized") return fail("oversized");
+          return fail("failed");
         }
-        if (document.status < 200 || document.status >= 300) return fail("failed");
+        if (document.status < 200 || document.status >= 300) return fail("http_status");
         writeFileSync(path, document.body, { flag: "wx" });
         return {
           url: document.url,

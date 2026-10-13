@@ -617,10 +617,10 @@ pub(crate) fn sha256_hex(content: &[u8]) -> String {
 }
 
 /// Write `content` create-only (an existing file is never replaced), then
-/// verify through the real path that the file is inside `root` (a junction
-/// or symlink in the path would otherwise redirect it); on escape the file
-/// is removed and the commit refused.
-#[cfg(any(windows, test))]
+/// verify through the real path that the file is inside `root`. A portable
+/// model of the commit for unit tests off Windows; the product commit is
+/// `approved_folder::commit`, which writes through held handles (#307).
+#[cfg(all(test, not(windows)))]
 pub(crate) fn commit_create_only(
     destination: &Path,
     root: &Path,
@@ -731,6 +731,20 @@ pub(crate) fn submission_of(
             .map(|field| field.name.clone())
             .collect(),
         fixed: tool.fixed_names.clone(),
+    }
+}
+
+/// Map a worker download failure onto the typed vocabulary (#307).
+#[cfg(any(windows, test))]
+pub(crate) fn download_failure(reason: &str) -> HostError {
+    use crate::error::DownloadFailure;
+    match reason {
+        "http_status" => HostError::Download(DownloadFailure::HttpStatus),
+        "oversized" => HostError::Download(DownloadFailure::Oversized),
+        "timeout" => HostError::Download(DownloadFailure::TimedOut),
+        "failed" => HostError::Download(DownloadFailure::EngineFailed),
+        "busy" => HostError::Unavailable(UnavailableReason::ActionFailed),
+        _ => HostError::Unavailable(UnavailableReason::ProtocolViolation),
     }
 }
 
@@ -2068,6 +2082,13 @@ mod platform {
                 ));
             }
             let binding = self.download_binding(&target.node_id, destination_root, relative)?;
+            // The approved folder's real path, as the approval names it: the
+            // commit writes only into that folder.
+            let bound_root = binding
+                .split('\n')
+                .nth(2)
+                .map(str::to_owned)
+                .ok_or(HostError::Unavailable(UnavailableReason::ProtocolViolation))?;
             let normalized = crate::transfers::validate_relative_destination(relative)?;
             let destination = destination_root.join(&normalized);
             if destination.exists() {
@@ -2118,8 +2139,7 @@ mod platform {
                 &reference,
                 &staged,
                 &link,
-                &destination,
-                destination_root,
+                (destination_root, &bound_root, &normalized),
             );
             let opened_expected = self.policy.finish_activation();
             let _ = std::fs::remove_file(&staged);
@@ -2157,9 +2177,9 @@ mod platform {
             reference: &str,
             staged: &Path,
             link: &str,
-            destination: &Path,
-            destination_root: &Path,
+            (destination_root, bound_root, relative): (&Path, &str, &str),
         ) -> Result<CommittedDownload, HostError> {
+            let destination = &destination_root.join(relative);
             let staged_text = path_text(staged, "staging path")?;
             self.send(&WorkerRequest::Download {
                 dl_id,
@@ -2179,7 +2199,7 @@ mod platform {
                 WorkerReply::DownloadFailed {
                     dl_id: done,
                     reason,
-                } if done == dl_id => return Err(navigation_failure(&reason)),
+                } if done == dl_id => return Err(download_failure(&reason)),
                 _ => return Err(HostError::Unavailable(UnavailableReason::ProtocolViolation)),
             };
             // Exactly the approved document: redirects are not followed.
@@ -2238,9 +2258,10 @@ mod platform {
             if self.cancelled.load(Ordering::SeqCst) {
                 return Err(self.fail_closed(UnavailableReason::Cancelled));
             }
-            commit_create_only(destination, destination_root, &content)?;
+            let path =
+                crate::approved_folder::commit(destination_root, bound_root, relative, &content)?;
             Ok(CommittedDownload {
-                path: destination.to_path_buf(),
+                path,
                 sha256,
                 bytes: content.len() as u64,
                 source_url: url,
@@ -2721,6 +2742,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
+    #[cfg(not(windows))]
     #[test]
     fn downloads_commit_create_only_inside_the_approved_folder() {
         let root = std::env::temp_dir().join(format!(
@@ -2927,6 +2949,30 @@ mod tests {
             r#"{"frame":"executed","exec_id":3,"url":"u","status":200,"structured":[],"structured_complete":true,"extra":1}"#
         )
         .is_err());
+    }
+
+    #[test]
+    fn download_failures_are_typed() {
+        use crate::error::DownloadFailure;
+        for (reason, expected) in [
+            ("http_status", DownloadFailure::HttpStatus),
+            ("oversized", DownloadFailure::Oversized),
+            ("timeout", DownloadFailure::TimedOut),
+            ("failed", DownloadFailure::EngineFailed),
+        ] {
+            assert!(
+                matches!(download_failure(reason), HostError::Download(got) if got == expected),
+                "{reason}"
+            );
+        }
+        assert!(matches!(
+            download_failure("busy"),
+            HostError::Unavailable(UnavailableReason::ActionFailed)
+        ));
+        assert!(matches!(
+            download_failure("denied-by-magic"),
+            HostError::Unavailable(UnavailableReason::ProtocolViolation)
+        ));
     }
 
     #[test]

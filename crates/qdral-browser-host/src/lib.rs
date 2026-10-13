@@ -2,6 +2,8 @@
 //! supervision, and errors. No MCP tools, no network, no execution.
 
 mod actuation;
+#[cfg(windows)]
+mod approved_folder;
 mod argv;
 mod capture;
 mod confinement;
@@ -56,7 +58,7 @@ pub use crawl::{
     MAX_PATH_PATTERNS, MAX_PATH_PATTERN_BYTES, MAX_SITEMAPS, MAX_SKIPPED_REPORTED,
 };
 pub use discovery::{discover_engine, Engine, EngineKind, SearchConfig};
-pub use error::{HostError, UnavailableReason};
+pub use error::{DownloadFailure, HostError, UnavailableReason};
 pub use exposure::{
     is_denied_shape, is_live_exposed, is_qualified_shape, profile_tools,
     remote_browser_mapping_enabled, BROWSER_STRUCTURED_PROFILE, DENIED_BROWSER_SHAPES,

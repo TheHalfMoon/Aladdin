@@ -528,7 +528,7 @@ A fresh-context judge's first round on these slices was BLOCK. The byte-safe dat
   - applies the type check to the destination's name;
   - requires that the approved link was the document requested;
   - records the SHA-256 digest;
-  - commits create-only (`create_new`). Each missing folder is created only after its parent's real path is checked to be inside the approved folder, so a junction gets nothing created behind it, and the file's real path is re-checked after writing.
+  - commits create-only through held handles (#307, below). Each folder below the approved folder, and the file itself, is opened relative to its parent's handle without following any reparse point.
 
   An existing destination is refused before anything is sent. The staging directory exists before the approval is consumed. The staging file is always removed, and the staging directory is removed at shutdown.
 - **After a download**, the committed document is the inert blank page, one generation later, and every earlier node identity is stale. A caller observes again only after navigating again.
@@ -538,7 +538,7 @@ A fresh-context judge's first round on these slices was BLOCK. The byte-safe dat
 - A link whose server redirects, even within the same origin, cannot be downloaded. It fails closed, and the approval is spent.
 - A link with a fragment (`#...`) cannot be downloaded. It is refused before the approval is consumed.
 - A PDF can still contain active content. Aladdin does not render or open it, but a user who opens the stored file later is outside this boundary.
-- The junction check has no native test: creating a junction in a test needs a shell or `DeviceIoControl`, and the governance test bans the shell. The fresh-context judge verified the earlier residue by experiment, and the fix is covered by reading.
+- The junction check now has native tests (#307): junctions are created with `DeviceIoControl` and `FSCTL_SET_REPARSE_POINT`, with no shell.
 
 **Evidence (local, Edge 155), from the native journey E2E test on the HTTPS fixture** (`the_journey_downloads_the_latest_report_create_only_and_verified`):
 - The host selects the latest dated report. The approved download stores exactly the fixture's bytes, verified independently along with their SHA-256 digest, at the approved relative path.
@@ -576,4 +576,36 @@ A fresh-context judge's first round on this slice was BLOCK. The destination-nam
   - **Crash:** in a second lifetime, the worker is killed mid-download. The outcome is `WorkerExited`, the approval is spent, nothing is committed or staged, and every member dies. A later `navigate` reports `WorkerExited`, and `kill` cleans up as above.
 - **Known limits (follow-ups in #309).**
   - A worker that writes the staged `.part` file and then dies before replying is handled by reading only: the host removes the staged file on every outcome, and the staging folder at the end of the lifetime. No test reaches that path.
-  - A host crash is outside A6, which is about the worker and its operations. It can leave an empty or partial file in the approved folder (between `create_new` and the post-write check) and the staging folder in `temp_dir`.
+  - A host crash is outside A6, which is about the worker and its operations. Since #307 it can no longer leave a file in the approved folder: the content is written to a temporary file marked for deletion, which the system removes when the host's handles close. It can still leave the staging folder in `temp_dir`.
+
+**#307: download commits through held handles, and typed download failures.**
+
+- **The approved folder is bound at commit.** The approval's `download_binding` names the approved folder's real path. At commit, the host opens the folder once and requires the handle's real path (`GetFinalPathNameByHandleW`) to equal the bound one. A folder whose path now leads elsewhere, such as a junction retargeted between approval and commit, is refused as "the approved folder changed since it was approved".
+- **No window between check and create.**
+  - **The folder is held:** it is held without delete sharing for the whole commit, so it cannot be renamed, removed or replaced.
+  - **Handle-relative opens:** each subfolder, and the file, is opened or created relative to its parent's handle with `NtCreateFile` and `OBJ_DONT_REPARSE`. A junction, symlink or mount point anywhere below the folder therefore refuses the write ("a reparse point below it") instead of redirecting it.
+  - **Subfolders are held too:** each is held without delete sharing until the file has its name.
+  - **Replaced:** this takes the place of the earlier path-based checks, which re-canonicalised the folder and could write once before the post-write check removed an escaped file.
+- **No partial file, even if the host dies.** The content is written to a hidden temporary file in the target folder, marked delete-on-close (`FileDispositionInfo`), so the system removes it if the host dies first. It is flushed, the mark is cleared, and the file is renamed onto its name relative to the folder's handle with `NtSetInformationFile` (`FileRenameInformation`, no replace), so an existing file is never replaced. A final check requires the named file's real path to be inside the held folder. Otherwise the file is marked for deletion again and the commit refused.
+- **Typed download failures.** A download that commits nothing reports a `HostError::Download` reason:
+  - `HttpStatus`: a non-2xx answer, a redirect included, since the approved document is exactly the approved link;
+  - `Oversized`: past the transfer bound;
+  - `TimedOut`: no document in time; a request the browser policy refuses never answers, so it also ends here;
+  - `EngineFailed`: the click or capture failed.
+
+  A worker that reports `busy` stays `Unavailable(ActionFailed)`, and unknown reasons stay `ProtocolViolation`.
+- **Evidence.**
+  - **Unit tests on real NTFS** (`approved_folder.rs`, Windows; junctions made with `FSCTL_SET_REPARSE_POINT`, no shell):
+    - a nested create-only commit leaves exactly one file and no temporary file;
+    - a second commit to the same name is refused, and the first is unchanged;
+    - a junction directly below, or two levels below, the folder refuses the write, and its target stays empty, while the same folder accepts a write that does not pass through it;
+    - a folder path retargeted from one real folder to another after approval is refused, and neither folder receives a file;
+    - a held folder can be neither renamed nor removed until it is released;
+    - a file where a folder should be refuses the write and is unchanged.
+  - **Unit tests on all platforms:** the download failure mapping.
+  - **Native E2E** (Edge, HTTPS fixture):
+    - the stalled download is `Download(TimedOut)`, and the 9 MiB one is `Download(Oversized)`;
+    - a 404 and a same-origin redirect are both `Download(HttpStatus)`, and nothing lands;
+    - a real download to `link\plain.pdf`, where `link` is a junction inside the approved folder to a writable outside folder, is refused with "reparse point", and the outside folder stays empty;
+    - the same download to `real\plain.pdf` commits the fixture's exact bytes.
+- **Known limit.** A request the browser policy refuses during a download surfaces as `TimedOut`, not as a policy refusal, because the refused request never produces a response for the capture.

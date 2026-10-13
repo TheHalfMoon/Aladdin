@@ -98,7 +98,7 @@ export type HostFrame =
 
 export type RouteKind = "document" | "redirect" | "frame" | "popup" | "fetch" | "subresource" | "service_worker";
 
-export type NavigationFailure = "denied" | "timeout" | "failed" | "busy";
+export type NavigationFailure = "denied" | "timeout" | "failed" | "busy" | "http_status" | "oversized";
 
 export type ErrorCode = "protocol_violation" | "launch_refused" | "launch_failed" | "engine_exited" | "not_ready";
 
