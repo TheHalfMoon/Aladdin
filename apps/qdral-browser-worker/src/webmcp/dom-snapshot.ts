@@ -17,6 +17,7 @@ export const MAX_SNAPSHOT_NODES = 100_000;
 export interface CapturedSnapshot {
   documents: Array<{
     documentURL?: number;
+    encodingName?: number;
     nodes: {
       parentIndex?: number[];
       nodeType?: number[];
@@ -25,6 +26,9 @@ export interface CapturedSnapshot {
       backendNodeId?: number[];
       attributes?: number[][];
       shadowRootType?: { index: number[]; value: number[] };
+      inputValue?: { index: number[]; value: number[] };
+      inputChecked?: { index: number[] };
+      optionSelected?: { index: number[] };
     };
   }>;
   strings: string[];
@@ -38,6 +42,7 @@ interface MutableElement {
   parent: MutableElement | null;
   node: number;
   inShadow?: boolean;
+  live?: { value?: string; checked?: boolean; selected?: boolean };
 }
 
 export interface DocumentModel {
@@ -45,6 +50,9 @@ export interface DocumentModel {
   truncated: boolean;
   /// The snapshot's own document URL.
   url: string;
+  /// The document's encoding as the engine reports it, lowercased ("" when
+  /// not reported).
+  encoding: string;
 }
 
 /// Build the model of the first (main-frame) document. Element names are
@@ -68,6 +76,11 @@ export function documentModel(snapshot: CapturedSnapshot): DocumentModel {
   const slots: Array<MutableElement | undefined> = [];
   const count = Math.min(nodeType.length, MAX_SNAPSHOT_NODES);
   const shadowed = new Set(nodes.shadowRootType?.index ?? []);
+  // Live control state (rare data, by node index).
+  const values = new Map<number, number>();
+  (nodes.inputValue?.index ?? []).forEach((at, k) => values.set(at, nodes.inputValue?.value[k] ?? -1));
+  const checked = new Set(nodes.inputChecked?.index ?? []);
+  const selected = new Set(nodes.optionSelected?.index ?? []);
   // The `#shadow-root` inserted under each host, by host index.
   const shadowRoots = new Map<number, MutableElement>();
   for (let i = 0; i < count; i++) {
@@ -104,6 +117,13 @@ export function documentModel(snapshot: CapturedSnapshot): DocumentModel {
         node: backend[i] ?? 0,
         inShadow: marked
       };
+      if (values.has(i) || checked.has(i) || selected.has(i)) {
+        element.live = {
+          ...(values.has(i) ? { value: text(values.get(i)) } : {}),
+          ...(checked.has(i) ? { checked: true } : {}),
+          ...(selected.has(i) ? { selected: true } : {})
+        };
+      }
       parent.children.push(element);
       slots[i] = element;
     } else if (type === 3) {
@@ -118,5 +138,5 @@ export function documentModel(snapshot: CapturedSnapshot): DocumentModel {
       slots[i] = shadow;
     }
   }
-  return { root, truncated: nodeType.length > MAX_SNAPSHOT_NODES, url: text(doc.documentURL) };
+  return { root, truncated: nodeType.length > MAX_SNAPSHOT_NODES, url: text(doc.documentURL), encoding: text(doc.encodingName).trim().toLowerCase() };
 }
