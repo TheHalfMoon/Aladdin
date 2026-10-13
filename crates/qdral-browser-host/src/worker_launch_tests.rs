@@ -12,7 +12,7 @@ use crate::confinement::{PolicyHive, PolicyKeyState, RegistryPolicySource};
 use crate::discovery::{discover_engine, Engine, SearchConfig};
 use std::fs::File;
 use std::io::Read;
-use std::net::{IpAddr, Ipv4Addr};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::os::windows::io::FromRawHandle;
 use std::os::windows::process::CommandExt;
 use std::sync::mpsc;
@@ -126,6 +126,379 @@ fn job_pids(worker: &BrowserWorker) -> Vec<u32> {
         .iter()
         .map(|process| process.pid)
         .collect()
+}
+
+/// #324: a socket as the OS connection tables report it.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+struct Endpoint {
+    /// "tcp" (a connection), "tcp-listen" (no remote yet) or "udp".
+    kind: &'static str,
+    local: SocketAddr,
+    /// The peer of a TCP connection.
+    remote: Option<SocketAddr>,
+    pid: u32,
+}
+
+impl Endpoint {
+    /// The address that makes it non-loopback: the peer of a connection,
+    /// else the bound address.
+    fn exposed(&self) -> SocketAddr {
+        self.remote.unwrap_or(self.local)
+    }
+}
+
+/// Every row of the OS's TCP and UDP tables (`GetExtendedTcpTable` /
+/// `GetExtendedUdpTable`, IPv4 and IPv6, all owners), with ports. Sockets
+/// that are bound but neither listening nor connected do not appear in
+/// these tables.
+fn socket_table() -> Vec<Endpoint> {
+    use windows_sys::Win32::NetworkManagement::IpHelper::{
+        GetExtendedTcpTable, GetExtendedUdpTable, TCP_TABLE_OWNER_PID_ALL, UDP_TABLE_OWNER_PID,
+    };
+    // Winsock address families (documented values).
+    const AF_INET: u16 = 2;
+    const AF_INET6: u16 = 23;
+    fn table(tcp: bool, family: u16) -> Vec<u8> {
+        let mut size = 0u32;
+        let mut buffer = Vec::new();
+        for _ in 0..8 {
+            buffer.resize(size as usize + 4096, 0);
+            size = buffer.len() as u32;
+            // SAFETY: `buffer` is writable for `size` bytes; the call writes
+            // at most that and reports the size it needs otherwise.
+            let status = unsafe {
+                if tcp {
+                    GetExtendedTcpTable(
+                        buffer.as_mut_ptr().cast(),
+                        &mut size,
+                        0,
+                        family as u32,
+                        TCP_TABLE_OWNER_PID_ALL,
+                        0,
+                    )
+                } else {
+                    GetExtendedUdpTable(
+                        buffer.as_mut_ptr().cast(),
+                        &mut size,
+                        0,
+                        family as u32,
+                        UDP_TABLE_OWNER_PID,
+                        0,
+                    )
+                }
+            };
+            if status == 0 {
+                buffer.truncate(size as usize);
+                return buffer;
+            }
+        }
+        panic!("the connection table could not be read");
+    }
+    let word = |bytes: &[u8], at: usize| u32::from_le_bytes(bytes[at..at + 4].try_into().unwrap());
+    let mut rows = Vec::new();
+    // Row layouts after a u32 entry count: MIB_TCPROW_OWNER_PID (24 bytes),
+    // MIB_TCP6ROW_OWNER_PID (56), MIB_UDPROW_OWNER_PID (12),
+    // MIB_UDP6ROW_OWNER_PID (28). Ports are in network order in the low two
+    // bytes of their DWORD.
+    // (tcp, family, row size, local address, local port, remote address,
+    // remote port, pid)
+    for (tcp, family, row, local, local_port, remote, remote_port, pid_at) in [
+        (
+            true, AF_INET, 24usize, 4usize, 8usize, 12usize, 16usize, 20usize,
+        ),
+        (true, AF_INET6, 56, 0, 20, 24, 44, 52),
+        (false, AF_INET, 12, 0, 4, 0, 0, 8),
+        (false, AF_INET6, 28, 0, 20, 0, 0, 24),
+    ] {
+        let bytes = table(tcp, family);
+        let count = word(&bytes, 0) as usize;
+        for index in 0..count {
+            let base = 4 + index * row;
+            let socket = |address: usize, port: usize| -> SocketAddr {
+                let ip: IpAddr = if family == AF_INET {
+                    Ipv4Addr::from(u32::from_be(word(&bytes, base + address))).into()
+                } else {
+                    let octets: [u8; 16] = bytes[base + address..base + address + 16]
+                        .try_into()
+                        .unwrap();
+                    std::net::Ipv6Addr::from(octets).into()
+                };
+                SocketAddr::new(
+                    ip,
+                    u16::from_be_bytes([bytes[base + port], bytes[base + port + 1]]),
+                )
+            };
+            let local = socket(local, local_port);
+            let (kind, remote) = if !tcp {
+                ("udp", None)
+            } else {
+                let peer = socket(remote, remote_port);
+                if peer.ip().is_unspecified() {
+                    ("tcp-listen", None)
+                } else {
+                    ("tcp", Some(peer))
+                }
+            };
+            rows.push(Endpoint {
+                kind,
+                local,
+                remote,
+                pid: word(&bytes, base + pid_at),
+            });
+        }
+    }
+    rows
+}
+
+/// #324: every socket a process in `pids` holds that is not loopback: a TCP
+/// connection to anything but loopback, a TCP listener or UDP endpoint
+/// bound to anything but loopback. The enforcement view, independent of any
+/// browser flag or request log.
+fn non_loopback_endpoints(pids: &[u32]) -> Vec<Endpoint> {
+    let mut found: Vec<Endpoint> = socket_table()
+        .into_iter()
+        .filter(|row| pids.contains(&row.pid) && !row.exposed().ip().is_loopback())
+        .collect();
+    found.sort();
+    found.dedup();
+    found
+}
+
+/// Every address this host's own sockets are bound to (both families).
+fn local_addresses() -> std::collections::BTreeSet<IpAddr> {
+    socket_table().iter().map(|row| row.local.ip()).collect()
+}
+
+/// Poll `pids()` for `duration`, collecting every non-loopback endpoint.
+fn endpoints_over(duration: Duration, pids: impl Fn() -> Vec<u32>) -> Vec<Endpoint> {
+    let deadline = Instant::now() + duration;
+    let mut all = std::collections::BTreeSet::new();
+    while Instant::now() < deadline {
+        all.extend(non_loopback_endpoints(&pids()));
+        std::thread::sleep(Duration::from_millis(500));
+    }
+    all.into_iter().collect()
+}
+
+#[test]
+#[ignore = "requires the built browser worker and Edge; run by npm run browser-launcher:native"]
+fn a_confined_lifetime_holds_no_network_endpoint_but_loopback() {
+    // #324: the whole job (browser, every helper, identity_helper included)
+    // holds no non-loopback endpoint while idle on the loopback fixture, as
+    // the OS reports it.
+    let fixture = HttpsFixture::start();
+    let profile = temp_profile("endpoints");
+    let mut launch = spec(&profile, true);
+    launch.test_trusted_spki = Some(fixture.spki.clone());
+    let mut worker = launch_worker(&launch, &Policy(PolicyKeyState::Absent)).expect("launch");
+    worker
+        .navigate("https://fixture.test/reports")
+        .expect("the fixture is reachable through the admitted path");
+    let seen = endpoints_over(Duration::from_secs(90), || job_pids(&worker));
+    println!("SG108-EVIDENCE confined idle endpoints over 90 s: {seen:?}");
+    assert!(
+        seen.is_empty(),
+        "the idle confined lifetime holds a network endpoint: {seen:?}"
+    );
+    worker
+        .ping("after-endpoints")
+        .expect("the lifetime goes on");
+    let report = worker.shutdown();
+    assert!(report.job_empty, "the job did not empty");
+    assert_profile_gone(report.profile_removed, &profile);
+}
+
+/// This host's own non-loopback IPv4 address, if it has one (a UDP
+/// "connect" sends nothing; it only selects the route).
+fn lan_address() -> Option<Ipv4Addr> {
+    let probe = std::net::UdpSocket::bind("0.0.0.0:0").ok()?;
+    probe.connect("192.0.2.1:9").ok()?;
+    match probe.local_addr().ok()?.ip() {
+        IpAddr::V4(address) if !address.is_loopback() && !address.is_unspecified() => Some(address),
+        _ => None,
+    }
+}
+
+#[test]
+#[ignore = "requires the built browser worker and Edge; run by npm run browser-launcher:native"]
+fn a_page_cannot_reach_the_lan_through_webrtc_fetch_or_sockets() {
+    // #324: an admitted page tries WebRTC ICE (STUN over UDP and TCP),
+    // fetch, WebSocket and sendBeacon toward this host's own LAN address,
+    // where the test listens. The enforcement evidence is twofold: nothing
+    // arrives at the listeners, and the OS shows no TCP connection, no
+    // listener and no mDNS endpoint of the job beyond loopback. WebRTC's
+    // ephemeral ICE sockets (bound, sending nothing under the UDP policy)
+    // are reported.
+    let Some(lan) = lan_address() else {
+        println!("SG108-EVIDENCE no non-loopback interface: the LAN egress check is skipped");
+        return;
+    };
+    let udp = std::net::UdpSocket::bind((lan, 0)).expect("udp listener");
+    udp.set_read_timeout(Some(Duration::from_millis(200)))
+        .expect("timeout");
+    let tcp = std::net::TcpListener::bind((lan, 0)).expect("tcp listener");
+    tcp.set_nonblocking(true).expect("nonblocking");
+    let (udp_port, tcp_port) = (
+        udp.local_addr().unwrap().port(),
+        tcp.local_addr().unwrap().port(),
+    );
+    // Positive control: the listeners are reachable at that address (no
+    // firewall drops what arrives there), so "nothing arrived" means the
+    // page sent nothing.
+    let mut buffer = [0u8; 2048];
+    std::net::UdpSocket::bind((lan, 0))
+        .and_then(|probe| probe.send_to(b"control", (lan, udp_port)))
+        .expect("control datagram");
+    assert!(
+        udp.recv_from(&mut buffer).is_ok(),
+        "the UDP listener is not reachable at {lan}"
+    );
+    let _control = std::net::TcpStream::connect_timeout(
+        &SocketAddr::from((lan, tcp_port)),
+        Duration::from_secs(5),
+    )
+    .expect("control connection");
+    let accepted = (0..50).any(|_| {
+        std::thread::sleep(Duration::from_millis(20));
+        tcp.accept().is_ok()
+    });
+    assert!(accepted, "the TCP listener is not reachable at {lan}");
+    let fixture = HttpsFixture::start();
+    let profile = temp_profile("endpoints-page");
+    let mut launch = spec(&profile, true);
+    launch.test_trusted_spki = Some(fixture.spki.clone());
+    let mut worker = launch_worker(&launch, &Policy(PolicyKeyState::Absent)).expect("launch");
+    worker
+        .navigate(&format!(
+            "https://fixture.test/rtc?ip={lan}&udp={udp_port}&tcp={tcp_port}"
+        ))
+        .expect("rtc page");
+    let deadline = Instant::now() + Duration::from_secs(60);
+    let mut seen = std::collections::BTreeSet::new();
+    let (mut datagrams, mut connections) = (0usize, 0usize);
+    while Instant::now() < deadline {
+        seen.extend(non_loopback_endpoints(&job_pids(&worker)));
+        if udp.recv_from(&mut buffer).is_ok() {
+            datagrams += 1;
+        }
+        if tcp.accept().is_ok() {
+            connections += 1;
+        }
+    }
+    // Any TCP connection or listener, and mDNS (UDP 5353) on any address.
+    let flagged: Vec<&Endpoint> = seen
+        .iter()
+        .filter(|entry| entry.kind != "udp" || entry.local.port() == 5353)
+        .collect();
+    let ice = seen.iter().filter(|entry| entry.kind == "udp").count();
+    println!(
+        "SG108-EVIDENCE page egress: {datagrams} datagrams and {connections} connections at {lan}; flagged endpoints {flagged:?}; {ice} ephemeral ICE UDP endpoints"
+    );
+    assert_eq!(
+        (datagrams, connections),
+        (0, 0),
+        "a page reached the LAN listener"
+    );
+    // The page's script did run: WebRTC gathered candidates on sockets of
+    // its own.
+    assert!(ice > 0, "the page never created a peer connection");
+    assert!(
+        flagged.is_empty(),
+        "the job held a network endpoint beyond loopback: {flagged:?}"
+    );
+    // The page did run: the fixture served it.
+    assert!(fixture.hits().iter().any(|hit| hit.contains("/rtc?")));
+    let report = worker.shutdown();
+    assert!(report.job_empty, "the job did not empty");
+    assert_profile_gone(report.profile_removed, &profile);
+}
+
+#[test]
+#[ignore = "requires the built browser worker and Edge; run by npm run browser-launcher:native"]
+fn the_endpoint_scan_detects_an_unconfined_engine() {
+    // #324 negative control: the same scan, over an Edge started with the
+    // production argv minus the disabled features. On a host whose Edge
+    // reaches out (a Microsoft account, Cast devices on the LAN), it must
+    // find the leak; QDRAL_SG108_EXPECT_LEAK=1 makes that a requirement.
+    // Elsewhere the result is reported only.
+    use windows_sys::Win32::System::Diagnostics::ToolHelp::{
+        CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W,
+        TH32CS_SNAPPROCESS,
+    };
+    fn descendants(root: u32) -> Vec<u32> {
+        // SAFETY: snapshot of all processes; closed below.
+        let snap = unsafe { CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0) };
+        let mut pairs = Vec::new();
+        // SAFETY: an all-zero PROCESSENTRY32W with dwSize set is valid input.
+        let mut entry: PROCESSENTRY32W = unsafe { std::mem::zeroed() };
+        entry.dwSize = std::mem::size_of::<PROCESSENTRY32W>() as u32;
+        // SAFETY: `snap` is a process snapshot; `entry` is writable.
+        let mut more = unsafe { Process32FirstW(snap, &mut entry) } != 0;
+        while more {
+            pairs.push((entry.th32ProcessID, entry.th32ParentProcessID));
+            // SAFETY: as above.
+            more = unsafe { Process32NextW(snap, &mut entry) } != 0;
+        }
+        // SAFETY: `snap` was opened above and is closed exactly once.
+        unsafe { CloseHandle(snap) };
+        let mut tree = vec![root];
+        let mut grew = true;
+        while grew {
+            grew = false;
+            for (pid, parent) in &pairs {
+                if tree.contains(parent) && !tree.contains(pid) {
+                    tree.push(*pid);
+                    grew = true;
+                }
+            }
+        }
+        tree
+    }
+    let profile = temp_profile("endpoints-control");
+    let destinations =
+        [
+            AdmittedDestination::fixture("fixture.test", IpAddr::V4(Ipv4Addr::LOCALHOST))
+                .expect("fixture destination"),
+        ];
+    let mut argv = crate::confinement::build_worker_argv(&profile, &destinations).expect("argv");
+    // Unconfined in exactly the way #324 measured: no disabled features. No
+    // pipe either, as nothing drives this engine.
+    argv.retain(|arg| !arg.starts_with("--disable-features=") && arg != "--remote-debugging-pipe");
+    let mut edge = std::process::Command::new(engine().path())
+        .args(&argv)
+        .spawn()
+        .expect("control engine");
+    let root = edge.id();
+    let seen = endpoints_over(Duration::from_secs(90), || descendants(root));
+    let _ = std::process::Command::new("taskkill")
+        .args(["/PID", &root.to_string(), "/T", "/F"])
+        .output();
+    let _ = edge.wait();
+    std::thread::sleep(Duration::from_secs(2));
+    let _ = std::fs::remove_dir_all(&profile);
+    println!("SG108-EVIDENCE unconfined control endpoints over 90 s: {seen:?}");
+    if std::env::var("QDRAL_SG108_EXPECT_LEAK").as_deref() == Ok("1") {
+        // What #324 saw: an outbound TCP connection to a remote address, and
+        // a UDP endpoint. A scan that mislocates the remote address (for
+        // example by reading the local one) cannot satisfy the first.
+        // A connection to a known remote service port (Cast 8009, TLS 443)
+        // on an address that is none of this host's own (any family). A
+        // scan that read the local fields for the remote ones cannot satisfy
+        // it.
+        let own = local_addresses();
+        let tcp_out = seen.iter().any(|entry| {
+            entry.remote.is_some_and(|peer| {
+                matches!(peer.port(), 443 | 8009)
+                    && peer.ip() != entry.local.ip()
+                    && !own.contains(&peer.ip())
+            })
+        });
+        let udp = seen.iter().any(|entry| entry.kind == "udp");
+        assert!(
+            tcp_out && udp,
+            "the scan missed a leak this host is known to produce: {seen:?}"
+        );
+    }
 }
 
 #[test]
