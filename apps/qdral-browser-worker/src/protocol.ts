@@ -9,12 +9,26 @@
 
 import { isIPv4, isIPv6 } from "node:net";
 import type { SnapshotNode } from "./snapshot.js";
-import type { DeclaredTool } from "./webmcp/declarative.js";
+import type { ControlKind, DeclaredTool } from "./webmcp/declarative.js";
+
+/// One form field to enter when executing a tool (host-validated).
+export interface ExecField {
+  name: string;
+  control: ControlKind;
+  values: string[];
+}
+
+const EXEC_CONTROLS: readonly ControlKind[] = ["text", "textarea", "select", "select_multiple", "radio", "checkbox", "checkboxes"];
+/// Mirrors the host's bounds.
+export const MAX_EXEC_FIELDS = 32;
+export const MAX_EXEC_VALUES = 64;
+export const MAX_EXEC_VALUE_CHARS = 1024;
 
 /// Generation 2 adds the slice-3a navigation frames, generation 3 slice-3b
 /// observation, generation 4 slice-3c activation, generation 5 slice-3d
-/// downloads, generation 6 slice-4 WebMCP discovery.
-export const WORKER_PROTOCOL_GENERATION = 6;
+/// downloads, generation 6 slice-4 WebMCP discovery, generation 7 slice-5
+/// WebMCP execution.
+export const WORKER_PROTOCOL_GENERATION = 7;
 export const WORKER_IDENTITY = "qdral-browser-worker";
 export const MAX_FRAME_BYTES = 64 * 1024;
 
@@ -62,6 +76,7 @@ export type HostFrame =
   | { frame: "route_decision"; request_id: number; allow: boolean }
   | { frame: "observe"; obs_id: number }
   | { frame: "discover"; disc_id: number }
+  | { frame: "execute"; exec_id: number; tool: string; fields: ExecField[] }
   | { frame: "activate"; act_id: number; ref: string }
   | { frame: "download"; dl_id: number; ref: string; path: string }
   | { frame: "shutdown" };
@@ -77,13 +92,25 @@ export type WorkerFrame =
   | { frame: "launched" }
   | { frame: "pong"; nonce: string }
   | { frame: "bye" }
-  | { frame: "route_request"; request_id: number; kind: RouteKind; url: string; origin: string }
+  | {
+      frame: "route_request";
+      request_id: number;
+      kind: RouteKind;
+      url: string;
+      origin: string;
+      method: string;
+      content_type: string;
+      body: string | null;
+      body_bytes: number;
+    }
   | { frame: "navigated"; nav_id: number; url: string; status: number }
   | { frame: "navigation_failed"; nav_id: number; reason: NavigationFailure }
   | { frame: "observed"; obs_id: number; url: string; truncated: boolean; nodes: SnapshotNode[] }
   | { frame: "observation_failed"; obs_id: number }
   | { frame: "discovered"; disc_id: number; url: string; truncated: boolean; tools: DeclaredTool[] }
   | { frame: "discovery_failed"; disc_id: number }
+  | { frame: "executed"; exec_id: number; url: string; status: number; structured: string[]; structured_complete: boolean }
+  | { frame: "execution_failed"; exec_id: number; reason: NavigationFailure }
   | { frame: "activated"; act_id: number; url: string; status: number }
   | { frame: "activation_failed"; act_id: number; reason: NavigationFailure }
   | { frame: "downloaded"; dl_id: number; url: string; name: string; media: string; bytes: number }
@@ -225,6 +252,35 @@ export function parseHostFrame(raw: unknown): HostFrame {
     case "discover": {
       exactKeys(raw, ["frame", "disc_id"]);
       return { frame: "discover", disc_id: positiveId(raw.disc_id, "disc_id") };
+    }
+    case "execute": {
+      exactKeys(raw, ["frame", "exec_id", "tool", "fields"]);
+      const execId = positiveId(raw.exec_id, "exec_id");
+      if (typeof raw.tool !== "string" || !/^[A-Za-z0-9_.-]{1,64}$/.test(raw.tool)) {
+        throw new ProtocolViolation("execute tool name is malformed");
+      }
+      if (!Array.isArray(raw.fields) || raw.fields.length > MAX_EXEC_FIELDS) {
+        throw new ProtocolViolation("execute fields are malformed");
+      }
+      const fields: ExecField[] = raw.fields.map((field: unknown) => {
+        if (typeof field !== "object" || field === null || Array.isArray(field)) {
+          throw new ProtocolViolation("execute field is malformed");
+        }
+        const entry = field as Record<string, unknown>;
+        exactKeys(entry, ["name", "control", "values"]);
+        const { name, control, values } = entry;
+        if (typeof name !== "string" || name.length === 0 || Array.from(name).length > 64 || /[\u0000-\u001f\u007f-\u009f]/.test(name)) {
+          throw new ProtocolViolation("execute field name is malformed");
+        }
+        if (typeof control !== "string" || !(EXEC_CONTROLS as readonly string[]).includes(control)) {
+          throw new ProtocolViolation("execute field control is malformed");
+        }
+        if (!Array.isArray(values) || values.length > MAX_EXEC_VALUES || !values.every((v) => typeof v === "string" && Array.from(v).length <= MAX_EXEC_VALUE_CHARS)) {
+          throw new ProtocolViolation("execute field values are malformed");
+        }
+        return { name, control: control as ControlKind, values: values as string[] };
+      });
+      return { frame: "execute", exec_id: execId, tool: raw.tool, fields };
     }
     case "route_decision": {
       exactKeys(raw, ["frame", "request_id", "allow"]);

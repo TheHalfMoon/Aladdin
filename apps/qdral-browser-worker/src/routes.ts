@@ -14,7 +14,7 @@
 
 import type { BrowserContext, Page } from "playwright-core";
 import { attachRedirectGuard, type RedirectGuard } from "./redirect-guard.js";
-import { classifyRequest } from "./routing.js";
+import { classifyRequest, requestDetail } from "./routing.js";
 import { denyServiceWorkerScripts } from "./service-workers.js";
 import type { RoutePolicy } from "./worker.js";
 
@@ -36,7 +36,8 @@ export async function installRoutes(
     let allow = false;
     try {
       const page = primary();
-      allow = await policy.decide(classifyRequest(route.request(), page, () => page.url()));
+      const request = route.request();
+      allow = await policy.decide({ ...classifyRequest(request, page, () => page.url()), detail: requestDetail(request) });
     } catch {
       allow = false;
     }

@@ -137,6 +137,36 @@ const TOOLS_CONTROL = `<!doctype html><title>Control</title>
     setTimeout(() => { document.body.setAttribute("data-y", "1"); document.querySelector("input").focus(); }, 300);
   });
 </script><p>Control</p><input name="c">`;
+// Slice 5 execution fixtures: executable tools (GET and POST), and every
+// way a tool must fail to execute.
+const EXEC = `<!doctype html><title>Exec</title>
+<form toolname="search_reports" tooldescription="Search the reports." action="/search" toolautosubmit>
+  <input name="q" required>
+  <select name="year"><option value="2026">2026</option><option value="2025">2025</option></select>
+  <input type="checkbox" name="exact">
+  <input type="hidden" name="csrf" value="csrf-123">
+  <button>Search</button>
+</form>
+<form toolname="post_note" tooldescription="Save a note." method="post" action="/note" toolautosubmit>
+  <textarea name="note"></textarea><button>Save</button>
+</form>
+<form toolname="needs_user" tooldescription="The user submits this one." action="/search"><input name="q"><button>Go</button></form>
+<form toolname="escape" tooldescription="Submits to another site." action="https://other.test/search" toolautosubmit><input name="q"><button>Go</button></form>
+<form toolname="script_handled" tooldescription="Handled by page script." action="/search" toolautosubmit onsubmit="event.preventDefault();"><input name="q"><button>Go</button></form>
+<form toolname="redirecting" tooldescription="Script moves elsewhere." action="/search" toolautosubmit onsubmit="event.preventDefault(); location.href='/elsewhere';"><input name="q"><button>Go</button></form>
+<form toolname="mutating" tooldescription="Changes after load." action="/search" toolautosubmit id="mutating"><input name="q"><button>Go</button></form>
+<script>setTimeout(() => document.getElementById("mutating").setAttribute("tooldescription", "Changed."), 1500);</script>
+<form toolname="decoy" tooldescription="A decoy field; the real one is owned from outside." action="/search" toolautosubmit id="fdecoy"><input name="q" form="nowhere"><button>Go</button></form>
+<input name="q" form="fdecoy" value="PAGEDEFAULT">
+<form toolname="foreign_button" tooldescription="Its button submits another form." action="/search" toolautosubmit><input name="q"><button form="fother">Go</button></form>
+<form id="fother" action="/search"><input name="q" value="OTHERFORM"></form>
+<form toolname="shadowed" tooldescription="A field inside a shadow tree." action="/search" toolautosubmit><x-field><template shadowrootmode="open"><input name="q"></template></x-field><button>Go</button></form>
+<form toolname="method_override" tooldescription="The button changes the method." action="/search" toolautosubmit><input name="q"><button formmethod="post">Go</button></form>
+<form toolname="rewriting" tooldescription="A submit handler rewrites the field." action="/search" toolautosubmit onsubmit="this.q.value='evil-rewrite'"><input name="q"><button>Go</button></form>
+<form toolname="big_result" tooldescription="Answers with large structured data." action="/big" toolautosubmit><input name="q"><button>Go</button></form>
+<form toolname="hidden_token" tooldescription="Carries its own hidden token." action="/search" toolautosubmit><input type="hidden" name="csrf" value="PAGETOKEN"><input name="q"><button>Go</button></form>
+<form toolname="adding" tooldescription="A submit handler adds a field." action="/search" toolautosubmit onsubmit="const i=document.createElement('input');i.type='hidden';i.name='added';i.value='SCRIPTADDED';this.append(i)"><input name="q"><button>Go</button></form>
+<form toolname="latin" tooldescription="Submits Latin-1." action="/search" accept-charset="iso-8859-1" toolautosubmit><input name="q"><button>Go</button></form>`;
 const NO_TOOLS = `<!doctype html><title>No tools</title><p>Nothing declared.</p><form><input name="q"></form>`;
 const FILES = `<!doctype html><title>Files</title><ul>
 <li><a href="/files/oversized.pdf">Oversized 2026-01-01</a></li>
@@ -176,6 +206,27 @@ const server = createServer({ key, cert }, (request, response) => {
     response.setHeader("location", location);
     response.end();
   };
+  if (path.startsWith("/search?")) {
+    const query = new URL(path, "https://fixture.test").searchParams;
+    const data = JSON.stringify({ "@type": "SearchResultsPage", query: query.get("q"), year: query.get("year"), exact: query.get("exact"), csrf: query.get("csrf") });
+    response.setHeader("content-type", "text/html");
+    return response.end(`<!doctype html><title>Results</title><script type="application/ld+json">${data.replace(/</g, "\\u003c")}</script><p>Results</p>`);
+  }
+  if (path.startsWith("/big?")) {
+    const block = JSON.stringify({ text: "\u{1F600}".repeat(8000) });
+    response.setHeader("content-type", "text/html");
+    return response.end(`<!doctype html><title>Big</title>${`<script type="application/ld+json">${block}</script>`.repeat(8)}`);
+  }
+  if (path === "/note" && request.method === "POST") {
+    let body = "";
+    request.on("data", (chunk) => (body += chunk));
+    request.on("end", () => {
+      const note = new URLSearchParams(body).get("note") ?? "";
+      response.setHeader("content-type", "text/html");
+      response.end(`<!doctype html><title>Saved</title><script type="application/ld+json">${JSON.stringify({ saved: true, length: note.length })}</script>`);
+    });
+    return;
+  }
   if (path === "/redirect-same") return redirect("/landing");
   if (path === "/redirect-cross") return redirect("https://other.test/landing");
   if (path === "/redirect-evil") return redirect("https://other.test/evil");
@@ -238,7 +289,7 @@ trailer << /Root 1 0 R >>
     response.setHeader("reporting-endpoints", 'csp="https://other.test/reports"');
     response.setHeader("content-security-policy", "img-src 'self'; report-to csp");
   }
-  const pages = { "/mixed": MIXED, "/spec-escape": SPEC_ESCAPE, "/reports": REPORTS, "/self-move": SELF_MOVE, "/archive": ARCHIVE, "/archive-hostile": ARCHIVE_HOSTILE, "/files": FILES, "/archive-tricky": ARCHIVE_TRICKY, "/secret-name": SECRET_NAME, "/tools": TOOLS, "/tools-none": NO_TOOLS, "/tools-control": TOOLS_CONTROL };
+  const pages = { "/mixed": MIXED, "/spec-escape": SPEC_ESCAPE, "/reports": REPORTS, "/self-move": SELF_MOVE, "/archive": ARCHIVE, "/archive-hostile": ARCHIVE_HOSTILE, "/files": FILES, "/archive-tricky": ARCHIVE_TRICKY, "/secret-name": SECRET_NAME, "/tools": TOOLS, "/tools-none": NO_TOOLS, "/tools-control": TOOLS_CONTROL, "/exec": EXEC };
   response.end(pages[path] ?? `<!doctype html><title>${host}${path}</title><p>fixture</p>`);
 });
 server.listen({ port: 443, host: "127.0.0.1" }, () => process.stdout.write(`READY ${spki}\n`));

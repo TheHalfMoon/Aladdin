@@ -39,7 +39,7 @@ pub struct JobProcess {
 /// Generation 2 adds the slice-3a navigation frames, generation 3 slice-3b
 /// observation, generation 4 slice-3c activation, generation 5 slice-3d
 /// downloads.
-pub const WORKER_PROTOCOL_GENERATION: u32 = 6;
+pub const WORKER_PROTOCOL_GENERATION: u32 = 7;
 /// Worker identity reported in its hello.
 pub const WORKER_IDENTITY: &str = "qdral-browser-worker";
 /// The only Node option the worker accepts (inspector activation refused).
@@ -56,6 +56,11 @@ pub const WORKER_NAVIGATION_TIMEOUT: Duration = Duration::from_secs(45);
 /// Upper bound for one activation (above the worker's worst case: a 5 s
 /// click, 30 s for the navigation and 30 s for its load).
 pub const WORKER_ACTIVATION_TIMEOUT: Duration = Duration::from_secs(75);
+
+/// Upper bound for one tool execution (above the worker's worst case: 10 s
+/// filling, a 5 s click, 30 s for the navigation, 30 s for its load and a
+/// 3 s result snapshot).
+pub const WORKER_EXECUTION_TIMEOUT: Duration = Duration::from_secs(90);
 
 /// Upper bound for one observation round trip.
 pub const WORKER_OBSERVATION_TIMEOUT: Duration = Duration::from_secs(10);
@@ -100,6 +105,20 @@ pub struct CommittedDownload {
     pub sha256: String,
     pub bytes: u64,
     pub source_url: String,
+}
+
+/// The outcome of an executed WebMCP declarative tool: the document the
+/// submission opened, and the structured data (`application/ld+json`) it
+/// carries, as untrusted page text.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ExecutionOutcome {
+    pub url: String,
+    pub status: u16,
+    pub document_generation: u64,
+    pub structured: Vec<crate::webmcp::PageText>,
+    /// Every structured block was read and kept (false when the snapshot
+    /// failed or blocks were dropped to fit the reply).
+    pub structured_complete: bool,
 }
 
 /// A completed top-level navigation.
@@ -193,6 +212,11 @@ pub(crate) enum WorkerRequest<'a> {
         reference: &'a str,
         path: &'a str,
     },
+    Execute {
+        exec_id: u64,
+        tool: &'a str,
+        fields: &'a [crate::webmcp::ExecField],
+    },
     Shutdown,
 }
 
@@ -216,6 +240,10 @@ pub(crate) enum WorkerReply {
         kind: String,
         url: String,
         origin: String,
+        method: String,
+        content_type: String,
+        body: Option<String>,
+        body_bytes: u64,
     },
     Navigated {
         nav_id: u64,
@@ -262,6 +290,17 @@ pub(crate) enum WorkerReply {
     },
     DownloadFailed {
         dl_id: u64,
+        reason: String,
+    },
+    Executed {
+        exec_id: u64,
+        url: String,
+        status: u16,
+        structured: Vec<String>,
+        structured_complete: bool,
+    },
+    ExecutionFailed {
+        exec_id: u64,
         reason: String,
     },
     Error {
@@ -592,6 +631,48 @@ pub(crate) fn commit_create_only(
     Ok(())
 }
 
+/// What an approved submission of `tool` with `fields` may send.
+#[cfg(any(windows, test))]
+pub(crate) fn submission_of(
+    tool: &crate::webmcp::DiscoveredTool,
+    fields: &[crate::webmcp::ExecField],
+    post: bool,
+) -> crate::worker_navigation::Submission {
+    use crate::webmcp::ControlKind;
+    use crate::worker_navigation::Submitted;
+    let submitted = fields
+        .iter()
+        .map(|field| {
+            let expected = match field.control {
+                ControlKind::Checkbox
+                    if field.values.first().map(String::as_str) == Some("true") =>
+                {
+                    Submitted::Present
+                }
+                ControlKind::Checkbox => Submitted::Absent,
+                _ => Submitted::Values(field.values.clone()),
+            };
+            (field.name.clone(), expected)
+        })
+        .collect();
+    crate::worker_navigation::Submission {
+        method: if post { "POST" } else { "GET" }.to_owned(),
+        fields: submitted,
+        unsupplied: tool
+            .params
+            .iter()
+            .filter(|param| !fields.iter().any(|field| field.name == param.name))
+            .map(|param| param.name.clone())
+            .collect(),
+        multiline: fields
+            .iter()
+            .filter(|field| field.control == ControlKind::Textarea)
+            .map(|field| field.name.clone())
+            .collect(),
+        fixed: tool.fixed_names.clone(),
+    }
+}
+
 /// Map a worker navigation failure onto the typed vocabulary.
 #[cfg(any(windows, test))]
 pub(crate) fn navigation_failure(reason: &str) -> HostError {
@@ -915,6 +996,7 @@ mod platform {
         next_disc: u64,
         next_act: u64,
         next_dl: u64,
+        next_exec: u64,
         /// Host-owned staging directory for downloads of this lifetime.
         staging: PathBuf,
         /// The committed document: URL and document generation.
@@ -985,6 +1067,7 @@ mod platform {
             next_disc: 0,
             next_act: 0,
             next_dl: 0,
+            next_exec: 0,
             staging: spec.temp_dir.join(format!(
                 "qdral-sg108-staging-{}-{:x}",
                 std::process::id(),
@@ -1066,7 +1149,19 @@ mod platform {
                         kind,
                         url,
                         origin,
-                    } => self.answer_route(request_id, &kind, &url, &origin)?,
+                        method,
+                        content_type,
+                        body,
+                        body_bytes,
+                    } => {
+                        let detail = crate::worker_navigation::RequestDetail {
+                            method,
+                            content_type,
+                            body,
+                            body_bytes,
+                        };
+                        self.answer_route(request_id, &kind, &url, &origin, &detail)?
+                    }
                     reply => return Ok(reply),
                 }
             }
@@ -1080,13 +1175,17 @@ mod platform {
             kind: &str,
             url: &str,
             origin: &str,
+            detail: &crate::worker_navigation::RequestDetail,
         ) -> Result<(), HostError> {
             if request_id <= self.last_request {
                 return Err(HostError::Unavailable(UnavailableReason::ProtocolViolation));
             }
             self.last_request = request_id;
             let allow = match RouteKind::parse(kind) {
-                Some(kind) => self.policy.decide(kind, url, origin).is_ok(),
+                Some(kind) => self
+                    .policy
+                    .decide_request(kind, url, origin, detail)
+                    .is_ok(),
                 None => false,
             };
             self.send(&WorkerRequest::RouteDecision { request_id, allow })
@@ -1384,6 +1483,151 @@ mod platform {
                 document_generation: generation,
                 truncated,
                 tools,
+            })
+        }
+
+        /// The state an execution approval must name: the tool, a digest of
+        /// its discovered record, its method and resolved action, and the
+        /// canonical arguments, so the one-shot approval covers exactly what
+        /// is submitted where. Refuses tools that cannot execute and
+        /// arguments outside the declared subset.
+        pub fn execution_binding(
+            &self,
+            tool_id: &str,
+            args: &serde_json::Map<String, serde_json::Value>,
+        ) -> Result<String, HostError> {
+            let (url, generation) = self
+                .committed
+                .clone()
+                .ok_or_else(|| HostError::Invalid("no committed document".into()))?;
+            let tool = self
+                .host_tools
+                .get(tool_id)
+                .filter(|tool| tool.document_generation == generation)
+                .ok_or_else(|| HostError::Invalid("stale or unknown tool".into()))?;
+            crate::webmcp::ensure_executable(&tool.record)?;
+            crate::webmcp::validate_arguments(&tool.record, args)?;
+            let action = crate::webmcp::resolve_action(
+                &url,
+                tool.record.action.as_deref().unwrap_or_default(),
+            )?;
+            let method = match tool.record.method {
+                crate::webmcp::FormMethod::Post => "post",
+                _ => "get",
+            };
+            Ok(format!(
+                "execute\n{}\n{}\n{method}\n{action}\n{}",
+                tool.record.name,
+                sha256_hex(format!("{:?}", tool.record).as_bytes()),
+                crate::webmcp::canonical_arguments(args)
+            ))
+        }
+
+        /// Execute a discovered WebMCP declarative tool (SG-000108 slice 5)
+        /// under SG-000077: the tool is discovered again and must be
+        /// unchanged; the arguments are validated host-side; the approval
+        /// (bound to `execution_binding`) is consumed in `dispatch`; the
+        /// worker fills the form through typed Playwright actions and clicks
+        /// its default submit button; the host accepts exactly one
+        /// page-initiated document, the form's action on the page's origin
+        /// (any query for GET). The result is that document and its
+        /// structured data as untrusted page text. A form whose page handles
+        /// the submission without opening a document is not a verified
+        /// execution.
+        pub fn execute_tool(
+            &mut self,
+            target: &crate::actuation::ActuationTarget,
+            approval: &mut crate::actuation::ApprovalToken,
+            args: &serde_json::Map<String, serde_json::Value>,
+            policy_revision: u64,
+            workspace: &str,
+        ) -> Result<ExecutionOutcome, HostError> {
+            self.ensure_alive()?;
+            if target.action != crate::actuation::SupportedAction::Execute {
+                return Err(HostError::Invalid(
+                    "an execution needs an execute approval".into(),
+                ));
+            }
+            let (url, generation) = self
+                .committed
+                .clone()
+                .ok_or_else(|| HostError::Invalid("no committed document".into()))?;
+            let shown = self
+                .host_tools
+                .get(&target.node_id)
+                .filter(|tool| tool.document_generation == generation)
+                .map(|tool| tool.record.clone())
+                .ok_or_else(|| HostError::Invalid("stale or unknown tool".into()))?;
+            // The page may have changed the form since it was discovered.
+            self.discover_tools()?;
+            let fresh = self
+                .host_tools
+                .get(&target.node_id)
+                .map(|tool| tool.record.clone());
+            if fresh.as_ref() != Some(&shown) {
+                self.host_tools.clear();
+                return Err(HostError::Invalid(
+                    "the tool changed since it was discovered".into(),
+                ));
+            }
+            let binding = self.execution_binding(&target.node_id, args)?;
+            let fields = crate::webmcp::validate_arguments(&shown, args)?;
+            let action =
+                crate::webmcp::resolve_action(&url, shown.action.as_deref().unwrap_or_default())?;
+            let post = shown.method == crate::webmcp::FormMethod::Post;
+            self.policy
+                .expect_submission(&action, !post, submission_of(&shown, &fields, post))?;
+            if let Err(error) = crate::actuation::dispatch(
+                target,
+                approval,
+                generation,
+                &binding,
+                policy_revision,
+                workspace,
+            ) {
+                self.policy.finish_activation();
+                return Err(error);
+            }
+            self.next_exec += 1;
+            let exec_id = self.next_exec;
+            let sent = self.send(&WorkerRequest::Execute {
+                exec_id,
+                tool: &shown.name,
+                fields: &fields,
+            });
+            let reply = sent.and_then(|()| self.reply(WORKER_EXECUTION_TIMEOUT));
+            let opened_expected = self.policy.finish_activation();
+            self.host_nodes.clear();
+            self.host_tools.clear();
+            let (done_url, status, structured, structured_complete) = match reply? {
+                WorkerReply::Executed {
+                    exec_id: done,
+                    url,
+                    status,
+                    structured,
+                    structured_complete,
+                } if done == exec_id => (url, status, structured, structured_complete),
+                WorkerReply::ExecutionFailed {
+                    exec_id: done,
+                    reason,
+                } if done == exec_id => return Err(navigation_failure(&reason)),
+                _ => return Err(HostError::Unavailable(UnavailableReason::ProtocolViolation)),
+            };
+            if !opened_expected {
+                return Err(HostError::Invalid(
+                    "postcondition unverified: the submission opened no document".into(),
+                ));
+            }
+            let structured = crate::webmcp::validate_result_blocks(structured)?;
+            self.policy.commit_page_initiated(&done_url)?;
+            let next = generation + 1;
+            self.committed = Some((done_url.clone(), next));
+            Ok(ExecutionOutcome {
+                url: done_url,
+                status,
+                document_generation: next,
+                structured,
+                structured_complete,
             })
         }
 
@@ -1839,6 +2083,31 @@ mod fallback {
         }
 
         /// API parity: no worker ever exists off Windows.
+        pub fn execution_binding(
+            &self,
+            _tool_id: &str,
+            _args: &serde_json::Map<String, serde_json::Value>,
+        ) -> Result<String, HostError> {
+            Err(HostError::Unavailable(
+                UnavailableReason::UnsupportedRuntime,
+            ))
+        }
+
+        /// API parity: no worker ever exists off Windows.
+        pub fn execute_tool(
+            &mut self,
+            _target: &crate::actuation::ActuationTarget,
+            _approval: &mut crate::actuation::ApprovalToken,
+            _args: &serde_json::Map<String, serde_json::Value>,
+            _policy_revision: u64,
+            _workspace: &str,
+        ) -> Result<ExecutionOutcome, HostError> {
+            Err(HostError::Unavailable(
+                UnavailableReason::UnsupportedRuntime,
+            ))
+        }
+
+        /// API parity: no worker ever exists off Windows.
         pub fn discover_tools(&mut self) -> Result<crate::webmcp::DiscoveredTools, HostError> {
             Err(HostError::Unavailable(
                 UnavailableReason::UnsupportedRuntime,
@@ -2287,6 +2556,79 @@ mod tests {
     }
 
     #[test]
+    fn a_submission_names_exactly_the_approved_fields() {
+        use crate::webmcp::{ControlKind, ExecField};
+        use crate::worker_navigation::Submitted;
+        let wire: Vec<crate::webmcp::WireTool> = serde_json::from_str(
+            r#"[{"name":"t","title":"","description":"d","autosubmit":true,"node":3,"has_password":false,"action":"/s","method":"post","self_contained":true,"fixed_names":["csrf"],"utf8":true,"params":[
+                {"name":"note","required":false,"control":"textarea","type":"string"},
+                {"name":"ok","required":false,"control":"checkbox","type":"boolean"},
+                {"name":"off","required":false,"control":"checkbox","type":"boolean"},
+                {"name":"tags","required":false,"control":"checkboxes","type":"array","items_enum":["a","b"]},
+                {"name":"left","required":false,"control":"text","type":"string"}]}]"#,
+        )
+        .unwrap();
+        let tool = crate::webmcp::validate_tools(wire, 1).unwrap().0.remove(0);
+        let field = |name: &str, control, values: &[&str]| ExecField {
+            name: name.into(),
+            control,
+            values: values.iter().map(|v| (*v).to_owned()).collect(),
+        };
+        let fields = [
+            field("note", ControlKind::Textarea, &["a\nb"]),
+            field("ok", ControlKind::Checkbox, &["true"]),
+            field("off", ControlKind::Checkbox, &["false"]),
+            field("tags", ControlKind::Checkboxes, &["b"]),
+        ];
+        let submission = submission_of(&tool, &fields, true);
+        assert_eq!(submission.method, "POST");
+        assert_eq!(
+            submission.fields,
+            vec![
+                ("note".to_owned(), Submitted::Values(vec!["a\nb".into()])),
+                ("ok".to_owned(), Submitted::Present),
+                ("off".to_owned(), Submitted::Absent),
+                ("tags".to_owned(), Submitted::Values(vec!["b".into()])),
+            ]
+        );
+        assert_eq!(submission.unsupplied, vec!["left".to_owned()]);
+        assert_eq!(submission.multiline, vec!["note".to_owned()]);
+        assert_eq!(submission.fixed, vec!["csrf".to_owned()]);
+        assert_eq!(submission_of(&tool, &fields, false).method, "GET");
+    }
+
+    #[test]
+    fn execution_frames_are_exact() {
+        let json = |request: &WorkerRequest<'_>| serde_json::to_string(request).unwrap();
+        let fields = [crate::webmcp::ExecField {
+            name: "q".into(),
+            control: crate::webmcp::ControlKind::Text,
+            values: vec!["rust".into()],
+        }];
+        assert_eq!(
+            json(&WorkerRequest::Execute {
+                exec_id: 3,
+                tool: "search",
+                fields: &fields
+            }),
+            r#"{"frame":"execute","exec_id":3,"tool":"search","fields":[{"name":"q","control":"text","values":["rust"]}]}"#
+        );
+        let reply = |text: &str| serde_json::from_str::<WorkerReply>(text);
+        assert!(matches!(
+            reply(r#"{"frame":"executed","exec_id":3,"url":"https://fixture.test/search?q=rust","status":200,"structured":["{}"],"structured_complete":true}"#).unwrap(),
+            WorkerReply::Executed { exec_id: 3, status: 200, .. }
+        ));
+        assert!(matches!(
+            reply(r#"{"frame":"execution_failed","exec_id":3,"reason":"timeout"}"#).unwrap(),
+            WorkerReply::ExecutionFailed { exec_id: 3, .. }
+        ));
+        assert!(reply(
+            r#"{"frame":"executed","exec_id":3,"url":"u","status":200,"structured":[],"structured_complete":true,"extra":1}"#
+        )
+        .is_err());
+    }
+
+    #[test]
     fn discovery_frames_are_exact() {
         let json = |request: &WorkerRequest<'_>| serde_json::to_string(request).unwrap();
         assert_eq!(
@@ -2295,7 +2637,7 @@ mod tests {
         );
         let reply = |text: &str| serde_json::from_str::<WorkerReply>(text);
         let tools = match reply(
-            r#"{"frame":"discovered","disc_id":2,"url":"https://fixture.test/t","truncated":false,"tools":[{"name":"t","title":"","description":"d","autosubmit":false,"node":3,"has_password":false,"params":[]}]}"#,
+            r#"{"frame":"discovered","disc_id":2,"url":"https://fixture.test/t","truncated":false,"tools":[{"name":"t","title":"","description":"d","autosubmit":false,"node":3,"has_password":false,"action":null,"method":"get","self_contained":false,"fixed_names":[],"utf8":true,"params":[]}]}"#,
         )
         .unwrap()
         {
@@ -2309,7 +2651,7 @@ mod tests {
         ));
         // Unknown fields anywhere in a tool are refused.
         assert!(reply(
-            r#"{"frame":"discovered","disc_id":2,"url":"u","truncated":false,"tools":[{"name":"t","title":"","description":"d","autosubmit":false,"node":3,"has_password":false,"params":[],"run":"x"}]}"#
+            r#"{"frame":"discovered","disc_id":2,"url":"u","truncated":false,"tools":[{"name":"t","title":"","description":"d","autosubmit":false,"node":3,"has_password":false,"action":null,"method":"get","self_contained":false,"fixed_names":[],"utf8":true,"params":[],"run":"x"}]}"#
         )
         .is_err());
     }
@@ -2397,12 +2739,16 @@ mod tests {
         );
         let reply = |text: &str| serde_json::from_str::<WorkerReply>(text);
         assert_eq!(
-            reply(r#"{"frame":"route_request","request_id":1,"kind":"frame","url":"https://x.test/","origin":"https://fixture.test"}"#).unwrap(),
+            reply(r#"{"frame":"route_request","request_id":1,"kind":"frame","url":"https://x.test/","origin":"https://fixture.test","method":"GET","content_type":"","body":null,"body_bytes":0}"#).unwrap(),
             WorkerReply::RouteRequest {
                 request_id: 1,
                 kind: "frame".into(),
                 url: "https://x.test/".into(),
-                origin: "https://fixture.test".into()
+                origin: "https://fixture.test".into(),
+                method: "GET".into(),
+                content_type: String::new(),
+                body: None,
+                body_bytes: 0
             }
         );
         assert_eq!(
@@ -2426,7 +2772,7 @@ mod tests {
         // Unknown fields, negative ids and out-of-range statuses are refused.
         assert!(reply(r#"{"frame":"navigated","nav_id":3,"url":"u","status":200,"x":1}"#).is_err());
         assert!(reply(
-            r#"{"frame":"route_request","request_id":-1,"kind":"frame","url":"u","origin":""}"#
+            r#"{"frame":"route_request","request_id":-1,"kind":"frame","url":"u","origin":"","method":"GET","content_type":"","body":null,"body_bytes":0}"#
         )
         .is_err());
         assert!(reply(r#"{"frame":"navigated","nav_id":3,"url":"u","status":70000}"#).is_err());

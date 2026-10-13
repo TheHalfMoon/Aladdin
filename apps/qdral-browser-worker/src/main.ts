@@ -6,14 +6,15 @@
 
 import { Console } from "node:console";
 import { existsSync, writeFileSync } from "node:fs";
-import { chromium, type Page } from "playwright-core";
+import { chromium, type Locator, type Page } from "playwright-core";
 import { refusedWorkerVariables, startupRefusal } from "./environment.js";
-import { encodeFrame, FrameDecoder, ProtocolViolation, type WorkerFrame } from "./protocol.js";
+import { encodeFrame, FrameDecoder, MAX_FRAME_BYTES, ProtocolViolation, type ExecField, type WorkerFrame } from "./protocol.js";
 import { installRoutes } from "./routes.js";
 import { boundSnapshot } from "./snapshot.js";
 import { discoverDeclarativeTools, DISCOVERY_BUDGET_MS } from "./webmcp/declarative.js";
 import { CAPTURE_TIMEOUT_MS, DISCOVERY_TOTAL_MS, fitTools } from "./webmcp/fit.js";
 import { captureWithin } from "./webmcp/capture.js";
+import { fitBlocks, MAX_RESULT_BLOCKS, structuredData } from "./webmcp/structured.js";
 import { documentModel, type CapturedSnapshot } from "./webmcp/dom-snapshot.js";
 import { NavigationError, Worker, type EngineSession, type Launcher, type LaunchSpec, type RoutePolicy } from "./worker.js";
 
@@ -77,36 +78,94 @@ const playwrightLauncher: Launcher = {
         }
       },
       async activate(ref: string) {
+        return clickAndLoad(primary, primary.locator(`aria-ref=${ref}`));
+      },
+      async execute(tool: string, fields: ExecField[]) {
         const page = primary;
-        let status = 0;
-        const onResponse = (response: import("playwright-core").Response) => {
-          const request = response.request();
-          if (request.isNavigationRequest() && request.frame() === page.mainFrame()) status = response.status();
+        // Host-built selectors only: the tool name is [A-Za-z0-9_.-] and
+        // field names are quoted as CSS strings.
+        const quoted = (value: string): string => `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
+        const form = page.locator(`form[toolname=${quoted(tool)}]`);
+        // One budget for locating and filling every field: a page that keeps
+        // a control unactionable cannot hold the call past the host's
+        // deadline (filling 10 s, then the click and load, then the capture).
+        const fillDeadline = Date.now() + FILL_BUDGET_MS;
+        const timeout = (): number => {
+          const remaining = fillDeadline - Date.now();
+          if (remaining <= 0) throw new NavigationError("timeout");
+          return Math.min(5_000, remaining);
         };
-        page.on("response", onResponse);
         try {
-          const navigated = page.waitForEvent("framenavigated", {
-            predicate: (frame) => frame === page.mainFrame(),
-            timeout: 30_000
-          });
-          try {
-            await page.locator(`aria-ref=${ref}`).click({ timeout: 5_000 });
-          } catch {
-            navigated.catch(() => {});
-            throw new NavigationError("failed");
+          if ((await form.count()) !== 1) throw new NavigationError("failed");
+          for (const field of fields) {
+            const name = `[name=${quoted(field.name)}]`;
+            const valueOf = (value: string): string => (value === "on" ? ":not([value])" : `[value=${quoted(value)}]`);
+            const one = async (selector: string) => {
+              const control = form.locator(selector);
+              if ((await control.count()) !== 1) throw new NavigationError("failed");
+              return control;
+            };
+            switch (field.control) {
+              case "text":
+                await (await one(`input${name}`)).fill(field.values[0] ?? "", { timeout: timeout() });
+                break;
+              case "textarea":
+                await (await one(`textarea${name}`)).fill(field.values[0] ?? "", { timeout: timeout() });
+                break;
+              case "select":
+              case "select_multiple":
+                await (await one(`select${name}`)).selectOption(
+                  field.values.map((value) => ({ value })),
+                  { timeout: timeout() }
+                );
+                break;
+              case "checkbox":
+                await (await one(`input[type="checkbox"]${name}`)).setChecked(field.values[0] === "true", { timeout: timeout() });
+                break;
+              case "checkboxes": {
+                const all = form.locator(`input[type="checkbox"]${name}`);
+                for (const box of await all.all()) await box.setChecked(false, { timeout: timeout() });
+                for (const value of field.values) await (await one(`input[type="checkbox"]${name}${valueOf(value)}`)).setChecked(true, { timeout: timeout() });
+                break;
+              }
+              case "radio":
+                await (await one(`input[type="radio"]${name}${valueOf(field.values[0] ?? "")}`)).check({ timeout: timeout() });
+                break;
+              default:
+                throw new NavigationError("failed");
+            }
           }
-          await navigated;
-          await page.waitForLoadState("load", { timeout: 30_000 });
         } catch (error) {
           if (error instanceof NavigationError) throw error;
-          if ((error as Error).name === "TimeoutError") throw new NavigationError("timeout");
           throw new NavigationError("failed");
-        } finally {
-          page.off("response", onResponse);
         }
-        // A refused navigation lands on Chromium's error page.
-        if (page.url().startsWith("chrome-error:")) throw new NavigationError("denied");
-        return { url: page.url(), status };
+        // The form's default button: the first submit button in tree order.
+        const submit = form.locator('button:not([type]), button[type="submit"], input[type="submit"], input[type="image"]').first();
+        if ((await submit.count().catch(() => 0)) === 0) throw new NavigationError("failed");
+        const { url, status } = await clickAndLoad(page, submit);
+        // The submission's result: the opened document's structured data.
+        let structured: string[] = [];
+        let structuredComplete = false;
+        try {
+          const session = await context.newCDPSession(page);
+          const captured = (await captureWithin(
+            {
+              capture: () => session.send("DOMSnapshot.captureSnapshot", { computedStyles: [] }),
+              detach: () => session.detach()
+            },
+            CAPTURE_TIMEOUT_MS
+          )) as CapturedSnapshot;
+          // The blocks must fit the reply frame with room for its envelope
+          // (the URL is bounded at 2 KiB).
+          const all = structuredData(documentModel(captured).root);
+          const fitted = fitBlocks(all, MAX_FRAME_BYTES - 4_096);
+          structured = fitted.kept;
+          structuredComplete = fitted.complete && all.length < MAX_RESULT_BLOCKS;
+        } catch {
+          structured = [];
+          structuredComplete = false;
+        }
+        return { url, status, structured, structuredComplete };
       },
       async download(ref: string, path: string) {
         if (existsSync(path)) throw new NavigationError("failed");
@@ -188,6 +247,43 @@ const playwrightLauncher: Launcher = {
     };
   }
 };
+
+/// The worker's budget for locating and filling a tool's fields.
+const FILL_BUDGET_MS = 10_000;
+
+/// Click `target` and wait for the main frame's resulting document to load;
+/// returns its URL and status. The host decides every request on the way.
+async function clickAndLoad(page: Page, target: Locator): Promise<{ url: string; status: number }> {
+  let status = 0;
+  const onResponse = (response: import("playwright-core").Response) => {
+    const request = response.request();
+    if (request.isNavigationRequest() && request.frame() === page.mainFrame()) status = response.status();
+  };
+  page.on("response", onResponse);
+  try {
+    const navigated = page.waitForEvent("framenavigated", {
+      predicate: (frame) => frame === page.mainFrame(),
+      timeout: 30_000
+    });
+    try {
+      await target.click({ timeout: 5_000 });
+    } catch {
+      navigated.catch(() => {});
+      throw new NavigationError("failed");
+    }
+    await navigated;
+    await page.waitForLoadState("load", { timeout: 30_000 });
+  } catch (error) {
+    if (error instanceof NavigationError) throw error;
+    if ((error as Error).name === "TimeoutError") throw new NavigationError("timeout");
+    throw new NavigationError("failed");
+  } finally {
+    page.off("response", onResponse);
+  }
+  // A refused navigation lands on Chromium's error page.
+  if (page.url().startsWith("chrome-error:")) throw new NavigationError("denied");
+  return { url: page.url(), status };
+}
 
 /// The file name a download would get: the Content-Disposition filename when
 /// present, else the last URL path segment; never a path.

@@ -23,6 +23,7 @@ import {
   WORKER_IDENTITY,
   WORKER_PROTOCOL_GENERATION,
   type ErrorCode,
+  type ExecField,
   type HostFrame,
   type NavigationFailure,
   type WorkerFrame
@@ -55,6 +56,10 @@ export interface EngineSession {
   /// The primary page's declarative WebMCP tools, read without running
   /// page script; bounded so the reply frame fits.
   discover(discId: number): Promise<{ url: string; truncated: boolean; tools: DeclaredTool[] }>;
+  /// Fill the declared tool form with host-validated fields, click its
+  /// default submit button and wait for the resulting document; returns it
+  /// with its structured data. Rejects with NavigationError.
+  execute(tool: string, fields: ExecField[]): Promise<{ url: string; status: number; structured: string[]; structuredComplete: boolean }>;
   /// Click the element with this snapshot ref and wait for the resulting
   /// navigation to load; rejects with NavigationError.
   activate(ref: string): Promise<{ url: string; status: number }>;
@@ -132,7 +137,18 @@ export class Worker {
         resolve(false);
       }, ROUTE_DECISION_TIMEOUT_MS);
       this.pending.set(requestId, { resolve, timer });
-      this.send({ frame: "route_request", request_id: requestId, kind: query.kind, url: query.url, origin: query.origin });
+      const detail = query.detail ?? { method: "GET", contentType: "", body: "", bodyBytes: 0 };
+      this.send({
+        frame: "route_request",
+        request_id: requestId,
+        kind: query.kind,
+        url: query.url,
+        origin: query.origin,
+        method: detail.method,
+        content_type: detail.contentType,
+        body: detail.body,
+        body_bytes: detail.bodyBytes
+      });
     });
   }
 
@@ -182,6 +198,16 @@ export class Worker {
         }
         this.navigating = true;
         void this.runActivation(this.session, frame.act_id, frame.ref);
+        return;
+      }
+      case "execute": {
+        if (this.state !== "launched" || !this.session) return this.fail("not_ready");
+        if (this.navigating) {
+          this.send({ frame: "execution_failed", exec_id: frame.exec_id, reason: "busy" });
+          return;
+        }
+        this.navigating = true;
+        void this.runExecution(this.session, frame.exec_id, frame.tool, frame.fields);
         return;
       }
       case "discover": {
@@ -255,7 +281,7 @@ export class Worker {
       outcome = { frame: "navigation_failed", nav_id: navId, reason };
     }
     this.navigating = false;
-    if (this.state === "launched" && this.session === session) this.send(outcome);
+    if (this.state === "launched" && this.session === session) this.settle(outcome, { frame: "navigation_failed", nav_id: navId, reason: "failed" });
   }
 
   private async runDownload(session: EngineSession, dlId: number, ref: string, path: string): Promise<void> {
@@ -268,7 +294,7 @@ export class Worker {
       outcome = { frame: "download_failed", dl_id: dlId, reason };
     }
     this.navigating = false;
-    if (this.state === "launched" && this.session === session) this.send(outcome);
+    if (this.state === "launched" && this.session === session) this.settle(outcome, { frame: "download_failed", dl_id: dlId, reason: "failed" });
   }
 
   private async runActivation(session: EngineSession, actId: number, ref: string): Promise<void> {
@@ -281,7 +307,42 @@ export class Worker {
       outcome = { frame: "activation_failed", act_id: actId, reason };
     }
     this.navigating = false;
-    if (this.state === "launched" && this.session === session) this.send(outcome);
+    if (this.state === "launched" && this.session === session) this.settle(outcome, { frame: "activation_failed", act_id: actId, reason: "failed" });
+  }
+
+  private async runExecution(session: EngineSession, execId: number, tool: string, fields: ExecField[]): Promise<void> {
+    let outcome: WorkerFrame;
+    try {
+      const result = await session.execute(tool, fields);
+      outcome = {
+        frame: "executed",
+        exec_id: execId,
+        url: result.url,
+        status: result.status,
+        structured: result.structured,
+        structured_complete: result.structuredComplete
+      };
+    } catch (error) {
+      const reason: NavigationFailure = error instanceof NavigationError ? error.reason : "failed";
+      outcome = { frame: "execution_failed", exec_id: execId, reason };
+    }
+    this.navigating = false;
+    if (this.state === "launched" && this.session === session) this.settle(outcome, { frame: "execution_failed", exec_id: execId, reason: "failed" });
+  }
+
+  /// Send an operation's outcome from a background run. If it cannot be
+  /// sent (a frame past the size bound), the operation reports a typed
+  /// failure instead; nothing escapes as an unhandled rejection.
+  private settle(outcome: WorkerFrame, failure: WorkerFrame): void {
+    try {
+      this.send(outcome);
+    } catch {
+      try {
+        this.send(failure);
+      } catch {
+        // The channel is gone; the host sees the end of output.
+      }
+    }
   }
 
   private fail(code: ErrorCode): Promise<void> {

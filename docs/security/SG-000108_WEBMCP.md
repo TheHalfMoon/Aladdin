@@ -15,13 +15,13 @@ A page with no declarations yields an empty list, and the caller falls back to o
 
 ## How it reads the page without running page code
 
-- The worker takes a CDP `DOMSnapshot.captureSnapshot` of the main document. The engine serialises its own DOM tree, so no script runs in the page: page-defined getters, patched prototypes and polyfills are never invoked, and nothing in the page changes. Declarative shadow roots are part of the snapshot.
+- The worker takes a CDP `DOMSnapshot.captureSnapshot` of the main document. The engine serialises its own DOM tree, so no script runs in the page: page-defined getters, patched prototypes and polyfills are never invoked, and nothing in the page changes. Open, closed and declarative shadow trees are part of the snapshot, flattened: Edge reports no shadow-root node, only a `shadowRootType` mark on every node inside a shadow tree. The model puts a shadow-root boundary where a marked node sits under an unmarked one. A shadow tree nested in another one cannot be told apart from its parent tree, so it is modelled as part of it. (Slice 4 as first merged assumed shadow-root nodes. Its synthetic tests did too, so a shadow-tree field could be counted as an outer form's parameter. Corrected in slice 5.)
 - The tool rules are adapted from MCP-B's `declarative-forms.ts` (MIT; see `docs/aladdin/notices/WebMCP-org-npm-packages-MIT.txt` and `docs/aladdin/sg000108_webmcp_provenance.json`). They run in the worker on that attribute-only model.
 - They read **attributes, not live state**. A value typed into a control is never visible, because the snapshot's input values are ignored. A control's `value` is never emitted. The only values that cross are the author-declared choice values of `option`, `radio` and `checkbox` controls.
 - Text in an editable region (`contenteditable`, `role=textbox`) never contributes to a label or description.
 - Password-like controls (`type=password`, or `autocomplete` set to `current-password`, `new-password` or `one-time-code`) are never parameters. They flag the tool through `has_password` even when disabled. SG-000077 already refuses filling password fields.
 - **The tree model follows the DOM**, and differs from the donor's live-DOM rules where the model needs it:
-  - Shadow roots are separate tree scopes. Form ownership, `form=` and `label for=` ids, and disabled fieldsets do not cross them.
+  - Shadow roots are separate tree scopes (reconstructed from the snapshot's `shadowRootType` marks; see above). Form ownership, `form=` and `label for=` ids, and disabled fieldsets do not cross them.
   - A wrapping `label` labels only its first labelable descendant.
   - A disabled fieldset spares its first `legend`.
   - Attribute names are matched exactly, so a name set in another case with `setAttributeNS` is not a declaration.
@@ -92,3 +92,97 @@ Native test `webmcp_declarative_tools_are_discovered_read_only_and_bound_to_the_
 Unit tests:
 - the worker's `webmcp/declarative.test.ts` covers schema rules, values, passwords, duplicates, disabled, read-only, nested and `form=`-owned controls, bounds, code-point cuts and control removal, and the snapshot model including shadow roots;
 - the host's `webmcp.rs` and `discovery_frames_are_exact` cover validation and the frame shapes.
+
+# Slice 5: approval-gated execution of declarative tools
+
+Status: implementation record for slice 5 of SG-000108 (worker protocol generation 7). Execution is available as a host API only. **No MCP-facing tool is added**: exposing page tools to a model is a later change under SG-000079, with its own approval policy.
+
+## What executes
+
+`BrowserWorker::execute_tool` runs a tool discovered in slice 4 only when all of these hold. Anything else is refused before the approval is checked, so nothing is spent:
+- the form declares `toolautosubmit`. Without it, WebMCP leaves submission to the user, and Aladdin's isolated browser has no user to submit;
+- it carries no password-like field;
+- its `action` crossed exactly;
+- its method is GET or POST;
+- it has no hidden parameters, which cannot be entered;
+- its structure is **self-contained**, as discovery reports it. Execution finds fields and the submit button by position in the form, and the browser submits by form ownership, so the two must agree:
+  - every control and button below the form is its own (none carries `form=`);
+  - none of its own lies outside it;
+  - no shadow tree below it holds a control or button;
+  - no submit button overrides the form (`form`, `formaction`, `formmethod`, `formenctype`, `formtarget`, `formnovalidate`);
+  - it has a default submit button;
+  - it opens no new browsing context (`target` empty or `_self`, or, without one, the document's `<base target>`);
+  - it posts URL-encoded;
+  - the form itself does not sit inside a shadow tree.
+
+## How approval binds
+
+- A new SG-000077 action, `execute` (role `webmcp-tool`), is required. A click or download approval is refused.
+- The target's `state` is `execution_binding`: the tool name, a digest of its discovered record, the method, the resolved action, and the canonical arguments with keys sorted. The one-shot approval therefore covers every value the caller supplies, the method, and where it goes. The form's own fixed names (below) are submitted with the page's values, which the approval does not cover.
+- An approval for other arguments, a forged approval and undeclared arguments are all refused unspent.
+
+## What happens
+
+1. **Fresh discovery.** The host discovers the page's tools again. The tool's record must be identical to the one the approval was given for, otherwise execution is refused as "the tool changed".
+2. **Argument validation.** Arguments are checked host-side against the bounded schema:
+   - types, required parameters and declared choices;
+   - number bounds and step;
+   - string length (1024 code points), with no controls (newlines and tabs are allowed in a textarea) and no invisible format characters.
+
+   `pattern` and `format` are not evaluated by the host. The engine's native constraint validation enforces them when the form is submitted, and a form that fails validation opens no document, so the execution is not verified.
+3. **Action.** The form's `action` is resolved against the committed page. It may be empty, absolute `https://`, or root-relative, in the form the engine requests unchanged: URL characters only, no backslash, no whitespace, no dot segments. Anything else is refused before dispatch, as is an action on another origin. The host then expects exactly one page-initiated document request:
+   - for POST, the exact action;
+   - for GET, the action's path.
+4. **The submitted request is checked.** Each route request now carries its method, content type and body (a URL-encoded body of printable ASCII up to 16 KiB; otherwise none). The one expected request must use the bound method, and its query (GET) or body (POST) must give each approved field exactly its approved values:
+   - a checked checkbox exactly once, an unchecked one not at all;
+   - textarea line breaks as the engine's CRLF;
+   - no other value on a declared parameter the caller did not supply;
+   - a select or radio parameter is always supplied, since the page's default would be submitted otherwise.
+
+   Discovery also reports the form's **fixed names**: the names of its hidden, read-only and other non-parameter controls, and of its default button, but never their values. Those names may carry any value, such as a CSRF token. Any other name is refused, and so is a frame or popup document while the submission is pending. A refused submission spends the expectation, so no later request can satisfy it. A page script that rewrites a field or adds one, a method override and a different form's submission are all refused at the request.
+
+   A form submits UTF-8 unless its `accept-charset` starts with another label or the document declares another charset. A form that does not submit UTF-8 executes only ASCII arguments; others are refused before dispatch.
+5. **Dispatch.** `dispatch` consumes the approval.
+6. **Filling.** The worker locates the form by `toolname` (exactly one match) and enters each field through Playwright's typed actions (`fill`, `selectOption`, `setChecked`, `check`), on host-built selectors with quoted names, within one 10 s filling budget. Discovery stays read-only; only execution enters values. The worker then clicks the form's default submit button.
+7. **Verification.** A submission that opens no document is not a verified execution. Examples are a page script that calls `preventDefault`, or a field that fails native validation. A script that navigates elsewhere is refused at the request.
+8. **Result.** The result is the opened document's URL and status, plus its `<script type="application/ld+json">` blocks (WebMCP's cross-document response). They are read from the engine's DOM snapshot without running script, and bounded to 8 blocks of 8192 code points as untrusted `PageText`. The blocks are fitted into one reply frame, and `structured_complete` is false when blocks were dropped or the snapshot failed. An outcome that still cannot be sent becomes a typed failure. The document is committed one generation later, and every earlier node and tool identity is stale. The host waits up to 90 s for an execution, above the worker's worst case.
+
+## Page code
+
+Aladdin evaluates no page-, model- or caller-supplied script. It calls no page-registered function (`executeTool`, `getTools`) and no `respondWith`. The page's own submit handlers do run when the form is submitted, exactly as they run for any SG-000077 click; that is how the page does what its tool declares. The SG-000108 invariant therefore holds as written, and declarative execution needs no amendment. Executing imperative tools (`document.modelContext.executeTool`) would invoke a page-registered handler directly. It stays out of scope until that amendment is made.
+
+## Known limits
+
+- An `<option>` without a `value` is matched by its reported text. If that differs from the submitted value (see slice 4), the selection fails, which fails closed.
+- A POST whose body is larger than 16 KiB, or not URL-encoded printable ASCII, cannot be checked and is refused.
+- The fixed names' values are submitted as the page sets them. They are the page's own data, not the caller's, and the approval covers only the declared parameters. A submit handler may change a fixed value; it cannot add a name.
+- The charset rule reads the `accept-charset` attribute and the document's first `<meta>` charset. A charset set only by the HTTP `Content-Type` header is not seen: such a page counts as UTF-8, so a non-ASCII argument could be submitted in another encoding than the approval names. The value check at the request still refuses a value that decodes differently, as long as the body is printable ASCII.
+- A form inside a shadow tree is discovered but never executed, and nested shadow trees are modelled as part of their parent tree.
+
+## Evidence
+
+Native test `webmcp_tools_execute_only_with_approval_and_return_the_verified_result` (local, Edge 155, HTTPS fixture `/exec`):
+- **GET.** `search_reports` with `{"q":"rust","year":"2025","exact":true}` opens `/search?q=rust&year=2025&exact=on&csrf=csrf-123`; the fixture log is the ground truth, and it shows the hidden field submitted by the browser. The returned JSON-LD echoes the query.
+- **Refused unspent:** a forged approval, an approval for other arguments, and an undeclared argument.
+- **Refused after use:** the stale tool identity, and separately a replay of the spent approval on a fresh identity.
+- **POST.** `post_note` with a multi-line note opens exactly `/note`. The fixture received a 12-character note ("hello", CRLF, "world"), and the result is complete.
+- **Not executable:** `needs_user` (no autosubmit) gets no binding. `escape` (action on `other.test`) is refused before dispatch, with its approval unspent.
+- **No document:** `script_handled` (`preventDefault`) opens nothing, so it is not verified.
+- **Elsewhere:** `redirecting` (script moves to `/elsewhere`) is refused at the request, and its approval is spent.
+- **Structure:** `decoy` (a decoy field, with the real one owned from outside), `foreign_button` (its button submits another form), `shadowed` (a field in a shadow tree) and `method_override` (`formmethod` on the button) are not self-contained and get no binding.
+- **Rewritten:** `rewriting`, whose submit handler replaces the approved value, is refused at the request.
+- **Fixed names:** `hidden_token` reports `csrf` as fixed and submits the page's token. `adding`, whose submit handler appends a field, is refused at the request. `latin` (`accept-charset="iso-8859-1"`) refuses a non-ASCII argument with no binding and binds an ASCII one.
+- **Large result:** `big_result` returns 8 blocks of emoji too large for one frame. The outcome keeps fewer blocks, marks them incomplete, and the lifetime goes on.
+- **Changed:** `mutating`, whose description changes after discovery, is refused as changed, with its approval unspent.
+- **Never requested,** per the fixture log: `other.test`, `/elsewhere`, the refused arguments, the page defaults and other-form values (`PAGEDEFAULT`, `OTHERFORM`), the rewritten value, the script-added field (`SCRIPTADDED`), any non-ASCII argument to `latin`, and the changed tool's submission. The page's own token was submitted (`csrf=PAGETOKEN&q=tokened`).
+
+The host's unit tests cover:
+- the argument rules, executability, action resolution (canonical form) and result bounds;
+- the submission check (methods, exact values, checkboxes, CRLF, cut or non-urlencoded bodies, malformed escapes);
+- how an approval maps to a submission.
+
+The worker's unit tests cover:
+- the generation-7 frames;
+- the request detail;
+- the structural self-containment rules, on synthetic trees and on a snapshot flattened the way Edge reports shadow trees;
+- an outcome too large to send becoming a typed failure.

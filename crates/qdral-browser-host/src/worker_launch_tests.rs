@@ -1308,6 +1308,364 @@ fn webmcp_declarative_tools_are_discovered_read_only_and_bound_to_the_document()
     assert_profile_gone(report.profile_removed, &profile);
 }
 
+/// An approval for executing `tool_id` with `args` (the host's binding).
+fn approved_execution(
+    worker: &BrowserWorker,
+    found: &crate::webmcp::DiscoveredTools,
+    tool_id: &str,
+    args: &serde_json::Map<String, serde_json::Value>,
+) -> (
+    crate::actuation::ActuationTarget,
+    crate::actuation::ApprovalToken,
+) {
+    let target = crate::actuation::ActuationTarget {
+        page_id: format!("p{}", found.document_generation),
+        origin: "https://fixture.test".into(),
+        document_generation: found.document_generation,
+        node_id: tool_id.to_owned(),
+        role: "webmcp-tool".into(),
+        state: worker.execution_binding(tool_id, args).unwrap_or_default(),
+        action: crate::actuation::SupportedAction::Execute,
+        workspace: "workspace".into(),
+        policy_revision: 1,
+    };
+    let approval = crate::actuation::ApprovalToken {
+        approval_id: "approval-exec".into(),
+        target_digest: crate::actuation::target_digest(&target),
+        workspace: "workspace".into(),
+        policy_revision: 1,
+        consumed: false,
+    };
+    (target, approval)
+}
+
+#[test]
+#[ignore = "requires the built browser worker and Edge; run by npm run browser-launcher:native"]
+fn webmcp_tools_execute_only_with_approval_and_return_the_verified_result() {
+    let fixture = HttpsFixture::start();
+    let profile = temp_profile("webmcp-exec");
+    let mut launch = spec(&profile, true);
+    launch.destinations =
+        vec![
+            AdmittedDestination::fixture("fixture.test", IpAddr::V4(Ipv4Addr::LOCALHOST))
+                .expect("fixture.test"),
+        ];
+    launch.test_trusted_spki = Some(fixture.spki.clone());
+    let mut worker = launch_worker(&launch, &Policy(PolicyKeyState::Absent)).expect("launch");
+    let args = |json: &str| -> serde_json::Map<String, serde_json::Value> {
+        serde_json::from_str(json).expect("args")
+    };
+    let open = |worker: &mut BrowserWorker| {
+        worker
+            .navigate("https://fixture.test/exec")
+            .expect("exec page");
+        worker.discover_tools().expect("discover")
+    };
+    let id_of = |found: &crate::webmcp::DiscoveredTools, name: &str| {
+        found
+            .tools
+            .iter()
+            .find(|t| t.name == name)
+            .map(|t| t.tool_id.clone())
+            .expect("tool")
+    };
+
+    // GET: the approved arguments are submitted, the browser adds the hidden
+    // field, and the result's structured data comes back as page text.
+    let found = open(&mut worker);
+    let search = id_of(&found, "search_reports");
+    let wanted = args(r#"{"q":"rust","year":"2025","exact":true}"#);
+    let (target, mut approval) = approved_execution(&worker, &found, &search, &wanted);
+    // A forged approval, an approval for other arguments, and undeclared
+    // arguments are refused without spending anything.
+    let mut forged = approval.clone();
+    forged.target_digest = "forged".into();
+    assert!(worker
+        .execute_tool(&target, &mut forged, &wanted, 1, "workspace")
+        .is_err());
+    assert!(!forged.consumed);
+    let other = args(r#"{"q":"evil","year":"2025","exact":true}"#);
+    assert!(worker
+        .execute_tool(&target, &mut approval, &other, 1, "workspace")
+        .is_err());
+    assert!(
+        !approval.consumed,
+        "an approval for other arguments was spent"
+    );
+    assert!(worker
+        .execute_tool(
+            &target,
+            &mut approval,
+            &args(r#"{"q":"rust","extra":1}"#),
+            1,
+            "workspace"
+        )
+        .is_err());
+    assert!(!approval.consumed);
+    let outcome = worker
+        .execute_tool(&target, &mut approval, &wanted, 1, "workspace")
+        .expect("execute");
+    assert!(approval.consumed);
+    assert!(
+        outcome.url.starts_with("https://fixture.test/search?"),
+        "{}",
+        outcome.url
+    );
+    assert_eq!(outcome.status, 200);
+    let result: serde_json::Value =
+        serde_json::from_str(outcome.structured[0].untrusted()).expect("structured data");
+    assert_eq!(result["query"], "rust");
+    assert_eq!(result["year"], "2025");
+    assert_eq!(result["exact"], "on");
+    assert_eq!(
+        result["csrf"], "csrf-123",
+        "the hidden field was not submitted"
+    );
+    // The old tool identity is stale after the submission's navigation.
+    assert!(matches!(
+        worker.execute_tool(&target, &mut approval, &wanted, 1, "workspace"),
+        Err(HostError::Invalid(message)) if message.contains("stale")
+    ));
+    // A replay: the spent approval on a fresh identity is refused as a
+    // replay, and nothing is submitted again.
+    let found = open(&mut worker);
+    let (fresh, _) = approved_execution(&worker, &found, &id_of(&found, "search_reports"), &wanted);
+    assert!(matches!(
+        worker.execute_tool(&fresh, &mut approval, &wanted, 1, "workspace"),
+        Err(HostError::Invalid(message)) if message.contains("replay")
+    ));
+
+    // POST: the exact action, with a multi-line note.
+    let found = open(&mut worker);
+    let note = id_of(&found, "post_note");
+    let text = args(r#"{"note":"hello\nworld"}"#);
+    let (target, mut approval) = approved_execution(&worker, &found, &note, &text);
+    let saved = worker
+        .execute_tool(&target, &mut approval, &text, 1, "workspace")
+        .expect("post");
+    assert_eq!(saved.url, "https://fixture.test/note");
+    let result: serde_json::Value =
+        serde_json::from_str(saved.structured[0].untrusted()).expect("structured data");
+    assert_eq!(result["saved"], true);
+    // The fixture saw exactly the approved note ("hello", CRLF, "world").
+    assert_eq!(result["length"], 12);
+    assert!(saved.structured_complete);
+
+    // Tools that must not execute: no autosubmit (no binding at all), a
+    // cross-origin action (refused before dispatch, approval unspent).
+    let found = open(&mut worker);
+    assert!(worker
+        .execution_binding(&id_of(&found, "needs_user"), &args(r#"{"q":"x"}"#))
+        .is_err());
+    let escape = id_of(&found, "escape");
+    let (target, mut approval) =
+        approved_execution(&worker, &found, &escape, &args(r#"{"q":"x"}"#));
+    assert!(worker
+        .execute_tool(
+            &target,
+            &mut approval,
+            &args(r#"{"q":"x"}"#),
+            1,
+            "workspace"
+        )
+        .is_err());
+    assert!(
+        !approval.consumed,
+        "a cross-origin action spent its approval"
+    );
+
+    // A page script that swallows the submission opens no document: not a
+    // verified execution (the approval was dispatched, so it is spent).
+    let found = open(&mut worker);
+    let swallowed = id_of(&found, "script_handled");
+    let (target, mut approval) =
+        approved_execution(&worker, &found, &swallowed, &args(r#"{"q":"swallowed"}"#));
+    let refused = worker.execute_tool(
+        &target,
+        &mut approval,
+        &args(r#"{"q":"swallowed"}"#),
+        1,
+        "workspace",
+    );
+    assert!(refused.is_err(), "{refused:?}");
+    assert!(approval.consumed);
+
+    // A page script that moves somewhere else instead is refused at the
+    // request.
+    let found = open(&mut worker);
+    let moving = id_of(&found, "redirecting");
+    let (target, mut approval) =
+        approved_execution(&worker, &found, &moving, &args(r#"{"q":"moved"}"#));
+    assert!(worker
+        .execute_tool(
+            &target,
+            &mut approval,
+            &args(r#"{"q":"moved"}"#),
+            1,
+            "workspace"
+        )
+        .is_err());
+    assert!(
+        approval.consumed,
+        "a dispatched execution must spend its approval"
+    );
+
+    // Structures where position and ownership disagree are not executable:
+    // no binding, so no approval can even be formed.
+    let found = open(&mut worker);
+    for name in ["decoy", "foreign_button", "shadowed", "method_override"] {
+        let tool = found.tools.iter().find(|t| t.name == name).expect(name);
+        assert!(!tool.self_contained, "{name} was taken as self-contained");
+        assert!(
+            worker
+                .execution_binding(&tool.tool_id, &args(r#"{"q":"x"}"#))
+                .is_err(),
+            "{name} was executable"
+        );
+    }
+
+    // A submit handler that rewrites a field is refused at the request: the
+    // request does not carry the approved value.
+    let rewriting = id_of(&found, "rewriting");
+    let (target, mut approval) =
+        approved_execution(&worker, &found, &rewriting, &args(r#"{"q":"approved"}"#));
+    assert!(worker
+        .execute_tool(
+            &target,
+            &mut approval,
+            &args(r#"{"q":"approved"}"#),
+            1,
+            "workspace"
+        )
+        .is_err());
+    assert!(approval.consumed);
+
+    // The form's own hidden token is submitted as the page set it.
+    let found = open(&mut worker);
+    let hidden = id_of(&found, "hidden_token");
+    let tool = found.tools.iter().find(|t| t.tool_id == hidden).unwrap();
+    assert_eq!(tool.fixed_names, vec!["csrf".to_owned()]);
+    let (target, mut approval) =
+        approved_execution(&worker, &found, &hidden, &args(r#"{"q":"tokened"}"#));
+    worker
+        .execute_tool(
+            &target,
+            &mut approval,
+            &args(r#"{"q":"tokened"}"#),
+            1,
+            "workspace",
+        )
+        .expect("a hidden token is the page's own");
+
+    // A submit handler that adds a name the form never declared is refused
+    // at the request.
+    let found = open(&mut worker);
+    let adding = id_of(&found, "adding");
+    let (target, mut approval) =
+        approved_execution(&worker, &found, &adding, &args(r#"{"q":"plain"}"#));
+    assert!(worker
+        .execute_tool(
+            &target,
+            &mut approval,
+            &args(r#"{"q":"plain"}"#),
+            1,
+            "workspace"
+        )
+        .is_err());
+    assert!(approval.consumed);
+
+    // A form that submits another charset takes only ASCII arguments: a
+    // non-ASCII one gets no binding.
+    let found = open(&mut worker);
+    let latin = id_of(&found, "latin");
+    assert!(
+        !found
+            .tools
+            .iter()
+            .find(|t| t.tool_id == latin)
+            .unwrap()
+            .utf8
+    );
+    assert!(worker
+        .execution_binding(&latin, &args(r#"{"q":"café"}"#))
+        .is_err());
+    assert!(worker
+        .execution_binding(&latin, &args(r#"{"q":"cafe"}"#))
+        .is_ok());
+
+    // A result too large for one frame is kept in part and marked
+    // incomplete, and the lifetime goes on.
+    let found = open(&mut worker);
+    let big = id_of(&found, "big_result");
+    let (target, mut approval) = approved_execution(&worker, &found, &big, &args(r#"{"q":"big"}"#));
+    let outcome = worker
+        .execute_tool(
+            &target,
+            &mut approval,
+            &args(r#"{"q":"big"}"#),
+            1,
+            "workspace",
+        )
+        .expect("big result");
+    assert!(!outcome.structured_complete);
+    assert!(
+        outcome.structured.len() < 8,
+        "{} blocks",
+        outcome.structured.len()
+    );
+    worker.ping("after-big").expect("the lifetime survived");
+
+    // A tool whose declaration changed after discovery is refused (fresh
+    // discovery before dispatch), and its approval is unspent.
+    let found = open(&mut worker);
+    let mutating = id_of(&found, "mutating");
+    let (target, mut approval) =
+        approved_execution(&worker, &found, &mutating, &args(r#"{"q":"m"}"#));
+    pump(&mut worker, Duration::from_secs(2));
+    assert!(matches!(
+        worker.execute_tool(&target, &mut approval, &args(r#"{"q":"m"}"#), 1, "workspace"),
+        Err(HostError::Invalid(message)) if message.contains("changed")
+    ));
+    assert!(!approval.consumed);
+
+    let report = worker.shutdown();
+    assert!(report.job_empty, "the job did not empty");
+    assert_profile_gone(report.profile_removed, &profile);
+    // Ground truth: what the fixture received.
+    let hits = fixture.hits();
+    assert!(
+        hits.iter()
+            .any(|h| h.ends_with("/search?q=rust&year=2025&exact=on&csrf=csrf-123")),
+        "{hits:?}"
+    );
+    assert!(
+        hits.iter()
+            .any(|h| h.ends_with("/search?csrf=PAGETOKEN&q=tokened")),
+        "{hits:?}"
+    );
+    for never in [
+        "other.test",
+        "q=evil",
+        "q=swallowed",
+        "/elsewhere",
+        "q=moved",
+        "PAGEDEFAULT",
+        "OTHERFORM",
+        "q=evil-rewrite",
+        "SCRIPTADDED",
+        "caf%",
+    ] {
+        assert!(
+            !hits.iter().any(|h| h.contains(never)),
+            "{never} was requested: {hits:?}"
+        );
+    }
+    assert!(
+        !hits.iter().any(|h| h.ends_with("/search?q=m")),
+        "the changed tool was submitted: {hits:?}"
+    );
+}
+
 #[test]
 #[ignore = "requires the built browser worker and Edge; run by npm run browser-launcher:native"]
 fn a_stalled_cancelled_or_killed_download_is_typed_and_commits_nothing() {

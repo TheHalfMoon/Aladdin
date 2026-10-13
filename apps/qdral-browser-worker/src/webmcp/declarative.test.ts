@@ -66,12 +66,12 @@ test("a declared form becomes a bounded tool with a schema from its controls", (
   assert.equal(tool.autosubmit, true);
   assert.equal(tool.has_password, false);
   assert.deepEqual(tool.params, [
-    { name: "from", required: true, type: "string", pattern: "[A-Z]{3}", description: "From airport" },
-    { name: "seats", required: false, type: "number", minimum: 1, maximum: 9, multiple_of: 1 },
-    { name: "cabin", required: false, type: "string", enum: ["eco", "Business"] },
-    { name: "trip", required: false, type: "string", enum: ["one", "return"], description: "Trip type" },
-    { name: "meal", required: false, type: "array", items_enum: ["veg", "halal"] },
-    { name: "when", required: false, type: "string", format: "date", description: "Dates MUST be provided in 'YYYY-MM-DD' format." }
+    { name: "from", required: true, control: "text", type: "string", pattern: "[A-Z]{3}", description: "From airport" },
+    { name: "seats", required: false, control: "text", type: "number", minimum: 1, maximum: 9, multiple_of: 1 },
+    { name: "cabin", required: false, control: "select", type: "string", enum: ["eco", "Business"] },
+    { name: "trip", required: false, control: "radio", type: "string", enum: ["one", "return"], description: "Trip type" },
+    { name: "meal", required: false, control: "checkboxes", type: "array", items_enum: ["veg", "halal"] },
+    { name: "when", required: false, control: "text", type: "string", format: "date", description: "Dates MUST be provided in 'YYYY-MM-DD' format." }
   ]);
   // The hidden field (no description) is not a parameter and its value never appears.
   assert.ok(!JSON.stringify(tools).includes("tok-123"));
@@ -181,7 +181,7 @@ test("the snapshot model keeps shadow trees and text, and drops other node kinds
   assert.equal(model.truncated, false);
   const { tools } = discoverDeclarativeTools(model.root);
   assert.deepEqual(tools.map((t) => [t.name, t.node, t.params]), [
-    ["shadowed", 105, [{ name: "q", required: false, type: "string", description: "Query" }]]
+    ["shadowed", 105, [{ name: "q", required: false, control: "text", type: "string", description: "Query" }]]
   ]);
 });
 
@@ -196,7 +196,7 @@ test("a DOM deeper than any call stack is walked without recursion", () => {
   let inner = el("form", { toolname: "deep", tooldescription: "At the bottom." }, el("label", {}, "Deep field ", el("input", { name: "d" })));
   for (let i = 0; i < 200_000; i++) inner = el("div", {}, inner);
   const { tools } = discoverDeclarativeTools(doc(inner));
-  assert.deepEqual(tools.map((t) => [t.name, t.params]), [["deep", [{ name: "d", required: false, type: "string", description: "Deep field" }]]]);
+  assert.deepEqual(tools.map((t) => [t.name, t.params]), [["deep", [{ name: "d", required: false, control: "text", type: "string", description: "Deep field" }]]]);
 });
 
 const LONE = /[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/;
@@ -229,8 +229,8 @@ test("text is well formed, control- and bidi-free, and cut at whole code points"
   assert.equal(Array.from(tool.description).length, LIMITS.description);
   assert.equal(tool.title, "Title\ufffd");
   assert.deepEqual(tool.params, [
-    { name: "q", required: false, type: "string", description: "Lab\ufffdel" },
-    { name: "pat", required: false, type: "string" }
+    { name: "q", required: false, control: "text", type: "string", description: "Lab\ufffdel" },
+    { name: "pat", required: false, control: "text", type: "string" }
   ]);
 });
 
@@ -248,10 +248,10 @@ test("number schemas stay inside the host's subset", () => {
     )
   );
   assert.deepEqual(tools[0]?.params, [
-    { name: "pat", required: false, type: "number", multiple_of: 1 },
-    { name: "inverted", required: false, type: "number", multiple_of: 1 },
-    { name: "range_high", required: false, type: "number", multiple_of: 1 },
-    { name: "range_ok", required: false, type: "number", minimum: 5, maximum: 100, multiple_of: 1 }
+    { name: "pat", required: false, control: "text", type: "number", multiple_of: 1 },
+    { name: "inverted", required: false, control: "text", type: "number", multiple_of: 1 },
+    { name: "range_high", required: false, control: "text", type: "number", multiple_of: 1 },
+    { name: "range_ok", required: false, control: "text", type: "number", minimum: 5, maximum: 100, multiple_of: 1 }
   ]);
 });
 
@@ -281,8 +281,8 @@ test("editable regions never contribute text, and labels label one control", () 
     )
   );
   assert.deepEqual(tools[0]?.params, [
-    { name: "q", required: false, type: "string", description: "Query" },
-    { name: "second", required: false, type: "string" }
+    { name: "q", required: false, control: "text", type: "string", description: "Query" },
+    { name: "second", required: false, control: "text", type: "string" }
   ]);
 });
 
@@ -357,4 +357,91 @@ test("a capture that never settles fails on time, even if detaching hangs too", 
   const begun = Date.now();
   assert.deepEqual(await captureWithin(quick, 1_000), { documents: [], strings: [] });
   assert.ok(Date.now() - begun < DETACH_WAIT_MS + 150, `took ${Date.now() - begun} ms`);
+});
+
+test("a tool is self-contained only when position and ownership agree", () => {
+  const button = () => el("button", {}, "Go");
+  const discover = (...children: Array<Mutable | string>) => discoverDeclarativeTools(doc(...children)).tools.map((t) => [t.name, t.self_contained]);
+  assert.deepEqual(
+    discover(
+      el("form", { toolname: "plain", tooldescription: "d" }, el("input", { name: "q" }), button()),
+      el("form", { toolname: "no_button", tooldescription: "d" }, el("input", { name: "q" })),
+      el("form", { toolname: "decoy", tooldescription: "d", id: "f" }, el("input", { name: "q", form: "nowhere" }), button()),
+      el("form", { toolname: "owned_outside", tooldescription: "d", id: "g" }, button()),
+      el("input", { name: "q", form: "g" }),
+      el("form", { toolname: "other_button", tooldescription: "d" }, el("input", { name: "q" }), el("button", { form: "x" }, "Go")),
+      el("form", { toolname: "formmethod", tooldescription: "d" }, el("input", { name: "q" }), el("button", { formmethod: "post" }, "Go")),
+      el("form", { toolname: "shadowed", tooldescription: "d" }, el("x-c", {}, el("#shadow-root", {}, el("input", { name: "q" }))), button()),
+      el("form", { toolname: "popup", tooldescription: "d", target: "_blank" }, el("input", { name: "q" }), button()),
+      el("form", { toolname: "multipart", tooldescription: "d", method: "post", enctype: "multipart/form-data" }, el("input", { name: "q" }), button()),
+      el("form", { toolname: "reset_only", tooldescription: "d" }, el("input", { name: "q" }), el("button", { type: "reset" }, "Clear"))
+    ),
+    [
+      ["plain", true],
+      ["no_button", false],
+      ["decoy", false],
+      ["owned_outside", false],
+      ["other_button", false],
+      ["formmethod", false],
+      ["shadowed", false],
+      ["popup", false],
+      ["multipart", false],
+      ["reset_only", false]
+    ]
+  );
+});
+
+test("flattened shadow trees (as Edge reports them) get their boundary back, and their forms never execute", () => {
+  // Edge's snapshot has no shadow-root node: shadow content sits under its
+  // host, marked with `shadowRootType`.
+  const base = snapshot([
+    [-1, 9, "#document"],
+    [0, 1, "HTML"],
+    [1, 1, "BODY"],
+    [2, 1, "FORM", undefined, ["toolname", "outer", "tooldescription", "d"]],
+    [3, 1, "X-FIELD"],
+    [4, 1, "INPUT", undefined, ["name", "shadowed"]],
+    [3, 1, "INPUT", undefined, ["name", "light"]],
+    [3, 1, "BUTTON"],
+    [2, 1, "X-APP"],
+    [8, 1, "FORM", undefined, ["toolname", "inner", "tooldescription", "d"]],
+    [9, 1, "INPUT", undefined, ["name", "q"]],
+    [9, 1, "BUTTON"]
+  ]);
+  const doc0 = base.documents[0];
+  assert.ok(doc0);
+  doc0.nodes.shadowRootType = { index: [5, 9, 10, 11], value: [0, 0, 0, 0] };
+  const { tools } = discoverDeclarativeTools(documentModel(base).root);
+  assert.deepEqual(
+    tools.map((t) => [t.name, t.self_contained, t.params.map((p) => p.name)]),
+    [
+      // The shadow field is not the outer form's, and makes it unsafe.
+      ["outer", false, ["light"]],
+      // A form inside a shadow tree is discovered but never executable.
+      ["inner", false, ["q"]]
+    ]
+  );
+});
+
+test("fixed names, base targets and charsets are reported for execution", () => {
+  const go = () => el("button", { name: "confirm", value: "yes" }, "Go");
+  const tools = (...children: Array<Mutable | string>) => discoverDeclarativeTools(doc(...children)).tools;
+  const [plain] = tools(
+    el("form", { toolname: "plain", tooldescription: "d" }, el("input", { name: "q" }), el("input", { type: "hidden", name: "csrf", value: "secret-token" }), el("input", { name: "ro", readonly: "" }), go())
+  );
+  assert.ok(plain);
+  assert.equal(plain.self_contained, true);
+  assert.deepEqual([...plain.fixed_names].sort(), ["confirm", "csrf", "ro"]);
+  assert.equal(plain.utf8, true);
+  assert.ok(!JSON.stringify(plain).includes("secret-token"), "a hidden value crossed");
+  // A document-wide <base target> sends the submission elsewhere.
+  const [based] = tools(el("base", { target: "fr" }), el("form", { toolname: "based", tooldescription: "d" }, el("input", { name: "q" }), go()));
+  assert.equal(based?.self_contained, false);
+  const [own] = tools(el("base", { target: "fr" }), el("form", { toolname: "own", tooldescription: "d", target: "_self" }, el("input", { name: "q" }), go()));
+  assert.equal(own?.self_contained, true, "the form's own target wins over the base");
+  // Charsets: accept-charset and the document's meta charset.
+  const [latin] = tools(el("form", { toolname: "latin", tooldescription: "d", "accept-charset": "windows-1252" }, el("input", { name: "q" }), go()));
+  assert.equal(latin?.utf8, false);
+  const [meta] = tools(el("meta", { charset: "ISO-8859-1" }), el("form", { toolname: "meta", tooldescription: "d" }, el("input", { name: "q" }), go()));
+  assert.equal(meta?.utf8, false);
 });

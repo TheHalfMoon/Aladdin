@@ -36,6 +36,8 @@ export interface DomElement {
   readonly parent: DomElement | null;
   /// The engine's backend node id (stable for the document's lifetime).
   readonly node: number;
+  /// The element lies inside a shadow tree.
+  readonly inShadow?: boolean;
 }
 
 export interface DomText {
@@ -59,9 +61,13 @@ export interface ParamSchema {
   items_enum?: string[];
 }
 
+/// How a parameter is entered into the form when the tool is executed.
+export type ControlKind = "text" | "textarea" | "select" | "select_multiple" | "radio" | "checkbox" | "checkboxes" | "hidden";
+
 export interface DeclaredParam extends ParamSchema {
   name: string;
   required: boolean;
+  control: ControlKind;
 }
 
 export interface DeclaredTool {
@@ -73,6 +79,25 @@ export interface DeclaredTool {
   node: number;
   /// The form carries a password control (omitted from `params`).
   has_password: boolean;
+  /// The form's `action` attribute as written ("" when absent), or null when
+  /// it cannot cross exactly (the tool is then not executable).
+  action: string | null;
+  /// The form's method: "get", "post" or "dialog" (HTML's default is get).
+  method: "get" | "post" | "dialog";
+  /// Execution can enter exactly the declared fields and submit exactly this
+  /// form: every control and button below it is its own and none of its own
+  /// lies elsewhere; no shadow tree below it holds one; no submit button
+  /// overrides it; it has a default button; it opens no new browsing
+  /// context and posts URL-encoded.
+  self_contained: boolean;
+  /// Names the form submits that are not parameters: its own hidden,
+  /// read-only and other non-parameter controls, and its default button's
+  /// name. Only their names cross (never their values); a submission may
+  /// carry no other undeclared name.
+  fixed_names: string[];
+  /// The form submits UTF-8 (no other `accept-charset`, and the document
+  /// declares no other charset); otherwise only ASCII arguments execute.
+  utf8: boolean;
   params: DeclaredParam[];
 }
 
@@ -85,7 +110,8 @@ export const LIMITS = {
   paramDescription: 512,
   choices: 64,
   choice: 256,
-  pattern: 256
+  pattern: 256,
+  action: 2048
 } as const;
 
 const NAME = /^[A-Za-z0-9_.-]{1,64}$/;
@@ -129,6 +155,15 @@ function wellFormed(text: string): boolean {
 /// cut at `max` code points (never inside a surrogate pair).
 function bound(text: string, max: number): string {
   const clean = wellFormedText(text).replace(/\s+/g, " ").replace(CONTROLS, "").replace(BIDIS, "").trim();
+  const points = Array.from(clean);
+  return points.length > max ? points.slice(0, max).join("") : clean;
+}
+
+/// A block of structured page data: well formed, without controls other
+/// than JSON whitespace (newline, tab, carriage return) and without invisible
+/// format characters, cut at `max` code points.
+export function sanitizeBlock(text: string, max: number): string {
+  const clean = wellFormedText(text).replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f]/g, "").replace(BIDIS, "").trim();
   const points = Array.from(clean);
   return points.length > max ? points.slice(0, max).join("") : clean;
 }
@@ -214,6 +249,8 @@ interface ControlFacts {
 interface Frame {
   node: DomNode;
   form: DomElement | null;
+  /// The nearest form ancestor across shadow-root boundaries.
+  hostForm: DomElement | null;
   disabled: boolean;
   label: { element: DomElement; used: boolean } | null;
   select: DomElement | null;
@@ -224,8 +261,27 @@ interface Frame {
 /// Nearest fieldsets remembered per control.
 const MAX_FIELDSETS = 8;
 
+/// Submit-button attributes that override the form's own submission.
+const SUBMIT_OVERRIDES = ["form", "formaction", "formmethod", "formenctype", "formtarget", "formnovalidate"];
+
+function isSubmitter(element: DomElement): boolean {
+  if (element.tag === "button") {
+    const type = (attr(element, "type") ?? "submit").trim().toLowerCase();
+    return type === "submit" || type === "";
+  }
+  return element.tag === "input" && ["submit", "image"].includes(inputType(element));
+}
+
 interface Pass {
   forms: DomElement[];
+  /// The document's first `<base target>`, lowercased ("" when none).
+  baseTarget: string;
+  /// The document's declared charset, lowercased ("" when none).
+  charset: string;
+  /// Forms whose structure the worker can execute exactly (below).
+  unsafe: Set<DomElement>;
+  /// Each form's default button (its first submit button in tree order).
+  submitters: Map<DomElement, DomElement>;
   controls: ControlFacts[];
   options: Map<DomElement, DomElement[]>;
   truncated: boolean;
@@ -242,10 +298,14 @@ function treePass(root: DomElement, deadline: number): Pass {
   const formAttr = new Map<ControlFacts, { scope: number; id: string }>();
   const labelFor: Array<{ label: DomElement; scope: number; id: string }> = [];
   const factsOf = new Map<DomElement, ControlFacts>();
+  const unsafe = new Set<DomElement>();
+  const submitters = new Map<DomElement, DomElement>();
+  let baseTarget: string | undefined;
+  let charset: string | undefined;
   let scopes = 0;
   let truncated = false;
   let steps = 0;
-  const stack: Frame[] = [{ node: root, form: null, disabled: false, label: null, select: null, fieldsets: [], scope: 0 }];
+  const stack: Frame[] = [{ node: root, form: null, hostForm: null, disabled: false, label: null, select: null, fieldsets: [], scope: 0 }];
   for (let frame = stack.pop(); frame; frame = stack.pop()) {
     if ((++steps & 1023) === 0 && Date.now() > deadline) {
       truncated = true;
@@ -254,6 +314,7 @@ function treePass(root: DomElement, deadline: number): Pass {
     const { node } = frame;
     if (node.kind !== "element") continue;
     let { form, disabled, label, select, fieldsets, scope } = frame;
+    const { hostForm } = frame;
     if (node.tag === "#shadow-root") {
       scope = ++scopes;
       form = null;
@@ -267,7 +328,38 @@ function treePass(root: DomElement, deadline: number): Pass {
         const key = `${scope}#${id}`;
         if (!byId.has(key)) byId.set(key, node);
       }
-      if (node.tag === "form") forms.push(node);
+      if (scope === 0 && node.tag === "base" && baseTarget === undefined && node.attrs.has("target")) {
+        baseTarget = (attr(node, "target") ?? "").trim().toLowerCase();
+      }
+      if (scope === 0 && node.tag === "meta" && charset === undefined) {
+        const declared =
+          attr(node, "charset") ??
+          ((attr(node, "http-equiv") ?? "").trim().toLowerCase() === "content-type"
+            ? /charset=([^;\s]+)/i.exec(attr(node, "content") ?? "")?.[1]
+            : undefined);
+        if (declared !== undefined) charset = declared.trim().toLowerCase();
+      }
+      if (node.tag === "form") {
+        forms.push(node);
+        // A form inside a form (only script can build one) makes both
+        // ambiguous.
+        if (hostForm) {
+          unsafe.add(hostForm);
+          unsafe.add(node);
+        }
+      }
+      // Execution finds a tool's fields and button by position in the form,
+      // so a form is executable only when position and ownership agree: no
+      // control or button in a shadow tree below it, none inside it owned
+      // elsewhere (`form=`), and no submit button that overrides the form.
+      if (CONTROL_TAGS.has(node.tag) || node.tag === "button") {
+        if (hostForm && hostForm !== form) unsafe.add(hostForm);
+        if (form && attr(node, "form") !== undefined) unsafe.add(form);
+        if (form && isSubmitter(node)) {
+          if (SUBMIT_OVERRIDES.some((name) => node.attrs.has(name))) unsafe.add(form);
+          if (!submitters.has(form)) submitters.set(form, node);
+        }
+      }
       if (node.tag === "option" && select) options.get(select)?.push(node);
       if (node.tag === "label") {
         const target = attr(node, "for");
@@ -306,6 +398,7 @@ function treePass(root: DomElement, deadline: number): Pass {
       stack.push({
         node: child,
         form: childForm,
+        hostForm: node.tag === "form" ? node : hostForm,
         disabled: disables && child !== legend ? true : disabled,
         label: childLabel,
         select: childSelect,
@@ -319,13 +412,15 @@ function treePass(root: DomElement, deadline: number): Pass {
   for (const [facts, { scope, id }] of formAttr) {
     const target = byId.get(`${scope}#${id}`);
     facts.owner = target && target.tag === "form" ? target : null;
+    // A control owned from outside the form is not where execution looks.
+    if (facts.owner) unsafe.add(facts.owner);
   }
   for (const { label, scope, id } of labelFor) {
     const target = byId.get(`${scope}#${id}`);
     const facts = target && isLabelable(target) ? factsOf.get(target) : undefined;
     facts?.labels.push(label);
   }
-  return { forms, controls, options, truncated };
+  return { forms, baseTarget: baseTarget ?? "", charset: charset ?? "", unsafe, submitters, controls, options, truncated };
 }
 
 function isReadOnly(control: DomElement): boolean {
@@ -497,6 +592,59 @@ function parameterSchema(group: readonly ControlFacts[], options: ReadonlyMap<Do
   return combined ? { ...schema, description: bound(combined, LIMITS.paramDescription) } : schema;
 }
 
+function controlKind(group: readonly ControlFacts[]): ControlKind {
+  const first = group[0]?.element;
+  if (!first) return "text";
+  if (first.tag === "textarea") return "textarea";
+  if (first.tag === "select") return first.attrs.has("multiple") ? "select_multiple" : "select";
+  if (isInput(first, "radio")) return "radio";
+  if (isInput(first, "checkbox")) return group.length > 1 ? "checkboxes" : "checkbox";
+  if (isInput(first, "hidden")) return "hidden";
+  return "text";
+}
+
+function selfContained(form: DomElement, pass: Pass): boolean {
+  // A form inside a shadow tree is never executed: the snapshot cannot tell
+  // a nested shadow tree from its parent tree, so ownership there is
+  // unknowable.
+  if (form.inShadow) return false;
+  // The form's own target, else the document's `<base target>`.
+  const target = form.attrs.has("target") ? (attr(form, "target") ?? "").trim().toLowerCase() : pass.baseTarget;
+  const enctype = (attr(form, "enctype") ?? "").trim().toLowerCase();
+  return (
+    !pass.unsafe.has(form) &&
+    pass.submitters.has(form) &&
+    (target === "" || target === "_self") &&
+    (enctype === "" || enctype === "application/x-www-form-urlencoded")
+  );
+}
+
+const isUtf8 = (label: string): boolean => label === "" || label === "utf-8" || label === "utf8" || label === "unicode-1-1-utf-8";
+
+function submitsUtf8(form: DomElement, pass: Pass): boolean {
+  const accept = (attr(form, "accept-charset") ?? "").trim().toLowerCase();
+  // `accept-charset` lists labels; the first supported one is used, so only
+  // a list that starts with UTF-8 (or is empty) is certainly UTF-8.
+  const first = accept.split(/[\s,]+/).filter(Boolean)[0] ?? "";
+  return isUtf8(first) && isUtf8(pass.charset);
+}
+
+/// Read-only controls are submitted but are not parameters: they join the
+/// fixed names. The fixed names must all cross exactly and within bounds,
+/// or the tool is not executable (an unlisted name would be refused).
+function fixedNamesFit(fixed: Set<string>, controls: readonly ControlFacts[]): boolean {
+  for (const facts of controls) {
+    const name = (attr(facts.element, "name") ?? "").trim();
+    if (name && !facts.disabled && isReadOnly(facts.element)) fixed.add(name);
+  }
+  return fixed.size <= LIMITS.params && [...fixed].every((n) => exactValue(n, LIMITS.name));
+}
+
+function formMethod(form: DomElement): "get" | "post" | "dialog" {
+  const method = (attr(form, "method") ?? "").trim().toLowerCase();
+  return method === "post" || method === "dialog" ? method : "get";
+}
+
 export interface Discovery {
   tools: DeclaredTool[];
   /// Some declarations were dropped by a bound or the CPU budget.
@@ -552,6 +700,11 @@ export function discoverDeclarativeTools(root: DomElement, budgetMs: number = DI
       if (group) group.push(facts);
       else groups.set(key, [facts]);
     }
+    // Every other name the form submits, by name only.
+    const fixed = new Set<string>();
+    const submitter = pass.submitters.get(form);
+    const submitterName = submitter ? (attr(submitter, "name") ?? "").trim() : "";
+    if (submitterName) fixed.add(submitterName);
     const params: DeclaredParam[] = [];
     for (const [key, group] of groups) {
       if (!exactValue(key, LIMITS.name)) {
@@ -563,8 +716,11 @@ export function discoverDeclarativeTools(root: DomElement, budgetMs: number = DI
         break;
       }
       const schema = parameterSchema(group, pass.options);
-      if (!schema) continue;
-      params.push({ name: key, required: group.some((facts) => facts.element.attrs.has("required")), ...schema });
+      if (!schema) {
+        fixed.add(key);
+        continue;
+      }
+      params.push({ name: key, required: group.some((facts) => facts.element.attrs.has("required")), control: controlKind(group), ...schema });
     }
     if (codePoints(description) > LIMITS.description) truncated = true;
     tools.push({
@@ -574,6 +730,11 @@ export function discoverDeclarativeTools(root: DomElement, budgetMs: number = DI
       autosubmit: form.attrs.has("toolautosubmit"),
       node: form.node,
       has_password: hasPassword,
+      action: ((raw) => (exactValue(raw, LIMITS.action) ? raw : null))(attr(form, "action") ?? ""),
+      method: formMethod(form),
+      self_contained: selfContained(form, pass) && fixedNamesFit(fixed, controls),
+      fixed_names: [...fixed].filter((n) => exactValue(n, LIMITS.name)).slice(0, LIMITS.params),
+      utf8: submitsUtf8(form, pass),
       params
     });
   }
