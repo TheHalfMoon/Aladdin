@@ -118,11 +118,11 @@ It adds no frame, no host API and no tool. The worker frame, the host-side bound
 
 - Only the main document is read. Iframe documents and SVG `<text>` are not.
 - `aria-hidden` text is kept, because it is visible on screen.
-- Text the engine does not render (off-screen `content-visibility: auto`) is lost and only reported. The slice 6 wiring must decide whether to render it first.
+- Text the engine does not render (off-screen `content-visibility: auto`) is lost and only reported. The slice 6 wiring decided not to render it first, because scrolling runs page code; see `docs/security/SG-000108_EXTRACTION.md`.
 - Visual tricks the snapshot cannot see stay possible: text covered by another element, text whose colour matches its background, text clipped by `clip-path` or hidden by a mask (`mask-image`), and text positioned far to the right or far below. Absolute positioning enlarges the document itself, so such text cannot be told apart from a wide or long page without dropping legitimate content.
 - A link wrapped around block content (`<a><div>…</div></a>`) keeps its text but loses its target, because the inline box has no area (content is dropped, never leaked).
 - A relative link or image on a document without an http(s) base URL is kept as text only.
-- The chunk size is a soft limit, as in the donor: a single block larger than it (one long paragraph, a list without blank lines) stays one chunk. The slice 6 wiring must hard-split oversized chunks or bound its frame independently.
+- The chunk size is a soft limit, as in the donor: a single block larger than it (one long paragraph, a list without blank lines) stays one chunk. The slice 6 wiring hard-splits every chunk into frame-sized pieces (`extract/pieces.ts`).
 - The state-blob cleanup, like the donor's, removes from a `{"$type":` opener up to the next `}`, which can span several blocks.
 
 ## Ideas worth carrying, not code

@@ -9,6 +9,7 @@ mod coordinates;
 mod discovery;
 mod error;
 mod exposure;
+mod extraction;
 mod host;
 mod navigation;
 mod observation;
@@ -53,6 +54,9 @@ pub use exposure::{
     is_denied_shape, is_live_exposed, is_qualified_shape, profile_tools,
     remote_browser_mapping_enabled, BROWSER_STRUCTURED_PROFILE, DENIED_BROWSER_SHAPES,
     LIVE_BROWSER_MCP_TOOLS, PREEXISTING_PROFILES, QUALIFIED_BROWSER_SHAPES,
+};
+pub use extraction::{
+    ExtractOptions, PageExtraction, MAX_EXTRACT_CHARS, MAX_EXTRACT_PIECES, MAX_PIECE_CHARS,
 };
 pub use host::{HostIdentity, LiveHost, Supervisor, HANDSHAKE_TIMEOUT};
 pub use navigation::{
@@ -115,9 +119,10 @@ pub use worker_launch::{
     classify_job, launch_worker, worker_environment, worker_node_args, BrowserWorker, CancelHandle,
     CommittedDownload, ExecutionOutcome, HostNode, JobProcess, LiveObservation, NavigationOutcome,
     ShutdownReport, SnapshotNode, WorkerLaunch, WORKER_ACTIVATION_TIMEOUT,
-    WORKER_EXECUTION_TIMEOUT, WORKER_HANDSHAKE_TIMEOUT, WORKER_IDENTITY, WORKER_LAUNCH_TIMEOUT,
-    WORKER_NAVIGATION_TIMEOUT, WORKER_NODE_OPTION, WORKER_OBSERVATION_TIMEOUT,
-    WORKER_PROTOCOL_GENERATION, WORKER_REPLY_TIMEOUT, WORKER_SHUTDOWN_TIMEOUT,
+    WORKER_EXECUTION_TIMEOUT, WORKER_EXTRACTION_TIMEOUT, WORKER_HANDSHAKE_TIMEOUT, WORKER_IDENTITY,
+    WORKER_LAUNCH_TIMEOUT, WORKER_NAVIGATION_TIMEOUT, WORKER_NODE_OPTION,
+    WORKER_OBSERVATION_TIMEOUT, WORKER_PROTOCOL_GENERATION, WORKER_REPLY_TIMEOUT,
+    WORKER_SHUTDOWN_TIMEOUT,
 };
 pub use worker_navigation::{
     decode_form, NavigationPolicy, RequestDetail, RouteKind, Submission, Submitted,

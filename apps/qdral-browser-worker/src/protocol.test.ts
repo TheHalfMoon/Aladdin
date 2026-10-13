@@ -36,7 +36,7 @@ test("length bounds and non-JSON bodies are violations before buffering", () => 
 });
 
 test("the host vocabulary is closed and exact", () => {
-  assert.deepEqual(parseHostFrame({ frame: "hello", generation: 7 }), { frame: "hello", generation: 7 });
+  assert.deepEqual(parseHostFrame({ frame: "hello", generation: 8 }), { frame: "hello", generation: 8 });
   const parsed = parseHostFrame(validLaunch());
   assert.deepEqual(JSON.parse(JSON.stringify(parsed)), validLaunch());
   assert.equal(parsed.frame === "launch" && Object.getPrototypeOf(parsed.env), null);
@@ -44,11 +44,11 @@ test("the host vocabulary is closed and exact", () => {
     null,
     [],
     "hello",
-    { generation: 7 },
+    { generation: 8 },
     { frame: "navigate", url: "https://example.com" },
     { frame: "evaluate", script: "1+1" },
     { frame: "cdp", method: "Runtime.evaluate" },
-    { frame: "hello", generation: 7, extra: true },
+    { frame: "hello", generation: 8, extra: true },
     { frame: "hello", generation: "1" },
     { frame: "hello" },
     { frame: "shutdown", now: true },
@@ -240,6 +240,23 @@ test("download frames carry a strict ref and an absolute .part staging path", ()
 test("discover frames carry only a positive id", () => {
   assert.deepEqual(parseHostFrame({ frame: "discover", disc_id: 4 }), { frame: "discover", disc_id: 4 });
   for (const bad of [{ frame: "discover", disc_id: 0 }, { frame: "discover", disc_id: 1, script: "x" }, { frame: "discover" }]) {
+    assert.throws(() => parseHostFrame(bad), ProtocolViolation, JSON.stringify(bad));
+  }
+});
+
+test("extract frames carry a positive id, boolean options and a bounded piece", () => {
+  const ok = { frame: "extract", ext_id: 2, links: true, images: false };
+  assert.deepEqual(parseHostFrame(ok), ok);
+  assert.deepEqual(parseHostFrame({ frame: "extract_more", ext_id: 2, piece: 95 }), { frame: "extract_more", ext_id: 2, piece: 95 });
+  for (const bad of [
+    { frame: "extract", ext_id: 0, links: true, images: false },
+    { frame: "extract", ext_id: 1, links: "yes", images: false },
+    { frame: "extract", ext_id: 1, links: true },
+    { frame: "extract", ext_id: 1, links: true, images: false, selector: "body" },
+    { frame: "extract_more", ext_id: 1, piece: 0 },
+    { frame: "extract_more", ext_id: 1, piece: 96 },
+    { frame: "extract_more", ext_id: 1 }
+  ]) {
     assert.throws(() => parseHostFrame(bad), ProtocolViolation, JSON.stringify(bad));
   }
 });

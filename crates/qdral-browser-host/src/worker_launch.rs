@@ -39,7 +39,7 @@ pub struct JobProcess {
 /// Generation 2 adds the slice-3a navigation frames, generation 3 slice-3b
 /// observation, generation 4 slice-3c activation, generation 5 slice-3d
 /// downloads.
-pub const WORKER_PROTOCOL_GENERATION: u32 = 7;
+pub const WORKER_PROTOCOL_GENERATION: u32 = 8;
 /// Worker identity reported in its hello.
 pub const WORKER_IDENTITY: &str = "qdral-browser-worker";
 /// The only Node option the worker accepts (inspector activation refused).
@@ -64,6 +64,11 @@ pub const WORKER_EXECUTION_TIMEOUT: Duration = Duration::from_secs(90);
 
 /// Upper bound for one observation round trip.
 pub const WORKER_OBSERVATION_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// Upper bound for an extraction's first piece (above the worker's worst
+/// case: a 5 s layout snapshot and a 4 s extraction budget). Later pieces
+/// are already computed and take `WORKER_REPLY_TIMEOUT` each.
+pub const WORKER_EXTRACTION_TIMEOUT: Duration = Duration::from_secs(20);
 
 /// One node of a worker snapshot: ref, role, accessible name and (links
 /// only) the link URL. The worker never sends field values.
@@ -201,6 +206,15 @@ pub(crate) enum WorkerRequest<'a> {
     Discover {
         disc_id: u64,
     },
+    Extract {
+        ext_id: u64,
+        links: bool,
+        images: bool,
+    },
+    ExtractMore {
+        ext_id: u64,
+        piece: u32,
+    },
     Activate {
         act_id: u64,
         #[serde(rename = "ref")]
@@ -271,6 +285,17 @@ pub(crate) enum WorkerReply {
     },
     DiscoveryFailed {
         disc_id: u64,
+    },
+    Extracted {
+        ext_id: u64,
+        url: String,
+        truncated: bool,
+        piece: u32,
+        total: u32,
+        content: String,
+    },
+    ExtractionFailed {
+        ext_id: u64,
     },
     Activated {
         act_id: u64,
@@ -994,6 +1019,7 @@ mod platform {
         last_request: u64,
         next_obs: u64,
         next_disc: u64,
+        next_ext: u64,
         next_act: u64,
         next_dl: u64,
         next_exec: u64,
@@ -1065,6 +1091,7 @@ mod platform {
             policy: NavigationPolicy::new(&spec.destinations),
             next_obs: 0,
             next_disc: 0,
+            next_ext: 0,
             next_act: 0,
             next_dl: 0,
             next_exec: 0,
@@ -1484,6 +1511,72 @@ mod platform {
                 truncated,
                 tools,
             })
+        }
+
+        /// The committed page's rendered content as Markdown, read by the
+        /// engine without running page script, as untrusted page text bound
+        /// to the document generation. Every piece is checked; a document
+        /// that changes during the transfer makes the result stale.
+        pub fn extract_page(
+            &mut self,
+            options: crate::extraction::ExtractOptions,
+        ) -> Result<crate::extraction::PageExtraction, HostError> {
+            let committed = self
+                .committed
+                .clone()
+                .ok_or_else(|| HostError::Invalid("no committed document to extract".into()))?;
+            self.next_ext += 1;
+            let ext_id = self.next_ext;
+            self.send(&WorkerRequest::Extract {
+                ext_id,
+                links: options.links,
+                images: options.images,
+            })?;
+            let mut timeout = WORKER_EXTRACTION_TIMEOUT;
+            let mut assembly: Option<crate::extraction::Assembly> = None;
+            loop {
+                let (url, truncated, piece, total, content) = match self.reply(timeout)? {
+                    WorkerReply::Extracted {
+                        ext_id: done,
+                        url,
+                        truncated,
+                        piece,
+                        total,
+                        content,
+                    } if done == ext_id => (url, truncated, piece, total, content),
+                    WorkerReply::ExtractionFailed { ext_id: done } if done == ext_id => {
+                        return Err(HostError::Unavailable(UnavailableReason::ActionFailed))
+                    }
+                    _ => return Err(HostError::Unavailable(UnavailableReason::ProtocolViolation)),
+                };
+                match assembly.as_mut() {
+                    None => {
+                        if url != committed.0 {
+                            return Err(HostError::Invalid(
+                                "stale page: the document changed".into(),
+                            ));
+                        }
+                        assembly = Some(crate::extraction::Assembly::start(
+                            url, truncated, piece, total, content,
+                        )?);
+                    }
+                    Some(open) => open.push(&url, truncated, piece, total, content)?,
+                }
+                let Some(open) = assembly.as_ref() else {
+                    return Err(HostError::Unavailable(UnavailableReason::ProtocolViolation));
+                };
+                let Some(piece) = open.next() else { break };
+                self.send(&WorkerRequest::ExtractMore { ext_id, piece })?;
+                timeout = WORKER_REPLY_TIMEOUT;
+            }
+            let assembly =
+                assembly.ok_or(HostError::Unavailable(UnavailableReason::ProtocolViolation))?;
+            if self.committed.as_ref() != Some(&committed) || assembly.url() != committed.0 {
+                return Err(HostError::Invalid(
+                    "stale page: the document changed".into(),
+                ));
+            }
+            assembly.finish(committed.1)
         }
 
         /// The state an execution approval must name: the tool, a digest of
@@ -2115,6 +2208,16 @@ mod fallback {
         }
 
         /// API parity: no worker ever exists off Windows.
+        pub fn extract_page(
+            &mut self,
+            _options: crate::extraction::ExtractOptions,
+        ) -> Result<crate::extraction::PageExtraction, HostError> {
+            Err(HostError::Unavailable(
+                UnavailableReason::UnsupportedRuntime,
+            ))
+        }
+
+        /// API parity: no worker ever exists off Windows.
         pub fn link_destination(&self, _node_id: &str) -> Result<String, HostError> {
             Err(HostError::Unavailable(
                 UnavailableReason::UnsupportedRuntime,
@@ -2626,6 +2729,42 @@ mod tests {
             r#"{"frame":"executed","exec_id":3,"url":"u","status":200,"structured":[],"structured_complete":true,"extra":1}"#
         )
         .is_err());
+    }
+
+    #[test]
+    fn extraction_frames_are_exact() {
+        let json = |request: &WorkerRequest<'_>| serde_json::to_string(request).unwrap();
+        assert_eq!(
+            json(&WorkerRequest::Extract {
+                ext_id: 2,
+                links: true,
+                images: false
+            }),
+            r#"{"frame":"extract","ext_id":2,"links":true,"images":false}"#
+        );
+        assert_eq!(
+            json(&WorkerRequest::ExtractMore {
+                ext_id: 2,
+                piece: 1
+            }),
+            r#"{"frame":"extract_more","ext_id":2,"piece":1}"#
+        );
+        let reply = |text: &str| serde_json::from_str::<WorkerReply>(text);
+        assert!(matches!(
+            reply(r##"{"frame":"extracted","ext_id":2,"url":"https://fixture.test/","truncated":false,"piece":0,"total":2,"content":"# A"}"##).unwrap(),
+            WorkerReply::Extracted { ext_id: 2, piece: 0, total: 2, .. }
+        ));
+        assert!(matches!(
+            reply(r#"{"frame":"extraction_failed","ext_id":2}"#).unwrap(),
+            WorkerReply::ExtractionFailed { ext_id: 2 }
+        ));
+        for bad in [
+            r#"{"frame":"extracted","ext_id":2,"url":"u","truncated":false,"piece":0,"total":1,"content":"","html":"<b>"}"#,
+            r#"{"frame":"extracted","ext_id":2,"url":"u","truncated":false,"piece":-1,"total":1,"content":""}"#,
+            r#"{"frame":"extracted","ext_id":2,"url":"u","truncated":false,"piece":0,"content":""}"#,
+        ] {
+            assert!(reply(bad).is_err(), "{bad}");
+        }
     }
 
     #[test]
