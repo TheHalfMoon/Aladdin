@@ -125,8 +125,11 @@ computer control merely from the organizer demonstration.
 ## Dependencies, risks and founder decisions
 
 Preserve the active grains and unfinished A10 engine-version work; do not import
-another worktree's dirty changes. PR #323 remains draft browser qualification,
-not evidence merged on main. A prototype can progress using qualified FS while
+another worktree's dirty changes. Initially draft PR #323 merged during this
+study into main `9b3f838e7b5642ffc8b10cc72888b504c0561e5d`. Its A8 TesterArmy
+suite drives an independent loopback-CDP Edge fixture; it does not qualify the
+production worker, policy routing or approvals. A10 remains draft PR #327 at
+the final frontier refresh. A prototype can progress using qualified FS while
 browser finishes; it cannot expose new desktop cloud authority on that basis.
 
 Separate decisions: architecture amendment accepting a compact Hala launch

@@ -62,6 +62,15 @@ was successful for that exact SHA. The local main checkout contains untracked
 SG-000108 spec/discovery/launcher/decision files. They were not changed or
 imported. Research starts in its own forward-only branch from exact main.
 
+Final frontier refresh during this study: main advanced to
+`9b3f838e7b5642ffc8b10cc72888b504c0561e5d` as PR #323 merged. The research
+branch incorporates it with a normal signed+DCO merge, preserving upstream
+history. Its post-merge CI [38458523264](https://github.com/TheHalfMoon/Aladdin/actions/runs/38458523264)
+was in progress at refresh. New draft PR #327, head
+`88db260e4517472711acf27f2ab2b4654668e9d3`, covers A10 engine-version enforcement.
+The original worktree/PR observations below are initial snapshots, not claims
+that those branches remained unfinished after this refresh.
+
 SG-000096 and SG-000108 are both `GRAIN`, with parallel work explicitly permitted
 for disjoint shell vs browser authority. Neither is canonically closed. The
 draft open PR [#323](https://github.com/TheHalfMoon/Aladdin/pull/323), head
@@ -78,6 +87,10 @@ Their individual evidence is in commits and the SG-000108 decision record.
 This study documents the distinction without rewriting historical canonical
 records or advancing grain state. Product wiring/engine-window/qualification
 remain materially different from a completed helper.
+The newly merged A8 record reports an independent TesterArmy fixture journey
+and network probes. It explicitly does not drive the production worker and
+does not exercise its local approvals/create-only commit; no product reachability
+or general browser task claim is inferred from that successful test-only suite.
 
 Ruleset [24456712](https://github.com/TheHalfMoon/Aladdin/rules/24456712) enforces
 PR-only, no deletion/non-fast-forward and ten strict required contexts:

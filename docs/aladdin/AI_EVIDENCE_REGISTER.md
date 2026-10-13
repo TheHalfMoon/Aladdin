@@ -29,6 +29,7 @@ customer usage, support burden, revenue or GPU performance was measured.
 | R7 | `crates/qdrald/Cargo.toml`, `src/sg000039_main.rs`/`browser.rs`; browser host Cargo/main; MCP `tool_contract.ts` | Selected daemon is sg000039_main, not legacy main.rs. 40 contract entries/26 remote core/14 local-only. Browser host dependency/product wiring absent; live worker helper source does not establish MCP reachability |
 | R8 | `docs/aladdin/EXECUTION_FRONTIER.md` vs SG108 record and Git log through #326 | Summary at 2026-10-10 is stale about browser progress. New live code contains implemented/tested browser slices, while final wiring/version-window/E2E/closeout remain separate |
 | R9 | `apps/aladdin-desktop-preview/src/Program.cs`, `docs/aladdin/UI_UX_AND_APP_SIZE_BUDGET.md`, packaging and legal files | Read-only WPF commands, AI/actions not connected; Node external prerequisite. Historical published artifact differs from main; self-host-only privacy terms need founder-Pro amendment before launch |
+| R10 | [refreshed main](https://github.com/TheHalfMoon/Aladdin/tree/9b3f838e7b5642ffc8b10cc72888b504c0561e5d), merged [PR323](https://github.com/TheHalfMoon/Aladdin/pull/323), draft [PR327](https://github.com/TheHalfMoon/Aladdin/pull/327) head `88db260e4517472711acf27f2ab2b4654668e9d3`, [CI38458523264](https://github.com/TheHalfMoon/Aladdin/actions/runs/38458523264) | Main advanced during research. Incorporated by normal signed+DCO merge without rewriting either history. A8 is an independent test-only CDP fixture, not production worker/policy/approval end-to-end qualification; its reported 3/3 passes were not rerun here. A10 remains draft; both active grains remain GRAIN. Post-merge CI was in progress at this refresh |
 
 No source/approval/policy/CI/identity runtime file changed in this package.
 The only integration into prior planning is the docs/aladdin README index link.
@@ -94,6 +95,13 @@ above. Shell invocations use `rtk` per the supplied RTK instructions.
 | REA | Official repo inspected/pinned `4c838469477f0b6ea844c235f78534a55118ddca`; prior Aladdin REA reports read as historical evidence. No new reverse-engineering run: own source resolves reachability and avoids inferring capability from binaries. No bypass/paid provider or runtime result fabricated |
 | New-head required CI / merge | Pending publication. Baseline green does not qualify this change. PR creation automatically runs paid Jev; no workflow disabled or bypassed |
 
+After incorporating refreshed main R10, the same 14 offline economics tests
+passed again (0.055s), the three native FS regressions passed again (0.15s;
+78 filtered), current identity passed across 657 tracked files, all 37 local
+document links resolved, generated cost tables matched and the 97 CLOSED/two
+GRAIN ledger remained unchanged. These are local research checks, not a rerun
+of the upstream A8 suite or qualification of new-head required CI.
+
 Review repairs: allow zero success while retaining failed-task spend; emit null
 and `UNDEFINED_NO_VERIFIED_TASKS` for no verified tasks; allow fractional/zero
 expected admission counts; add a discrete one-power-customer-in-ten sensitivity;
@@ -119,7 +127,8 @@ grain-state delta. Split into focused signed+DCO commits, one reviewable PR.
 
 ## Publication and resume state
 
-Research branch: `research/aladdin-native-hala-2026-10-13`, based on R1.
+Research branch: `research/aladdin-native-hala-2026-10-13`, initially based on R1
+and subsequently incorporating R10 by a normal signed+DCO merge.
 Four signed+DCO commits through `ea16e52f48f06753592e4efa428080fd03653512`
 were pushed to that branch without opening a PR. Signatures were checked
 cryptographically against the configured public SSH signing key using an
