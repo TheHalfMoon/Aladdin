@@ -8,7 +8,8 @@ import { Console } from "node:console";
 import { existsSync, writeFileSync } from "node:fs";
 import { chromium, type Locator, type Page } from "playwright-core";
 import { refusedWorkerVariables, startupRefusal } from "./environment.js";
-import { encodeFrame, FrameDecoder, MAX_EXTRACT_PIECES, MAX_FRAME_BYTES, MAX_PIECE_BYTES, ProtocolViolation, type ExecField, type WorkerFrame } from "./protocol.js";
+import { safeText } from "./extract/clean.js";
+import { encodeFrame, FETCH_TEXT_MEDIA, FrameDecoder, MAX_EXTRACT_PIECES, MAX_FETCH_TEXT_BYTES, MAX_FRAME_BYTES, MAX_PIECE_BYTES, ProtocolViolation, type ExecField, type WorkerFrame } from "./protocol.js";
 import { CONTENT_STYLES, EXTRACT_DEFAULTS, extractMarkdown } from "./extract/index.js";
 import type { LayoutSnapshot } from "./extract/model.js";
 import { toPieces } from "./extract/pieces.js";
@@ -63,22 +64,45 @@ const playwrightLauncher: Launcher = {
     let primary: Page = context.pages()[0] ?? (await context.newPage());
     const routes = await installRoutes(context, () => primary, policy);
     let closing = false;
+    // Each host navigation runs in a fresh page (see above).
+    const open = async (url: string) => {
+      const previous = primary;
+      const page = await context.newPage();
+      await routes.guardReady(page);
+      primary = page;
+      await previous.close().catch(() => {});
+      try {
+        const response = await page.goto(url, { timeout: 30_000, waitUntil: "load" });
+        return { page, response };
+      } catch (error) {
+        const message = String((error as Error).message);
+        if (message.includes("ERR_BLOCKED_BY_CLIENT")) throw new NavigationError("denied");
+        if ((error as Error).name === "TimeoutError") throw new NavigationError("timeout");
+        throw new NavigationError("failed");
+      }
+    };
     return {
       async navigate(url: string) {
-        const previous = primary;
-        const page = await context.newPage();
-        await routes.guardReady(page);
-        primary = page;
-        await previous.close().catch(() => {});
+        const { page, response } = await open(url);
+        return { url: page.url(), status: response?.status() ?? 0 };
+      },
+      async fetchText(url: string) {
+        const { page, response } = await open(url);
+        const status = response?.status() ?? 0;
+        const media = (response?.headers()["content-type"] ?? "").split(";")[0]?.trim().toLowerCase() ?? "";
+        if (!response || !FETCH_TEXT_MEDIA.includes(media)) return { url: page.url(), status, media, text: "", truncated: false };
+        let body: Buffer;
         try {
-          const response = await page.goto(url, { timeout: 30_000, waitUntil: "load" });
-          return { url: page.url(), status: response?.status() ?? 0 };
-        } catch (error) {
-          const message = String((error as Error).message);
-          if (message.includes("ERR_BLOCKED_BY_CLIENT")) throw new NavigationError("denied");
-          if ((error as Error).name === "TimeoutError") throw new NavigationError("timeout");
+          body = await response.body();
+        } catch {
           throw new NavigationError("failed");
         }
+        // Text only: controls, invisible characters and lone surrogates
+        // are removed, and the text is cut to fit one frame.
+        const text = safeText(new TextDecoder("utf-8").decode(body.subarray(0, 4 * MAX_FETCH_TEXT_BYTES)));
+        const { pieces } = toPieces([{ content: text, index: 0, total: 1, start: 0, end: text.length, overlap: "", hasMore: false }], MAX_FETCH_TEXT_BYTES, 1);
+        const kept = pieces[0]?.content ?? "";
+        return { url: page.url(), status, media, text: kept, truncated: kept.length < text.length || body.length > 4 * MAX_FETCH_TEXT_BYTES };
       },
       async activate(ref: string) {
         return clickAndLoad(primary, primary.locator(`aria-ref=${ref}`));

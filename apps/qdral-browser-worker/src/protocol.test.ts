@@ -36,7 +36,7 @@ test("length bounds and non-JSON bodies are violations before buffering", () => 
 });
 
 test("the host vocabulary is closed and exact", () => {
-  assert.deepEqual(parseHostFrame({ frame: "hello", generation: 8 }), { frame: "hello", generation: 8 });
+  assert.deepEqual(parseHostFrame({ frame: "hello", generation: 9 }), { frame: "hello", generation: 9 });
   const parsed = parseHostFrame(validLaunch());
   assert.deepEqual(JSON.parse(JSON.stringify(parsed)), validLaunch());
   assert.equal(parsed.frame === "launch" && Object.getPrototypeOf(parsed.env), null);
@@ -44,11 +44,11 @@ test("the host vocabulary is closed and exact", () => {
     null,
     [],
     "hello",
-    { generation: 8 },
+    { generation: 9 },
     { frame: "navigate", url: "https://example.com" },
     { frame: "evaluate", script: "1+1" },
     { frame: "cdp", method: "Runtime.evaluate" },
-    { frame: "hello", generation: 8, extra: true },
+    { frame: "hello", generation: 9, extra: true },
     { frame: "hello", generation: "1" },
     { frame: "hello" },
     { frame: "shutdown", now: true },
@@ -240,6 +240,19 @@ test("download frames carry a strict ref and an absolute .part staging path", ()
 test("discover frames carry only a positive id", () => {
   assert.deepEqual(parseHostFrame({ frame: "discover", disc_id: 4 }), { frame: "discover", disc_id: 4 });
   for (const bad of [{ frame: "discover", disc_id: 0 }, { frame: "discover", disc_id: 1, script: "x" }, { frame: "discover" }]) {
+    assert.throws(() => parseHostFrame(bad), ProtocolViolation, JSON.stringify(bad));
+  }
+});
+
+test("fetch_text frames carry a positive id and an https URL", () => {
+  const ok = { frame: "fetch_text", fetch_id: 2, url: "https://fixture.test/robots.txt" };
+  assert.deepEqual(parseHostFrame(ok), ok);
+  for (const bad of [
+    { frame: "fetch_text", fetch_id: 0, url: "https://fixture.test/robots.txt" },
+    { frame: "fetch_text", fetch_id: 1, url: "http://fixture.test/robots.txt" },
+    { frame: "fetch_text", fetch_id: 1, url: "https://fixture.test/" + "a".repeat(3000) },
+    { frame: "fetch_text", fetch_id: 1, url: "https://fixture.test/", method: "POST" }
+  ]) {
     assert.throws(() => parseHostFrame(bad), ProtocolViolation, JSON.stringify(bad));
   }
 });

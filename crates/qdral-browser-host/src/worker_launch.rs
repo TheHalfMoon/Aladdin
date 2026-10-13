@@ -39,7 +39,7 @@ pub struct JobProcess {
 /// Generation 2 adds the slice-3a navigation frames, generation 3 slice-3b
 /// observation, generation 4 slice-3c activation, generation 5 slice-3d
 /// downloads.
-pub const WORKER_PROTOCOL_GENERATION: u32 = 8;
+pub const WORKER_PROTOCOL_GENERATION: u32 = 9;
 /// Worker identity reported in its hello.
 pub const WORKER_IDENTITY: &str = "qdral-browser-worker";
 /// The only Node option the worker accepts (inspector activation refused).
@@ -102,6 +102,25 @@ pub struct LiveObservation {
     pub document: crate::observation::DocumentIdentity,
     pub observation: crate::observation::Observation,
 }
+
+/// A text document (#317: robots.txt, sitemaps) opened by a governed
+/// navigation. Its text is untrusted page text, present only for
+/// `text/plain` and XML and cut to one frame (`truncated`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FetchedText {
+    pub url: String,
+    pub status: u16,
+    pub media: String,
+    pub text: crate::webmcp::PageText,
+    pub truncated: bool,
+}
+
+/// The media types a text fetch returns content for (mirrors the worker):
+/// text, XML, HTML and none at all.
+pub const FETCH_TEXT_MEDIA: [&str; 5] =
+    ["text/plain", "application/xml", "text/xml", "text/html", ""];
+/// Characters of one fetched text (it fits one frame).
+pub const MAX_FETCH_TEXT_CHARS: usize = 56 * 1024;
 
 /// A download committed create-only into the approved folder.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -196,6 +215,10 @@ pub(crate) enum WorkerRequest<'a> {
         nav_id: u64,
         url: &'a str,
     },
+    FetchText {
+        fetch_id: u64,
+        url: &'a str,
+    },
     RouteDecision {
         request_id: u64,
         allow: bool,
@@ -266,6 +289,18 @@ pub(crate) enum WorkerReply {
     },
     NavigationFailed {
         nav_id: u64,
+        reason: String,
+    },
+    FetchedText {
+        fetch_id: u64,
+        url: String,
+        status: u16,
+        media: String,
+        text: String,
+        truncated: bool,
+    },
+    FetchFailed {
+        fetch_id: u64,
         reason: String,
     },
     Observed {
@@ -982,6 +1017,9 @@ mod platform {
         cancelled: Arc<AtomicBool>,
     }
 
+    /// A text fetch's (media, text, truncated), as the worker sent it.
+    type TextBody = (String, String, bool);
+
     /// A crawl's view of the worker.
     struct WorkerCrawl<'a> {
         worker: &'a mut BrowserWorker,
@@ -1027,6 +1065,17 @@ mod platform {
 
         fn lost(&self) -> bool {
             self.worker.failed.is_some()
+        }
+
+        fn fetch_text(&mut self, url: &str) -> Result<crate::crawl::TextDocument, HostError> {
+            let fetched = self.worker.fetch_text(url)?;
+            Ok(crate::crawl::TextDocument {
+                final_url: fetched.url,
+                status: fetched.status,
+                text: fetched.text.untrusted().to_owned(),
+                truncated: fetched.truncated,
+                media: fetched.media,
+            })
         }
     }
 
@@ -1388,58 +1437,119 @@ mod platform {
         /// the engine makes meanwhile is decided here by the SG-000075
         /// policy; the outcome is typed.
         pub fn navigate(&mut self, url: &str) -> Result<NavigationOutcome, HostError> {
+            self.navigate_with(url, false).map(|(outcome, _)| outcome)
+        }
+
+        /// Open `url` like `navigate` (the same policy, redirects and
+        /// commit; the document generation advances) and return its text
+        /// when it is plain text or XML (#317: robots.txt and sitemaps).
+        pub fn fetch_text(&mut self, url: &str) -> Result<FetchedText, HostError> {
+            let (outcome, body) = self.navigate_with(url, true)?;
+            let (media, text, truncated) =
+                body.ok_or(HostError::Unavailable(UnavailableReason::ProtocolViolation))?;
+            Ok(FetchedText {
+                url: outcome.url,
+                status: outcome.status,
+                media,
+                text: crate::webmcp::PageText::from_page(text),
+                truncated,
+            })
+        }
+
+        fn navigate_with(
+            &mut self,
+            url: &str,
+            text: bool,
+        ) -> Result<(NavigationOutcome, Option<TextBody>), HostError> {
             // Any navigation attempt, failed or not, invalidates every
             // identity issued for the previous document.
             self.host_nodes.clear();
             self.host_tools.clear();
-            let outcome = self.navigate_inner(url);
+            let outcome = self.navigate_inner(url, text);
             if outcome.is_err() {
                 self.policy.abort();
             }
             outcome
         }
 
-        fn navigate_inner(&mut self, url: &str) -> Result<NavigationOutcome, HostError> {
+        fn navigate_inner(
+            &mut self,
+            url: &str,
+            text: bool,
+        ) -> Result<(NavigationOutcome, Option<TextBody>), HostError> {
             self.policy.begin(url)?;
             self.next_nav += 1;
-            let nav_id = self.next_nav;
-            self.send(&WorkerRequest::Navigate { nav_id, url })?;
-            match self.reply(WORKER_NAVIGATION_TIMEOUT)? {
+            let id = self.next_nav;
+            if text {
+                self.send(&WorkerRequest::FetchText { fetch_id: id, url })?;
+            } else {
+                self.send(&WorkerRequest::Navigate { nav_id: id, url })?;
+            }
+            let (committed, status, body) = match self.reply(WORKER_NAVIGATION_TIMEOUT)? {
                 WorkerReply::Navigated {
                     nav_id: done,
                     url: committed,
                     status,
-                } if done == nav_id => {
-                    self.policy.commit(&committed)?;
-                    // A new document: earlier node identities are stale. The
-                    // document generation advances only on a commit.
-                    let next = self
-                        .committed
-                        .as_ref()
-                        .map_or(1, |(_, generation)| generation + 1);
-                    self.committed = Some((committed.clone(), next));
-                    self.host_nodes.clear();
-                    self.host_tools.clear();
-                    Ok(NavigationOutcome {
-                        url: committed,
-                        status,
-                    })
+                } if !text && done == id => (committed, status, None),
+                WorkerReply::FetchedText {
+                    fetch_id: done,
+                    url: committed,
+                    status,
+                    media,
+                    text: body,
+                    truncated,
+                } if text && done == id => {
+                    let bad = |ch: char| {
+                        (ch.is_control() && !matches!(ch, '\n' | '\t' | '\r'))
+                            || crate::webmcp::is_bidi_or_format(ch)
+                    };
+                    let known = FETCH_TEXT_MEDIA.contains(&media.as_str());
+                    if media.len() > 128
+                        || !media.bytes().all(|b| b.is_ascii_graphic())
+                        || (!known && !body.is_empty())
+                        || body.chars().count() > MAX_FETCH_TEXT_CHARS
+                        || body.chars().any(bad)
+                    {
+                        return Err(HostError::Unavailable(UnavailableReason::ProtocolViolation));
+                    }
+                    (committed, status, Some((media, body, truncated)))
                 }
                 WorkerReply::NavigationFailed {
                     nav_id: done,
                     reason,
-                } if done == nav_id => {
+                } if !text && done == id => {
                     #[cfg(test)]
                     eprintln!("SG108-DIAG navigation {url} failed: {reason}");
-                    Err(navigation_failure(&reason))
+                    return Err(navigation_failure(&reason));
                 }
+                WorkerReply::FetchFailed {
+                    fetch_id: done,
+                    reason,
+                } if text && done == id => return Err(navigation_failure(&reason)),
                 other => {
                     #[cfg(test)]
                     eprintln!("SG108-DIAG navigation {url} unexpected reply: {other:?}");
                     let _ = other;
-                    Err(HostError::Unavailable(UnavailableReason::ProtocolViolation))
+                    return Err(HostError::Unavailable(UnavailableReason::ProtocolViolation));
                 }
-            }
+            };
+            self.policy.commit(&committed)?;
+            // A new document: earlier node identities are stale. The
+            // document generation advances only on a commit.
+            let next = self
+                .committed
+                .as_ref()
+                .map_or(1, |(_, generation)| generation + 1);
+            self.committed = Some((committed.clone(), next));
+            self.host_nodes.clear();
+            self.host_tools.clear();
+            Ok((
+                NavigationOutcome {
+                    url: committed,
+                    status,
+                },
+                body,
+            ))
         }
 
         /// Observe the committed document (SG-000076). The snapshot must be
@@ -2277,6 +2387,13 @@ mod fallback {
         }
 
         /// API parity: no worker ever exists off Windows.
+        pub fn fetch_text(&mut self, _url: &str) -> Result<FetchedText, HostError> {
+            Err(HostError::Unavailable(
+                UnavailableReason::UnsupportedRuntime,
+            ))
+        }
+
+        /// API parity: no worker ever exists off Windows.
         pub fn crawl_site(
             &mut self,
             _spec: &crate::crawl::CrawlSpec,
@@ -2808,6 +2925,31 @@ mod tests {
         ));
         assert!(reply(
             r#"{"frame":"executed","exec_id":3,"url":"u","status":200,"structured":[],"structured_complete":true,"extra":1}"#
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn text_fetch_frames_are_exact() {
+        let json = |request: &WorkerRequest<'_>| serde_json::to_string(request).unwrap();
+        assert_eq!(
+            json(&WorkerRequest::FetchText {
+                fetch_id: 4,
+                url: "https://fixture.test/robots.txt"
+            }),
+            r#"{"frame":"fetch_text","fetch_id":4,"url":"https://fixture.test/robots.txt"}"#
+        );
+        let reply = |text: &str| serde_json::from_str::<WorkerReply>(text);
+        assert!(matches!(
+            reply(r#"{"frame":"fetched_text","fetch_id":4,"url":"https://fixture.test/robots.txt","status":200,"media":"text/plain","text":"User-agent: *","truncated":false}"#).unwrap(),
+            WorkerReply::FetchedText { fetch_id: 4, status: 200, .. }
+        ));
+        assert!(matches!(
+            reply(r#"{"frame":"fetch_failed","fetch_id":4,"reason":"denied"}"#).unwrap(),
+            WorkerReply::FetchFailed { fetch_id: 4, .. }
+        ));
+        assert!(reply(
+            r#"{"frame":"fetched_text","fetch_id":4,"url":"u","status":200,"media":"text/plain","text":"","truncated":false,"body":"x"}"#
         )
         .is_err());
     }

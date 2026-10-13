@@ -53,6 +53,10 @@ export interface EngineSession {
   close(): Promise<void>;
   /// Navigate the primary page; rejects with NavigationError.
   navigate(url: string): Promise<{ url: string; status: number }>;
+  /// Navigate the primary page like `navigate` (the same routes and host
+  /// decisions) and return the document's text when it is plain text or
+  /// XML, bounded to one frame; rejects with NavigationError.
+  fetchText(url: string): Promise<{ url: string; status: number; media: string; text: string; truncated: boolean }>;
   /// A bounded, value-free accessibility snapshot of the primary page.
   observe(): Promise<{ url: string; snapshot: BoundedSnapshot }>;
   /// The primary page's declarative WebMCP tools, read without running
@@ -286,6 +290,16 @@ export class Worker {
         void this.runNavigation(this.session, frame.nav_id, frame.url);
         return;
       }
+      case "fetch_text": {
+        if (this.state !== "launched" || !this.session) return this.fail("not_ready");
+        if (this.navigating) {
+          this.send({ frame: "fetch_failed", fetch_id: frame.fetch_id, reason: "busy" });
+          return;
+        }
+        this.navigating = true;
+        void this.runFetch(this.session, frame.fetch_id, frame.url);
+        return;
+      }
       case "ping":
         this.send({ frame: "pong", nonce: frame.nonce });
         return;
@@ -328,6 +342,19 @@ export class Worker {
     }
     this.navigating = false;
     if (this.state === "launched" && this.session === session) this.settle(outcome, { frame: "navigation_failed", nav_id: navId, reason: "failed" });
+  }
+
+  private async runFetch(session: EngineSession, fetchId: number, url: string): Promise<void> {
+    let outcome: WorkerFrame;
+    try {
+      const result = await session.fetchText(url);
+      outcome = { frame: "fetched_text", fetch_id: fetchId, ...result };
+    } catch (error) {
+      const reason: NavigationFailure = error instanceof NavigationError ? error.reason : "failed";
+      outcome = { frame: "fetch_failed", fetch_id: fetchId, reason };
+    }
+    this.navigating = false;
+    if (this.state === "launched" && this.session === session) this.settle(outcome, { frame: "fetch_failed", fetch_id: fetchId, reason: "failed" });
   }
 
   private async runDownload(session: EngineSession, dlId: number, ref: string, path: string): Promise<void> {

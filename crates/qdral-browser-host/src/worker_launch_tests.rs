@@ -1222,6 +1222,8 @@ fn a_crawl_reads_only_its_scope_through_the_governed_navigation() {
         include_paths: Vec::new(),
         exclude_paths: vec!["/site/private".into()],
         extract: Some(crate::extraction::ExtractOptions::default()),
+        robots: true,
+        sitemaps: true,
         deadline: Duration::from_secs(300),
     };
 
@@ -1246,6 +1248,8 @@ fn a_crawl_reads_only_its_scope_through_the_governed_navigation() {
         urls,
         [
             "https://fixture.test/site/",
+            // Seeded at depth 1 from the sitemap robots.txt names.
+            "https://fixture.test/site/only-in-sitemap",
             "https://fixture.test/site/a",
             "https://fixture.test/site/b",
             "https://fixture.test/site/moved",
@@ -1270,6 +1274,11 @@ fn a_crawl_reads_only_its_scope_through_the_governed_navigation() {
             .unwrap_or_default()
     };
     assert!(text("https://fixture.test/site/a").contains("Alpha text."));
+    assert!(
+        text("https://fixture.test/site/only-in-sitemap").contains("Found through the sitemap.")
+    );
+    assert_eq!(report.robots_status, Some(200));
+    assert_eq!(report.sitemaps_read, 1);
     // /site/moved redirects onto /site/c: read once, as /site/moved.
     assert_eq!(
         page("https://fixture.test/site/moved").final_url,
@@ -1316,6 +1325,14 @@ fn a_crawl_reads_only_its_scope_through_the_governed_navigation() {
     assert!(skipped(SkipReason::TooDeep)
         .iter()
         .any(|u| u.ends_with("/site/deep/2")));
+    // robots.txt disallows /site/blocked for every agent: from a link and
+    // from the sitemap alike.
+    assert!(skipped(SkipReason::Robots)
+        .iter()
+        .any(|u| u.ends_with("/site/blocked/other")));
+    assert!(skipped(SkipReason::Robots)
+        .iter()
+        .any(|u| u.ends_with("/site/blocked/page")));
     assert_eq!(report.stopped, None);
 
     // A map: the same scope, links only, within a page budget.
@@ -1335,6 +1352,15 @@ fn a_crawl_reads_only_its_scope_through_the_governed_navigation() {
     // A start URL off the admitted destination is refused by the navigation.
     let mut foreign = crawl_spec.clone();
     foreign.start_url = "https://other.test/site/".into();
+    // Its robots.txt cannot be opened, so (RFC 9309) nothing is crawled.
+    let refused = worker
+        .crawl_site(&foreign, &scope, &AtomicBool::new(false))
+        .expect("a refused start is reported");
+    assert_eq!(refused.stopped, Some(CrawlStop::RobotsUnreachable));
+    assert!(refused.pages.is_empty());
+    // Without robots.txt, the start page itself is refused and reported.
+    foreign.robots = false;
+    foreign.sitemaps = false;
     let refused = worker
         .crawl_site(&foreign, &scope, &AtomicBool::new(false))
         .expect("a refused start is reported");
@@ -1343,6 +1369,8 @@ fn a_crawl_reads_only_its_scope_through_the_governed_navigation() {
 
     pump(&mut worker, Duration::from_secs(1));
     let hits = fixture.hits();
+    assert!(hits.iter().any(|h| h.ends_with(" /robots.txt")));
+    assert!(hits.iter().any(|h| h.ends_with(" /site-map.xml")));
     // /elsewhere is reached once, by /site/away's same-origin server
     // redirect (the navigation policy decides redirects; the origin is the
     // boundary). Its link was skipped, so it was never opened as a page.
@@ -1357,6 +1385,7 @@ fn a_crawl_reads_only_its_scope_through_the_governed_navigation() {
         "/site/private",
         "/site/deep/2",
         "mailto",
+        "/site/blocked",
     ] {
         assert!(
             !hits.iter().any(|h| h.contains(never)),

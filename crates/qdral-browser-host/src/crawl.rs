@@ -8,10 +8,12 @@
 //! scope, a depth bound, internal links only, fragments dropped, non-page
 //! files and non-web schemes skipped, include and exclude paths) is the
 //! reference; no Firecrawl code is copied. Include and exclude are path
-//! prefixes, not regular expressions.
+//! prefixes, not regular expressions. robots.txt (RFC 9309) and sitemaps
+//! are read through governed navigations too (#317).
 
 use crate::error::HostError;
 use crate::extraction::{ExtractOptions, PageExtraction};
+use crate::robots::{sitemap_locations, Robots};
 use std::collections::{HashSet, VecDeque};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
@@ -26,6 +28,8 @@ pub const MAX_CRAWL_DURATION: Duration = Duration::from_secs(600);
 pub const MAX_CRAWL_URLS: usize = 1000;
 /// Skipped links reported (later ones are only counted).
 pub const MAX_SKIPPED_REPORTED: usize = 200;
+/// Sitemaps one crawl reads (an index's children included).
+pub const MAX_SITEMAPS: usize = 4;
 /// Include and exclude path prefixes, each.
 pub const MAX_PATH_PATTERNS: usize = 16;
 pub const MAX_PATH_PATTERN_BYTES: usize = 256;
@@ -57,6 +61,12 @@ pub struct CrawlSpec {
     pub exclude_paths: Vec<String>,
     /// Extract every opened page (slice 6); `None` maps links only.
     pub extract: Option<ExtractOptions>,
+    /// Read `/robots.txt` first and honour it for Deskal's product token
+    /// (RFC 9309): an unreachable one (5xx, or no answer) stops the crawl.
+    pub robots: bool,
+    /// Seed the queue from the sitemaps robots.txt names (else
+    /// `/sitemap.xml`), at depth 1.
+    pub sitemaps: bool,
     pub deadline: Duration,
 }
 
@@ -80,6 +90,8 @@ pub enum SkipReason {
     TooDeep,
     /// The crawl already remembers MAX_CRAWL_URLS URLs.
     TooMany,
+    /// robots.txt disallows it for Deskal.
+    Robots,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -96,6 +108,9 @@ pub enum CrawlStop {
     Cancelled,
     /// The worker failed in a way the lifetime does not survive.
     WorkerFailed,
+    /// robots.txt could not be read (a 5xx answer or none): RFC 9309 treats
+    /// the whole site as disallowed, so nothing was opened.
+    RobotsUnreachable,
 }
 
 /// One opened page.
@@ -123,6 +138,13 @@ pub struct CrawlReport {
     /// Skipped links past MAX_SKIPPED_REPORTED.
     pub skipped_unreported: usize,
     pub stopped: Option<CrawlStop>,
+    /// The robots.txt answer's status, when it was read.
+    pub robots_status: Option<u16>,
+    /// Sitemaps read that yielded at least one location.
+    pub sitemaps_read: usize,
+    /// Sitemaps opened (2xx) that yielded none: not a sitemap, or one the
+    /// engine transformed with its XSLT stylesheet before the text was read.
+    pub sitemaps_empty: usize,
 }
 
 /// One page as the driver saw it.
@@ -132,8 +154,23 @@ pub struct Visit {
     pub status: u16,
 }
 
+/// A text document (robots.txt, a sitemap) as the driver read it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TextDocument {
+    pub final_url: String,
+    pub status: u16,
+    /// Empty unless the document was text, XML or HTML.
+    pub text: String,
+    /// The text was cut to fit one frame.
+    pub truncated: bool,
+    /// The document's media type, as the worker reported it.
+    pub media: String,
+}
+
 /// The browser side of a crawl.
 pub trait CrawlDriver {
+    /// Open a text document through the governed navigation.
+    fn fetch_text(&mut self, url: &str) -> Result<TextDocument, HostError>;
     /// Open `url` through the governed navigation.
     fn open(&mut self, url: &str) -> Result<Visit, HostError>;
     /// The links of the committed page, as observed (absolute or
@@ -301,6 +338,167 @@ fn check_spec(spec: &CrawlSpec) -> Result<(), HostError> {
     Ok(())
 }
 
+/// Seed the frontier from the sitemaps robots.txt names on the crawl's
+/// origin (else `/sitemap.xml`): their page URLs at depth 1, an index's
+/// child sitemaps read in turn, at most MAX_SITEMAPS in all.
+fn read_sitemaps(
+    driver: &mut dyn CrawlDriver,
+    spec: &CrawlSpec,
+    scope: &Scope,
+    robots: &Robots,
+    frontier: &mut Frontier,
+    report: &mut CrawlReport,
+    (started, cancelled): (Instant, &AtomicBool),
+) {
+    let mut sources: VecDeque<String> = robots
+        .sitemaps
+        .iter()
+        .filter(|url| split_on(&scope.base, url).is_some())
+        .cloned()
+        .collect();
+    if sources.is_empty() {
+        sources.push_back(format!("{}/sitemap.xml", scope.base));
+    }
+    let mut opened = 0;
+    while let Some(source) = sources.pop_front() {
+        if opened >= MAX_SITEMAPS {
+            break;
+        }
+        if cancelled.load(Ordering::SeqCst) {
+            report.stopped = Some(CrawlStop::Cancelled);
+            return;
+        }
+        if started.elapsed() >= spec.deadline {
+            report.stopped = Some(CrawlStop::Deadline);
+            return;
+        }
+        // The sitemap document itself must be one robots.txt allows.
+        let Some(path) = split_on(&scope.base, &source) else {
+            continue;
+        };
+        if !robots.allowed(&path) {
+            skip(report, source, SkipReason::Robots);
+            continue;
+        }
+        opened += 1;
+        let document = match driver.fetch_text(&source) {
+            Ok(document) if (200..300).contains(&document.status) => document,
+            Ok(_) => continue,
+            Err(_) if driver.lost() => {
+                report.stopped = Some(CrawlStop::WorkerFailed);
+                return;
+            }
+            Err(_) => continue,
+        };
+        let (locations, index) = sitemap_locations(&document.text);
+        if locations.is_empty() {
+            report.sitemaps_empty += 1;
+            continue;
+        }
+        report.sitemaps_read += 1;
+        for location in locations {
+            if index {
+                if split_on(&scope.base, &location).is_some() && sources.len() < MAX_SITEMAPS {
+                    sources.push_back(location);
+                }
+            } else {
+                frontier.offer(report, scope, robots, location, 1, spec.max_depth);
+            }
+        }
+    }
+}
+
+/// What the crawl remembers and what it will open next.
+struct Frontier {
+    seen: HashSet<String>,
+    /// Links past the depth bound, reported once each (bounded like `seen`).
+    too_deep: HashSet<String>,
+    queue: VecDeque<(String, u32)>,
+}
+
+fn skip(report: &mut CrawlReport, url: String, reason: SkipReason) {
+    if report.skipped.len() < MAX_SKIPPED_REPORTED {
+        report.skipped.push(SkippedLink { url, reason });
+    } else {
+        report.skipped_unreported += 1;
+    }
+}
+
+impl Frontier {
+    /// Queue `link` at `depth` if the scope, robots.txt and the bounds let
+    /// it in; report why not otherwise. A URL already seen is ignored.
+    fn offer(
+        &mut self,
+        report: &mut CrawlReport,
+        scope: &Scope,
+        robots: &Robots,
+        link: String,
+        depth: u32,
+        max_depth: u32,
+    ) {
+        let admitted = match scope.admit(&link) {
+            Ok(admitted) => admitted,
+            Err(reason) => return skip(report, link, reason),
+        };
+        if self.seen.contains(&admitted) {
+            return;
+        }
+        if !robots.allowed(&admitted[scope.base.len()..]) {
+            if self.too_deep.len() < MAX_CRAWL_URLS && self.too_deep.insert(admitted.clone()) {
+                skip(report, admitted, SkipReason::Robots);
+            }
+            return;
+        }
+        if depth > max_depth {
+            if self.too_deep.len() < MAX_CRAWL_URLS && self.too_deep.insert(admitted.clone()) {
+                skip(report, admitted, SkipReason::TooDeep);
+            }
+            return;
+        }
+        if self.seen.len() >= MAX_CRAWL_URLS {
+            return skip(report, admitted, SkipReason::TooMany);
+        }
+        self.seen.insert(admitted.clone());
+        report.discovered.push(admitted.clone());
+        self.queue.push_back((admitted, depth));
+    }
+}
+
+/// robots.txt for the crawl's origin, or the stop it causes.
+fn read_robots(
+    driver: &mut dyn CrawlDriver,
+    scope: &Scope,
+    report: &mut CrawlReport,
+) -> Result<Robots, CrawlStop> {
+    match driver.fetch_text(&format!("{}/robots.txt", scope.base)) {
+        Ok(document) => {
+            report.robots_status = Some(document.status);
+            match document.status {
+                200..=299 => {
+                    // A file larger than one frame, or with more rules than
+                    // kept, cannot be honoured in full: RFC 9309 asks a
+                    // crawler to parse at least 500 KiB, so the crawl fails
+                    // closed instead of dropping late rules.
+                    let robots = Robots::parse(&document.text);
+                    // An HTML page answering /robots.txt (a catch-all route)
+                    // with no records in what was read is no robots.txt.
+                    let page_not_robots = document.media == "text/html" && !robots.has_records();
+                    if !robots.complete() || (document.truncated && !page_not_robots) {
+                        return Err(CrawlStop::RobotsUnreachable);
+                    }
+                    Ok(robots)
+                }
+                // "Unavailable": no rules (RFC 9309 2.3.1.3).
+                400..=499 => Ok(Robots::allow_all()),
+                _ => Err(CrawlStop::RobotsUnreachable),
+            }
+        }
+        Err(_) if driver.lost() => Err(CrawlStop::WorkerFailed),
+        // No answer, or a redirect the navigation refused: "unreachable".
+        Err(_) => Err(CrawlStop::RobotsUnreachable),
+    }
+}
+
 /// Run a crawl. A refused spec is an error; everything after the start is
 /// in the report. `cancelled` and the deadline are checked between pages.
 pub fn crawl(
@@ -316,25 +514,48 @@ pub fn crawl(
     let started = Instant::now();
     let mut report = CrawlReport {
         pages: Vec::new(),
-        discovered: vec![scope_start.clone()],
+        discovered: Vec::new(),
         skipped: Vec::new(),
         skipped_unreported: 0,
         stopped: None,
+        robots_status: None,
+        sitemaps_read: 0,
+        sitemaps_empty: 0,
     };
-    let mut seen: HashSet<String> = HashSet::from([scope_start.clone()]);
-    // Links past the depth bound, reported once each (bounded like `seen`).
-    let mut too_deep: HashSet<String> = HashSet::new();
+    let robots = if spec.robots {
+        match read_robots(driver, &scope, &mut report) {
+            Ok(robots) => robots,
+            Err(stop) => {
+                report.stopped = Some(stop);
+                return Ok(report);
+            }
+        }
+    } else {
+        Robots::allow_all()
+    };
+    let mut frontier = Frontier {
+        seen: HashSet::new(),
+        too_deep: HashSet::new(),
+        queue: VecDeque::new(),
+    };
+    frontier.offer(&mut report, &scope, &robots, scope_start, 0, spec.max_depth);
+    if spec.sitemaps {
+        read_sitemaps(
+            driver,
+            spec,
+            &scope,
+            &robots,
+            &mut frontier,
+            &mut report,
+            (started, cancelled),
+        );
+        if report.stopped.is_some() {
+            return Ok(report);
+        }
+    }
     // Final URLs already read, so a redirect onto one is not read twice.
     let mut read: HashSet<String> = HashSet::new();
-    let mut queue: VecDeque<(String, u32)> = VecDeque::from([(scope_start, 0)]);
-    let skip = |report: &mut CrawlReport, url: String, reason: SkipReason| {
-        if report.skipped.len() < MAX_SKIPPED_REPORTED {
-            report.skipped.push(SkippedLink { url, reason });
-        } else {
-            report.skipped_unreported += 1;
-        }
-    };
-    while let Some((url, depth)) = queue.pop_front() {
+    while let Some((url, depth)) = frontier.queue.pop_front() {
         if cancelled.load(Ordering::SeqCst) {
             report.stopped = Some(CrawlStop::Cancelled);
             break;
@@ -375,6 +596,9 @@ pub fn crawl(
         } else {
             match scope.admit(&visit.final_url) {
                 Err(_) => Some("redirected out of the crawl scope".to_owned()),
+                Ok(normalized) if !robots.allowed(&normalized[scope.base.len()..]) => {
+                    Some("redirected onto a page robots.txt disallows".to_owned())
+                }
                 // Keyed by the normalized URL (no fragment), as the queue is.
                 Ok(normalized) if !read.insert(normalized.clone()) => {
                     Some("redirected onto a page already read".to_owned())
@@ -414,29 +638,14 @@ pub fn crawl(
         };
         report.pages.push(page);
         for link in links {
-            let admitted = match scope.admit(&link) {
-                Ok(admitted) => admitted,
-                Err(reason) => {
-                    skip(&mut report, link, reason);
-                    continue;
-                }
-            };
-            if seen.contains(&admitted) {
-                continue;
-            }
-            if depth + 1 > spec.max_depth {
-                if too_deep.len() < MAX_CRAWL_URLS && too_deep.insert(admitted.clone()) {
-                    skip(&mut report, admitted, SkipReason::TooDeep);
-                }
-                continue;
-            }
-            if seen.len() >= MAX_CRAWL_URLS {
-                skip(&mut report, admitted, SkipReason::TooMany);
-                continue;
-            }
-            seen.insert(admitted.clone());
-            report.discovered.push(admitted.clone());
-            queue.push_back((admitted, depth + 1));
+            frontier.offer(
+                &mut report,
+                &scope,
+                &robots,
+                link,
+                depth + 1,
+                spec.max_depth,
+            );
         }
     }
     Ok(report)
@@ -455,6 +664,8 @@ mod tests {
         current: Option<String>,
         fail_extract: bool,
         lost: bool,
+        /// Text documents by URL: (status, text).
+        texts: HashMap<String, (u16, String)>,
     }
 
     impl Site {
@@ -477,6 +688,7 @@ mod tests {
                 current: None,
                 fail_extract: false,
                 lost: false,
+                texts: HashMap::new(),
             }
         }
     }
@@ -516,6 +728,32 @@ mod tests {
         fn lost(&self) -> bool {
             self.lost
         }
+        fn fetch_text(&mut self, url: &str) -> Result<TextDocument, HostError> {
+            self.opened.push(url.to_owned());
+            match self.texts.get(url) {
+                Some((0, _)) => Err(HostError::Invalid("navigation denied".into())),
+                Some((status, text)) => Ok(TextDocument {
+                    final_url: url.to_owned(),
+                    status: *status % 1000,
+                    text: text.clone(),
+                    // A status above 1000 marks the text as cut; HTML text is
+                    // served as text/html.
+                    truncated: *status > 1000,
+                    media: if text.starts_with("<html") {
+                        "text/html".into()
+                    } else {
+                        "text/plain".into()
+                    },
+                }),
+                None => Ok(TextDocument {
+                    final_url: url.to_owned(),
+                    status: 404,
+                    text: String::new(),
+                    truncated: false,
+                    media: "text/plain".into(),
+                }),
+            }
+        }
         fn extract(&mut self, _options: ExtractOptions) -> Result<PageExtraction, HostError> {
             if self.fail_extract {
                 return Err(HostError::Invalid("stale page".into()));
@@ -539,6 +777,8 @@ mod tests {
             include_paths: Vec::new(),
             exclude_paths: Vec::new(),
             extract: Some(ExtractOptions::default()),
+            robots: false,
+            sitemaps: false,
             deadline: Duration::from_secs(60),
         }
     }
@@ -841,6 +1081,181 @@ mod tests {
     }
 
     #[test]
+    fn robots_txt_is_read_first_and_honoured_for_links_starts_and_redirects() {
+        let mut driver = site();
+        driver.texts.insert(
+            "https://site.test/robots.txt".into(),
+            (
+                200,
+                "User-agent: *\nDisallow: /docs/a\nDisallow: /docs/c\nAllow: /docs/\n".into(),
+            ),
+        );
+        let mut wanted = spec("https://site.test/docs/");
+        wanted.robots = true;
+        let report = crawl(&mut driver, &wanted, &AtomicBool::new(false)).unwrap();
+        assert_eq!(driver.opened[0], "https://site.test/robots.txt");
+        assert_eq!(report.robots_status, Some(200));
+        assert!(!driver
+            .opened
+            .contains(&"https://site.test/docs/a".to_owned()));
+        assert!(reasons(&report).contains(&("https://site.test/docs/a", SkipReason::Robots)));
+        // b redirects onto c, which robots.txt disallows: not read.
+        let b = report
+            .pages
+            .iter()
+            .find(|p| p.url.ends_with("/docs/b"))
+            .unwrap();
+        assert_eq!(
+            b.failure.as_deref(),
+            Some("redirected onto a page robots.txt disallows")
+        );
+        assert!(b.extraction.is_none());
+
+        // A disallowed start opens nothing.
+        let mut driver = site();
+        driver.texts.insert(
+            "https://site.test/robots.txt".into(),
+            (200, "User-agent: deskal\nDisallow: /\n".into()),
+        );
+        let report = crawl(&mut driver, &wanted, &AtomicBool::new(false)).unwrap();
+        assert!(report.pages.is_empty());
+        assert_eq!(
+            reasons(&report),
+            [("https://site.test/docs/", SkipReason::Robots)]
+        );
+
+        // No robots.txt (404) allows everything.
+        let mut driver = site();
+        let report = crawl(&mut driver, &wanted, &AtomicBool::new(false)).unwrap();
+        assert_eq!(report.robots_status, Some(404));
+        assert!(report.pages.len() > 1);
+
+        // A cut robots.txt, or one with more rules than kept, is not
+        // honoured in part: the crawl stops before any page.
+        let mut many = String::from("User-agent: *\n");
+        for i in 0..crate::robots::MAX_ROBOTS_RULES + 1 {
+            many.push_str(&format!("Disallow: /x{i}\n"));
+        }
+        for answer in [
+            (1200, "User-agent: *\nDisallow: /a\n".to_owned()),
+            (200, many),
+        ] {
+            let mut driver = site();
+            driver
+                .texts
+                .insert("https://site.test/robots.txt".into(), answer);
+            let report = crawl(&mut driver, &wanted, &AtomicBool::new(false)).unwrap();
+            assert_eq!(report.stopped, Some(CrawlStop::RobotsUnreachable));
+            assert!(report.pages.is_empty());
+        }
+
+        // A cut HTML page with no robots records is no robots.txt.
+        let mut driver = site();
+        driver.texts.insert(
+            "https://site.test/robots.txt".into(),
+            (1200, "<html><body>An app shell</body></html>".into()),
+        );
+        let report = crawl(&mut driver, &wanted, &AtomicBool::new(false)).unwrap();
+        assert_eq!(report.stopped, None);
+        assert!(report.pages.len() > 1);
+
+        // A 5xx answer, or none, stops the crawl before any page.
+        for answer in [(503, String::new()), (0, String::new())] {
+            let mut driver = site();
+            driver
+                .texts
+                .insert("https://site.test/robots.txt".into(), answer);
+            let report = crawl(&mut driver, &wanted, &AtomicBool::new(false)).unwrap();
+            assert_eq!(report.stopped, Some(CrawlStop::RobotsUnreachable));
+            assert!(report.pages.is_empty());
+        }
+    }
+
+    #[test]
+    fn sitemaps_seed_the_queue_at_depth_one_within_scope_and_robots() {
+        let mut driver = site();
+        driver.pages.insert(
+            "https://site.test/docs/only-in-sitemap".into(),
+            (
+                "https://site.test/docs/only-in-sitemap".into(),
+                200,
+                Vec::new(),
+            ),
+        );
+        driver.texts.insert(
+            "https://site.test/robots.txt".into(),
+            (
+                200,
+                "User-agent: *\nDisallow: /docs/blocked\nSitemap: https://site.test/index.xml\nSitemap: https://other.test/s.xml\n".into(),
+            ),
+        );
+        driver.texts.insert(
+            "https://site.test/index.xml".into(),
+            (
+                200,
+                "<sitemapindex><sitemap><loc>https://site.test/pages.xml</loc></sitemap><sitemap><loc>https://other.test/x.xml</loc></sitemap></sitemapindex>".into(),
+            ),
+        );
+        driver.texts.insert(
+            "https://site.test/pages.xml".into(),
+            (
+                200,
+                "<urlset><url><loc>https://site.test/docs/only-in-sitemap</loc></url><url><loc>https://site.test/docs/blocked</loc></url><url><loc>https://site.test/elsewhere</loc></url></urlset>".into(),
+            ),
+        );
+        let mut wanted = spec("https://site.test/docs/");
+        wanted.robots = true;
+        wanted.sitemaps = true;
+        let report = crawl(&mut driver, &wanted, &AtomicBool::new(false)).unwrap();
+        assert_eq!(report.sitemaps_read, 2);
+        assert!(!driver.opened.iter().any(|u| u.contains("other.test")));
+        let only = report
+            .pages
+            .iter()
+            .find(|p| p.url.ends_with("/only-in-sitemap"))
+            .expect("the sitemap page was crawled");
+        assert_eq!(only.depth, 1);
+        assert!(reasons(&report).contains(&("https://site.test/docs/blocked", SkipReason::Robots)));
+        assert!(reasons(&report).contains(&("https://site.test/elsewhere", SkipReason::OutOfScope)));
+
+        // A sitemap robots.txt disallows is not opened, and one that yields
+        // no location (an XSLT-transformed page) is counted apart.
+        let mut driver = site();
+        driver.texts.insert(
+            "https://site.test/robots.txt".into(),
+            (200, "User-agent: *\nDisallow: /sitemap.xml\n".into()),
+        );
+        let report = crawl(&mut driver, &wanted, &AtomicBool::new(false)).unwrap();
+        assert!(!driver
+            .opened
+            .contains(&"https://site.test/sitemap.xml".to_owned()));
+        assert!(reasons(&report).contains(&("https://site.test/sitemap.xml", SkipReason::Robots)));
+        let mut driver = site();
+        driver.texts.insert(
+            "https://site.test/sitemap.xml".into(),
+            (200, "<html><body>Styled sitemap</body></html>".into()),
+        );
+        let mut plain = spec("https://site.test/docs/");
+        plain.sitemaps = true;
+        let report = crawl(&mut driver, &plain, &AtomicBool::new(false)).unwrap();
+        assert_eq!((report.sitemaps_read, report.sitemaps_empty), (0, 1));
+        // Cancellation is checked before each sitemap too.
+        let mut driver = site();
+        let report = crawl(&mut driver, &plain, &AtomicBool::new(true)).unwrap();
+        assert_eq!(report.stopped, Some(CrawlStop::Cancelled));
+        assert!(driver.opened.is_empty());
+
+        // Without robots.txt sitemaps, /sitemap.xml is tried.
+        let mut driver = site();
+        let mut plain = spec("https://site.test/docs/");
+        plain.sitemaps = true;
+        crawl(&mut driver, &plain, &AtomicBool::new(false)).unwrap();
+        assert!(driver
+            .opened
+            .contains(&"https://site.test/sitemap.xml".to_owned()));
+    }
+
+    #[test]
     fn the_deadline_is_checked_between_pages() {
         struct Slow(Site);
         impl CrawlDriver for Slow {
@@ -856,6 +1271,9 @@ mod tests {
             }
             fn lost(&self) -> bool {
                 self.0.lost()
+            }
+            fn fetch_text(&mut self, url: &str) -> Result<TextDocument, HostError> {
+                self.0.fetch_text(url)
             }
         }
         let mut quick = spec("https://site.test/docs/");
