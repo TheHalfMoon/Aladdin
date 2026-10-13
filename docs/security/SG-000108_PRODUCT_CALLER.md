@@ -200,3 +200,52 @@ For each consequential action, `qdrald` and the host each contribute what only t
 - Remote browser control and relay mapping.
 - Uploads beyond SG-000078's recorded sources.
 - The SG-000106 packaging itself.
+
+## Implementation status
+
+**Slice 1a: host worker mode (test builds only).** Its authority delta is the worker-mode host vocabulary, generation 2.
+
+**What it adds:**
+- **Feature.** `qdral-browser-host` gains the test-only `live-browser-test` feature. With it, the binary has a `--worker` mode, and fixture admission and fixture-certificate trust become available to that mode.
+- **Worker mode (`worker_host.rs`).** It serves a closed generation-2 vocabulary: hello, `open` (loopback fixture only), navigate, observe, close and shutdown. It allows one lifetime at a time.
+  - **Profile.** Each lifetime runs in the host's own `ephemeral_profile_dir` profile, carrying the A9 marker that is checked by an adopt-back before launch.
+  - **Lifetime nonce.** A 128-bit nonce from the system RNG.
+  - **What crosses.** Observations cross as identities and digests only. A reply that does not fit one frame drops nodes and says so. Errors cross as closed codes, never as message text.
+- **Supervision.** `Supervisor::launch_worker_host` keeps the single-host rule across both modes and leaves the profile to the host.
+
+**What it does not add:**
+- the `bind` frame and the two-part binding (slice 1b);
+- link activation and download (slice 1b);
+- any `qdrald` dispatch;
+- any exposure.
+
+**Evidence:**
+- `tests/sg000108_worker_host.rs`, run by `npm run browser-launcher:native` as a second, feature-enabled pass (4 tests). It drives the real binary under `Supervisor` against the fixture and checks:
+  - open: 32-hex nonce, pin 127.0.0.1, the host-pid-named profile;
+  - a second open is refused, typed;
+  - navigate returns 200, and another origin is refused;
+  - observe returns no raw page text;
+  - close: job empty, profile removed;
+  - a mid-lifetime shutdown takes the worker and the profile with it;
+  - a second host is refused.
+- **Managed-policy precondition.** The host binary reads the real registry (the SG-000074 managed-policy precondition), so on a host with a managed browser policy every `open` is refused, typed, before anything starts. CI's windows-latest runner has one.
+  - There, the worker-host tests require exactly `unavailable:managedpolicy` with no profile left, and still check the single-host rule and shutdown.
+  - The full lifetime journey is evidenced on the evidence host, which has no managed policy. This mirrors `the_real_registry_precondition_decides_the_launch`.
+- **Without the feature:** `worker_mode_does_not_exist_without_the_test_feature` shows that `--worker` is an unknown argument.
+- **Release guard:** `the_live_browser_test_feature_never_reaches_a_release_build` (release-blocker sweep) is a source scan. It allows the feature to be named only in:
+  - the host crate's own definition and code;
+  - its tests;
+  - the native-suite launcher;
+  - documentation.
+
+  In the manifest it may appear only as its own empty definition: no default and no other feature enables it. No other crate depends on the host crate, and the release build compiles only `qdrald` and `qdral-lifecycle`.
+- **Cleanup paths:**
+  - a refused `open` leaves no profile:
+    - checks that need no profile come first (`a_refused_open_leaves_no_profile_behind`);
+    - a launch refused after the profile exists removes it (`a_launch_refused_after_the_profile_exists_removes_it`). With only that removal deleted, the test fails (mutation run);
+  - `Supervisor::shutdown` and its drop also shut a worker-mode host down.
+- **Unit tests under the feature:** the native launcher also runs the feature-enabled `--lib` unit tests (the closed vocabulary, closed error codes, frame before hello).
+- **Follow-ups recorded:**
+  - **L1, the blocking hello and shutdown reads.** `Supervisor`'s hello and shutdown reads block without a deadline, as the classic handshake already does. They need a reader thread with `recv_timeout`, as `BrowserWorker` has. Slice 1b.
+  - **L3, the committed URL.** `Navigated.url` is the committed URL, which a same-origin redirect chooses. Slice 1b decides whether `qdrald` receives it or only the requested URL and a digest.
+- **sg000085:** its certificate-flag rule accepts the feature gate, `cfg(any(test, feature = "live-browser-test"))`, besides `cfg(test)`.

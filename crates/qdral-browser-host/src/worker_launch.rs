@@ -177,7 +177,7 @@ pub struct WorkerLaunch {
     pub destinations: Vec<AdmittedDestination>,
     /// Test builds only: a fixture certificate's SPKI hash the engine
     /// trusts. The worker accepts it only with loopback fixture pins.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "live-browser-test"))]
     #[cfg_attr(not(windows), allow(dead_code))]
     pub(crate) test_trusted_spki: Option<String>,
 }
@@ -439,7 +439,7 @@ pub(crate) fn seed_profile_preferences(profile_dir: &Path) -> Result<(), HostErr
 }
 
 /// Test builds only: the fixture certificate trust flag.
-#[cfg(test)]
+#[cfg(any(test, feature = "live-browser-test"))]
 #[cfg_attr(not(windows), allow(dead_code))]
 pub(crate) fn test_certificate_flag(spki: &str) -> String {
     format!("--ignore-certificate-errors-spki-list={spki}")
@@ -1215,7 +1215,7 @@ mod platform {
         };
         #[allow(unused_mut)] // mutated in test builds only
         let mut argv = build_worker_argv(&spec.profile_dir, &spec.destinations)?;
-        #[cfg(test)]
+        #[cfg(any(test, feature = "live-browser-test"))]
         if let Some(spki) = &spec.test_trusted_spki {
             // Before the trailing blank page, where the worker expects it.
             argv.insert(argv.len() - 1, test_certificate_flag(spki));

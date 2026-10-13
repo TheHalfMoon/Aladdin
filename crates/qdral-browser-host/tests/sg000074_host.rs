@@ -85,3 +85,19 @@ fn live_host_or_typed_unavailable_with_lifecycle() {
     assert!(supervisor.shutdown().expect("second shutdown"));
     let _ = fs::remove_dir_all(&scratch);
 }
+
+/// SG-000108 product caller: without the test-only `live-browser-test`
+/// feature, the host binary has no worker mode at all: `--worker` is an
+/// unknown argument, refused before any discovery or launch.
+#[cfg(not(feature = "live-browser-test"))]
+#[test]
+fn worker_mode_does_not_exist_without_the_test_feature() {
+    let output = std::process::Command::new(host_binary())
+        .args(["--worker", "--host-id", "h"])
+        .stdin(std::process::Stdio::null())
+        .output()
+        .expect("run the host binary");
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("unknown argument: --worker"), "{stderr}");
+}

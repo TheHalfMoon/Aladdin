@@ -320,7 +320,8 @@ fn only_the_documented_ignored_tests_exist() {
                         && line.contains(
                             "performs one real HTTPS request; run with --ignored for live evidence",
                         ))
-                    || (relative == "crates/qdral-browser-host/src/worker_launch_tests.rs"
+                    || ((relative == "crates/qdral-browser-host/src/worker_launch_tests.rs"
+                        || relative == "crates/qdral-browser-host/tests/sg000108_worker_host.rs")
                         && line.contains(
                             "requires the built browser worker and Edge; run by npm run browser-launcher:native",
                         ));
@@ -334,6 +335,51 @@ fn only_the_documented_ignored_tests_exist() {
         hits.is_empty(),
         "unexpected ignored tests:\n{}",
         hits.join("\n")
+    );
+}
+
+/// SG-000108 product caller: the test-only `live-browser-test` feature
+/// (worker mode with the loopback fixture admitted) never reaches a release
+/// build. Only the host crate's own definition and code, its worker-host
+/// test, the native-suite launcher and documentation may name it, and it is
+/// never a default feature.
+#[test]
+fn the_live_browser_test_feature_never_reaches_a_release_build() {
+    let root = repo_root();
+    let mut hits = Vec::new();
+    for (relative, text) in text_files(&root) {
+        if !text.contains("live-browser-test") {
+            continue;
+        }
+        let allowed = relative == "crates/qdral-browser-host/Cargo.toml"
+            || (relative.starts_with("crates/qdral-browser-host/src/")
+                && relative.ends_with(".rs"))
+            || relative == "crates/qdral-browser-host/tests/sg000108_worker_host.rs"
+            || relative == "crates/qdral-browser-host/tests/sg000074_host.rs"
+            || relative == "crates/qdral-browser-host/tests/sg000085_qualification.rs"
+            || relative == "apps/qdral-browser-worker/scripts/native-launcher.mjs"
+            || relative.starts_with("docs/");
+        if !allowed {
+            hits.push(relative);
+        }
+    }
+    assert!(
+        hits.is_empty(),
+        "live-browser-test is named outside its test-only places:\n{}",
+        hits.join("\n")
+    );
+    // In the manifest it appears exactly once, as its own empty definition:
+    // no other feature list (default, or a feature that enables it) names it.
+    let manifest = fs::read_to_string(root.join("crates/qdral-browser-host/Cargo.toml")).unwrap();
+    let naming: Vec<&str> = manifest
+        .lines()
+        .map(str::trim)
+        .filter(|line| line.contains("live-browser-test") && !line.starts_with('#'))
+        .collect();
+    assert_eq!(
+        naming,
+        ["live-browser-test = []"],
+        "live-browser-test may only be defined, never enabled by another feature"
     );
 }
 

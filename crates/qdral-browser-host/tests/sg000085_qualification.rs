@@ -1188,7 +1188,9 @@ fn no_shell_script_or_remote_process_surface_exists() {
     }
     // SG-000108: the fixture certificate trust flag exists only in test
     // builds. Outside the cfg(test) native test module it may appear only
-    // inside the cfg(test) helper in worker_launch.rs.
+    // inside the test-gated helper in worker_launch.rs: cfg(test), or the
+    // test-only `live-browser-test` feature of the product caller's worker
+    // mode, which release qualification keeps out of every release build.
     for (file, text) in &sources {
         if !text.contains("ignore-certificate-errors") || file == "worker_launch_tests.rs" {
             continue;
@@ -1197,9 +1199,10 @@ fn no_shell_script_or_remote_process_surface_exists() {
         let lines: Vec<&str> = text.lines().collect();
         for (index, line) in lines.iter().enumerate() {
             if line.contains("ignore-certificate-errors") {
-                let gated = lines[index.saturating_sub(4)..index]
-                    .iter()
-                    .any(|above| above.trim() == "#[cfg(test)]");
+                let gated = lines[index.saturating_sub(4)..index].iter().any(|above| {
+                    above.trim() == "#[cfg(test)]"
+                        || above.trim() == "#[cfg(any(test, feature = \"live-browser-test\"))]"
+                });
                 assert!(
                     gated,
                     "certificate flag outside cfg(test) at worker_launch.rs:{}",

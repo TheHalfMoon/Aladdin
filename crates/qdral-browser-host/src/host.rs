@@ -88,21 +88,35 @@ impl LiveHost {
     }
 }
 
-/// Owns zero or one live host. Created per Deskal launch scope.
+/// Owns zero or one live host, of either mode. Created per Deskal launch
+/// scope.
 pub struct Supervisor {
     live: Option<LiveHost>,
+    #[cfg(all(windows, feature = "live-browser-test"))]
+    worker: Option<LiveWorkerHost>,
 }
 
 impl Supervisor {
     pub fn new() -> Self {
-        Self { live: None }
+        Self {
+            live: None,
+            #[cfg(all(windows, feature = "live-browser-test"))]
+            worker: None,
+        }
     }
 
     pub fn is_live(&mut self) -> bool {
-        match self.live.as_mut() {
+        let classic = match self.live.as_mut() {
             Some(host) => host.is_alive(),
             None => false,
-        }
+        };
+        #[cfg(all(windows, feature = "live-browser-test"))]
+        let classic = classic
+            || match self.worker.as_mut() {
+                Some(host) => host.child.is_alive(),
+                None => false,
+            };
+        classic
     }
 
     /// Launch the discovered engine under a fresh ephemeral profile and
@@ -156,12 +170,21 @@ impl Supervisor {
         Ok(identity)
     }
 
-    /// Shut the live host down deterministically, if any.
+    /// Shut the live host down deterministically, if any, of either mode.
     pub fn shutdown(&mut self) -> Result<bool, HostError> {
-        match self.live.take() {
+        let classic = match self.live.take() {
             Some(host) => host.shutdown(),
             None => Ok(true),
-        }
+        };
+        #[cfg(all(windows, feature = "live-browser-test"))]
+        let classic = {
+            let worker = self.shutdown_worker_host();
+            match (classic, worker) {
+                (Ok(a), Ok(b)) => Ok(a && b),
+                (Err(err), _) | (_, Err(err)) => Err(err),
+            }
+        };
+        classic
     }
 
     /// Round-trip ping through the live host's private channel, if any.
@@ -176,6 +199,144 @@ impl Supervisor {
 impl Default for Supervisor {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+/// SG-000108 product caller, slice 1a: a host in worker mode. It owns its
+/// own profile (the host makes it, so the #298 sweep sees the right owner),
+/// and serves the closed worker-mode vocabulary. Test builds only.
+#[cfg(all(windows, feature = "live-browser-test"))]
+pub struct LiveWorkerHost {
+    host_id: String,
+    child: SupervisedChild,
+    stdin: std::process::ChildStdin,
+    stdout: std::io::BufReader<std::process::ChildStdout>,
+}
+
+#[cfg(all(windows, feature = "live-browser-test"))]
+impl LiveWorkerHost {
+    pub fn host_id(&self) -> &str {
+        &self.host_id
+    }
+
+    pub fn pid(&self) -> u32 {
+        self.child.pid()
+    }
+
+    /// One request, one reply. A reply that does not decode ends nothing
+    /// by itself; the caller treats it as a protocol violation.
+    pub fn request(
+        &mut self,
+        request: &crate::worker_host::WorkerHostRequest,
+    ) -> Result<crate::worker_host::WorkerHostReply, HostError> {
+        write_frame(&mut self.stdin, request)?;
+        decode_frame(&mut self.stdout)
+    }
+
+    /// Ask the host to stop (it ends any lifetime first), then confirm the
+    /// whole family is gone.
+    pub fn shutdown(mut self) -> Result<bool, HostError> {
+        let _ = write_frame(
+            &mut self.stdin,
+            &crate::worker_host::WorkerHostRequest::Shutdown {},
+        );
+        let deadline = Instant::now() + Duration::from_secs(30);
+        while self.child.is_alive() && Instant::now() < deadline {
+            match decode_frame::<crate::worker_host::WorkerHostReply, _>(&mut self.stdout) {
+                Ok(crate::worker_host::WorkerHostReply::Bye {}) => break,
+                Ok(_) => continue,
+                Err(_) => break,
+            }
+        }
+        let LiveWorkerHost {
+            child,
+            stdin,
+            stdout,
+            ..
+        } = self;
+        drop((stdin, stdout));
+        child.shutdown()
+    }
+}
+
+/// What Deskal passes a worker-mode host (never caller input).
+#[cfg(all(windows, feature = "live-browser-test"))]
+#[derive(Debug, Clone)]
+pub struct WorkerHostLaunch {
+    pub node: std::path::PathBuf,
+    pub worker_main: std::path::PathBuf,
+    pub profile_root: std::path::PathBuf,
+    pub temp_dir: std::path::PathBuf,
+    pub state_root: std::path::PathBuf,
+}
+
+#[cfg(all(windows, feature = "live-browser-test"))]
+impl Supervisor {
+    /// Launch `host_binary` in worker mode and complete the generation-2
+    /// hello. Refused while any host is live (one lifetime at a time).
+    pub fn launch_worker_host(
+        &mut self,
+        host_binary: &Path,
+        launch: &WorkerHostLaunch,
+    ) -> Result<String, HostError> {
+        if self.is_live() {
+            return Err(HostError::Invalid("a browser host is already live".into()));
+        }
+        self.live = None;
+        self.worker = None;
+        if !host_binary.is_file() {
+            return Err(HostError::Unavailable(UnavailableReason::LaunchFailed));
+        }
+        let host_id = format!("host-{:016x}", unique_nonce());
+        let path = |value: &Path| value.to_string_lossy().into_owned();
+        let args = vec![
+            "--worker".to_string(),
+            "--host-id".to_string(),
+            host_id.clone(),
+            "--node".to_string(),
+            path(&launch.node),
+            "--worker-main".to_string(),
+            path(&launch.worker_main),
+            "--profile-root".to_string(),
+            path(&launch.profile_root),
+            "--temp-dir".to_string(),
+            path(&launch.temp_dir),
+        ];
+        let env = host_env(&launch.state_root);
+        let (child, pipes) = spawn_host_piped(host_binary, &args, &env)?;
+        let mut host = LiveWorkerHost {
+            host_id: host_id.clone(),
+            child,
+            stdin: pipes.stdin,
+            stdout: pipes.stdout,
+        };
+        match host.request(&crate::worker_host::WorkerHostRequest::Hello {
+            generation: crate::worker_host::WORKER_HOST_GENERATION,
+        })? {
+            crate::worker_host::WorkerHostReply::Hello {
+                generation,
+                host: id,
+            } if generation == crate::worker_host::WORKER_HOST_GENERATION && id == host_id => {}
+            _ => {
+                let _ = host.shutdown();
+                return Err(HostError::Unavailable(UnavailableReason::ProtocolViolation));
+            }
+        }
+        self.worker = Some(host);
+        Ok(host_id)
+    }
+
+    /// The live worker-mode host, if any.
+    pub fn worker_host(&mut self) -> Option<&mut LiveWorkerHost> {
+        self.worker.as_mut()
+    }
+
+    /// Shut the worker-mode host down deterministically, if any.
+    pub fn shutdown_worker_host(&mut self) -> Result<bool, HostError> {
+        match self.worker.take() {
+            Some(host) => host.shutdown(),
+            None => Ok(true),
+        }
     }
 }
 

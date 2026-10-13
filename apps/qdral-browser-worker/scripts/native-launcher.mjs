@@ -14,6 +14,7 @@ import { fileURLToPath } from "node:url";
 // Every native test must run: a filter that matches nothing (for example
 // after a module rename) exits 0 and would otherwise pass vacuously.
 const EXPECTED_TESTS = 26;
+const EXPECTED_WORKER_HOST_TESTS = 4;
 
 const app = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const repo = resolve(app, "..", "..");
@@ -51,6 +52,51 @@ const summary = /test result: ok\. (\d+) passed; 0 failed; 0 ignored/.exec(resul
 if (!summary || Number(summary[1]) !== EXPECTED_TESTS) {
   process.stderr.write(
     `browser-launcher:native: expected ${EXPECTED_TESTS} native tests to pass, saw ${summary ? summary[1] : "none"}\n`
+  );
+  process.exit(1);
+}
+
+// SG-000108 product caller (slice 1a): the real `qdral-browser-host
+// --worker` binary under supervision. A separate build with the test-only
+// `live-browser-test` feature, which release builds never enable.
+// The worker-mode unit tests compile only with the feature: run them too.
+const featureLib = spawnSync(
+  "cargo",
+  ["test", "-p", "qdral-browser-host", "--features", "live-browser-test", "--lib"],
+  { cwd: repo, stdio: ["ignore", "pipe", "inherit"], encoding: "utf8", maxBuffer: 64 * 1024 * 1024, shell: false }
+);
+process.stdout.write(featureLib.stdout ?? "");
+if (featureLib.error || featureLib.status !== 0 || !/test result: ok\. \d+ passed; 0 failed/.test(featureLib.stdout ?? "")) {
+  process.stderr.write("browser-launcher:native: the live-browser-test unit tests failed\n");
+  process.exit(1);
+}
+const workerHost = spawnSync(
+  "cargo",
+  [
+    "test", "-p", "qdral-browser-host", "--features", "live-browser-test", "--test", "sg000108_worker_host",
+    "--", "--ignored", "--test-threads=1", "--nocapture"
+  ],
+  {
+    cwd: repo,
+    stdio: ["ignore", "pipe", "inherit"],
+    encoding: "utf8",
+    maxBuffer: 64 * 1024 * 1024,
+    shell: false,
+    env: { ...process.env, QDRAL_SG108_NODE: process.execPath, QDRAL_SG108_WORKER_MAIN: main }
+  }
+);
+if (workerHost.error) {
+  process.stderr.write(`browser-launcher:native: could not run cargo: ${workerHost.error.message}\n`);
+  process.exit(1);
+}
+process.stdout.write(workerHost.stdout ?? "");
+if (workerHost.status !== 0) {
+  process.exit(workerHost.status ?? 1);
+}
+const workerSummary = /test result: ok\. (\d+) passed; 0 failed; 0 ignored/.exec(workerHost.stdout ?? "");
+if (!workerSummary || Number(workerSummary[1]) !== EXPECTED_WORKER_HOST_TESTS) {
+  process.stderr.write(
+    `browser-launcher:native: expected ${EXPECTED_WORKER_HOST_TESTS} worker-host tests to pass, saw ${workerSummary ? workerSummary[1] : "none"}\n`
   );
   process.exit(1);
 }
