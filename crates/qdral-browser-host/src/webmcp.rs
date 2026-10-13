@@ -119,6 +119,7 @@ pub struct PageText(String);
 
 impl PageText {
     /// Label text the page supplied (the caller has bounded and checked it).
+    #[cfg(any(windows, test))]
     pub(crate) fn from_page(text: String) -> Self {
         Self(text)
     }

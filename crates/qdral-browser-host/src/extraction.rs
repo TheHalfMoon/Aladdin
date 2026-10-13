@@ -5,8 +5,11 @@
 //! count, size, text safety, one document) and returns the result as
 //! untrusted page text bound to the document generation.
 
+#[cfg(any(windows, test))]
 use crate::error::{HostError, UnavailableReason};
-use crate::webmcp::{is_bidi_or_format, PageText};
+#[cfg(any(windows, test))]
+use crate::webmcp::is_bidi_or_format;
+use crate::webmcp::PageText;
 
 /// Pieces one extraction may take (mirrors the worker).
 pub const MAX_EXTRACT_PIECES: u32 = 96;
@@ -37,11 +40,14 @@ pub struct PageExtraction {
     pub chunks: Vec<PageText>,
 }
 
+#[cfg(any(windows, test))]
 fn violation() -> HostError {
     HostError::Unavailable(UnavailableReason::ProtocolViolation)
 }
 
-/// Pieces received so far, checked as they arrive.
+/// Pieces received so far, checked as they arrive (the worker exists only
+/// on Windows).
+#[cfg(any(windows, test))]
 #[derive(Debug)]
 pub(crate) struct Assembly {
     url: String,
@@ -52,6 +58,7 @@ pub(crate) struct Assembly {
     chunks: Vec<PageText>,
 }
 
+#[cfg(any(windows, test))]
 impl Assembly {
     /// The first piece opens the assembly; it names the document and the
     /// piece count, which every later piece must repeat.
@@ -150,6 +157,7 @@ mod tests {
     #[test]
     fn pieces_arrive_in_order_for_one_document_and_become_page_text() {
         let mut assembly = start(3, "# One").unwrap();
+        assert_eq!(assembly.url(), URL);
         assert_eq!(assembly.next(), Some(1));
         assert!(assembly.push(URL, false, 2, 3, "skip".into()).is_err());
         assembly.push(URL, false, 1, 3, "two\n".into()).unwrap();
