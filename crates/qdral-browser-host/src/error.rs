@@ -58,10 +58,39 @@ impl fmt::Display for UnavailableReason {
     }
 }
 
+/// Why an approved download committed nothing (#307). Each is a refusal or
+/// an engine outcome, never a partial write.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DownloadFailure {
+    /// The document answered with a status other than 2xx (a redirect
+    /// included: the approved document is exactly the approved link).
+    HttpStatus,
+    /// The document was larger than the transfer bound.
+    Oversized,
+    /// No document arrived in time; a request the browser policy refused
+    /// also ends here, as it never answers.
+    TimedOut,
+    /// The engine could not click the link or capture the document.
+    EngineFailed,
+}
+
+impl fmt::Display for DownloadFailure {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::HttpStatus => write!(f, "the document did not answer 2xx"),
+            Self::Oversized => write!(f, "the document is larger than the transfer bound"),
+            Self::TimedOut => write!(f, "no document arrived in time"),
+            Self::EngineFailed => write!(f, "the engine could not capture the document"),
+        }
+    }
+}
+
 /// Every failure of the browser host. No variant widens authority.
 #[derive(Debug)]
 pub enum HostError {
     Unavailable(UnavailableReason),
+    /// An approved download committed nothing, for a typed reason.
+    Download(DownloadFailure),
     Invalid(String),
     Platform(String),
     Io(std::io::Error),
@@ -71,6 +100,7 @@ impl fmt::Display for HostError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Unavailable(reason) => write!(f, "browser unavailable: {reason}"),
+            Self::Download(reason) => write!(f, "download refused: {reason}"),
             Self::Invalid(detail) => write!(f, "invalid browser host input: {detail}"),
             Self::Platform(detail) => write!(f, "browser host platform failure: {detail}"),
             Self::Io(err) => write!(f, "browser host I/O failure: {err}"),

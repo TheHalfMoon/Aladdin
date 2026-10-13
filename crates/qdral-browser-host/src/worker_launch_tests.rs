@@ -2152,7 +2152,7 @@ fn a_stalled_cancelled_or_killed_download_is_typed_and_commits_nothing() {
     assert!(
         matches!(
             outcome,
-            Err(HostError::Unavailable(UnavailableReason::TimedOut))
+            Err(HostError::Download(crate::error::DownloadFailure::TimedOut))
         ),
         "{outcome:?}"
     );
@@ -2390,7 +2390,11 @@ fn the_journey_downloads_the_latest_report_create_only_and_verified() {
         )
         .expect("approved download");
     assert!(approval.consumed);
-    assert_eq!(committed.path, approved.join("reports").join("latest.pdf"));
+    // The path the commit's held handle reached (#307): the canonical form.
+    assert_eq!(
+        committed.path,
+        std::fs::canonicalize(approved.join("reports").join("latest.pdf")).unwrap()
+    );
     // Independent check: the exact fixture bytes and their SHA-256.
     let expected = b"%PDF-1.4\n% /reports/2026-09-30.pdf\n1 0 obj << /Type /Catalog >> endobj\ntrailer << /Root 1 0 R >>\n%%EOF\n";
     let on_disk = std::fs::read(&committed.path).expect("read committed file");
@@ -2469,6 +2473,18 @@ fn the_journey_downloads_the_latest_report_create_only_and_verified() {
                 .starts_with(b"%PDF-1.4\r\n@echo POLYGLOT"));
             continue;
         }
+        if out == "oversized.pdf" {
+            // Typed (#307): the bound refused it, not the engine.
+            assert!(
+                matches!(
+                    result,
+                    Err(HostError::Download(
+                        crate::error::DownloadFailure::Oversized
+                    ))
+                ),
+                "{result:?}"
+            );
+        }
         match (&result, refusal) {
             (Err(HostError::Invalid(message)), Some(expected)) => {
                 assert!(message.contains(expected), "{out}: {message}")
@@ -2481,6 +2497,85 @@ fn the_journey_downloads_the_latest_report_create_only_and_verified() {
             assert!(!approval.consumed, "a fragment link spent its approval");
         }
     }
+    // #307: a 404 and a redirect are typed as the document's status (the
+    // approved document is exactly the approved link), and nothing lands.
+    for (name, out) in [
+        ("Missing 2026-01-06", "missing.pdf"),
+        ("Moved 2026-01-07", "moved.pdf"),
+    ] {
+        worker
+            .navigate("https://fixture.test/files")
+            .expect("files");
+        let live = worker.observe(&scope).expect("observe files");
+        let node = live
+            .observation
+            .nodes
+            .iter()
+            .flat_map(|n| std::iter::once(n).chain(n.children.iter()))
+            .flat_map(|n| std::iter::once(n).chain(n.children.iter()))
+            .find(|n| worker.host_node(&n.node_id).is_some_and(|h| h.name == name))
+            .map(|n| n.node_id.clone())
+            .expect("file link");
+        let (target, mut approval) = approved_download(&worker, &live, &node, &approved, out);
+        let result = worker.download(&target, &mut approval, 1, "workspace", &approved, out);
+        assert!(
+            matches!(
+                result,
+                Err(HostError::Download(
+                    crate::error::DownloadFailure::HttpStatus
+                ))
+            ),
+            "{out}: {result:?}"
+        );
+        assert!(!approved.join(out).exists());
+    }
+
+    // #307: a junction inside the approved folder never receives the file,
+    // even though its target exists and is writable; the same download
+    // into a real subfolder commits.
+    let outside = temp_profile("junction-outside");
+    std::fs::create_dir_all(&outside).unwrap();
+    crate::approved_folder::tests::junction(&approved.join("link"), &outside);
+    for (out, lands) in [("link\\plain.pdf", false), ("real\\plain.pdf", true)] {
+        worker
+            .navigate("https://fixture.test/files")
+            .expect("files");
+        let live = worker.observe(&scope).expect("observe files");
+        let node = live
+            .observation
+            .nodes
+            .iter()
+            .flat_map(|n| std::iter::once(n).chain(n.children.iter()))
+            .flat_map(|n| std::iter::once(n).chain(n.children.iter()))
+            .find(|n| {
+                worker
+                    .host_node(&n.node_id)
+                    .is_some_and(|h| h.name == "Plain 2026-01-08")
+            })
+            .map(|n| n.node_id.clone())
+            .expect("plain link");
+        let (target, mut approval) = approved_download(&worker, &live, &node, &approved, out);
+        let result = worker.download(&target, &mut approval, 1, "workspace", &approved, out);
+        if lands {
+            let committed = result.expect("a real subfolder commits");
+            assert_eq!(
+                std::fs::read(&committed.path).unwrap(),
+                b"%PDF-1.4\n% plain\n"
+            );
+        } else {
+            assert!(
+                matches!(&result, Err(HostError::Invalid(message)) if message.contains("reparse point")),
+                "{result:?}"
+            );
+        }
+    }
+    assert!(
+        std::fs::read_dir(&outside).unwrap().next().is_none(),
+        "the junction's target received a file"
+    );
+    std::fs::remove_dir(approved.join("link")).unwrap();
+    let _ = std::fs::remove_dir_all(&outside);
+
     let report = worker.shutdown();
     assert!(report.job_empty, "the job did not empty");
     assert_profile_gone(report.profile_removed, &profile);
