@@ -229,5 +229,18 @@ For each consequential action, `qdrald` and the host each contribute what only t
   - a mid-lifetime shutdown takes the worker and the profile with it;
   - a second host is refused.
 - **Without the feature:** `worker_mode_does_not_exist_without_the_test_feature` shows that `--worker` is an unknown argument.
-- **Release guard:** `the_live_browser_test_feature_never_reaches_a_release_build` (release-blocker sweep) allows the feature to be named only in the host crate's own definition and code, its worker-host test, the native-suite launcher and documentation, and never as a default feature.
+- **Release guard:** `the_live_browser_test_feature_never_reaches_a_release_build` (release-blocker sweep) is a source scan. It allows the feature to be named only in:
+  - the host crate's own definition and code;
+  - its tests;
+  - the native-suite launcher;
+  - documentation.
+
+  In the manifest it may appear only as its own empty definition: no default and no other feature enables it. No other crate depends on the host crate, and the release build compiles only `qdrald` and `qdral-lifecycle`.
+- **Cleanup paths:**
+  - a refused `open` removes the profile it made (`a_refused_open_leaves_no_profile_behind`);
+  - `Supervisor::shutdown` and its drop also shut a worker-mode host down.
+- **Unit tests under the feature:** the native launcher also runs the feature-enabled `--lib` unit tests (the closed vocabulary, closed error codes, frame before hello).
+- **Follow-ups recorded:**
+  - **L1, the blocking hello and shutdown reads.** `Supervisor`'s hello and shutdown reads block without a deadline, as the classic handshake already does. They need a reader thread with `recv_timeout`, as `BrowserWorker` has. Slice 1b.
+  - **L3, the committed URL.** `Navigated.url` is the committed URL, which a same-origin redirect chooses. Slice 1b decides whether `qdrald` receives it or only the requested URL and a digest.
 - **sg000085:** its certificate-flag rule accepts the feature gate, `cfg(any(test, feature = "live-browser-test"))`, besides `cfg(test)`.

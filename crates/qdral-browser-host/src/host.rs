@@ -170,12 +170,21 @@ impl Supervisor {
         Ok(identity)
     }
 
-    /// Shut the live host down deterministically, if any.
+    /// Shut the live host down deterministically, if any, of either mode.
     pub fn shutdown(&mut self) -> Result<bool, HostError> {
-        match self.live.take() {
+        let classic = match self.live.take() {
             Some(host) => host.shutdown(),
             None => Ok(true),
-        }
+        };
+        #[cfg(all(windows, feature = "live-browser-test"))]
+        let classic = {
+            let worker = self.shutdown_worker_host();
+            match (classic, worker) {
+                (Ok(a), Ok(b)) => Ok(a && b),
+                (Err(err), _) | (_, Err(err)) => Err(err),
+            }
+        };
+        classic
     }
 
     /// Round-trip ping through the live host's private channel, if any.

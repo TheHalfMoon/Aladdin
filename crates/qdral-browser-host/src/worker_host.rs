@@ -264,13 +264,56 @@ fn open(
             "fixture certificate hash is malformed".into(),
         ));
     }
-    let engine = discover_engine(&SearchConfig::production())?;
-    let profile_dir = crate::worker_launch::ephemeral_profile_dir(&args.profile_root)?;
-    let profile = crate::profile::mark_profile(&profile_dir, &engine.fingerprint())?;
-    // Adopt-back proves the marker round-trips before the launch (A9).
-    let profile = crate::profile::adopt_profile(profile.dir(), &engine.fingerprint())?;
+    // Everything that can be refused without a profile is refused first.
     let pin = IpAddr::V4(Ipv4Addr::LOCALHOST);
     let destination = AdmittedDestination::fixture(host, pin)?;
+    let engine = discover_engine(&SearchConfig::production())?;
+    let profile_dir = crate::worker_launch::ephemeral_profile_dir(&args.profile_root)?;
+    // From here until the worker owns the profile, any failure removes it:
+    // the #298 sweep never collects this host's own profiles while it runs.
+    let launched = launch_in(args, &profile_dir, engine, destination, fixture_spki);
+    let (worker, profile_identity) = match launched {
+        Ok(launched) => launched,
+        Err(err) => {
+            let _ = std::fs::remove_dir_all(&profile_dir);
+            return Err(err);
+        }
+    };
+    let nonce = match crate::worker_launch::lifetime_key() {
+        Ok(nonce) => nonce,
+        Err(err) => {
+            let _ = worker.kill();
+            return Err(err);
+        }
+    };
+    let lifetime = nonce[..16]
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect::<String>();
+    Ok((
+        Lifetime {
+            worker,
+            workspace: workspace.to_owned(),
+            profile_identity,
+        },
+        WorkerHostReply::Opened {
+            lifetime,
+            pinned: pin.to_string(),
+        },
+    ))
+}
+
+/// Mark the fresh profile (A9: adopt-back proves the marker round-trips),
+/// then launch the worker in it.
+fn launch_in(
+    args: &WorkerHostArgs,
+    profile_dir: &std::path::Path,
+    engine: crate::discovery::Engine,
+    destination: AdmittedDestination,
+    fixture_spki: &str,
+) -> Result<(BrowserWorker, String), HostError> {
+    let profile = crate::profile::mark_profile(profile_dir, &engine.fingerprint())?;
+    let profile = crate::profile::adopt_profile(profile.dir(), &engine.fingerprint())?;
     let spec = WorkerLaunch {
         node: args.node.clone(),
         worker_main: args.worker_main.clone(),
@@ -282,22 +325,7 @@ fn open(
         test_trusted_spki: Some(fixture_spki.to_owned()),
     };
     let worker = launch_worker(&spec, &crate::confinement::RegistryPolicySource)?;
-    let nonce = crate::worker_launch::lifetime_key()?;
-    let lifetime = nonce[..16]
-        .iter()
-        .map(|byte| format!("{byte:02x}"))
-        .collect::<String>();
-    Ok((
-        Lifetime {
-            worker,
-            workspace: workspace.to_owned(),
-            profile_identity: profile.identity().to_owned(),
-        },
-        WorkerHostReply::Opened {
-            lifetime,
-            pinned: pin.to_string(),
-        },
-    ))
+    Ok((worker, profile.identity().to_owned()))
 }
 
 /// Observe the committed document; nodes are dropped from the end until the

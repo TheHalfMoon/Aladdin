@@ -220,6 +220,34 @@ fn a_lifetime_through_the_real_host_binary_navigates_observes_and_closes_clean()
 
 #[test]
 #[ignore = "requires the built browser worker and Edge; run by npm run browser-launcher:native"]
+fn a_refused_open_leaves_no_profile_behind() {
+    let fixture = Fixture::start();
+    let (mut supervisor, launch, root) = launch("refused-open");
+    let host = supervisor.worker_host().expect("live worker host");
+    for (host_name, spki) in [
+        ("not a host", fixture.spki.clone()),
+        ("fixture.test", "short".to_string()),
+    ] {
+        assert!(matches!(
+            host.request(&WorkerHostRequest::Open {
+                workspace: "ws-sg108".into(),
+                host: host_name.into(),
+                fixture_spki: spki,
+            })
+            .expect("open"),
+            WorkerHostReply::Error { .. }
+        ));
+    }
+    assert!(
+        entries(&launch.profile_root).is_empty(),
+        "a refused open left a profile"
+    );
+    assert!(supervisor.shutdown().expect("shutdown"));
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+#[ignore = "requires the built browser worker and Edge; run by npm run browser-launcher:native"]
 fn shutting_the_host_down_mid_lifetime_takes_the_worker_and_profile_with_it() {
     let fixture = Fixture::start();
     let (mut supervisor, launch, root) = launch("shutdown");
@@ -237,10 +265,12 @@ fn shutting_the_host_down_mid_lifetime_takes_the_worker_and_profile_with_it() {
     assert!(supervisor
         .launch_worker_host(&host_binary(), &launch)
         .is_err());
+    // The supervisor's own shutdown covers the worker-mode host.
     assert!(
-        supervisor.shutdown_worker_host().expect("shutdown"),
+        supervisor.shutdown().expect("shutdown"),
         "the host family stayed"
     );
+    assert!(!supervisor.is_live());
     assert!(
         entries(&launch.profile_root).is_empty(),
         "the lifetime's profile stayed"

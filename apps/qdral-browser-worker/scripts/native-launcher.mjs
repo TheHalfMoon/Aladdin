@@ -14,7 +14,7 @@ import { fileURLToPath } from "node:url";
 // Every native test must run: a filter that matches nothing (for example
 // after a module rename) exits 0 and would otherwise pass vacuously.
 const EXPECTED_TESTS = 26;
-const EXPECTED_WORKER_HOST_TESTS = 2;
+const EXPECTED_WORKER_HOST_TESTS = 3;
 
 const app = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const repo = resolve(app, "..", "..");
@@ -59,6 +59,17 @@ if (!summary || Number(summary[1]) !== EXPECTED_TESTS) {
 // SG-000108 product caller (slice 1a): the real `qdral-browser-host
 // --worker` binary under supervision. A separate build with the test-only
 // `live-browser-test` feature, which release builds never enable.
+// The worker-mode unit tests compile only with the feature: run them too.
+const featureLib = spawnSync(
+  "cargo",
+  ["test", "-p", "qdral-browser-host", "--features", "live-browser-test", "--lib"],
+  { cwd: repo, stdio: ["ignore", "pipe", "inherit"], encoding: "utf8", maxBuffer: 64 * 1024 * 1024, shell: false }
+);
+process.stdout.write(featureLib.stdout ?? "");
+if (featureLib.error || featureLib.status !== 0 || !/test result: ok\. \d+ passed; 0 failed/.test(featureLib.stdout ?? "")) {
+  process.stderr.write("browser-launcher:native: the live-browser-test unit tests failed\n");
+  process.exit(1);
+}
 const workerHost = spawnSync(
   "cargo",
   [

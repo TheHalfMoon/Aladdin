@@ -355,6 +355,8 @@ fn the_live_browser_test_feature_never_reaches_a_release_build() {
             || (relative.starts_with("crates/qdral-browser-host/src/")
                 && relative.ends_with(".rs"))
             || relative == "crates/qdral-browser-host/tests/sg000108_worker_host.rs"
+            || relative == "crates/qdral-browser-host/tests/sg000074_host.rs"
+            || relative == "crates/qdral-browser-host/tests/sg000085_qualification.rs"
             || relative == "apps/qdral-browser-worker/scripts/native-launcher.mjs"
             || relative.starts_with("docs/");
         if !allowed {
@@ -366,14 +368,19 @@ fn the_live_browser_test_feature_never_reaches_a_release_build() {
         "live-browser-test is named outside its test-only places:\n{}",
         hits.join("\n")
     );
+    // In the manifest it appears exactly once, as its own empty definition:
+    // no other feature list (default, or a feature that enables it) names it.
     let manifest = fs::read_to_string(root.join("crates/qdral-browser-host/Cargo.toml")).unwrap();
-    for line in manifest.lines() {
-        let line = line.trim();
-        assert!(
-            !(line.starts_with("default") && line.contains("live-browser-test")),
-            "live-browser-test must never be a default feature: {line}"
-        );
-    }
+    let naming: Vec<&str> = manifest
+        .lines()
+        .map(str::trim)
+        .filter(|line| line.contains("live-browser-test") && !line.starts_with('#'))
+        .collect();
+    assert_eq!(
+        naming,
+        ["live-browser-test = []"],
+        "live-browser-test may only be defined, never enabled by another feature"
+    );
 }
 
 #[test]

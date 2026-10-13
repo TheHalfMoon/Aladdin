@@ -13,7 +13,8 @@ path = "src/main.rs"
 [features]
 # SG-000108 product caller slices 1-2: the host binary's worker mode, with
 # the loopback fixture origin and its certificate admitted. Test builds
-# only; release qualification asserts no artifact is built with it.
+# only. The release-blocker sweep keeps it out of every other manifest and
+# feature list; no release build compiles this crate with it.
 live-browser-test = []
 
 [dependencies]
