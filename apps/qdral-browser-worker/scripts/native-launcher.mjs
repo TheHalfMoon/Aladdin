@@ -14,7 +14,7 @@ import { fileURLToPath } from "node:url";
 // Every native test must run: a filter that matches nothing (for example
 // after a module rename) exits 0 and would otherwise pass vacuously.
 const EXPECTED_TESTS = 26;
-const EXPECTED_WORKER_HOST_TESTS = 6;
+const EXPECTED_WORKER_HOST_TESTS = 7;
 
 const app = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const repo = resolve(app, "..", "..");
@@ -98,8 +98,16 @@ const workerSummary = /test result: ok\. (\d+) passed; 0 failed; 0 ignored/.exec
 // its journey or a managed-policy refusal. On the evidence host (no managed
 // policy) QDRAL_SG108_REQUIRE_JOURNEY=1 requires the journeys themselves.
 const workerOut = workerHost.stdout ?? "";
-const journeys = ["SG108-EVIDENCE worker host observation", "SG108-EVIDENCE worker host journey", "SG108-EVIDENCE worker host binding"];
-const refusedByPolicy = workerOut.includes("SG108-EVIDENCE worker host: managed policy present");
+const journeys = [
+  "SG108-EVIDENCE worker host observation",
+  "SG108-EVIDENCE worker host journey",
+  "SG108-EVIDENCE worker host binding",
+  "SG108-EVIDENCE worker host click"
+];
+// Under a managed policy, every test that opens a lifetime (the four
+// journeys and the mid-lifetime shutdown) reports the refusal itself.
+const policyRefusals = workerOut.split("SG108-EVIDENCE worker host: managed policy present").length - 1;
+const refusedByPolicy = policyRefusals >= journeys.length + 1;
 const journeysSeen = journeys.every((line) => workerOut.includes(line));
 if (!journeysSeen && !refusedByPolicy) {
   process.stderr.write("browser-launcher:native: the worker-host tests reported neither their journeys nor a managed-policy refusal\n");

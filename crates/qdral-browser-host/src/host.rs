@@ -212,7 +212,63 @@ pub struct LiveWorkerHost {
     stdin: std::process::ChildStdin,
     /// Frames read by a reader thread, so every wait has a deadline (a host
     /// that is alive but silent can never block the supervisor).
-    replies: std::sync::mpsc::Receiver<Result<crate::worker_host::WorkerHostReply, HostError>>,
+    replies: ReplyChannel<crate::worker_host::WorkerHostReply>,
+}
+
+/// Replies in order, one per request. Replies carry no request id, so a
+/// reply that misses its deadline would otherwise be read as the answer to
+/// the next request: after any timeout or channel failure the channel is
+/// poisoned, and every later request on that host is refused (the host is
+/// then only shut down).
+#[cfg(all(windows, feature = "live-browser-test"))]
+pub(crate) struct ReplyChannel<T> {
+    replies: std::sync::mpsc::Receiver<Result<T, HostError>>,
+    poisoned: bool,
+}
+
+#[cfg(all(windows, feature = "live-browser-test"))]
+impl<T> ReplyChannel<T> {
+    pub(crate) fn new(replies: std::sync::mpsc::Receiver<Result<T, HostError>>) -> Self {
+        Self {
+            replies,
+            poisoned: false,
+        }
+    }
+
+    pub(crate) fn is_poisoned(&self) -> bool {
+        self.poisoned
+    }
+
+    /// The reply to the request just sent, within `timeout`.
+    pub(crate) fn recv(&mut self, timeout: Duration) -> Result<T, HostError> {
+        if self.poisoned {
+            return Err(HostError::Unavailable(UnavailableReason::ProtocolViolation));
+        }
+        let result = match self.replies.recv_timeout(timeout) {
+            Ok(reply) => reply,
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+                Err(HostError::Unavailable(UnavailableReason::TimedOut))
+            }
+            Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+                Err(HostError::Unavailable(UnavailableReason::ProtocolViolation))
+            }
+        };
+        if result.is_err() {
+            self.poisoned = true;
+        }
+        result
+    }
+
+    /// Drain until `stop` matches or the deadline passes (shutdown only).
+    pub(crate) fn drain_until(&mut self, deadline: Instant, stop: impl Fn(&T) -> bool) {
+        while let Some(left) = deadline.checked_duration_since(Instant::now()) {
+            match self.replies.recv_timeout(left) {
+                Ok(Ok(reply)) if stop(&reply) => break,
+                Ok(Ok(_)) => continue,
+                Ok(Err(_)) | Err(_) => break,
+            }
+        }
+    }
 }
 
 /// The longest a worker-mode reply may take: above the worker's own longest
@@ -249,16 +305,18 @@ impl LiveWorkerHost {
         request: &crate::worker_host::WorkerHostRequest,
         timeout: Duration,
     ) -> Result<crate::worker_host::WorkerHostReply, HostError> {
-        write_frame(&mut self.stdin, request)?;
-        match self.replies.recv_timeout(timeout) {
-            Ok(reply) => reply,
-            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
-                Err(HostError::Unavailable(UnavailableReason::TimedOut))
-            }
-            Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
-                Err(HostError::Unavailable(UnavailableReason::ProtocolViolation))
-            }
+        // A host whose replies may be out of step answers nothing more.
+        if self.replies.is_poisoned() {
+            return Err(HostError::Unavailable(UnavailableReason::ProtocolViolation));
         }
+        write_frame(&mut self.stdin, request)?;
+        self.replies.recv(timeout)
+    }
+
+    /// Whether requests are still answered in step (false after a timeout or
+    /// a channel failure: only shutdown remains).
+    pub fn is_usable(&self) -> bool {
+        !self.replies.is_poisoned()
     }
 
     /// Ask the host to stop (it ends any lifetime first), wait for its bye
@@ -270,13 +328,9 @@ impl LiveWorkerHost {
             &crate::worker_host::WorkerHostRequest::Shutdown {},
         );
         let deadline = Instant::now() + WORKER_HOST_CONTROL_TIMEOUT;
-        while let Some(left) = deadline.checked_duration_since(Instant::now()) {
-            match self.replies.recv_timeout(left) {
-                Ok(Ok(crate::worker_host::WorkerHostReply::Bye {})) => break,
-                Ok(Ok(_)) => continue,
-                Ok(Err(_)) | Err(_) => break,
-            }
-        }
+        self.replies.drain_until(deadline, |reply| {
+            matches!(reply, crate::worker_host::WorkerHostReply::Bye {})
+        });
         let LiveWorkerHost { child, stdin, .. } = self;
         drop(stdin);
         child.shutdown()
@@ -341,7 +395,7 @@ impl Supervisor {
             host_id: host_id.clone(),
             child,
             stdin: pipes.stdin,
-            replies,
+            replies: ReplyChannel::new(replies),
         };
         let hello = host.request_within(
             &crate::worker_host::WorkerHostRequest::Hello {
@@ -469,4 +523,49 @@ fn host_env(state_root: &Path) -> Vec<(std::ffi::OsString, std::ffi::OsString)> 
         ));
     }
     env
+}
+
+#[cfg(all(test, windows, feature = "live-browser-test"))]
+mod reply_channel_tests {
+    use super::*;
+
+    #[test]
+    fn a_reply_that_misses_its_deadline_poisons_the_channel() {
+        let (sender, receiver) = std::sync::mpsc::channel::<Result<u32, HostError>>();
+        let mut channel = ReplyChannel::new(receiver);
+        sender.send(Ok(1)).unwrap();
+        assert_eq!(channel.recv(Duration::from_millis(100)).unwrap(), 1);
+        // Request 2 times out; its reply arrives late.
+        assert!(matches!(
+            channel.recv(Duration::from_millis(50)),
+            Err(HostError::Unavailable(UnavailableReason::TimedOut))
+        ));
+        sender.send(Ok(2)).unwrap();
+        // The late reply is never read as the answer to request 3.
+        assert!(matches!(
+            channel.recv(Duration::from_millis(100)),
+            Err(HostError::Unavailable(UnavailableReason::ProtocolViolation))
+        ));
+        assert!(channel.is_poisoned());
+    }
+
+    #[test]
+    fn a_failed_frame_also_poisons_the_channel() {
+        let (sender, receiver) = std::sync::mpsc::channel::<Result<u32, HostError>>();
+        let mut channel = ReplyChannel::new(receiver);
+        sender
+            .send(Err(HostError::Unavailable(
+                UnavailableReason::ProtocolViolation,
+            )))
+            .unwrap();
+        sender.send(Ok(7)).unwrap();
+        assert!(channel.recv(Duration::from_millis(100)).is_err());
+        assert!(channel.recv(Duration::from_millis(100)).is_err());
+        drop(sender);
+        let (_s, receiver) = std::sync::mpsc::channel::<Result<u32, HostError>>();
+        let mut closed = ReplyChannel::new(receiver);
+        drop(_s);
+        assert!(closed.recv(Duration::from_millis(100)).is_err());
+        assert!(closed.is_poisoned());
+    }
 }

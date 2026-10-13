@@ -316,7 +316,10 @@ pub fn serve_worker_mode(
 fn in_lifetime(live: &mut Lifetime, request: WorkerHostRequest) -> WorkerHostReply {
     match request {
         WorkerHostRequest::Bind { action } => match host_binding(live, &action) {
-            Ok((binding, target)) => WorkerHostReply::Bound { binding, target },
+            Ok(derived) => WorkerHostReply::Bound {
+                binding: derived.binding,
+                target: derived.target,
+            },
             Err(err) => refusal(&err),
         },
         WorkerHostRequest::Observe {} => observe(live),
@@ -335,7 +338,7 @@ fn in_lifetime(live: &mut Lifetime, request: WorkerHostRequest) -> WorkerHostRep
             binding,
         } => {
             let action = BindAction::Navigate { url: url.clone() };
-            if let Some(refused) = verify(live, &action, &record_id, &binding) {
+            if let Err(refused) = verify(live, &action, &record_id, &binding) {
                 return refused;
             }
             live.observed = None;
@@ -357,10 +360,11 @@ fn in_lifetime(live: &mut Lifetime, request: WorkerHostRequest) -> WorkerHostRep
                 node_id: node_id.clone(),
                 role: role.clone(),
             };
-            if let Some(refused) = verify(live, &action, &record_id, &binding) {
-                return refused;
-            }
-            let (target, mut approval) = match approved_target(live, &action, &record_id) {
+            let state = match verify(live, &action, &record_id, &binding) {
+                Ok(state) => state,
+                Err(refused) => return refused,
+            };
+            let (target, mut approval) = match approved_target(live, &action, &record_id, state) {
                 Ok(pair) => pair,
                 Err(err) => return refusal(&err),
             };
@@ -391,10 +395,11 @@ fn in_lifetime(live: &mut Lifetime, request: WorkerHostRequest) -> WorkerHostRep
                 folder: folder.clone(),
                 relative: relative.clone(),
             };
-            if let Some(refused) = verify(live, &action, &record_id, &binding) {
-                return refused;
-            }
-            let (target, mut approval) = match approved_target(live, &action, &record_id) {
+            let state = match verify(live, &action, &record_id, &binding) {
+                Ok(state) => state,
+                Err(refused) => return refused,
+            };
+            let (target, mut approval) = match approved_target(live, &action, &record_id, state) {
                 Ok(pair) => pair,
                 Err(err) => return refusal(&err),
             };
@@ -447,15 +452,41 @@ fn sha256_hex(text: &str) -> String {
         .collect()
 }
 
-/// The host's half of an approval: a digest over the lifetime nonce, the
-/// workspace and policy revision of the lifetime, and the action's own
-/// material as the host sees it now. Returns it with the action's target
-/// (for the prompt).
-fn host_binding(live: &Lifetime, action: &BindAction) -> Result<(String, String), HostError> {
-    let (material, target) = match action {
+/// The binding digest: SHA-256 over the domain tag, the lifetime nonce,
+/// the workspace and policy revision of the lifetime, and the action's
+/// material. Pure, so every part it binds is tested directly.
+pub(crate) fn binding_digest(
+    nonce: &str,
+    workspace: &str,
+    policy_revision: u64,
+    material: &str,
+) -> String {
+    sha256_hex(&format!(
+        "{BINDING_DOMAIN}\n{nonce}\n{workspace}\n{policy_revision}\n{material}"
+    ))
+}
+
+/// What a binding was derived from: the digest, the action's target (for
+/// the prompt) and the state the host's own actuation path is bound to
+/// (the link's destination for a click, the host's `download_binding` for a
+/// download, the URL for a navigation). Dispatch uses the state verified
+/// here, never a fresh derivation, so what runs is what was approved.
+struct Derived {
+    binding: String,
+    target: String,
+    state: String,
+}
+
+/// The host's half of an approval, from its own state now.
+fn host_binding(live: &Lifetime, action: &BindAction) -> Result<Derived, HostError> {
+    let (material, target, state) = match action {
         BindAction::Navigate { url } => {
             crate::navigation::parse_navigation_url(url)?;
-            (format!("navigate\n{url}\n{}", live.pin), url.clone())
+            (
+                format!("navigate\n{url}\n{}", live.pin),
+                url.clone(),
+                url.clone(),
+            )
         }
         BindAction::Click { node_id, role } => {
             let (page, document) = observed(live)?;
@@ -465,6 +496,7 @@ fn host_binding(live: &Lifetime, action: &BindAction) -> Result<(String, String)
                     "click\n{}\n{}\n{}\n{node_id}\n{role}\n{destination}",
                     page.page_id, page.origin, document.document_generation
                 ),
+                destination.clone(),
                 destination,
             )
         }
@@ -481,18 +513,27 @@ fn host_binding(live: &Lifetime, action: &BindAction) -> Result<(String, String)
                 .download_binding(node_id, Path::new(folder), relative)?;
             (
                 format!(
-                    "download\n{}\n{}\n{}\n{node_id}\n{role}\n{download}",
-                    page.page_id, page.origin, document.document_generation
+                    "download\n{}\n{}\n{}\n{node_id}\n{role}\n{download}\n{}",
+                    page.page_id,
+                    page.origin,
+                    document.document_generation,
+                    crate::transfers::MAX_TRANSFER_BYTES
                 ),
                 destination,
+                download,
             )
         }
     };
-    let binding = sha256_hex(&format!(
-        "{BINDING_DOMAIN}\n{}\n{}\n{}\n{material}",
-        live.nonce, live.workspace, live.policy_revision
-    ));
-    Ok((binding, target))
+    Ok(Derived {
+        binding: binding_digest(
+            &live.nonce,
+            &live.workspace,
+            live.policy_revision,
+            &material,
+        ),
+        target,
+        state,
+    })
 }
 
 fn observed(live: &Lifetime) -> Result<(&PageIdentity, &DocumentIdentity), HostError> {
@@ -505,56 +546,43 @@ fn observed(live: &Lifetime) -> Result<(&PageIdentity, &DocumentIdentity), HostE
 /// Check a consequential frame: a well-formed record id not used before in
 /// this lifetime, and a binding equal to the one the host derives now. A
 /// record id is spent once presented, whatever happens next (the broker
-/// already consumed the approval).
+/// already consumed the approval). Returns the verified state.
 fn verify(
     live: &mut Lifetime,
     action: &BindAction,
     record_id: &str,
     binding: &str,
-) -> Option<WorkerHostReply> {
+) -> Result<String, WorkerHostReply> {
     if crate::observation::validate_identity_field(record_id).is_err() {
-        return Some(error("invalid"));
+        return Err(error("invalid"));
     }
     if !live.used_records.insert(record_id.to_owned()) {
-        return Some(error("approval_replay"));
+        return Err(error("approval_replay"));
     }
     match host_binding(live, action) {
-        Ok((now, _)) if now == binding => None,
-        Ok(_) => Some(error("binding_mismatch")),
+        Ok(derived) if derived.binding == binding => Ok(derived.state),
+        Ok(_) => Err(error("binding_mismatch")),
         // The material cannot be derived any more (the page moved, the node
         // is gone): the approved action no longer exists.
-        Err(_) => Some(error("binding_mismatch")),
+        Err(_) => Err(error("binding_mismatch")),
     }
 }
 
 /// The SG-000077 target and one-shot token the host's own actuation path
-/// takes, built after the binding was verified. The token is the host's
-/// internal mechanism, not an approval of its own.
+/// takes, built from the verified `state`. The token is the host's internal
+/// mechanism, not an approval of its own; the actuation path then checks
+/// the target against its current state, so anything that changed between
+/// verification and dispatch (a folder junction swapped) is refused.
 fn approved_target(
     live: &Lifetime,
     action: &BindAction,
     record_id: &str,
+    state: String,
 ) -> Result<(ActuationTarget, ApprovalToken), HostError> {
     let (page, document) = observed(live)?;
-    let (node_id, role, kind, state) = match action {
-        BindAction::Click { node_id, role } => (
-            node_id,
-            role,
-            SupportedAction::Click,
-            live.worker.link_destination(node_id)?,
-        ),
-        BindAction::Download {
-            node_id,
-            role,
-            folder,
-            relative,
-        } => (
-            node_id,
-            role,
-            SupportedAction::Download,
-            live.worker
-                .download_binding(node_id, Path::new(folder), relative)?,
-        ),
+    let (node_id, role, kind) = match action {
+        BindAction::Click { node_id, role } => (node_id, role, SupportedAction::Click),
+        BindAction::Download { node_id, role, .. } => (node_id, role, SupportedAction::Download),
         BindAction::Navigate { .. } => {
             return Err(HostError::Invalid(
                 "navigation takes no actuation target".into(),
@@ -704,10 +732,23 @@ fn observe(live: &mut Lifetime) -> WorkerHostReply {
             truncated,
         };
         if crate::proto::encode_frame(&reply).is_ok() || nodes.is_empty() {
+            if truncated {
+                // Only nodes Deskal actually received can be acted on.
+                let mut sent = HashSet::new();
+                collect_ids(&nodes, &mut sent);
+                live.worker.retain_host_nodes(&sent);
+            }
             return reply;
         }
         nodes.pop();
         truncated = true;
+    }
+}
+
+fn collect_ids(nodes: &[WireNode], into: &mut HashSet<String>) {
+    for node in nodes {
+        into.insert(node.node_id.clone());
+        collect_ids(&node.children, into);
     }
 }
 
@@ -835,21 +876,35 @@ mod tests {
 
     #[test]
     fn a_binding_changes_with_every_part_it_binds() {
-        // The digest over the lifetime's parts: any change yields another.
-        let base = |nonce: &str, workspace: &str, revision: u64, material: &str| {
-            sha256_hex(&format!(
-                "{BINDING_DOMAIN}\n{nonce}\n{workspace}\n{revision}\n{material}"
-            ))
-        };
-        let reference = base("n1", "w", 1, "navigate\nhttps://fixture.test/\n127.0.0.1");
+        let material = "navigate\nhttps://fixture.test/\n127.0.0.1";
+        let reference = binding_digest("n1", "w", 1, material);
         for other in [
-            base("n2", "w", 1, "navigate\nhttps://fixture.test/\n127.0.0.1"),
-            base("n1", "v", 1, "navigate\nhttps://fixture.test/\n127.0.0.1"),
-            base("n1", "w", 2, "navigate\nhttps://fixture.test/\n127.0.0.1"),
-            base("n1", "w", 1, "navigate\nhttps://fixture.test/x\n127.0.0.1"),
+            binding_digest("n2", "w", 1, material),
+            binding_digest("n1", "v", 1, material),
+            binding_digest("n1", "w", 2, material),
+            binding_digest("n1", "w", 1, "navigate\nhttps://fixture.test/x\n127.0.0.1"),
         ] {
             assert_ne!(reference, other);
         }
+        assert_eq!(reference, binding_digest("n1", "w", 1, material));
         assert_eq!(reference.len(), 64);
+    }
+
+    #[test]
+    fn only_sent_node_ids_are_collected() {
+        let leaf = |id: &str| WireNode {
+            node_id: id.into(),
+            role: "link".into(),
+            name_digest: String::new(),
+            value_digest: String::new(),
+            redacted: false,
+            children: Vec::new(),
+        };
+        let mut parent = leaf("a");
+        parent.children.push(leaf("b"));
+        let mut ids = HashSet::new();
+        collect_ids(&[parent, leaf("c")], &mut ids);
+        assert_eq!(ids.len(), 3);
+        assert!(ids.contains("b"));
     }
 }

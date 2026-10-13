@@ -285,10 +285,9 @@ fn a_lifetime_through_the_real_host_binary_navigates_observes_and_closes_clean()
     }
     // Another origin is outside the lifetime's single destination, even
     // with a correct binding.
-    assert!(matches!(
-        navigate(host, "https://other.test/", "rec-nav-2"),
-        WorkerHostReply::Error { .. }
-    ));
+    let elsewhere = navigate(host, "https://other.test/", "rec-nav-2");
+    // The binding matched: the navigation policy itself refused it.
+    assert_eq!(error_code(&elsewhere), "invalid");
     let observed = observe(host);
     let text = serde_json::to_string(&observed).expect("reply text");
     match &observed {
@@ -430,10 +429,64 @@ fn the_journey_downloads_the_latest_report_through_bound_approvals_and_verifies_
             binding: fresh,
         })
         .expect("download again");
-    assert!(matches!(again, WorkerHostReply::Error { .. }), "{again:?}");
+    // The binding matched: the create-only commit itself refused it.
+    assert_eq!(error_code(&again), "invalid");
     assert_eq!(
         std::fs::read(approved.join("reports").join("latest.pdf")).expect("still there"),
         expected
+    );
+    assert!(supervisor.shutdown().expect("shutdown"));
+    assert!(entries(&launch.profile_root).is_empty());
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+#[ignore = "requires the built browser worker and Edge; run by npm run browser-launcher:native"]
+fn a_bound_click_follows_the_approved_link_once() {
+    let fixture = Fixture::start();
+    let (mut supervisor, launch, root) = launch("click");
+    let host = supervisor.worker_host().expect("live worker host");
+    if open(host, &fixture, &launch.profile_root).is_none() {
+        assert!(supervisor.shutdown().expect("shutdown"));
+        let _ = std::fs::remove_dir_all(&root);
+        return;
+    }
+    assert!(matches!(
+        navigate(host, "https://fixture.test/reports", "rec-1"),
+        WorkerHostReply::Navigated { status: 200, .. }
+    ));
+    assert!(matches!(observe(host), WorkerHostReply::Observed { .. }));
+    let latest = select_latest(host);
+    let (binding, target) = bind(
+        host,
+        BindAction::Click {
+            node_id: latest.clone(),
+            role: "link".into(),
+        },
+    );
+    assert_eq!(target, "https://fixture.test/reports/2026-09-30.pdf");
+    let activate = |host: &mut LiveWorkerHost, record: &str| {
+        host.request(&WorkerHostRequest::Activate {
+            node_id: latest.clone(),
+            role: "link".into(),
+            record_id: record.into(),
+            binding: binding.clone(),
+        })
+        .expect("activate")
+    };
+    match activate(host, "rec-2") {
+        WorkerHostReply::Activated { url, status } => {
+            assert_eq!(url, "https://fixture.test/reports/2026-09-30.pdf");
+            assert_eq!(status, 200);
+        }
+        other => panic!("activation refused: {other:?}"),
+    }
+    // The same approval again, and the old binding with a fresh record:
+    // refused (the record is spent; the click opened a new document).
+    assert_eq!(error_code(&activate(host, "rec-2")), "approval_replay");
+    assert_eq!(error_code(&activate(host, "rec-3")), "binding_mismatch");
+    println!(
+        "SG108-EVIDENCE worker host click: the bound link opened once, replay and stale refused"
     );
     assert!(supervisor.shutdown().expect("shutdown"));
     assert!(entries(&launch.profile_root).is_empty());

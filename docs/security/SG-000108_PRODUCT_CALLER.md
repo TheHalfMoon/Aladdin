@@ -289,3 +289,15 @@ For each consequential action, `qdrald` and the host each contribute what only t
 - **The launcher accepts the pass only with each lifetime test's evidence line,** or with the managed-policy refusal line. With `QDRAL_SG108_REQUIRE_JOURNEY=1`, set per run on the evidence host, the journeys themselves are required. *1a follow-up.*
 
 **What remains for slice 1b:** `qdrald`'s dispatch over these frames, behind the feature, with the broker's record ids.
+
+**Slice 1b host side, review fixes (round 1).**
+- **Replies stay in step.** Replies carry no request id, so a reply that missed its deadline would have been read as the answer to the next request.
+  - `LiveWorkerHost` reads through a `ReplyChannel` that is poisoned after any timeout or channel failure. Every later request on that host is refused, and only shutdown remains (`is_usable` reports it).
+  - Unit tests cover the late reply and a failed frame. The mutation that leaves the channel unpoisoned fails both.
+- **Only sent nodes can be acted on.** When an observation reply drops nodes to fit one frame, the host forgets every node it did not send (`retain_host_nodes`). `bind`, `activate`, `download` and selection can therefore only target nodes Deskal received.
+- **What runs is what was verified.** Dispatch builds the host's SG-000077 target from the state verified against the binding: the link's destination, or the host's `download_binding`. It never re-derives that state. The actuation path then checks the verified state against its current state, so a folder junction swapped between verification and dispatch is refused.
+- **The size limit is bound.** Download bindings include the size limit, `MAX_TRANSFER_BYTES`, as decision 3 lists.
+- **The digest is a pure function.** `binding_digest`'s unit test calls it directly. With the workspace dropped from the digest, the test fails.
+- **Click path.** `a_bound_click_follows_the_approved_link_once`: a bound activation opens exactly the approved link. Its replay is refused, and the old binding with a fresh record is refused.
+- **Exact codes.** The other-origin navigation and the create-only refusal both assert the exact code `invalid`: the binding matched, and the policy or the commit refused.
+- **Launcher.** Under a managed policy, every lifetime-opening test must report the refusal itself: four journeys plus the shutdown test.

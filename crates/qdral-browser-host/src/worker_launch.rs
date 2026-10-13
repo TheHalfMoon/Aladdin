@@ -1990,6 +1990,14 @@ mod platform {
             select_latest_dated_link(&self.host_nodes)
         }
 
+        /// Forget every observed node but `keep` (the product caller's
+        /// worker mode: only nodes Deskal actually received can be acted
+        /// on, when a reply had to drop some to fit one frame).
+        #[cfg(feature = "live-browser-test")]
+        pub(crate) fn retain_host_nodes(&mut self, keep: &std::collections::HashSet<String>) {
+            self.host_nodes.retain(|id, _| keep.contains(id));
+        }
+
         /// The destination an activation of this observed link would open
         /// (what an approval must name as the target's `state`).
         pub fn link_destination(&self, node_id: &str) -> Result<String, HostError> {
