@@ -35,7 +35,19 @@ fn prerequisites() -> (PathBuf, PathBuf) {
 }
 
 fn engine() -> Engine {
-    discover_engine(&SearchConfig::production()).expect("a verified installed Edge or Chrome")
+    let engine =
+        discover_engine(&SearchConfig::production()).expect("a verified installed Edge or Chrome");
+    // A10 evidence: which engine every native test ran on, once per run.
+    static REPORTED: std::sync::Once = std::sync::Once::new();
+    REPORTED.call_once(|| {
+        println!(
+            "SG108-EVIDENCE engine: {:?} {} (worker qualified: {})",
+            engine.kind(),
+            engine.version(),
+            engine.worker_qualified()
+        );
+    });
+    engine
 }
 
 fn temp_profile(label: &str) -> PathBuf {
