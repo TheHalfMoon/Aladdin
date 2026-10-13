@@ -159,7 +159,7 @@
   },
   "successor_requirements": {
     "sg_000100": "Personal or signed-in user-browser control stays out of SG-000108 and requires its own grain.",
-    "sg_000101": "Firecrawl code may be copied and adapted under the founder's attested source permission (2026-10-12, docs/aladdin/SOURCE_PERMISSIONS.md; revising the 2026-10-11 native-rebuild decision in docs/aladdin/WEB_CAPABILITIES_DECISION.md). Scrape, map, crawl and Markdown remain Aladdin's own pipeline on the SG-000108 engine as slices 6 and 7; copied modules keep attribution, the AGPL notice and the permission reference, merge only once the permission document is filed in docs/aladdin/grants/, and their dependencies are admitted separately.",
+    "sg_000101": "Firecrawl code may be copied and adapted under the founder's attested source permission (2026-10-12, docs/aladdin/SOURCE_PERMISSIONS.md; revising the 2026-10-11 native-rebuild decision in docs/aladdin/WEB_CAPABILITIES_DECISION.md). Scrape, map, crawl and Markdown remain Aladdin's own pipeline on the SG-000108 engine as slices 6 and 7; copied modules keep attribution, the AGPL notice and the permission reference, merge once qualified under the founder authorization of 2026-10-13 (docs/aladdin/grants/2026-10-13-founder-source-authorization.md), which satisfies the permission gate without committing the confidential documents, and their dependencies are admitted separately.",
     "sg_000106": "The worker enters the release payload only with unified packaging, license notices, SBOM and signed provenance."
   },
   "activation_note": "No dependency, worker, tool or authority change in this activation packet. Separate implementation and closeout PRs must qualify their exact heads; activation CI alone proves nothing about the engine.",

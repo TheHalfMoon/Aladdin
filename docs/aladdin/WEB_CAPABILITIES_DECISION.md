@@ -6,7 +6,7 @@ Status: **ADOPTED founder decisions (2026-10-11)**, recorded here for review. Th
 
 1. **Firecrawl: Aladdin-native rebuild, revised 2026-10-12.**
    - Firecrawl's engine (`apps/api`, `apps/playwright-service-ts`, `apps/go-html-to-md-service`) is AGPL-3.0. Aladdin is Apache-2.0.
-   - **Revised by the founder decision of 2026-10-12** (`SOURCE_PERMISSIONS.md`): the founder attests official permission to copy and use Firecrawl's source. Firecrawl modules may now be copied and adapted module by module under source admission; an import merges only once the permission document is filed in `docs/aladdin/grants/` (`SOURCE_PERMISSIONS.md`).
+   - **Revised by the founder decision of 2026-10-12** (`SOURCE_PERMISSIONS.md`): the founder attests official permission to copy and use Firecrawl's source. Firecrawl modules may now be copied and adapted module by module under source admission; the permission gate is satisfied by the founder authorization of 2026-10-13 (`docs/aladdin/grants/2026-10-13-founder-source-authorization.md`).
    - Scrape, map, crawl and Markdown stay Aladdin's own pipeline behind SG-000075 (no second HTTP client, no hosted service). Firecrawl code is taken where a module fits that pipeline: first, its Rust link and URL filtering, robots.txt handling and sitemap parsing (`apps/api/native/src/crawler.rs`) for the slice 7 host queue (`BROWSER_AGENT_DONORS_DECISION.md`).
 2. **WebMCP: amend SG-000108.**
    - WebMCP becomes later SG-000108 slices on the isolated browser worker: read-only discovery first, then approval-gated execution.
