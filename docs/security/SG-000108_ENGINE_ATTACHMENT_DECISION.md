@@ -575,8 +575,8 @@ A fresh-context judge's first round on this slice was BLOCK. The destination-nam
   - **Cancellation:** another thread cancels mid-download. The outcome is `Cancelled`, and the approval is spent. A later download on the cancelled lifetime returns `Cancelled` and leaves its approval unspent. Nothing is committed or staged, every job member dies, and a later `ping` reports `Cancelled`. `kill` reports the job empty and removes the staging folder and the profile.
   - **Crash:** in a second lifetime, the worker is killed mid-download. The outcome is `WorkerExited`, the approval is spent, nothing is committed or staged, and every member dies. A later `navigate` reports `WorkerExited`, and `kill` cleans up as above.
 - **Known limits (follow-ups in #309).**
-  - A worker that writes the staged `.part` file and then dies before replying is handled by reading only: the host removes the staged file on every outcome, and the staging folder at the end of the lifetime. No test reaches that path.
-  - A host crash is outside A6, which is about the worker and its operations. Since #307 it can no longer leave a partial file under the approved name. The content is written to a hidden temporary file marked for deletion, which the system removes when the host's handles close. Two short windows remain, listed in the #307 section below, where a `.qdral-dl-*.part` file can be left behind. It can still leave the staging folder in `temp_dir`.
+  - A worker that writes the staged `.part` file and then dies before replying: now tested natively (#309, below).
+  - A host crash is outside A6, which is about the worker and its operations. Since #307 it can no longer leave a partial file under the approved name, and since #309 the next launch sweeps the staging folder. The content is written to a hidden temporary file marked for deletion, which the system removes when the host's handles close. Two short windows remain, listed in the #307 section below, where a `.qdral-dl-*.part` file can be left behind. A host crash also leaves its staging folder in `temp_dir`, which the next launch removes (#309).
 
 **#307: download commits through held handles, and typed download failures.**
 
@@ -593,10 +593,12 @@ A fresh-context judge's first round on this slice was BLOCK. The destination-nam
   - **Any failure after creation** marks the file for deletion again, through a drop guard.
   - **The returned path** is the one the held handle reached, not one rebuilt from the caller's text.
   - **Windows that remain if the host dies:**
-    - between creating the temporary file and marking it, which leaves an empty, hidden `.qdral-dl-<pid>-<hex>.part` file;
-    - between clearing the mark and the rename, which leaves the full content in a visible `.qdral-dl-<pid>-<hex>.part` file.
+    - between creating the temporary file and marking it, which leaves an empty, hidden temporary file;
+    - between clearing the mark and the rename, which leaves the full content in a visible temporary file.
 
-    Neither leaves a file under the approved name (#309). After the rename the commit only checks the result, so a crash there leaves the complete, ordinary file under its approved name.
+    The temporary name is `.qdral-dl-<16 hex>.part`, one per destination since #309.
+
+    Neither leaves a file under the approved name, and since #309 the next commit to the same destination removes the leftover (below). After the rename the commit only checks the result, so a crash there leaves the complete, ordinary file under its approved name.
 - **Typed download failures.** A download that commits nothing reports a `HostError::Download` reason:
   - `HttpStatus`: a non-2xx answer, a redirect included, since the approved document is exactly the approved link;
   - `Oversized`: past the transfer bound;
@@ -622,3 +624,32 @@ A fresh-context judge's first round on this slice was BLOCK. The destination-nam
   - A request the browser policy refuses during a download surfaces as `TimedOut`, not as a policy refusal, because the refused request never produces a response for the capture.
   - The hold needs the approved folder to be shareable: if another process already holds it with delete access, or without sharing write, the commit is refused as "cannot be held" (fails closed; Explorer and indexers share everything).
   - Subfolders created for a destination stay if the commit is then refused (for example on a name collision); they are empty.
+
+**#309: staged-file crash tests and leftovers after a host crash.**
+
+- **A worker that dies or hangs after staging.**
+  - **The instrumented worker:** the test runs the real worker through a test-only entry point that replaces its staged write (`writeFileSync` of a `.part` path; the module's named import is a live binding, updated with `syncBuiltinESMExports`).
+  - **A worker that dies:** it writes the staged file, then exits without replying. The download fails as `WorkerExited`.
+  - **A worker that hangs:** it blocks for 50 s, past the host's 45 s deadline, then writes. The download fails as `TimedOut`, because the host terminates the job on its own deadline. Right after the failure the worker process is dead (the guarantee), and 55 s after the failure, past the latest moment the block could end, nothing was written (the evidence).
+  - **In both cases:** nothing is staged afterwards, nothing reaches the approved folder, the job empties, and the staging folder is removed at shutdown.
+- **A host killed mid-commit.**
+  - **The test:** an ordinary test (no browser needed) runs a real commit in a child process: the test binary itself, running a child test that does nothing without its parent's environment. The child stops at a test-only crash point and is killed hard (`TerminateProcess`):
+    - after the temporary file is created: an empty hidden temporary file is left;
+    - after the content is written, while marked for deletion: nothing is left;
+    - after the mark is cleared, before the rename: the full content is left in a visible temporary file.
+  - **The approved name:** in every case nothing stands under it.
+  - **The next commit:** a commit to the same destination succeeds and leaves only the committed file. The temporary name is now the same for every attempt at a destination (`.qdral-dl-<first 16 hex of SHA-256 of the lower-cased file name>.part`), so a leftover is found and removed.
+  - **Removing a leftover:** it is opened exclusively, without following a reparse point. A commit still in progress holds its temporary file exclusively, so a second commit to the same destination is refused ("in progress") rather than removing it (tested). A hard link to a user file loses only its name; the user file keeps its content.
+  - **A leftover that cannot be removed refuses that destination:** a read-only file, a reparse point, or a file another reader holds open (an indexer, antivirus) gives a typed "cannot be removed" or "in use" refusal until it is released or removed. The commit code never creates such a leftover itself.
+  - The crash points exist only in test builds.
+- **Staging folders of a host that died.**
+  - **The sweep:** at launch, the host removes every `qdral-sg108-staging-<pid>-<hex>` folder in its temp directory whose owning process is no longer running. A process that cannot be queried for any other reason counts as running, so only certainly-dead owners lose their folder.
+  - **What it never touches:** its own folder, and a reparse point named like a staging folder (or its target).
+  - **Bounds:** 4,096 staging-named entries looked at and 64 folders removed per launch. `BrowserWorker::swept_staging()` reports the count.
+  - **Enumeration:** only names matching `qdral-sg108-staging-*` are listed (`FindFirstFileW` with that pattern), so a crowded temp directory cannot use up the bound before them.
+  - **Tested:** with a pid no process can have (`0xFFFF_FFFC`; spawning a process is reserved to `worker_launch_tests.rs`), plus a live host's folder, an unrelated folder, such a junction, and more than 4,096 entries sorting before the prefix. The judge verified separately that a really exited pid, with or without its handle still held, counts as not running.
+- **Known limits.**
+  - A leftover temporary file for a destination that is never committed again stays until the user removes it; it is in Deskal's own hidden `.qdral-dl-*.part` namespace.
+  - A dead host's pid reused by an unrelated live process keeps that host's staging folder until the pid is free again.
+  - Ephemeral browser profiles left by a host crash are #298, unchanged here.
+  - The temporary name folds case with Rust's Unicode lowercasing, not NTFS's upcase table. Two names NTFS keeps distinct but that fold together (the Kelvin sign and `k`) share a temporary name. One commit is then refused while the other runs, and the approved names stay protected by the no-replace rename.

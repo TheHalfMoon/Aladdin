@@ -2062,6 +2062,116 @@ fn webmcp_tools_execute_only_with_approval_and_return_the_verified_result() {
     );
 }
 
+/// The real worker, with its staged write (`writeFileSync` of a `.part`
+/// path) replaced by `on_part` (#309): the module's named import is a live
+/// binding, updated by `syncBuiltinESMExports`.
+fn instrumented_worker(label: &str, on_part: &str) -> (PathBuf, PathBuf) {
+    let real = prerequisites().1;
+    let dir = temp_profile(label);
+    std::fs::write(dir.join("package.json"), r#"{"type":"module"}"#).expect("package.json");
+    let real_url = format!("file:///{}", real.to_string_lossy().replace('\\', "/"));
+    let main = dir.join("main.js");
+    std::fs::write(
+        &main,
+        format!(
+            "import fs from 'node:fs';\n\
+             import {{ syncBuiltinESMExports }} from 'node:module';\n\
+             const write = fs.writeFileSync;\n\
+             fs.writeFileSync = (path, data, options) => {{\n\
+             if (String(path).endsWith('.part')) {{ {on_part} }}\n\
+             return write(path, data, options);\n\
+             }};\n\
+             syncBuiltinESMExports();\n\
+             await import({real_url:?});\n"
+        ),
+    )
+    .expect("instrumented worker");
+    (dir, main)
+}
+
+#[test]
+#[ignore = "requires the built browser worker and Edge; run by npm run browser-launcher:native"]
+fn a_staged_file_never_outlives_a_worker_that_dies_or_hangs() {
+    let fixture = HttpsFixture::start();
+    let scope = crate::observation::ObservationScope {
+        workspace: "workspace".into(),
+        profile_identity: "profile".into(),
+    };
+    for (label, on_part, expected) in [
+        // The worker writes the staged file, then dies without replying.
+        (
+            "dies",
+            "write(path, data, options); process.exit(9);",
+            UnavailableReason::WorkerExited,
+        ),
+        // The worker hangs past the host's deadline, then writes: the host
+        // has terminated the job by then, so the late write never happens.
+        (
+            "hangs",
+            "Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 50000); write(path, data, options);",
+            UnavailableReason::TimedOut,
+        ),
+    ] {
+        let (dir, main) = instrumented_worker(label, on_part);
+        let profile = temp_profile(&format!("staged-{label}"));
+        let approved = temp_profile(&format!("staged-{label}-approved"));
+        let mut launch = spec_with(main, &profile, true);
+        launch.test_trusted_spki = Some(fixture.spki.clone());
+        let mut worker = launch_worker(&launch, &Policy(PolicyKeyState::Absent)).expect("launch");
+        let staging = worker.staging_dir().to_path_buf();
+        worker
+            .navigate("https://fixture.test/files")
+            .expect("files");
+        let live = worker.observe(&scope).expect("observe files");
+        let node = live
+            .observation
+            .nodes
+            .iter()
+            .flat_map(|n| std::iter::once(n).chain(n.children.iter()))
+            .flat_map(|n| std::iter::once(n).chain(n.children.iter()))
+            .find(|n| {
+                worker
+                    .host_node(&n.node_id)
+                    .is_some_and(|h| h.name == "Plain 2026-01-08")
+            })
+            .map(|n| n.node_id.clone())
+            .expect("plain link");
+        let (target, mut approval) =
+            approved_download(&worker, &live, &node, &approved, "plain.pdf");
+        let worker_pid = worker.worker_pid();
+        let result = worker.download(&target, &mut approval, 1, "workspace", &approved, "plain.pdf");
+        let failed = Instant::now();
+        assert!(
+            matches!(result, Err(HostError::Unavailable(reason)) if reason == expected),
+            "{label}: {result:?}"
+        );
+        // The guarantee: the worker is gone, so nothing can write later.
+        assert!(
+            all_dead(&[worker_pid], Duration::from_secs(5)),
+            "{label}: the worker survived"
+        );
+        if label == "hangs" {
+            // And the evidence: past the latest moment the hung worker could
+            // have written (its block began before the host's deadline).
+            std::thread::sleep(Duration::from_secs(55).saturating_sub(failed.elapsed()));
+        }
+        let staged: Vec<_> = std::fs::read_dir(&staging)
+            .map(|entries| entries.flatten().map(|e| e.file_name()).collect())
+            .unwrap_or_default();
+        assert!(staged.is_empty(), "{label}: staged files left: {staged:?}");
+        assert!(
+            std::fs::read_dir(&approved).unwrap().next().is_none(),
+            "{label}: something reached the approved folder"
+        );
+        let report = worker.shutdown();
+        assert!(report.job_empty, "{label}: the job did not empty");
+        assert_profile_gone(report.profile_removed, &profile);
+        assert!(!staging.exists(), "{label}: the staging folder stayed");
+        let _ = std::fs::remove_dir_all(&approved);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+}
+
 #[test]
 #[ignore = "requires the built browser worker and Edge; run by npm run browser-launcher:native"]
 fn a_stalled_cancelled_or_killed_download_is_typed_and_commits_nothing() {
@@ -2580,4 +2690,86 @@ fn the_journey_downloads_the_latest_report_create_only_and_verified() {
     assert!(report.job_empty, "the job did not empty");
     assert_profile_gone(report.profile_removed, &profile);
     let _ = std::fs::remove_dir_all(&approved);
+}
+
+/// #309: a host killed mid-commit (a child test process, killed hard).
+/// Needs no browser, so it is an ordinary test, not an ignored native one.
+mod host_crash {
+    use crate::approved_folder::tests::{bound, names, scratch};
+    use crate::approved_folder::{commit, staged_name_for};
+    use std::path::PathBuf;
+    use windows_sys::Win32::Storage::FileSystem::FILE_ATTRIBUTE_HIDDEN;
+
+    /// Run only as a child of `a_host_killed_mid_commit_*`: commit one file
+    /// and stop at the crash point the parent names.
+    /// Without the parent's environment it does nothing (an ordinary test
+    /// that passes at once), so it is not an ignored test.
+    #[test]
+    fn crash_child() {
+        let Ok(root) = std::env::var("QDRAL_309_ROOT") else {
+            return;
+        };
+        let root = PathBuf::from(root);
+        let _ = commit(&root, &bound(&root), "r.pdf", b"%PDF-1.4 full content");
+    }
+
+    #[test]
+    fn a_host_killed_mid_commit_never_leaves_a_file_under_the_approved_name() {
+        use std::os::windows::fs::MetadataExt;
+        let staged = staged_name_for("r.pdf");
+        // (stage, what the kill leaves: none, an empty hidden file, or the
+        // full content in a visible one).
+        for (stage, left) in [
+            ("created", Some((0u64, true))),
+            ("written", None),
+            ("cleared", Some((21u64, false))),
+        ] {
+            let root = scratch(&format!("crash-{stage}"));
+            let marker = root.with_extension("marker");
+            let mut child = std::process::Command::new(std::env::current_exe().unwrap())
+                .args([
+                    "worker_launch::native_tests::host_crash::crash_child",
+                    "--exact",
+                    "--test-threads=1",
+                ])
+                .env("QDRAL_309_ROOT", &root)
+                .env("QDRAL_309_CRASH_AT", stage)
+                .env("QDRAL_309_MARKER", &marker)
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .spawn()
+                .unwrap();
+            let started = std::time::Instant::now();
+            while !marker.exists() {
+                assert!(
+                    started.elapsed() < std::time::Duration::from_secs(60),
+                    "the child never reached {stage}"
+                );
+                std::thread::sleep(std::time::Duration::from_millis(20));
+            }
+            // A hard kill: the host dies mid-commit.
+            child.kill().unwrap();
+            child.wait().unwrap();
+            match left {
+                None => assert!(names(&root).is_empty(), "{stage}: {:?}", names(&root)),
+                Some((bytes, hidden)) => {
+                    assert_eq!(names(&root), std::slice::from_ref(&staged), "{stage}");
+                    let meta = std::fs::metadata(root.join(&staged)).unwrap();
+                    assert_eq!(meta.len(), bytes, "{stage}");
+                    assert_eq!(
+                        meta.file_attributes() & FILE_ATTRIBUTE_HIDDEN != 0,
+                        hidden,
+                        "{stage}"
+                    );
+                }
+            }
+            // Never a file under the approved name, and the next commit to
+            // the same destination removes any leftover and succeeds.
+            assert!(!root.join("r.pdf").exists(), "{stage}");
+            commit(&root, &bound(&root), "r.pdf", b"%PDF-1.4 again").unwrap();
+            assert_eq!(names(&root), ["r.pdf"], "{stage}");
+            std::fs::remove_dir_all(&root).unwrap();
+            let _ = std::fs::remove_file(&marker);
+        }
+    }
 }

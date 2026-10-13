@@ -19,7 +19,7 @@ use std::path::{Path, PathBuf};
 use windows_sys::Wdk::Foundation::OBJECT_ATTRIBUTES;
 use windows_sys::Wdk::Storage::FileSystem::{
     NtCreateFile, NtSetInformationFile, FILE_CREATE, FILE_DIRECTORY_FILE, FILE_NON_DIRECTORY_FILE,
-    FILE_OPEN_IF, FILE_RENAME_INFORMATION, FILE_SYNCHRONOUS_IO_NONALERT,
+    FILE_OPEN, FILE_OPEN_IF, FILE_RENAME_INFORMATION, FILE_SYNCHRONOUS_IO_NONALERT,
 };
 use windows_sys::Win32::Foundation::{HANDLE, UNICODE_STRING};
 use windows_sys::Win32::Storage::FileSystem::{
@@ -277,22 +277,28 @@ pub(crate) fn commit(
     let folder = held
         .last()
         .map_or(root_handle.as_raw_handle(), AsRawHandle::as_raw_handle);
-    let staged_name = format!(
-        ".qdral-dl-{}-{:x}.part",
-        std::process::id(),
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map_or(0, |elapsed| elapsed.as_nanos())
-    );
-    let staged = open_relative(
-        folder,
-        &staged_name,
-        FILE_WRITE_DATA | FILE_WRITE_ATTRIBUTES | DELETE | FILE_READ_ATTRIBUTES | SYNCHRONIZE,
-        0,
-        FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_TEMPORARY,
-        FILE_CREATE,
-        FILE_NON_DIRECTORY_FILE | FILE_SYNCHRONOUS_IO_NONALERT,
-    )?;
+    // One temporary name per destination (#309): a leftover from a commit
+    // the host never finished is found, and removed, by the next attempt.
+    let staged_name = staged_name_for(file_name);
+    let create = || {
+        open_relative(
+            folder,
+            &staged_name,
+            FILE_WRITE_DATA | FILE_WRITE_ATTRIBUTES | DELETE | FILE_READ_ATTRIBUTES | SYNCHRONIZE,
+            0,
+            FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_TEMPORARY,
+            FILE_CREATE,
+            FILE_NON_DIRECTORY_FILE | FILE_SYNCHRONOUS_IO_NONALERT,
+        )
+    };
+    let staged = match create() {
+        Err(HostError::Invalid(message)) if message.contains("create-only") => {
+            remove_stale(folder, &staged_name)?;
+            create()?
+        }
+        other => other?,
+    };
+    crash_point("created");
     // From here on, any failure marks the file for deletion again (the
     // guard), so nothing staged or half-committed outlives the commit.
     let mut staged = Staged {
@@ -307,6 +313,7 @@ pub(crate) fn commit(
         .write_all(content)
         .and_then(|()| staged.file.sync_all())
         .map_err(|err| HostError::Platform(format!("destination write: {err}")))?;
+    crash_point("written");
     // The committed file is an ordinary file, not a hidden temporary one:
     // its attributes are cleared while it still has its temporary name, so
     // it never stands under the approved name hidden.
@@ -314,6 +321,7 @@ pub(crate) fn commit(
     // A file marked for deletion cannot be renamed, so the mark is cleared
     // just before the rename.
     set_delete_on_close(staged.raw(), false)?;
+    crash_point("cleared");
     rename_no_replace(staged.raw(), folder, file_name)?;
     // Defense in depth: the named file is inside the held folder.
     let committed = final_path(staged.raw())?;
@@ -333,6 +341,66 @@ pub(crate) fn commit(
     // text.
     Ok(committed)
 }
+
+/// The temporary name for `file_name`: hidden, in Deskal's own namespace,
+/// and the same for every attempt at that destination (case-insensitive,
+/// as the file system is).
+pub(crate) fn staged_name_for(file_name: &str) -> String {
+    use sha2::{Digest, Sha256};
+    let digest = Sha256::digest(file_name.to_lowercase().as_bytes());
+    let hex: String = digest[..8].iter().map(|b| format!("{b:02x}")).collect();
+    format!(".qdral-dl-{hex}.part")
+}
+
+/// Remove a leftover temporary file of an earlier, unfinished commit. It is
+/// opened exclusively, without following a reparse point: a commit still in
+/// progress holds its file exclusively, so it is never removed under it.
+fn remove_stale(folder: RawHandle, staged_name: &str) -> Result<(), HostError> {
+    let stale = open_relative(
+        folder,
+        staged_name,
+        DELETE | FILE_READ_ATTRIBUTES | SYNCHRONIZE,
+        0,
+        FILE_ATTRIBUTE_NORMAL,
+        FILE_OPEN,
+        FILE_NON_DIRECTORY_FILE | FILE_SYNCHRONOUS_IO_NONALERT,
+    )
+    .map_err(|error| match error {
+        // Held without sharing: a commit (or another reader) has it open.
+        HostError::Platform(detail) if detail.contains("0xc0000043") => HostError::Invalid(
+            "another commit to this destination is in progress, or its leftover is in use".into(),
+        ),
+        _ => HostError::Invalid(format!(
+            "a leftover temporary file for this destination cannot be removed ({error})"
+        )),
+    })?;
+    set_delete_on_close(stale.as_raw_handle(), true).map_err(|_| {
+        HostError::Invalid(
+            "a leftover temporary file for this destination cannot be removed (read-only?)".into(),
+        )
+    })?;
+    drop(stale);
+    Ok(())
+}
+
+/// Test-only crash points: a child test process told to stop at `stage`
+/// signals it and waits there to be killed (#309; the test is in
+/// worker_launch_tests.rs, where test process spawning lives). Absent from product
+/// builds.
+#[cfg(test)]
+fn crash_point(stage: &str) {
+    if std::env::var("QDRAL_309_CRASH_AT").as_deref() == Ok(stage) {
+        if let Ok(marker) = std::env::var("QDRAL_309_MARKER") {
+            let _ = std::fs::write(marker, stage);
+        }
+        // Killed by the parent; never outlives it by more than two minutes.
+        std::thread::sleep(std::time::Duration::from_secs(120));
+        std::process::exit(3);
+    }
+}
+
+#[cfg(not(test))]
+fn crash_point(_stage: &str) {}
 
 /// The staged file; unless `keep` is set, dropping it marks the file for
 /// deletion, so it goes away when its handle closes.
@@ -391,7 +459,7 @@ pub(crate) mod tests {
     const FSCTL_SET_REPARSE_POINT: u32 = 0x0009_00A4;
     const IO_REPARSE_TAG_MOUNT_POINT: u32 = 0xA000_0003;
 
-    fn scratch(label: &str) -> PathBuf {
+    pub(crate) fn scratch(label: &str) -> PathBuf {
         let path = std::env::temp_dir().join(format!(
             "qdral-307-{label}-{}-{:x}",
             std::process::id(),
@@ -404,7 +472,7 @@ pub(crate) mod tests {
         path
     }
 
-    fn bound(root: &Path) -> String {
+    pub(crate) fn bound(root: &Path) -> String {
         std::fs::canonicalize(root)
             .unwrap()
             .to_str()
@@ -570,6 +638,50 @@ pub(crate) mod tests {
         drop(held);
         std::fs::rename(&root, parent.join("moved")).unwrap();
         std::fs::remove_dir_all(&parent).unwrap();
+    }
+
+    pub(crate) fn names(folder: &Path) -> Vec<String> {
+        let mut names: Vec<String> = std::fs::read_dir(folder)
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+        names.sort();
+        names
+    }
+
+    #[test]
+    fn a_commit_in_progress_is_never_removed_as_a_leftover() {
+        // A live commit holds its temporary file exclusively: a second
+        // commit to the same destination is refused, not removed under it.
+        let root = scratch("in-progress");
+        let folder: OwnedHandle = std::fs::OpenOptions::new()
+            .access_mode(FOLDER_ACCESS)
+            .share_mode(FILE_SHARE_READ | FILE_SHARE_WRITE)
+            .custom_flags(FILE_FLAG_BACKUP_SEMANTICS)
+            .open(&root)
+            .unwrap()
+            .into();
+        let held = open_relative(
+            folder.as_raw_handle(),
+            &staged_name_for("r.pdf"),
+            FILE_WRITE_DATA | DELETE | SYNCHRONIZE,
+            0,
+            FILE_ATTRIBUTE_HIDDEN,
+            FILE_CREATE,
+            FILE_NON_DIRECTORY_FILE | FILE_SYNCHRONOUS_IO_NONALERT,
+        )
+        .unwrap();
+        assert!(matches!(
+            commit(&root, &bound(&root), "r.pdf", b"x"),
+            Err(HostError::Invalid(message)) if message.contains("in progress")
+        ));
+        assert!(!root.join("r.pdf").exists());
+        drop(held);
+        drop(folder);
+        // Released, it is a leftover: the next commit removes it.
+        commit(&root, &bound(&root), "r.pdf", b"x").unwrap();
+        assert_eq!(names(&root), ["r.pdf"]);
+        std::fs::remove_dir_all(&root).unwrap();
     }
 
     #[test]

@@ -1137,6 +1137,8 @@ mod platform {
         next_exec: u64,
         /// Host-owned staging directory for downloads of this lifetime.
         staging: PathBuf,
+        /// Staging folders of hosts that died, removed at this launch (#309).
+        swept_staging: usize,
         /// The committed document: URL and document generation.
         committed: Option<(String, u64)>,
         /// Raw names of the last observation, by host-issued node id.
@@ -1156,6 +1158,8 @@ mod platform {
         validate_launch(spec)?;
         assert_no_managed_policy(spec.engine.kind(), policy)
             .map_err(|_| HostError::Unavailable(UnavailableReason::ManagedPolicy))?;
+        // What a host that died left in the temp directory (#309).
+        let swept_staging = crate::leftovers::sweep_stale_staging(&spec.temp_dir);
         #[allow(unused_mut)] // mutated in test builds only
         let mut argv = build_worker_argv(&spec.profile_dir, &spec.destinations)?;
         #[cfg(test)]
@@ -1207,8 +1211,10 @@ mod platform {
             next_act: 0,
             next_dl: 0,
             next_exec: 0,
+            swept_staging,
             staging: spec.temp_dir.join(format!(
-                "qdral-sg108-staging-{}-{:x}",
+                "{}{}-{:x}",
+                crate::leftovers::STAGING_PREFIX,
                 std::process::id(),
                 unique_suffix()
             )),
@@ -2266,6 +2272,11 @@ mod platform {
                 bytes: content.len() as u64,
                 source_url: url,
             })
+        }
+
+        /// How many staging folders of hosts that died this launch removed.
+        pub fn swept_staging(&self) -> usize {
+            self.swept_staging
         }
 
         /// Test-only: this lifetime's download staging directory.
