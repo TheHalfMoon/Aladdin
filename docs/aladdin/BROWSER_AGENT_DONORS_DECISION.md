@@ -53,7 +53,7 @@ browser-use, Stagehand and Skyvern are, at their core, an LLM agent loop wrapped
 
 ## Skyvern and the AGPL
 
-Skyvern is AGPL-3.0 and Aladdin is Apache-2.0. On 2026-10-12 the founder attested official permission to copy and use the source code of every donor (`SOURCE_PERMISSIONS.md`), which lifts the license barrier for Skyvern and Firecrawl. The permission documents are to be filed in `docs/aladdin/grants/`.
+Skyvern is AGPL-3.0 and Aladdin is Apache-2.0. On 2026-10-12 the founder attested official permission to copy and use the source code of every donor (`SOURCE_PERMISSIONS.md`), which lifts the license barrier for Skyvern and Firecrawl. On 2026-10-13 the founder confirmed the permissions explicitly and recorded that the documents stay confidential. The permission gate is satisfied by `docs/aladdin/grants/2026-10-13-founder-source-authorization.md`.
 
 The license barrier was not the only one. With the permission in place, every Skyvern module was re-checked against the architecture:
 - `webeye/scraper/domUtils.js` is a page-injected script, and SG-000108 forbids evaluating it.
