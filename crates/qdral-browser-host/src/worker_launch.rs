@@ -863,6 +863,13 @@ pub(crate) fn validate_launch(spec: &WorkerLaunch) -> Result<(), HostError> {
     if !spec.engine.path().is_file() {
         return Err(HostError::Unavailable(UnavailableReason::NoEngine));
     }
+    // A10: the file about to run is still the engine discovery verified
+    // (an in-place update or replacement is refused), and its version is
+    // one the worker is qualified on.
+    spec.engine.reverify()?;
+    if !spec.engine.worker_qualified() {
+        return Err(HostError::Unavailable(UnavailableReason::UnsupportedEngine));
+    }
     if !spec.profile_dir.is_dir() || !spec.temp_dir.is_dir() {
         return Err(HostError::Invalid(
             "profile or temp directory does not exist".into(),
@@ -3373,6 +3380,58 @@ mod tests {
                 UnavailableReason::UnsupportedRuntime
             ))
         ));
+    }
+
+    #[test]
+    fn an_unqualified_engine_version_is_refused_before_anything_runs() {
+        // A10: every prerequisite present, only the engine version outside
+        // the qualified window: a typed refusal, nothing spawned.
+        let base = std::env::temp_dir().join(format!(
+            "qdral-a10-{}-{:x}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&base).unwrap();
+        for name in ["msedge.exe", "chrome.exe", "node.exe", "main.js"] {
+            std::fs::write(base.join(name), b"").unwrap();
+        }
+        let spec = |engine: Engine| WorkerLaunch {
+            test_trusted_spki: None,
+            node: base.join("node.exe"),
+            worker_main: base.join("main.js"),
+            engine,
+            profile_dir: base.clone(),
+            ephemeral_profile: false,
+            temp_dir: base.clone(),
+            destinations: vec![crate::confinement::AdmittedDestination::fixture(
+                "fixture.test",
+                std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
+            )
+            .unwrap()],
+        };
+        use crate::discovery::EngineKind::{Chromium, Edge};
+        for (name, kind, version) in [
+            ("msedge.exe", Edge, "154.0.1.2"),
+            ("msedge.exe", Edge, "156.0.1.2"),
+            ("chrome.exe", Chromium, "155.0.4283.45"),
+            ("chrome.exe", Chromium, "153.0.1.2"),
+        ] {
+            let engine = Engine::for_tests_at(base.join(name), kind, version);
+            assert!(
+                matches!(
+                    validate_launch(&spec(engine)),
+                    Err(HostError::Unavailable(UnavailableReason::UnsupportedEngine))
+                ),
+                "{kind:?} {version}"
+            );
+        }
+        // The qualified version passes this rule.
+        let engine = Engine::for_tests_at(base.join("msedge.exe"), Edge, "155.0.4283.45");
+        assert!(validate_launch(&spec(engine)).is_ok());
+        std::fs::remove_dir_all(&base).unwrap();
     }
 
     #[test]

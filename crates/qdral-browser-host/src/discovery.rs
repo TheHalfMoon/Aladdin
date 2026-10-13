@@ -28,6 +28,21 @@ impl EngineKind {
     }
 }
 
+/// SG-000108 A10: the engine major versions the live worker
+/// (playwright-core 1.63.0) is qualified on. Qualified means that the full
+/// native suite (`npm run browser-launcher:native`) passed on that engine:
+/// every confinement, policy and network-endpoint probe re-runs per
+/// version, because a new engine can change how it honours a flag.
+/// - Edge 155: the evidence host, with the #324 leak control required.
+/// - Chrome 154: CI's windows-latest runner, where the same suite passes
+///   (the leak control is not required there: the runner has no account
+///   or LAN devices to leak to).
+///
+/// A new major is added only by a PR whose own native-suite run passes on
+/// it. Any other kind or major is refused at launch with a typed error.
+pub const QUALIFIED_WORKER_ENGINES: &[(EngineKind, u32)] =
+    &[(EngineKind::Edge, 155), (EngineKind::Chromium, 154)];
+
 /// A verified engine executable.
 #[derive(Debug, Clone)]
 pub struct Engine {
@@ -35,6 +50,9 @@ pub struct Engine {
     kind: EngineKind,
     version: String,
     publisher_verified: bool,
+    /// A unit-test stand-in, which `reverify` does not re-read.
+    #[cfg(test)]
+    stand_in: bool,
 }
 
 impl Engine {
@@ -50,6 +68,38 @@ impl Engine {
         &self.version
     }
 
+    /// The major version, if the version starts with one.
+    pub fn major(&self) -> Option<u32> {
+        self.version.split('.').next()?.parse().ok()
+    }
+
+    /// A10: verify the engine file again, now, exactly as discovery did
+    /// (name, presence, version resource and, on Windows, Authenticode), and
+    /// require the same kind and version. An engine updated or replaced in
+    /// place since discovery is refused, so the window and the signature
+    /// are checked against the file that is about to run.
+    pub fn reverify(&self) -> Result<(), HostError> {
+        #[cfg(test)]
+        if self.stand_in {
+            return Ok(());
+        }
+        let fresh = verify_candidate(&self.path)?;
+        if fresh.kind != self.kind || fresh.version != self.version {
+            return Err(HostError::Unavailable(UnavailableReason::UnsupportedEngine));
+        }
+        Ok(())
+    }
+
+    /// Whether the live worker is qualified on this engine (A10): its kind
+    /// and major are in `QUALIFIED_WORKER_ENGINES`.
+    pub fn worker_qualified(&self) -> bool {
+        self.major().is_some_and(|major| {
+            QUALIFIED_WORKER_ENGINES
+                .iter()
+                .any(|&(kind, qualified)| kind == self.kind && qualified == major)
+        })
+    }
+
     /// Whether the OS publisher check passed. Always true on Windows
     /// (WinVerifyTrust is mandatory there); elsewhere the path and
     /// version checks apply and this reports false.
@@ -61,11 +111,18 @@ impl Engine {
     /// production code).
     #[cfg(test)]
     pub(crate) fn for_tests(path: PathBuf, kind: EngineKind) -> Self {
+        Self::for_tests_at(path, kind, "0.0.0.0")
+    }
+
+    /// As `for_tests`, with a given version.
+    #[cfg(test)]
+    pub(crate) fn for_tests_at(path: PathBuf, kind: EngineKind, version: &str) -> Self {
         Self {
             path,
             kind,
-            version: "0.0.0.0".into(),
+            version: version.into(),
             publisher_verified: false,
+            stand_in: true,
         }
     }
 
@@ -169,6 +226,8 @@ fn verify_candidate(path: &Path) -> Result<Engine, HostError> {
         kind,
         version,
         publisher_verified,
+        #[cfg(test)]
+        stand_in: false,
     })
 }
 
@@ -451,6 +510,31 @@ fn app_paths_executable(name: &str) -> Option<PathBuf> {
 mod tests {
     use super::*;
     use std::fs;
+
+    #[test]
+    fn only_qualified_engine_versions_run_the_worker() {
+        let engine = |kind, version| Engine::for_tests_at(PathBuf::from("x"), kind, version);
+        assert!(engine(EngineKind::Edge, "155.0.4283.45").worker_qualified());
+        assert_eq!(engine(EngineKind::Edge, "155.0.4283.45").major(), Some(155));
+        assert!(engine(EngineKind::Chromium, "154.0.8037.58").worker_qualified());
+        for (kind, version) in [
+            (EngineKind::Edge, "154.0.1.2"),
+            (EngineKind::Edge, "156.0.1.2"),
+            (EngineKind::Edge, "1550.0.1.2"),
+            (EngineKind::Edge, "0.0.0.0"),
+            (EngineKind::Edge, ""),
+            (EngineKind::Edge, "x155.0"),
+            // Each kind has its own qualified majors.
+            (EngineKind::Chromium, "155.0.4283.45"),
+            (EngineKind::Chromium, "153.0.1.2"),
+            (EngineKind::Edge, "154.0.8037.58"),
+        ] {
+            assert!(
+                !engine(kind, version).worker_qualified(),
+                "{kind:?} {version}"
+            );
+        }
+    }
 
     #[test]
     fn version_parsing_accepts_dotted_runs() {

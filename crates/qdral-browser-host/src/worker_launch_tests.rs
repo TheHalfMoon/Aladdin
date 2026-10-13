@@ -35,7 +35,19 @@ fn prerequisites() -> (PathBuf, PathBuf) {
 }
 
 fn engine() -> Engine {
-    discover_engine(&SearchConfig::production()).expect("a verified installed Edge or Chrome")
+    let engine =
+        discover_engine(&SearchConfig::production()).expect("a verified installed Edge or Chrome");
+    // A10 evidence: which engine every native test ran on, once per run.
+    static REPORTED: std::sync::Once = std::sync::Once::new();
+    REPORTED.call_once(|| {
+        println!(
+            "SG108-EVIDENCE engine: {:?} {} (worker qualified: {})",
+            engine.kind(),
+            engine.version(),
+            engine.worker_qualified()
+        );
+    });
+    engine
 }
 
 fn temp_profile(label: &str) -> PathBuf {
@@ -1003,6 +1015,40 @@ fn a_silent_worker_times_out_typed_and_is_terminated() {
         all_dead(&[pid], Duration::from_secs(5)),
         "a timed-out worker survived"
     );
+    assert!(remove_profile(&dir) && remove_profile(&profile));
+}
+
+#[test]
+#[ignore = "requires the built browser worker and Edge; run by npm run browser-launcher:native"]
+fn an_engine_replaced_after_discovery_is_refused_at_launch() {
+    // A10: an engine discovered (and qualified) earlier, whose file is then
+    // replaced in place, as an update does, is refused at launch: the
+    // window and the signature are checked against the file about to run.
+    let installed = engine();
+    let dir = temp_profile("replaced-engine");
+    let copy = dir.join(installed.path().file_name().expect("engine file name"));
+    std::fs::copy(installed.path(), &copy).expect("copy the engine");
+    let held =
+        discover_engine(&SearchConfig::isolated(vec![dir.clone()])).expect("discover the copy");
+    assert_eq!(held.version(), installed.version());
+    let profile = temp_profile("replaced-engine-profile");
+    let mut launch = spec(&profile, true);
+    launch.engine = held;
+    assert!(
+        crate::worker_launch::validate_launch(&launch).is_ok(),
+        "the unchanged copy passes"
+    );
+    // Replace it with another signed Windows binary of another version.
+    let system32 =
+        PathBuf::from(std::env::var_os("SystemRoot").unwrap_or_else(|| "C:\\Windows".into()))
+            .join("System32");
+    std::fs::copy(system32.join("curl.exe"), &copy).expect("replace the engine");
+    let result = crate::worker_launch::validate_launch(&launch);
+    println!("SG108-EVIDENCE replaced engine at launch: {result:?}");
+    assert!(matches!(
+        result,
+        Err(HostError::Unavailable(UnavailableReason::UnsupportedEngine))
+    ));
     assert!(remove_profile(&dir) && remove_profile(&profile));
 }
 
