@@ -1532,51 +1532,51 @@ mod platform {
                 links: options.links,
                 images: options.images,
             })?;
-            let mut timeout = WORKER_EXTRACTION_TIMEOUT;
-            let mut assembly: Option<crate::extraction::Assembly> = None;
-            loop {
-                let (url, truncated, piece, total, content) = match self.reply(timeout)? {
-                    WorkerReply::Extracted {
-                        ext_id: done,
-                        url,
-                        truncated,
-                        piece,
-                        total,
-                        content,
-                    } if done == ext_id => (url, truncated, piece, total, content),
-                    WorkerReply::ExtractionFailed { ext_id: done } if done == ext_id => {
-                        return Err(HostError::Unavailable(UnavailableReason::ActionFailed))
-                    }
-                    _ => return Err(HostError::Unavailable(UnavailableReason::ProtocolViolation)),
-                };
-                match assembly.as_mut() {
-                    None => {
-                        if url != committed.0 {
-                            return Err(HostError::Invalid(
-                                "stale page: the document changed".into(),
-                            ));
-                        }
-                        assembly = Some(crate::extraction::Assembly::start(
-                            url, truncated, piece, total, content,
-                        )?);
-                    }
-                    Some(open) => open.push(&url, truncated, piece, total, content)?,
-                }
-                let Some(open) = assembly.as_ref() else {
-                    return Err(HostError::Unavailable(UnavailableReason::ProtocolViolation));
-                };
-                let Some(piece) = open.next() else { break };
-                self.send(&WorkerRequest::ExtractMore { ext_id, piece })?;
-                timeout = WORKER_REPLY_TIMEOUT;
+            let (url, truncated, piece, total, content) =
+                self.extraction_piece(ext_id, WORKER_EXTRACTION_TIMEOUT)?;
+            if url != committed.0 {
+                return Err(HostError::Invalid(
+                    "stale page: the document changed".into(),
+                ));
             }
-            let assembly =
-                assembly.ok_or(HostError::Unavailable(UnavailableReason::ProtocolViolation))?;
-            if self.committed.as_ref() != Some(&committed) || assembly.url() != committed.0 {
+            let mut assembly =
+                crate::extraction::Assembly::start(url, truncated, piece, total, content)?;
+            while let Some(piece) = assembly.next() {
+                self.send(&WorkerRequest::ExtractMore { ext_id, piece })?;
+                let (url, truncated, piece, total, content) =
+                    self.extraction_piece(ext_id, WORKER_REPLY_TIMEOUT)?;
+                assembly.push(&url, truncated, piece, total, content)?;
+            }
+            if self.committed.as_ref() != Some(&committed) {
                 return Err(HostError::Invalid(
                     "stale page: the document changed".into(),
                 ));
             }
             assembly.finish(committed.1)
+        }
+
+        /// One `extracted` reply for `ext_id`: (url, truncated, piece, total,
+        /// content). A typed failure is `ActionFailed`; anything else is a
+        /// protocol violation.
+        fn extraction_piece(
+            &mut self,
+            ext_id: u64,
+            timeout: Duration,
+        ) -> Result<(String, bool, u32, u32, String), HostError> {
+            match self.reply(timeout)? {
+                WorkerReply::Extracted {
+                    ext_id: done,
+                    url,
+                    truncated,
+                    piece,
+                    total,
+                    content,
+                } if done == ext_id => Ok((url, truncated, piece, total, content)),
+                WorkerReply::ExtractionFailed { ext_id: done } if done == ext_id => {
+                    Err(HostError::Unavailable(UnavailableReason::ActionFailed))
+                }
+                _ => Err(HostError::Unavailable(UnavailableReason::ProtocolViolation)),
+            }
         }
 
         /// The state an execution approval must name: the tool, a digest of

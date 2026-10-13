@@ -127,10 +127,6 @@ impl Assembly {
         Ok(())
     }
 
-    pub(crate) fn url(&self) -> &str {
-        &self.url
-    }
-
     pub(crate) fn finish(self, document_generation: u64) -> Result<PageExtraction, HostError> {
         if self.next().is_some() {
             return Err(violation());
@@ -157,7 +153,6 @@ mod tests {
     #[test]
     fn pieces_arrive_in_order_for_one_document_and_become_page_text() {
         let mut assembly = start(3, "# One").unwrap();
-        assert_eq!(assembly.url(), URL);
         assert_eq!(assembly.next(), Some(1));
         assert!(assembly.push(URL, false, 2, 3, "skip".into()).is_err());
         assembly.push(URL, false, 1, 3, "two\n".into()).unwrap();
