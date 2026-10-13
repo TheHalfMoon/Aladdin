@@ -88,6 +88,18 @@
       "architecture": "Qwen2VLForConditionalGeneration",
       "readme_sha256": "40946552d4ce1625d6c234b8b85b33bf70765f1c76a6e56c678cc1ac2d2a72b5",
       "license_files": []
+    },
+    {
+      "id": "Hcompany/Holo4-27B",
+      "revision": "4de03cfeee1d930b616bfd4817570293f29ad8b9",
+      "license": "cc-by-nc-4.0",
+      "parameters": 27356728560,
+      "architecture": "Qwen3_5ForConditionalGeneration",
+      "readme_sha256": "2254c1065a1d88bc491a93e060c5c55e25edc90a34c935a457b5dc1466a1c123",
+      "license_files": [
+        "LICENSE",
+        "LICENSE-APACHE"
+      ]
     }
   ]
 }

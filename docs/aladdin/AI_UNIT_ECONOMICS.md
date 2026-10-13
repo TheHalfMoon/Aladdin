@@ -50,6 +50,9 @@ conservatively; it is not a verified provider egress charge.
 
 `operating cost/success` also includes support. Payment, sales tax and maintenance
 are separately modeled, so a GPU-only figure cannot be mistaken for profit.
+When all tasks fail, spend remains real and cost per verified task is undefined;
+JSON returns `null` with `UNDEFINED_NO_VERIFIED_TASKS`, not zero. Capped expected
+counts can be fractional or zero; they are scenario expectations, not real half-tasks.
 Cash contribution deducts payment fees, refunds/dispute reserves, GPU,
 infrastructure and support from tax-exclusive receipts. After-maintenance
 contribution subtracts founder maintenance labor too; it is not net company
@@ -121,6 +124,11 @@ at 100 accounts; a heavy user loses $12.95 and a power user loses $193.07.
 Even $20 loses money on these unbounded heavy/power assumptions. The 2% power
 cohort contributes about 59% of modeled GPU expense. An average margin is not
 protection from a few unusually active customers.
+At ten subscribers, the 2% mix represents 0.2 expected power users. The executable
+discrete sensitivity instead uses four light/four regular/one heavy/one power
+customers; one power user alone costs about $190 GPU/month before other costs.
+It is not a probability forecast; it exposes concentration hidden by fractional
+cohort expectations. The full discrete price table is included in generated results.
 
 Full-cost flex break-even for this uncapped mix is about 268 accounts at $10,
 55 at $15 or 31 at $20; $5/$8 have negative variable contribution and no scale

@@ -1,7 +1,6 @@
 """Independent arithmetic, boundary, conservation and sensitivity checks."""
 import copy
 import json
-import math
 import unittest
 import ai_cost_model as model
 
@@ -74,7 +73,7 @@ class EconomicsTests(unittest.TestCase):
             a["hosting"]["small_flex_usd_hour"] = invalid
             with self.assertRaises(ValueError):
                 model.fleet(a, 100, 10)
-        for invalid in (0, 1.1):
+        for invalid in (-0.1, 1.1):
             a = copy.deepcopy(self.a)
             a["cohorts"]["light"]["success_probability"] = invalid
             with self.assertRaises(ValueError):
@@ -105,6 +104,44 @@ class EconomicsTests(unittest.TestCase):
         n = result["break_even_subscribers_labor"]
         self.assertGreaterEqual(model.basic(self.a, n)["after_maintenance_usd"], 0)
         self.assertLess(model.basic(self.a, n - 1)["after_maintenance_usd"], 0)
+
+    def test_one_failed_cohort_keeps_spend_and_other_successes(self):
+        before = model.fleet(self.a, 10, 10)
+        self.a["cohorts"]["light"]["success_probability"] = 0
+        after = model.fleet(self.a, 10, 10)
+        self.assertEqual(after["gpu_usd"], before["gpu_usd"])
+        self.assertGreater(after["verified_tasks_assumed"], 0)
+        self.assertLess(after["verified_tasks_assumed"], before["verified_tasks_assumed"])
+        self.assertEqual(after["verified_cost_status"], "DEFINED")
+
+    def test_all_failed_tasks_have_undefined_success_cost_and_real_spend(self):
+        before = model.fleet(self.a, 10, 10)
+        for c in self.a["cohorts"].values():
+            c["success_probability"] = 0
+        after = model.fleet(self.a, 10, 10)
+        self.assertEqual(after["gpu_usd"], before["gpu_usd"])
+        self.assertEqual(after["verified_tasks_assumed"], 0)
+        self.assertIsNone(after["inference_infrastructure_usd_per_verified_task"])
+        self.assertIsNone(after["operating_usd_per_verified_task"])
+        self.assertEqual(after["verified_cost_status"], "UNDEFINED_NO_VERIFIED_TASKS")
+        json.dumps(model.report(self.a), allow_nan=False)
+
+    def test_cap_can_admit_fractional_or_zero_expected_tasks(self):
+        self.a["cohorts"]["light"]["small_gpu_seconds_call"] = 10000
+        result = model.report(self.a)
+        self.assertGreater(result["capped_at_10_usd"][0]["gpu_usd"], 0)
+        for c in self.a["cohorts"].values():
+            c["tasks_month"] = 0
+        result = model.report(self.a)
+        self.assertEqual(result["capped_at_10_usd"][0]["gpu_usd"], 0)
+        self.assertIsNone(result["capped_at_10_usd"][0]["operating_usd_per_verified_task"])
+
+    def test_discrete_small_fleet_exposes_power_user_concentration(self):
+        result = model.report(self.a)
+        discrete = next(x for x in result["one_power_among_ten"] if x["price_usd"] == 10)
+        mixed = next(x for x in result["fleet"] if x["subscribers"] == 10 and x["price_usd"] == 10)
+        self.assertGreater(discrete["gpu_usd"], 190)
+        self.assertGreater(discrete["gpu_usd"], mixed["gpu_usd"])
 
 
 if __name__ == "__main__":

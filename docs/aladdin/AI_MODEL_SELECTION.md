@@ -103,12 +103,22 @@ accuracy or decoder tokens, to evaluate the choice.
 
 ## Reversal and escalation gates
 
-Replace Qwen3.5-4B with Qwen3-VL-2B if the challenger is within 3 percentage
-points of verified task success on each launch language/domain, preserves all
+Replace Qwen3.5-4B with Qwen3-VL-2B only if the one-sided 95% paired
+non-inferiority confidence bound on its success difference is no worse than
+-3 percentage points in each launch language/domain, preserves all
 safety denials and reduces cost per verified task by at least 20% with acceptable
 p95 latency. Prefer Holo3.1-4B if its paired confidence interval shows a material
 GUI/recovery benefit and Arabic/tool calling do not regress. These are proposed
 decision thresholds; the founder has not approved a release on them.
+An interval too wide to establish non-inferiority means insufficient evidence;
+expand independent task/app samples rather than accepting a noisy point estimate.
+
+Holo4-27B has stronger publisher scores but its current weight card/license is
+**CC BY-NC 4.0** at `4de03cfeee1d930b616bfd4817570293f29ad8b9` (27.357B
+API total; about 54.71GB BF16 weights). Its Apache base does not override that
+noncommercial weight restriction. This makes 35B-A3B the practical permissive
+strong baseline for this study. A verified founder grant covering commercial
+27B use could reopen the baseline choice; no such scope is verified here.
 
 Holo4 earns selective use only if the absolute verified-task gain on failed or
 ambiguous eligible cases pays for its additional compute and does not require

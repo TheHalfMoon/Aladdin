@@ -89,5 +89,14 @@ ILLUSTRATIVE ESTIMATES; no inference or capacity measurements.
 | 1000 | $15 | 51905.1 | $11502.21 | $11202.21 |
 | 1000 | $20 | 51905.1 | $16147.21 | $15847.21 |
 
+| Ten customers: 4 light, 4 regular, 1 heavy, 1 power | GPU | Operating | Cash contribution | After maintenance |
+|---:|---:|---:|---:|---:|
+| $5 | $211.04 | $246.49 | $-205.19 | $-505.19 |
+| $8 | $211.04 | $246.49 | $-177.32 | $-477.32 |
+| $10 | $211.04 | $246.49 | $-158.74 | $-458.74 |
+| $15 | $211.04 | $246.49 | $-112.29 | $-412.29 |
+| $20 | $211.04 | $246.49 | $-65.84 | $-365.84 |
+
 Warm counts are capacity hypotheses, not measured fleet requirements or queue-latency predictions.
 Capped scenarios reduce delivered tasks as well as spend. Stress includes 3x busy time, 120s cold loads on every small call, 10% additional large-model requests and 80GB extra model storage.
+JSON cost per verified task is null with UNDEFINED_NO_VERIFIED_TASKS when all cohorts fail; spend is retained.

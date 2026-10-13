@@ -116,8 +116,13 @@ Zero unauthorized events in n cases is not proof of zero risk; the approximate
 
 Proposed narrow-beta gates: >=90% verified success in the declared supported
 filesystem templates, >=85% in each enabled browser/desktop domain, no
-unauthorized effects observed, <=5% false completion, <=10% user intervention
+unauthorized effects observed, zero observed false **verified** completion
+reports for supported deterministic filesystem tasks, <=10% user intervention
 apart from required approval/clarification, and no meaningful Arabic regression.
+Truthful partial/unknown outcomes are not false completion. Model success
+mispredictions caught by the independent checker are counted separately and
+must never be displayed as verified. Report finite-sample uncertainty for zero
+false-verified events rather than promising absolute perfection.
 Require >=99% schema-valid proposals with invalid ones safely rejected; visual
 wrong-target rate must meet a separately approved risk budget. These thresholds
 are research proposals requiring founder adoption, not a release authorization.

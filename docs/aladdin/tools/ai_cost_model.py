@@ -44,8 +44,10 @@ def validate(a):
             finite(value, name + "." + key)
         for key in ("share", "escalation_probability", "retry_fraction"):
             finite(cohort[key], name + "." + key, maximum=1)
-        finite(cohort["success_probability"], name + ".success", 0.000001, 1)
-        finite(cohort["tasks_month"], name + ".tasks", minimum=1)
+        finite(cohort["success_probability"], name + ".success", 0, 1)
+        # Derived admission scenarios are expected counts, possibly below
+        # one or zero; failed/denied cohorts can have zero success.
+        finite(cohort["tasks_month"], name + ".tasks", minimum=0)
     if not math.isclose(sum(c["share"] for c in a["cohorts"].values()), 1):
         raise ValueError("cohort shares must sum to 1")
 
@@ -140,8 +142,9 @@ def fleet(a, subscribers, price, mode="flex"):
         "cash_contribution_usd": net_receipts - operating,
         "after_maintenance_usd": net_receipts - operating - maintenance,
         "verified_tasks_assumed": verified,
-        "inference_infrastructure_usd_per_verified_task": (gpu + cash_fixed + network_state) / verified,
-        "operating_usd_per_verified_task": operating / verified,
+        "verified_cost_status": "DEFINED" if verified > 0 else "UNDEFINED_NO_VERIFIED_TASKS",
+        "inference_infrastructure_usd_per_verified_task": (gpu + cash_fixed + network_state) / verified if verified > 0 else None,
+        "operating_usd_per_verified_task": operating / verified if verified > 0 else None,
     }
 
 
@@ -192,12 +195,16 @@ def report(a):
     for c in capped["cohorts"].values():
         seconds = cohort_usage(capped, c)["small_billed_seconds"]
         c["tasks_month"] *= min(1, 7200 / seconds) if seconds else 1
+    discrete = copy.deepcopy(a)
+    for name, share in {"light": 0.4, "regular": 0.4, "heavy": 0.1, "power": 0.1}.items():
+        discrete["cohorts"][name]["share"] = share
     return {"status": a["status"], "assumptions": a, "fleet": rows,
             "accounts_at_100": accounts, "basic_at_100": basic(a, 100),
             "warm_at_10_usd": [fleet(a, n, 10, "warm") for n in a["subscribers"]],
             "stress_at_10_usd": [fleet(stress, n, 10) for n in a["subscribers"]],
             "capped_at_10_usd": [fleet(capped, n, 10) for n in a["subscribers"]],
-            "capped_fleet": [fleet(capped, n, p) for n in a["subscribers"] for p in a["prices"]]}
+            "capped_fleet": [fleet(capped, n, p) for n in a["subscribers"] for p in a["prices"]],
+            "one_power_among_ten": [fleet(discrete, 10, p) for p in a["prices"]]}
 
 
 def markdown(r):
@@ -227,8 +234,14 @@ def markdown(r):
     for row in r["capped_fleet"]:
         lines.append("| %d | $%.0f | %.1f | $%.2f | $%.2f |" % tuple(row[k] for k in
             ("subscribers", "price_usd", "verified_tasks_assumed", "cash_contribution_usd", "after_maintenance_usd")))
+    lines += ["", "| Ten customers: 4 light, 4 regular, 1 heavy, 1 power | GPU | Operating | Cash contribution | After maintenance |",
+              "|---:|---:|---:|---:|---:|"]
+    for row in r["one_power_among_ten"]:
+        lines.append("| $%.0f | $%.2f | $%.2f | $%.2f | $%.2f |" % tuple(row[k] for k in
+            ("price_usd", "gpu_usd", "operating_usd", "cash_contribution_usd", "after_maintenance_usd")))
     lines += ["", "Warm counts are capacity hypotheses, not measured fleet requirements or queue-latency predictions.",
-              "Capped scenarios reduce delivered tasks as well as spend. Stress includes 3x busy time, 120s cold loads on every small call, 10% additional large-model requests and 80GB extra model storage."]
+              "Capped scenarios reduce delivered tasks as well as spend. Stress includes 3x busy time, 120s cold loads on every small call, 10% additional large-model requests and 80GB extra model storage.",
+              "JSON cost per verified task is null with UNDEFINED_NO_VERIFIED_TASKS when all cohorts fail; spend is retained."]
     return "\n".join(lines) + "\n"
 
 

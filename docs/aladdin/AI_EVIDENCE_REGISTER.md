@@ -52,6 +52,7 @@ All following model URLs have an immutable revision in [model selection](AI_MODE
 | M7 | [Holo3.1-4B](https://huggingface.co/Hcompany/Holo-3.1-4B/tree/8c88265a5a159bfd1492db9243733dd2e6e04a6e), [0.8B](https://huggingface.co/Hcompany/Holo-3.1-0.8B/tree/72da4c53b351eb60e10a7022279019633c479292) | Compact domain challengers, Apache card and English tag; Arabic/tool/serving compatibility unqualified |
 | M8 | [Qwen3.5 base](https://huggingface.co/Qwen/Qwen3.5-4B-Base/tree/1001bb4d826a52d1f399e183466143f4da7b741b), [Qwen3.6 base](https://huggingface.co/Qwen/Qwen3.6-35B-A3B/tree/995ad96eacd98c81ed38be0c5b274b04031597b0) | Base cards Apache-2.0; selected release audit still needs every artifact/license/notice/custom-code chain |
 | M9 | [vLLM 0.31.0](https://github.com/vllm-project/vllm/releases/tag/v0.31.0), tag `db9527a46873454610df6dbedf79a36d6bf1a7f6`; [Qwen runtime recipe](https://docs.vllm.ai/projects/recipes/en/latest/Qwen/Qwen3.5.html) | Current runtime candidate and family recipe, not tested candidate 4B GPU/image/tool-parser image; larger-model recipe is not proof of 24GB capacity |
+| M10 | [Holo4-27B](https://huggingface.co/Hcompany/Holo4-27B/tree/4de03cfeee1d930b616bfd4817570293f29ad8b9) | CC BY-NC 4.0 model weights despite Apache base. A verified commercial direct grant could reopen comparison eligibility; no override assumed |
 | D1 | [DragOn](https://huggingface.co/datasets/Hcompany/DragOn/tree/3451c1fc3543c18fc3361a32bfe1f12cc69b64b5) | Apache card, independent-image vs repeated-task distinction, train/eval partitions; underlying asset audit not completed |
 | D2 | [ShowUI desktop data](https://huggingface.co/datasets/showlab/ShowUI-desktop-8K/tree/0d190dfee8ca2cb24f1a7157f8bdde52845d5348) | OmniAct-derived 7,496 rows; dataset license absent in metadata; **not cleared for training** |
 
@@ -84,14 +85,24 @@ above. Shell invocations use `rtk` per the supplied RTK instructions.
 
 | Check | Actual result / scope |
 |---|---|
-| Offline Python economics tests | 10 tests PASS initially; final count recorded in review handoff after any repairs. Independent one-hour quote arithmetic, retry/cold/idle/escalation, failure denominator, tax, fixed allocation, invalid input, warm floor, cap delivery and Basic break-even |
+| Offline Python economics tests | **14 tests PASS** after review repairs (10 initially). Independent one-hour quote arithmetic, retry/cold/idle/escalation, zero/all-failed denominator, tax, fixed allocation, invalid input, warm floor, fractional/zero cap delivery, discrete power-user concentration and Basic break-even |
 | Existing native FS control | `cargo test --locked --offline -p qdrald fs_mutation::tests --target-dir <isolated work/cargo-ai> -- --test-threads=1`: **3 passed**, 78 filtered, 0.13s test time. Build 1m57s. Existing test brokers, not Windows Hello/user-installed task or Hala inference |
 | Graft structural pass | v0.21.1, non-deep $0 build, scoped daemon/FS/MCP/browser host; 104 files, 2,204 nodes, 3,738 edges, no source import/AI call. BrowserWorker caller query undercounts duplicate names; raw imports/Cargo/dispatch inspected independently |
-| Alibaba OpenCodeReview | Installed local v1.13.0; pinned CI version v1.12.9. Local exact-range delegation/rules and manual exclusions recorded in final handoff; no managed-model review claim. Future CI pinned gate still required |
-| PStack | Resume/ADR/review used under explicit autonomous research scope. Fresh-context adversarial review receipt will be recorded in final handoff; no missing provider silently called green |
+| Alibaba OpenCodeReview | Local v1.13.0 exact `9098adde..5dac3aeb` preview: 15 files, 3 reviewable/12 excluded (11 Markdown, one test path); rules retrieved for eligible JSON/Python, and exclusions manually reviewed by the fresh-context panel. CI pinned v1.12.9 remains required; no managed-model review claim |
+| PStack | Fresh-context cost/correctness/parsimony/product and separate architecture/security/licensing reviewers inspected immutable `9098adde..5dac3aeb`. Cost review found two real boundaries; fixes and four additional regressions added. Architecture review found no blocker and its two evaluation refinements were adopted. Repair-delta qualification follows; no required Jev/CI gate substituted |
 | Jev | Local `jev --version`: 2026.919.0; **not invoked for paid judgments**. Required TypeSafe CI gate unrun for new head until narrow spending exception. Never substitute an inline review for this required check |
 | REA | Official repo inspected/pinned `4c838469477f0b6ea844c235f78534a55118ddca`; prior Aladdin REA reports read as historical evidence. No new reverse-engineering run: own source resolves reachability and avoids inferring capability from binaries. No bypass/paid provider or runtime result fabricated |
 | New-head required CI / merge | Pending publication. Baseline green does not qualify this change. PR creation automatically runs paid Jev; no workflow disabled or bypassed |
+
+Review repairs: allow zero success while retaining failed-task spend; emit null
+and `UNDEFINED_NO_VERIFIED_TASKS` for no verified tasks; allow fractional/zero
+expected admission counts; add a discrete one-power-customer-in-ten sensitivity;
+require zero observed false verified reports in supported filesystem tasks and
+a paired confidence bound for 2B non-inferiority. New Holo4-27B noncommercial
+evidence is pinned rather than treating its better scores as commercially eligible.
+The broad default cost tables and product recommendation did not change from
+these corrections. Reviewer findings and results are factual local evidence;
+this panel is not an Alibaba-managed model review or a paid security audit.
 
 Research exceeds Diffcipline's default 12-file/600-line **implementation** packet
 target because the founder requested one integrated 22-section study, executable
