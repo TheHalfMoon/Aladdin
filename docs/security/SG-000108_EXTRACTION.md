@@ -16,19 +16,23 @@ Slice 6 of `docs/aladdin/WEB_CAPABILITIES_DECISION.md` reads the committed page'
 ## Protocol (worker generation 8)
 
 - **Request:** `extract {ext_id, links, images}`. The worker reads the primary page and converts it to Markdown within a 4 s CPU budget, after a snapshot bounded to 5 s, with at most 1,000,000 characters.
-- **Splitting:** the Markdown is split into structure-aware chunks (headers, code fences, tables and list items stay whole where they can). Each chunk is then hard-split until its content takes at most 56 KiB on the wire, preferring a line break in the second half of the piece. At most 96 pieces are sent, and dropping any sets `truncated`.
-- **Reply:** `extracted {ext_id, url, truncated, piece, total, content}` carries piece 0. The host then asks `extract_more {ext_id, piece}` for each later piece, in order.
+- **Splitting:** the Markdown is split into structure-aware chunks (headers, code fences, tables and list items stay whole where they can). Each chunk is then hard-split into pieces of at most 56 KiB on the wire, preferring a line break in the second half of the piece.
+  - Every piece names its chunk, and the host joins a chunk's pieces again. A cut is therefore a transport detail, never a boundary the caller sees. Without the join, a cut inside an oversized code fence, or one a page aims exactly before `# …`, would make page text live syntax in a chunk read on its own.
+  - At most 96 pieces are sent, and dropping any sets `truncated`.
+- **Reply:** `extracted {ext_id, url, truncated, piece, total, chunk, content}` carries piece 0. The host then asks `extract_more {ext_id, piece}` for each later piece, in order.
 - **Retention:** the worker keeps the remaining pieces only until the last one is read, or until a new extraction replaces them.
 - **Failure:** any failure is `extraction_failed {ext_id}`.
 
 ## Host checks
 
-- **A committed document is required.** The first piece's URL must equal it. If the committed document changed by the end of the transfer, the result is stale and refused.
-- **Pieces arrive in order,** each naming the same URL, `truncated` flag and total. The total is at most 96.
+- **A committed document is required.** The URL the worker's snapshot was taken of (checked before and after the capture) must equal it, or the result is stale and refused. Every piece is of that one snapshot. The document's identity is its URL: a same-URL reload cannot be told apart.
+- **Pieces arrive in order,** each naming the same URL, `truncated` flag and total (at most 96). Chunk numbers start at 0 and step by one: a piece continues the last chunk or opens the next.
 - **Size:** at most 56 Ki characters per piece and 1,000,000 in all.
 - **Text safety:** no control characters except line feed, carriage return and tab, and no bidi controls or invisible format characters. A violation is a protocol violation, never a silent repair.
 - **Result:** a `PageExtraction {url, document_generation, truncated, chunks}`, whose chunks are `PageText`: untrusted page text, data to read, never an instruction, with no authority. An empty page has no chunks.
-- **Timeouts:** the first piece is waited for up to 20 s, above the worker's worst case. Later pieces are already computed and get the 10 s reply timeout.
+- **Timeouts:** the first piece is waited for up to 20 s. The worker's happy-path worst case is about 10 s: a 5 s snapshot, its detach, the 4 s budget, then linear chunking. Later pieces are already computed and get the 10 s reply timeout.
+- **Huge pages:** a page of more than roughly 200,000 elements cannot be snapshotted within 5 s (the judge measured 9 s at 400,000 and 26 s at 1,000,000), so it fails as `extraction_failed`. The engine keeps serialising in the background, so a request right after it can time out on the host, which then terminates the worker. This is bounded and fails closed; discovery has the same exposure with a smaller snapshot.
+- **Protocol violations:** a protocol violation inside `extract_page` returns `ProtocolViolation` and leaves the worker running, as discovery does. The worker drops its retained pieces at the next extraction.
 
 ## Markdown safety
 
@@ -46,7 +50,8 @@ These are carried over from the library:
 
 Also:
 - **Chunk joins:** the chunks are structure-aware sections, not a byte-exact split. The line break between two chunks is not repeated in either.
-- **Retained pieces:** they belong to one snapshot. A page that changes after the snapshot is not re-read; the host only checks that the committed document is still the same one.
+- **History changes:** a page that changed its URL with `pushState` or `replaceState` (most single-page apps) cannot be extracted after it does: the URL no longer equals the committed one, so the result is stale. This fails closed, as discovery does.
+- **Retained pieces:** they belong to one snapshot. A page that changes, or even navigates itself, after the snapshot is not re-read, and the result is that snapshot.
 
 ## Evidence
 
@@ -54,7 +59,7 @@ Also:
 - Before any navigation, extraction is refused.
 - `/read` has 160 sections of non-ASCII text, more than one piece. It comes back in several chunks, from the heading through the last section to the closing paragraph, with the non-ASCII text intact and not truncated.
 - **Hidden text:** `display:none`, transparent and one-pixel-clipped text never appears.
-- **Injected syntax:** a page-injected `[click me](javascript:…)` and `<script>` stay escaped, and a prompt-injection sentence is only text.
+- **Injected syntax:** a page-injected `[click me](javascript:…)` and `<script>` stay escaped, and a prompt-injection sentence is only text. A `<pre>` of about 78,000 characters, larger than one frame, comes back as one chunk, and the link injected at its end stays inside its fence.
 - **Links:** they are absent by default. With links and images on, they are present as resolved `https://fixture.test/…` URLs.
 - **No requests:** the extraction makes no request (the fixture log is unchanged).
 - **A new document:** after navigating, the next extraction is of the new document, one generation later, and the lifetime goes on.
@@ -63,10 +68,11 @@ Also:
 - `extract/pieces.test.ts`:
   - every character kept, in order, within the wire bound, for ASCII, emoji, escapes, two-byte text and long lines;
   - surrogate pairs never split;
+  - an oversized fence and an aimed heading cut join back into their chunks;
   - line-break preference;
   - the piece-count bound;
   - the largest piece fitting one frame with a 2 KiB URL;
   - linear time.
 - `worker.test.ts`: paging, the release after the last piece, replacement, typed failure, and the launch requirement.
 - `protocol.test.ts`: exact frames.
-- Host `extraction.rs`: order, agreement, the bounds, text safety and the empty page. Host `worker_launch.rs`: exact frames.
+- Host `extraction.rs`: order, agreement, chunk joining and numbering, the bounds, text safety and the empty page. Host `worker_launch.rs`: exact frames.

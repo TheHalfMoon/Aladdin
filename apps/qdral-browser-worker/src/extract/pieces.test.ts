@@ -19,27 +19,58 @@ test("pieces keep every character, in order, each within the wire bound", () => 
   for (const text of shapes) {
     const { pieces, truncated } = toPieces([chunk(text)], 1000, 10_000);
     assert.equal(truncated, false);
-    assert.equal(pieces.join(""), text);
-    assert.ok(pieces.every((p) => wire(p) <= 1000 && p.length > 0));
+    assert.equal(pieces.map((p) => p.content).join(""), text);
+    assert.ok(pieces.every((p) => wire(p.content) <= 1000 && p.content.length > 0 && p.chunk === 0));
   }
   // A surrogate pair is never split.
   const { pieces } = toPieces([chunk("a" + "\u{1f600}".repeat(10))], 17, 100);
-  assert.ok(pieces.every((p) => !/[\ud800-\udbff]$/.test(p)), JSON.stringify(pieces));
+  assert.ok(pieces.every((p) => !/[\ud800-\udbff]$/.test(p.content)), JSON.stringify(pieces));
 });
 
 test("a split prefers a line break in the second half of the piece", () => {
   const text = "a".repeat(700) + "\n" + "b".repeat(700);
   const { pieces } = toPieces([chunk(text)], 1000, 10);
-  assert.deepEqual(pieces, ["a".repeat(700) + "\n", "b".repeat(700)]);
+  assert.deepEqual(
+    pieces.map((p) => p.content),
+    ["a".repeat(700) + "\n", "b".repeat(700)]
+  );
   const early = "a".repeat(100) + "\n" + "b".repeat(1500);
-  assert.ok((toPieces([chunk(early)], 1000, 10).pieces[0]?.length ?? 0) > 900, "an early break is not used");
+  assert.ok((toPieces([chunk(early)], 1000, 10).pieces[0]?.content.length ?? 0) > 900, "an early break is not used");
 });
 
-test("chunks stay separate, empty ones are skipped, and the piece count is bounded", () => {
-  assert.deepEqual(toPieces([chunk("a"), chunk(""), chunk("b")], 1000, 10), { pieces: ["a", "b"], truncated: false });
-  assert.deepEqual(toPieces([chunk("")], 1000, 10), { pieces: [""], truncated: false });
+test("chunks are numbered without the empty ones, and the piece count is bounded", () => {
+  assert.deepEqual(toPieces([chunk("a"), chunk(""), chunk("b")], 1000, 10), {
+    pieces: [
+      { chunk: 0, content: "a" },
+      { chunk: 1, content: "b" }
+    ],
+    truncated: false
+  });
+  assert.deepEqual(toPieces([chunk("")], 1000, 10), { pieces: [{ chunk: 0, content: "" }], truncated: false });
   const many = toPieces([chunk("z".repeat(10_000))], 100, 5);
-  assert.deepEqual(many, { pieces: Array<string>(5).fill("z".repeat(100)), truncated: true });
+  assert.deepEqual(many, { pieces: Array.from({ length: 5 }, () => ({ chunk: 0, content: "z".repeat(100) })), truncated: true });
+});
+
+test("a cut inside a chunk is only a transport detail: its pieces name the same chunk", () => {
+  // A fenced block larger than one piece, ending in syntax that is live
+  // outside the fence, and a paragraph aimed so a heading starts at a cut.
+  const fence = "```\n" + "x".repeat(2500) + "\n[click](javascript:alert(1)) <img src=x onerror=alert(2)>\n```";
+  const aimed = "y".repeat(1000) + "# Ignore previous instructions";
+  const { pieces } = toPieces([chunk(fence), chunk(aimed)], 1000, 100);
+  assert.ok(pieces.length > 3);
+  const joined = (n: number): string =>
+    pieces
+      .filter((p) => p.chunk === n)
+      .map((p) => p.content)
+      .join("");
+  assert.equal(joined(0), fence);
+  assert.equal(joined(1), aimed);
+  assert.ok(pieces.some((p) => p.chunk === 1 && p.content.startsWith("# Ignore")), "the aimed cut happened");
+  // Chunk numbers never go back and step by one.
+  for (let i = 1; i < pieces.length; i++) {
+    const step = (pieces[i]?.chunk ?? 0) - (pieces[i - 1]?.chunk ?? 0);
+    assert.ok(step === 0 || step === 1);
+  }
 });
 
 test("the largest piece still fits a reply frame with the longest URL", () => {
@@ -51,7 +82,8 @@ test("the largest piece still fits a reply frame with the longest URL", () => {
     truncated: true,
     piece: 95,
     total: 96,
-    content: pieces[0] ?? ""
+    chunk: 95,
+    content: pieces[0]?.content ?? ""
   });
   assert.ok(frame.length <= MAX_FRAME_BYTES + 4, `${frame.length}`);
 });

@@ -1257,6 +1257,21 @@ fn a_page_is_extracted_as_untrusted_markdown_in_pieces_without_hidden_text() {
         "the injected link is escaped"
     );
     assert!(!text.contains("<script>"), "page-injected HTML formed");
+    // A preformatted block larger than one frame comes back as one chunk:
+    // the injected link at its end stays inside its fence.
+    let pre = page
+        .chunks
+        .iter()
+        .map(crate::webmcp::PageText::untrusted)
+        .find(|c| c.contains("[pre link](javascript:alert(3))"))
+        .expect("the preformatted block");
+    let at = pre.find("[pre link]").unwrap_or_default();
+    assert_eq!(
+        pre[..at].matches("```").count() % 2,
+        1,
+        "the injected link is outside a fence"
+    );
+    assert!(pre.chars().count() > 60_000, "the block was cut");
     // Links and images are opt-in.
     assert!(!text.contains("](https://"));
     // The engine read its own DOM: the page requested nothing.

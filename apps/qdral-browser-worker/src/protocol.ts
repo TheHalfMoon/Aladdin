@@ -116,7 +116,7 @@ export type WorkerFrame =
   | { frame: "observation_failed"; obs_id: number }
   | { frame: "discovered"; disc_id: number; url: string; truncated: boolean; tools: DeclaredTool[] }
   | { frame: "discovery_failed"; disc_id: number }
-  | { frame: "extracted"; ext_id: number; url: string; truncated: boolean; piece: number; total: number; content: string }
+  | { frame: "extracted"; ext_id: number; url: string; truncated: boolean; piece: number; total: number; chunk: number; content: string }
   | { frame: "extraction_failed"; ext_id: number }
   | { frame: "executed"; exec_id: number; url: string; status: number; structured: string[]; structured_complete: boolean }
   | { frame: "execution_failed"; exec_id: number; reason: NavigationFailure }

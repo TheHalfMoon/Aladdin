@@ -292,6 +292,7 @@ pub(crate) enum WorkerReply {
         truncated: bool,
         piece: u32,
         total: u32,
+        chunk: u32,
         content: String,
     },
     ExtractionFailed {
@@ -1532,37 +1533,31 @@ mod platform {
                 links: options.links,
                 images: options.images,
             })?;
-            let (url, truncated, piece, total, content) =
-                self.extraction_piece(ext_id, WORKER_EXTRACTION_TIMEOUT)?;
-            if url != committed.0 {
+            // The worker took its snapshot of the page it reports; that must
+            // be the committed document (a page that moved itself, even by
+            // pushState, is stale). Every piece is of that one snapshot.
+            let first = self.extraction_piece(ext_id, WORKER_EXTRACTION_TIMEOUT)?;
+            if first.url != committed.0 {
                 return Err(HostError::Invalid(
                     "stale page: the document changed".into(),
                 ));
             }
-            let mut assembly =
-                crate::extraction::Assembly::start(url, truncated, piece, total, content)?;
+            let mut assembly = crate::extraction::Assembly::start(first)?;
             while let Some(piece) = assembly.next() {
                 self.send(&WorkerRequest::ExtractMore { ext_id, piece })?;
-                let (url, truncated, piece, total, content) =
-                    self.extraction_piece(ext_id, WORKER_REPLY_TIMEOUT)?;
-                assembly.push(&url, truncated, piece, total, content)?;
-            }
-            if self.committed.as_ref() != Some(&committed) {
-                return Err(HostError::Invalid(
-                    "stale page: the document changed".into(),
-                ));
+                let next = self.extraction_piece(ext_id, WORKER_REPLY_TIMEOUT)?;
+                assembly.push(next)?;
             }
             assembly.finish(committed.1)
         }
 
-        /// One `extracted` reply for `ext_id`: (url, truncated, piece, total,
-        /// content). A typed failure is `ActionFailed`; anything else is a
-        /// protocol violation.
+        /// One `extracted` reply for `ext_id`. A typed failure is
+        /// `ActionFailed`; anything else is a protocol violation.
         fn extraction_piece(
             &mut self,
             ext_id: u64,
             timeout: Duration,
-        ) -> Result<(String, bool, u32, u32, String), HostError> {
+        ) -> Result<crate::extraction::WirePiece, HostError> {
             match self.reply(timeout)? {
                 WorkerReply::Extracted {
                     ext_id: done,
@@ -1570,8 +1565,16 @@ mod platform {
                     truncated,
                     piece,
                     total,
+                    chunk,
                     content,
-                } if done == ext_id => Ok((url, truncated, piece, total, content)),
+                } if done == ext_id => Ok(crate::extraction::WirePiece {
+                    url,
+                    truncated,
+                    piece,
+                    total,
+                    chunk,
+                    content,
+                }),
                 WorkerReply::ExtractionFailed { ext_id: done } if done == ext_id => {
                     Err(HostError::Unavailable(UnavailableReason::ActionFailed))
                 }
@@ -2751,7 +2754,7 @@ mod tests {
         );
         let reply = |text: &str| serde_json::from_str::<WorkerReply>(text);
         assert!(matches!(
-            reply(r##"{"frame":"extracted","ext_id":2,"url":"https://fixture.test/","truncated":false,"piece":0,"total":2,"content":"# A"}"##).unwrap(),
+            reply(r##"{"frame":"extracted","ext_id":2,"url":"https://fixture.test/","truncated":false,"piece":0,"total":2,"chunk":0,"content":"# A"}"##).unwrap(),
             WorkerReply::Extracted { ext_id: 2, piece: 0, total: 2, .. }
         ));
         assert!(matches!(
@@ -2759,9 +2762,9 @@ mod tests {
             WorkerReply::ExtractionFailed { ext_id: 2 }
         ));
         for bad in [
-            r#"{"frame":"extracted","ext_id":2,"url":"u","truncated":false,"piece":0,"total":1,"content":"","html":"<b>"}"#,
-            r#"{"frame":"extracted","ext_id":2,"url":"u","truncated":false,"piece":-1,"total":1,"content":""}"#,
-            r#"{"frame":"extracted","ext_id":2,"url":"u","truncated":false,"piece":0,"content":""}"#,
+            r#"{"frame":"extracted","ext_id":2,"url":"u","truncated":false,"piece":0,"total":1,"chunk":0,"content":"","html":"<b>"}"#,
+            r#"{"frame":"extracted","ext_id":2,"url":"u","truncated":false,"piece":-1,"total":1,"chunk":0,"content":""}"#,
+            r#"{"frame":"extracted","ext_id":2,"url":"u","truncated":false,"piece":0,"chunk":0,"content":""}"#,
         ] {
             assert!(reply(bad).is_err(), "{bad}");
         }

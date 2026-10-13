@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import type { Piece } from "./extract/pieces.js";
 import { validLaunch } from "./fixtures.js";
 import { encodeFrame, type WorkerFrame } from "./protocol.js";
 import { NavigationError, Worker, type EngineSession, type Launcher, type LaunchSpec, type RoutePolicy } from "./worker.js";
@@ -31,12 +32,12 @@ class FakeEngine implements EngineSession {
   discover(): Promise<{ url: string; truncated: boolean; tools: never[] }> {
     return this.discoverBehavior();
   }
-  extractBehavior: () => Promise<{ url: string; truncated: boolean; pieces: string[] }> = async () => ({
+  extractBehavior: () => Promise<{ url: string; truncated: boolean; pieces: Piece[] }> = async () => ({
     url: "https://fixture.test/",
     truncated: false,
-    pieces: ["# Page"]
+    pieces: [{ chunk: 0, content: "# Page" }]
   });
-  extract(): Promise<{ url: string; truncated: boolean; pieces: string[] }> {
+  extract(): Promise<{ url: string; truncated: boolean; pieces: Piece[] }> {
     return this.extractBehavior();
   }
   executions: Array<{ tool: string; fields: unknown }> = [];
@@ -404,9 +405,9 @@ test("discover reports bounded tools or a typed failure, and needs a launch", as
 
 test("extraction is served in pieces on request, released after the last, or fails typed", async () => {
   const { worker, sent, engine } = await launched();
-  engine.extractBehavior = async () => ({ url: "https://fixture.test/a", truncated: true, pieces: ["one", "two", "three"] });
+  engine.extractBehavior = async () => ({ url: "https://fixture.test/a", truncated: true, pieces: [{ chunk: 0, content: "one" }, { chunk: 0, content: "two" }, { chunk: 1, content: "three" }] });
   await worker.receive({ frame: "extract", ext_id: 4, links: false, images: false });
-  assert.deepEqual(sent.at(-1), { frame: "extracted", ext_id: 4, url: "https://fixture.test/a", truncated: true, piece: 0, total: 3, content: "one" });
+  assert.deepEqual(sent.at(-1), { frame: "extracted", ext_id: 4, url: "https://fixture.test/a", truncated: true, piece: 0, total: 3, chunk: 0, content: "one" });
   // Another id, or a piece past the end, fails without dropping the pieces.
   await worker.receive({ frame: "extract_more", ext_id: 5, piece: 1 });
   assert.deepEqual(sent.at(-1), { frame: "extraction_failed", ext_id: 5 });
@@ -415,7 +416,7 @@ test("extraction is served in pieces on request, released after the last, or fai
   await worker.receive({ frame: "extract_more", ext_id: 4, piece: 1 });
   assert.equal((sent.at(-1) as { content: string }).content, "two");
   await worker.receive({ frame: "extract_more", ext_id: 4, piece: 2 });
-  assert.deepEqual(sent.at(-1), { frame: "extracted", ext_id: 4, url: "https://fixture.test/a", truncated: true, piece: 2, total: 3, content: "three" });
+  assert.deepEqual(sent.at(-1), { frame: "extracted", ext_id: 4, url: "https://fixture.test/a", truncated: true, piece: 2, total: 3, chunk: 1, content: "three" });
   // The last piece releases the extraction.
   await worker.receive({ frame: "extract_more", ext_id: 4, piece: 1 });
   assert.deepEqual(sent.at(-1), { frame: "extraction_failed", ext_id: 4 });
@@ -433,7 +434,7 @@ test("extraction is served in pieces on request, released after the last, or fai
   await worker.receive({ frame: "extract", ext_id: 9, links: false, images: false });
   assert.deepEqual(sent.at(-1), { frame: "extraction_failed", ext_id: 9 });
   // A URL the page lengthened itself fails typed, and nothing is kept.
-  engine.extractBehavior = async () => ({ url: "https://fixture.test/" + "a".repeat(3000), truncated: false, pieces: ["x", "y"] });
+  engine.extractBehavior = async () => ({ url: "https://fixture.test/" + "a".repeat(3000), truncated: false, pieces: [{ chunk: 0, content: "x" }, { chunk: 0, content: "y" }] });
   await worker.receive({ frame: "extract", ext_id: 10, links: false, images: false });
   assert.deepEqual(sent.at(-1), { frame: "extraction_failed", ext_id: 10 });
   await worker.receive({ frame: "extract_more", ext_id: 10, piece: 1 });

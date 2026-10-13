@@ -1,7 +1,10 @@
 // SG-000108 slice 6: fit an extraction into reply frames. The structure-
 // aware chunks are a soft limit (one block larger than the chunk size stays
 // whole), so each chunk is hard-split here until its content, as a JSON
-// string on the wire, fits one frame. Linear in the Markdown's length.
+// string on the wire, fits one frame. Every piece names its chunk, and the
+// host joins a chunk's pieces again: a cut inside a chunk (inside a code
+// fence, or just before text that would read as a heading) is a transport
+// detail, never a boundary the caller sees. Linear in the Markdown's length.
 
 import type { MarkdownChunk } from "./chunk.js";
 
@@ -17,8 +20,14 @@ function wireCost(cp: number): number {
   return 4;
 }
 
+export interface Piece {
+  /// The chunk this piece belongs to (non-empty chunks, numbered from 0).
+  chunk: number;
+  content: string;
+}
+
 export interface Pieces {
-  pieces: string[];
+  pieces: Piece[];
   /// Pieces past `maxPieces` were dropped.
   truncated: boolean;
 }
@@ -29,13 +38,16 @@ export interface Pieces {
 /// skipped; an empty extraction is one empty piece.
 export function toPieces(chunks: readonly MarkdownChunk[], maxBytes: number, maxPieces: number): Pieces {
   if (maxBytes < 16) throw new Error("piece bound too small");
-  const pieces: string[] = [];
-  const push = (piece: string): boolean => {
+  const pieces: Piece[] = [];
+  let chunk = -1;
+  const push = (content: string): boolean => {
     if (pieces.length >= maxPieces) return false;
-    pieces.push(piece);
+    pieces.push({ chunk, content });
     return true;
   };
   for (const { content: text } of chunks) {
+    if (text === "") continue;
+    chunk += 1;
     let start = 0;
     let bytes = 0;
     // The position just after the last line break in this piece, and the
@@ -67,6 +79,6 @@ export function toPieces(chunks: readonly MarkdownChunk[], maxBytes: number, max
     }
     if (start < text.length && !push(text.slice(start))) return { pieces, truncated: true };
   }
-  if (pieces.length === 0) pieces.push("");
+  if (pieces.length === 0) pieces.push({ chunk: 0, content: "" });
   return { pieces, truncated: false };
 }
