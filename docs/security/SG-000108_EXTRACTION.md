@@ -18,7 +18,7 @@ Slice 6 of `docs/aladdin/WEB_CAPABILITIES_DECISION.md` reads the committed page'
 - **Request:** `extract {ext_id, links, images}`. The worker reads the primary page and converts it to Markdown within a 4 s CPU budget, after a snapshot bounded to 5 s, with at most 1,000,000 characters.
 - **Splitting:** the Markdown is split into structure-aware chunks (headers, code fences, tables and list items stay whole where they can). Each chunk is then hard-split into pieces of at most 56 KiB on the wire, preferring a line break in the second half of the piece.
   - Every piece names its chunk, and the host joins a chunk's pieces again. A cut is therefore a transport detail, never a boundary the caller sees. Without the join, a cut inside an oversized code fence, or one a page aims exactly before `# …`, would make page text live syntax in a chunk read on its own.
-  - At most 96 pieces are sent, and dropping any sets `truncated`.
+  - At most 96 pieces are sent, and dropping any sets `truncated`. Only the last chunk is then cut short, and it may end mid-block (inside an open fence, which reads as code to its end); nothing follows it.
 - **Reply:** `extracted {ext_id, url, truncated, piece, total, chunk, content}` carries piece 0. The host then asks `extract_more {ext_id, piece}` for each later piece, in order.
 - **Retention:** the worker keeps the remaining pieces only until the last one is read, or until a new extraction replaces them.
 - **Failure:** any failure is `extraction_failed {ext_id}`.
