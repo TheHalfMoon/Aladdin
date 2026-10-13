@@ -81,7 +81,7 @@
       "question": "WebMCP and web extraction scope",
       "status": "ADOPTED founder decision (2026-10-11)",
       "record": "docs/aladdin/WEB_CAPABILITIES_DECISION.md",
-      "decision": "WebMCP is added to SG-000108 as later slices on the isolated worker: read-only discovery (slice 4), then approval-gated execution (slice 5). Native web extraction follows: scrape and Markdown (slice 6), then map and crawl (slice 7). These are rebuilt natively because Firecrawl's AGPL-3.0 engine is not copied. Page-advertised tools grant nothing; the Rust host validates, approves and bounds every call. Every slice is separately qualified, and this decision grants no authority."
+      "decision": "WebMCP is added to SG-000108 as later slices on the isolated worker: read-only discovery (slice 4), then approval-gated execution (slice 5). Native web extraction follows: scrape and Markdown (slice 6), then map and crawl (slice 7). These are Aladdin's own pipeline on the isolated engine; Firecrawl modules may be adapted into it under the founder's source permission of 2026-10-12 (docs/aladdin/SOURCE_PERMISSIONS.md). Page-advertised tools grant nothing; the Rust host validates, approves and bounds every call. Every slice is separately qualified, and this decision grants no authority."
     }
   ],
   "invariants": [
@@ -159,7 +159,7 @@
   },
   "successor_requirements": {
     "sg_000100": "Personal or signed-in user-browser control stays out of SG-000108 and requires its own grain.",
-    "sg_000101": "Firecrawl code is not copied (founder decision 2026-10-11, docs/aladdin/WEB_CAPABILITIES_DECISION.md). Native scrape, map, crawl and Markdown build on the SG-000108 engine as slices 6 and 7, and Firecrawl serves only as a behavioral reference unless a written rights grant is filed and verified at source admission.",
+    "sg_000101": "Firecrawl code may be copied and adapted under the founder's attested source permission (2026-10-12, docs/aladdin/SOURCE_PERMISSIONS.md; revising the 2026-10-11 native-rebuild decision in docs/aladdin/WEB_CAPABILITIES_DECISION.md). Scrape, map, crawl and Markdown remain Aladdin's own pipeline on the SG-000108 engine as slices 6 and 7; copied modules keep attribution, the AGPL notice and the permission reference, merge only once the permission document is filed in docs/aladdin/grants/, and their dependencies are admitted separately.",
     "sg_000106": "The worker enters the release payload only with unified packaging, license notices, SBOM and signed provenance."
   },
   "activation_note": "No dependency, worker, tool or authority change in this activation packet. Separate implementation and closeout PRs must qualify their exact heads; activation CI alone proves nothing about the engine.",

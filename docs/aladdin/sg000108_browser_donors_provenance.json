@@ -1,0 +1,85 @@
+{
+  "schema": "aladdin-sg000108-donor-provenance/1",
+  "grain": "SG-000108",
+  "slice": "6 (library)",
+  "decision": "docs/aladdin/BROWSER_AGENT_DONORS_DECISION.md",
+  "donor": {
+    "repository": "browser-use/browser-use",
+    "commit": "c75e8476e26d18b7617643bc2ae082fae8eae431",
+    "license": "MIT",
+    "license_path": "LICENSE",
+    "license_blob_sha": "1ea3836ce58a4cd32c90c0b4f4e736d840d23780",
+    "notice_path": "docs/aladdin/notices/browser-use-MIT.txt"
+  },
+  "imports": [
+    {
+      "source": "browser_use/dom/markdown_extractor.py (chunk_markdown_by_structure, _parse_atomic_blocks, _get_table_header)",
+      "source_blob_sha": "fad20920734f41ed5b976a5a22dbcdeebb5f7a9f",
+      "destination": "apps/qdral-browser-worker/src/extract/chunk.ts",
+      "reuse": "PORT",
+      "modified": true,
+      "modification_summary": "Python to TypeScript, line for line in algorithm: atomic blocks (headers, code fences, table header plus separator, table rows, list items with continuations, paragraphs, blanks), greedy assembly with header-preferred splits that keep at least half a chunk, overlap lines and table-header carry across every continuation, start offset. Changes: offsets count UTF-16 code units; a code fence opens only on a CommonMark fence line (no backtick in its info string) and closes only on a line of at least as many backticks (the donor treats any line starting with three backticks as a fence boundary); header-preferred splits use running prefix sizes (the donor sums inside its backward scan, which is quadratic in a chunk's blocks). Names in Aladdin style.",
+      "authority_delta": "None: a pure function over a string.",
+      "qualification": [
+        "extract/chunk.test.ts (the donor's tests/ci/test_markdown_chunking.py unit cases, ported; its overlap case made non-vacuous)"
+      ]
+    },
+    {
+      "source": "browser_use/dom/markdown_extractor.py (_preprocess_markdown_content)",
+      "source_blob_sha": "fad20920734f41ed5b976a5a22dbcdeebb5f7a9f",
+      "destination": "apps/qdral-browser-worker/src/extract/clean.ts",
+      "reuse": "PORT",
+      "modified": true,
+      "modification_summary": "SPA state-blob removal (JSON in inline code, $type objects, nested objects, long lines that parse as JSON once the converter's escapes are undone). The donor's lazy regexes are replaced by linear scans with blobs bounded to 64 KiB; code-fence lines are kept verbatim; blank lines between blocks are kept (one at most) instead of all removed; trailing whitespace is trimmed by a scan, keeping Markdown hard breaks. Adds Aladdin's text safety rule: well formed (lone surrogates become U+FFFD), no controls, and no invisible characters that hide text or carry data (bidi controls, zero-width marks, fillers, variation selectors, tag characters).",
+      "authority_delta": "None: a pure function over a string.",
+      "qualification": [
+        "extract/extract.test.ts",
+        "extract/extract.native.test.ts"
+      ]
+    },
+    {
+      "source": "browser_use/dom/serializer/html_serializer.py (HTMLSerializer skip and table rules)",
+      "source_blob_sha": "fcc1d84992dcaac46538ecae60d0dab493b49afe",
+      "destination": "apps/qdral-browser-worker/src/extract/markdown.ts",
+      "reuse": "ADAPT",
+      "modified": true,
+      "modification_summary": "Keeps the donor's rules: non-content elements are skipped, hidden inline-JSON code (its id patterns) and inline data: images are dropped, a header row (thead, or a first row of th) leads the table. The donor serialises to HTML and converts with the Python markdownify package; Aladdin converts its own content model straight to Markdown (ATX headings, '-' bullets, GFM tables). No markdownify code is copied and no dependency is added. Unlike the donor, page text is escaped wherever a character could form syntax, so it cannot form Markdown links or images, HTML, strikethrough or block syntax (rules and setext headings included); characters that cannot form syntax in place are left readable; GFM bare-URL autolinks remain possible (http(s) and mail only). Links and images are opt-in, limited to resolved http(s) URLs without credentials and with destination-ending characters encoded, and taken only from shown elements; fences and code spans are longer than any backtick run inside; tables keep at most 64 columns and are walked iteratively; every emitted part is charged to the size and time bounds; nesting past 50 levels is flattened.",
+      "authority_delta": "None: a pure function over a content model.",
+      "qualification": [
+        "extract/extract.test.ts",
+        "extract/extract.native.test.ts (real Edge)"
+      ]
+    },
+    {
+      "source": "browser_use/dom/service.py (is_element_visible_according_to_all_parents) and browser_use/dom/enhanced_snapshot.py (layout and computed-style parsing)",
+      "source_blob_sha": "8eb38acb56593ac709f27a707cba5b9e742d4848 (service.py), a983828a4a6ac3f2f08524708f545a93835233f4 (enhanced_snapshot.py)",
+      "destination": "apps/qdral-browser-worker/src/extract/model.ts",
+      "reuse": "ADAPT",
+      "modified": true,
+      "modification_summary": "The donor's CSS visibility rule (display none, visibility hidden, opacity 0) and its parsing of DOMSnapshot layout styles, applied to content and extended: only text with a layout object, visible computed visibility, a non-transparent colour and text fill (any colour syntax), a non-zero font size and a non-empty box not past the document's top or left edge is kept; subtrees with opacity or filter opacity below 0.01 are dropped, and so is text inside a box (other than the root or body) clipped to at most four pixels by overflow or paint containment, unless it escapes every enclosing clip under the CSS containing-block rules (positioning, transforms, filters, containment, will-change); colour alpha below 0.01 counts as transparent; attribute text is used only from rendered, visible elements; text the engine skipped under content-visibility auto is reported as truncated. The donor's viewport threshold is not used, its Runtime.evaluate calls (readyState, iframe scroll, getEventListeners) are not used, and live input values (inputValue, textValue) are never read.",
+      "authority_delta": "None: a pure function over a DOMSnapshot.",
+      "qualification": [
+        "extract/extract.test.ts",
+        "extract/extract.native.test.ts (real Edge, 30 hidden-content cases)"
+      ]
+    }
+  ],
+  "not_imported": [
+    {
+      "source": "browser_use/agent, llm, controller, tools, mcp, sandbox, cloud, telemetry",
+      "reason": "A second planner and model stack; Aladdin's model is outside the browser layer (ALADDIN_AI_SERVER_ARCHITECTURE.md)."
+    },
+    {
+      "source": "browser_use/dom/service.py Runtime.evaluate calls",
+      "reason": "Page-context evaluation; SG-000108 forbids evaluating page-influenced script, and slice 4 established the no-script DOMSnapshot path."
+    },
+    {
+      "source": "browser_use/dom/serializer/clickable_elements.py, paint_order.py, serializer.py",
+      "reason": "Interactivity heuristics and occlusion filtering for an LLM's element index; Aladdin's observation uses Playwright's accessibility snapshot. Recorded as a reference for a later observation slice."
+    },
+    {
+      "source": "browser_use/browser/watchdogs",
+      "reason": "Aladdin's host supervises downloads, crashes and popups itself."
+    }
+  ]
+}

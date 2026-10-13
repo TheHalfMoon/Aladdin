@@ -93,7 +93,7 @@ Next three executable packets at review time (current next grains: `EXECUTION_FR
 | Code signing and distribution channel for releases | Founder | IMPLEMENTATION_ROADMAP.md (F4) |
 | Retention of screen/audio observations for Aladdin AI | Founder (privacy) | ALADDIN_AI_SERVER_ARCHITECTURE.md |
 | Tauri reversal (only on the stated measured conditions) | Founder | UI_UX_AND_APP_SIZE_BUDGET.md |
-| Written rights grants for Firecrawl and the Hala/Reliance models | Founder + counsel | SOURCE_REUSE_MATRIX.md, ALADDIN_AI_SERVER_ARCHITECTURE.md |
+| Written rights grants for Firecrawl and the Hala/Reliance models (source-code permission for all donors attested by the founder 2026-10-12, `SOURCE_PERMISSIONS.md`; documents to be filed in `docs/aladdin/grants/`; model grants unchanged) | Founder + counsel | SOURCE_REUSE_MATRIX.md, ALADDIN_AI_SERVER_ARCHITECTURE.md |
 | Trademark/naming clearance | Founder + counsel | OPUS_TO_SOL_CHANGELOG.md (D14) |
 | Whether a Rust PTY engine should replace the authorized SG-000096 terminal donor | Founder | IMPLEMENTATION_ROADMAP.md (WP04) |
 

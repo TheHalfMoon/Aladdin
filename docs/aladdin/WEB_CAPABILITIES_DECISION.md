@@ -4,11 +4,10 @@ Status: **ADOPTED founder decisions (2026-10-11)**, recorded here for review. Th
 
 ## Founder decisions
 
-1. **Firecrawl: Aladdin-native rebuild.**
+1. **Firecrawl: Aladdin-native rebuild, revised 2026-10-12.**
    - Firecrawl's engine (`apps/api`, `apps/playwright-service-ts`, `apps/go-html-to-md-service`) is AGPL-3.0. Aladdin is Apache-2.0.
-   - Since no written rights grant from Firecrawl's copyright holders is on file, the existing rule in `SOURCE_REUSE_MATRIX.md` still applies: no Firecrawl code is copied, adapted or distributed.
-   - Aladdin builds its own scrape, map, crawl and Markdown capability from permissively licensed libraries, using Firecrawl only as a behavioural reference (its feature set and output shapes), never as copied code.
-   - If a written grant is filed later, this decision can be revisited module by module.
+   - **Revised by the founder decision of 2026-10-12** (`SOURCE_PERMISSIONS.md`): the founder attests official permission to copy and use Firecrawl's source. Firecrawl modules may now be copied and adapted module by module under source admission; an import merges only once the permission document is filed in `docs/aladdin/grants/` (`SOURCE_PERMISSIONS.md`).
+   - Scrape, map, crawl and Markdown stay Aladdin's own pipeline behind SG-000075 (no second HTTP client, no hosted service). Firecrawl code is taken where a module fits that pipeline: first, its Rust link and URL filtering, robots.txt handling and sitemap parsing (`apps/api/native/src/crawler.rs`) for the slice 7 host queue (`BROWSER_AGENT_DONORS_DECISION.md`).
 2. **WebMCP: amend SG-000108.**
    - WebMCP becomes later SG-000108 slices on the isolated browser worker: read-only discovery first, then approval-gated execution.
    - No new active grain is opened. The founder-approved parallel pair {SG-000096, SG-000108} and its tests are unchanged.
@@ -22,7 +21,7 @@ All donors are cloned read-only at exact commits; no donor script is run.
 | [webmachinelearning/webmcp](https://github.com/webmachinelearning/webmcp/tree/d0e4e0e0f039358cc9d93f90074116622bfebd53) | `d0e4e0e0f039358cc9d93f90074116622bfebd53` | W3C Software and Document License | **Specification reference.** It defines `document.modelContext` (`registerTool`, `getTools`, `executeTool`), the declarative form tools and the security and privacy questionnaire. It contains no implementation code. |
 | [WebMCP-org/npm-packages](https://github.com/WebMCP-org/npm-packages/tree/7db816b5a280c2d1d4b86559696e993c497c021a) (MCP-B 6.0.0) | `7db816b5a280c2d1d4b86559696e993c497c021a` | MIT, © 2025 mcp-b contributors | **Adapt selected modules** (see the matrix below). |
 | [ripulio/web-mcp](https://github.com/ripulio/web-mcp/tree/4921a1834446440c4d1c6867d98d0ff662ea6231) | `4921a1834446440c4d1c6867d98d0ff662ea6231` | MIT, © 2025 Ripul | **Reference.** Its polyfill (0.0.2), extension and WebSocket server duplicate MCP-B in a less mature form. |
-| [firecrawl/firecrawl](https://github.com/firecrawl/firecrawl/tree/f84845c864b6e2af22791c18fcf89ac2a21f1434) | `f84845c864b6e2af22791c18fcf89ac2a21f1434` | AGPL-3.0 at the root; the JS, Python, Ruby and Elixir SDK directories carry MIT LICENSE files (python-sdk `setup.py` says GPLv3; the Go, Java and .NET SDKs have no LICENSE file) | **Behavioural reference only** (decision 1). No SDK is used: they are clients of the hosted or self-hosted API. |
+| [firecrawl/firecrawl](https://github.com/firecrawl/firecrawl/tree/f84845c864b6e2af22791c18fcf89ac2a21f1434) | `f84845c864b6e2af22791c18fcf89ac2a21f1434` | AGPL-3.0 at the root; the JS, Python, Ruby and Elixir SDK directories carry MIT LICENSE files (python-sdk `setup.py` says GPLv3; the Go, Java and .NET SDKs have no LICENSE file) | **Adapt under the founder's permission** (decision 1, revised 2026-10-12): engine modules such as `apps/api/native/src/crawler.rs`. No SDK is used: they are clients of the hosted or self-hosted API. |
 
 ## What Aladdin already has (and must not rebuild)
 
@@ -75,7 +74,7 @@ The three approaches considered:
 | MCP-B `packages/webmcp-ts-sdk/src/json-schema.ts`, `normalize.ts` | `apps/qdral-browser-worker/src/webmcp/schema.ts` | Adapt (MIT notice kept) | Restricted to a bounded subset (types, `properties`, `required`, `enum`, string and number bounds). Anything outside the subset is refused. Plain TypeScript, without `zod` or standard-schema. | Unit tests, including the donor's cases. A Rust host validator for the same subset, checked against shared vectors. |
 | W3C WebMCP spec `index.bs`, `declarative-api-explainer.md`, `security-privacy-questionnaire.md` | `docs/security/SG-000108_WEBMCP.md` | Specification reference | Not applicable | Conformance cases for `getTools` and `executeTool` behaviour on fixture pages, with native support and without. |
 | ripulio `packages/polyfill` (npm `webmcp-polyfill` 0.0.2) | none | Reference | Not applicable | Not applicable |
-| Firecrawl `apps/api` scrape, map and crawl behaviour | Worker extraction and the host crawl queue | Behavioural reference only | No code copied (decision 1) | Firecrawl's documented features and limits are mapped to Aladdin tests. Fixture site at loopback through the test-only pin. |
+| Firecrawl `apps/api` scrape, map and crawl behaviour; `apps/api/native/src/crawler.rs` | Worker extraction and the host crawl queue | Adapt under founder permission (decision 1, revised 2026-10-12) | Copied code keeps attribution, the AGPL notice and the permission reference; its crates are admitted separately | Firecrawl's documented features and limits are mapped to Aladdin tests. Fixture site at loopback through the test-only pin. |
 
 The donor integration record (copied paths, commits, modifications, notices) is kept in `THIRD_PARTY_NOTICES` and the per-file headers whenever donor code is adapted.
 
