@@ -12,7 +12,7 @@ use crate::confinement::{PolicyHive, PolicyKeyState, RegistryPolicySource};
 use crate::discovery::{discover_engine, Engine, SearchConfig};
 use std::fs::File;
 use std::io::Read;
-use std::net::{IpAddr, Ipv4Addr};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::os::windows::io::FromRawHandle;
 use std::os::windows::process::CommandExt;
 use std::sync::mpsc;
@@ -298,6 +298,27 @@ fn a_page_cannot_reach_the_lan_through_webrtc_fetch_or_sockets() {
         udp.local_addr().unwrap().port(),
         tcp.local_addr().unwrap().port(),
     );
+    // Positive control: the listeners are reachable at that address (no
+    // firewall drops what arrives there), so "nothing arrived" means the
+    // page sent nothing.
+    let mut buffer = [0u8; 2048];
+    std::net::UdpSocket::bind((lan, 0))
+        .and_then(|probe| probe.send_to(b"control", (lan, udp_port)))
+        .expect("control datagram");
+    assert!(
+        udp.recv_from(&mut buffer).is_ok(),
+        "the UDP listener is not reachable at {lan}"
+    );
+    let _control = std::net::TcpStream::connect_timeout(
+        &SocketAddr::from((lan, tcp_port)),
+        Duration::from_secs(5),
+    )
+    .expect("control connection");
+    let accepted = (0..50).any(|_| {
+        std::thread::sleep(Duration::from_millis(20));
+        tcp.accept().is_ok()
+    });
+    assert!(accepted, "the TCP listener is not reachable at {lan}");
     let fixture = HttpsFixture::start();
     let profile = temp_profile("endpoints-page");
     let mut launch = spec(&profile, true);
@@ -311,7 +332,6 @@ fn a_page_cannot_reach_the_lan_through_webrtc_fetch_or_sockets() {
     let deadline = Instant::now() + Duration::from_secs(60);
     let mut seen = std::collections::BTreeSet::new();
     let (mut datagrams, mut connections) = (0usize, 0usize);
-    let mut buffer = [0u8; 2048];
     while Instant::now() < deadline {
         seen.extend(non_loopback_endpoints(&job_pids(&worker)));
         if udp.recv_from(&mut buffer).is_ok() {
