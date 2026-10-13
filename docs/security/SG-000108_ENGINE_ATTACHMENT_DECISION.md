@@ -118,6 +118,7 @@ launch preconditions below.
      which accepted no connection even with listeners bound to `0.0.0.0:9`,
      `127.0.0.1:9` and `[::]:9`.
    - `<-loopback>` removes the engine's implicit loopback bypass.
+   - Measured later (A8, Edge 155): layer 1's catch-all `MAP * ~NOTFOUND` refuses IP literals as well. With the proxy removed, a navigation to a LAN IP literal still failed and reached no listener. Each layer is sufficient on its own, and only removing both let it through (`SG-000108_TESTERARMY_E2E.md`).
    - On Linux, connecting to `0.0.0.0` reaches the local host, so this
      choice is valid only for the Windows release.
 3. **Policy gate.** The worker's context-level route consults the host's
