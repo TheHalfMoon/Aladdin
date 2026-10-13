@@ -30,25 +30,37 @@ rmSync(pidsFile, { force: true });
 
 const failures = [];
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+// Whether `pid` is a running Edge process (never another program that
+// reused the pid).
+const isEdge = (pid) =>
+  (
+    spawnSync("tasklist", ["/FI", `PID eq ${pid}`, "/FI", "IMAGENAME eq msedge.exe", "/NH"], { encoding: "utf8" }).stdout ??
+    ""
+  ).includes(` ${pid} `);
 
-// The production confinement flags, from the built worker itself.
+// The production launch values, from the built worker itself.
 const protocolJs = join(here, "..", "dist", "protocol.js");
 if (!existsSync(protocolJs)) {
   process.stderr.write("A8: build the worker first (npm run build in apps/qdral-browser-worker)\n");
   process.exit(1);
 }
 const protocol = await import(pathToFileURL(protocolJs).href);
-const confinement = [
-  protocol.NO_ROUTE_PROXY,
-  protocol.WEBRTC_POLICY,
-  protocol.DISABLE_QUIC,
-  protocol.DISABLE_SHARED_WORKER,
-  protocol.DISABLE_FEATURES,
-];
-if (confinement.some((flag) => typeof flag !== "string" || !flag.startsWith("--"))) {
-  process.stderr.write("A8: the worker's confinement flags are missing\n");
+if (typeof protocol.launchRefusal !== "function" || !Array.isArray(protocol.FROZEN_FLAGS)) {
+  process.stderr.write("A8: the worker's launch contract is missing\n");
   process.exit(1);
 }
+const edgeExe = [
+  "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
+  "C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe",
+].find((path) => existsSync(path));
+if (!edgeExe) {
+  process.stderr.write("A8: Edge is not installed\n");
+  process.exit(1);
+}
+// The engine environment the host hands over: the allowlisted keys only.
+const engineEnv = Object.fromEntries(
+  protocol.ENGINE_ENV_ALLOWLIST.filter((key) => process.env[key] !== undefined).map((key) => [key, process.env[key]]),
+);
 
 // This host's own LAN address, where the bypass is aimed and listened for.
 const lan = Object.values(networkInterfaces())
@@ -85,21 +97,28 @@ probe.close();
 arrivals.datagrams.length = 0;
 arrivals.connections.length = 0;
 
-// Negative control: an unconfined Edge, sent to the same IP literal, does
-// reach the listener, so the bypass probe is a real one.
+// Negative control: an Edge without the confinement, sent to the same IP
+// literal, does reach the listener, so the bypass probe is a real one. It
+// reaches nothing else: the listener is its proxy, so every request it
+// makes lands there, and the services that ignore the proxy (#324) are off.
 {
-  const edge = [
-    "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe",
-    "C:/Program Files/Microsoft/Edge/Application/msedge.exe",
-  ].find((path) => existsSync(path));
   const profile = mkdtempSync(join(tmpdir(), "qdral-a8-control-"));
   const raw = spawn(
-    edge ?? "msedge.exe",
-    ["--headless=new", `--user-data-dir=${profile}`, "--no-first-run", "--no-default-browser-check", `http://${lan}:${tcpPort}/`],
-    { stdio: "ignore" },
+    edgeExe,
+    [
+      ...protocol.FROZEN_FLAGS,
+      `--user-data-dir=${profile}`,
+      `--proxy-server=http://${lan}:${tcpPort}`,
+      "--proxy-bypass-list=<-loopback>",
+      protocol.WEBRTC_POLICY,
+      protocol.DISABLE_QUIC,
+      protocol.DISABLE_FEATURES,
+      `http://${lan}:${tcpPort}/`,
+    ],
+    { stdio: "ignore", env: engineEnv },
   );
   const reached = await settle(() => arrivals.connections.length > 0);
-  spawnSync("taskkill", ["/PID", String(raw.pid), "/T", "/F"], { stdio: "ignore" });
+  if (isEdge(raw.pid)) spawnSync("taskkill", ["/PID", String(raw.pid), "/T", "/F"], { stdio: "ignore" });
   for (let attempt = 0; attempt < 40 && existsSync(profile); attempt++) {
     try {
       rmSync(profile, { recursive: true, force: true });
@@ -109,6 +128,8 @@ arrivals.connections.length = 0;
   }
   process.stdout.write(`A8-EVIDENCE negative control: an unconfined Edge reached ${lan}:${tcpPort}: ${reached}\n`);
   if (!reached) failures.push("the negative control never reached the listener: the bypass probe proves nothing");
+  if (isEdge(raw.pid)) failures.push(`the negative control's Edge ${raw.pid} still runs`);
+  if (existsSync(profile)) failures.push(`the negative control left its profile: ${profile}`);
   arrivals.connections.length = 0;
 }
 
@@ -140,6 +161,34 @@ const spki = await new Promise((resolve, reject) => {
   fixture.on("exit", () => reject(new Error("the fixture exited")));
 });
 
+// The exact argv the host builds for the fixture.test destination
+// (confinement.rs), with the worker's own fixed values; the worker's
+// contract check must accept it. edge.ts swaps only the pipe for DevTools.
+const argvTemplate = [
+  ...protocol.FROZEN_FLAGS,
+  "--user-data-dir={PROFILE}",
+  protocol.PIPE,
+  "--host-resolver-rules=MAP fixture.test 127.0.0.1:443, MAP * ~NOTFOUND",
+  protocol.NO_ROUTE_PROXY,
+  "--proxy-bypass-list=fixture.test;<-loopback>",
+  protocol.WEBRTC_POLICY,
+  protocol.DISABLE_QUIC,
+  protocol.DISABLE_SHARED_WORKER,
+  protocol.DISABLE_FEATURES,
+  `--ignore-certificate-errors-spki-list=${spki}`,
+  protocol.INITIAL_URL,
+];
+const sampleProfile = "C:\\qdral-a8\\profile";
+const refusal = protocol.launchRefusal({
+  frame: "launch",
+  engine: edgeExe,
+  profile_dir: sampleProfile,
+  env: engineEnv,
+  argv: argvTemplate.map((arg) => (arg === "--user-data-dir={PROFILE}" ? `--user-data-dir=${sampleProfile}` : arg)),
+});
+if (refusal !== null) failures.push(`the worker's contract refuses the suite's launch: ${refusal}`);
+process.stdout.write(`A8-EVIDENCE production launch contract: ${refusal === null ? "accepted" : refusal}\n`);
+
 const cli = join(here, "node_modules", "e2e", "dist", "cli", "bin.js");
 // Asynchronous, so the fixture's log keeps draining while the suite runs.
 const status = await new Promise((resolve) => {
@@ -150,7 +199,8 @@ const status = await new Promise((resolve) => {
       ...process.env,
       FIXTURE_SPKI: spki,
       A8_PIDS: pidsFile,
-      A8_CONFINEMENT: JSON.stringify(confinement),
+      A8_ARGV: JSON.stringify(argvTemplate),
+      A8_ENGINE_ENV: JSON.stringify(engineEnv),
       A8_LAN_IP: lan,
       A8_TCP_PORT: String(tcpPort),
       A8_UDP_PORT: String(udpPort),
@@ -204,6 +254,9 @@ process.stdout.write(
   `A8-EVIDENCE OS tables: ${samples} samples, up to ${owned} Edge processes; flagged ${JSON.stringify([...flagged])}; ${ice.size} other UDP sockets\n`,
 );
 if (owned === 0) failures.push("the OS scan never saw the suite's Edge: the scan proves nothing");
+// The page's WebRTC code ran: ICE sockets were bound (the UDP leg is only
+// as good as the attempt).
+if (ice.size === 0) failures.push("no ICE socket was seen: the page's WebRTC probe never ran");
 if (flagged.size > 0) failures.push(`the suite's Edge held a network endpoint beyond loopback: ${[...flagged].join("; ")}`);
 
 // Nothing left behind: every Edge the suite launched is ended with its
@@ -219,8 +272,6 @@ try {
 } catch {}
 rmSync(pidsFile, { force: true });
 if (launched.length === 0) failures.push("no launched Edge was recorded");
-const running = (pid) =>
-  (spawnSync("tasklist", ["/FI", `PID eq ${pid}`, "/NH"], { encoding: "utf8" }).stdout ?? "").includes(` ${pid} `);
 // Ask the browser itself to close over its own DevTools endpoint (this ends
 // every process of that browser), then end any recorded process still left.
 const closeOverCdp = (endpoint) =>
@@ -240,7 +291,7 @@ const closeOverCdp = (endpoint) =>
   });
 for (const [pid, profile, endpoint] of launched) {
   if (endpoint) await closeOverCdp(endpoint);
-  if (running(pid)) spawnSync("taskkill", ["/PID", pid, "/T", "/F"], { stdio: "ignore" });
+  if (isEdge(pid)) spawnSync("taskkill", ["/PID", pid, "/T", "/F"], { stdio: "ignore" });
   for (let attempt = 0; attempt < 40; attempt++) {
     try {
       rmSync(profile, { recursive: true, force: true });
@@ -249,7 +300,7 @@ for (const [pid, profile, endpoint] of launched) {
       await new Promise((resolve) => setTimeout(resolve, 250));
     }
   }
-  if (running(pid)) failures.push(`Edge ${pid} still runs`);
+  if (isEdge(pid)) failures.push(`Edge ${pid} still runs`);
   if (existsSync(profile)) failures.push(`profile left behind: ${profile}`);
 }
 if (failures.length === 0) {
@@ -261,6 +312,7 @@ const hosts = [...new Set(hits.map((hit) => hit.split(" ")[0]))];
 process.stdout.write(`A8-EVIDENCE fixture hits: ${hits.join(" | ")}\n`);
 if (hosts.some((host) => host !== "fixture.test")) failures.push(`another origin was contacted: ${hosts.join(", ")}`);
 if (!hits.includes("fixture.test /reports/2026-09-30.pdf")) failures.push("the latest report was never requested");
+if (!hits.some((hit) => hit.startsWith("fixture.test /rtc?"))) failures.push("the bypass page was never served");
 if (hits.some((hit) => hit.includes("2026-06-30.pdf") || hit.includes("2026-03-31.pdf")))
   failures.push("an older report was requested");
 
