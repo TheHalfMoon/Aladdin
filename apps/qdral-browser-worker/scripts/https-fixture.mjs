@@ -139,7 +139,7 @@ const TOOLS_CONTROL = `<!doctype html><title>Control</title>
 </script><p>Control</p><input name="c">`;
 // Slice 5 execution fixtures: executable tools (GET and POST), and every
 // way a tool must fail to execute.
-const EXEC = `<!doctype html><title>Exec</title>
+const EXEC = `<!doctype html><meta charset="utf-8"><title>Exec</title>
 <form toolname="search_reports" tooldescription="Search the reports." action="/search" toolautosubmit>
   <input name="q" required>
   <select name="year"><option value="2026">2026</option><option value="2025">2025</option></select>
@@ -166,7 +166,10 @@ const EXEC = `<!doctype html><title>Exec</title>
 <form toolname="big_result" tooldescription="Answers with large structured data." action="/big" toolautosubmit><input name="q"><button>Go</button></form>
 <form toolname="hidden_token" tooldescription="Carries its own hidden token." action="/search" toolautosubmit><input type="hidden" name="csrf" value="PAGETOKEN"><input name="q"><button>Go</button></form>
 <form toolname="adding" tooldescription="A submit handler adds a field." action="/search" toolautosubmit onsubmit="const i=document.createElement('input');i.type='hidden';i.name='added';i.value='SCRIPTADDED';this.append(i)"><input name="q"><button>Go</button></form>
-<form toolname="latin" tooldescription="Submits Latin-1." action="/search" accept-charset="iso-8859-1" toolautosubmit><input name="q"><button>Go</button></form>`;
+<form toolname="latin" tooldescription="Submits Latin-1." action="/search" accept-charset="iso-8859-1" toolautosubmit><input name="q"><button>Go</button></form>
+<form toolname="defaulted" tooldescription="The page fills a field." action="/search" toolautosubmit><input name="q"><input name="year" value="PAGEYEAR"><button>Go</button></form>
+<form toolname="browser_names" tooldescription="The browser adds names." action="/search" toolautosubmit><input name="q" dirname="q.dir"><input type="image" name="img" alt="Go" style="width:40px;height:20px"></form>
+<form toolname="odd_button" tooldescription="An invalid button type submits." action="/search" toolautosubmit><input name="q"><button type="bogus" name="go" value="1">Go</button></form>`;
 const NO_TOOLS = `<!doctype html><title>No tools</title><p>Nothing declared.</p><form><input name="q"></form>`;
 const FILES = `<!doctype html><title>Files</title><ul>
 <li><a href="/files/oversized.pdf">Oversized 2026-01-01</a></li>
@@ -185,7 +188,8 @@ const ARCHIVE_HOSTILE = `<!doctype html><title>Hostile archive</title><ul>
 // swapped after observation, and a button named by a password field.
 const ARCHIVE_TRICKY = `<!doctype html><title>Tricky archive</title><ul>
 <li><a id=js href="/archive/2026-09-30" onclick="event.preventDefault(); location.href='/js-dest';">Annual review 2026-09-30</a></li>
-<li><a id=swap href="/archive/2026-06-30">Annual review 2026-06-30</a></li></ul>
+<li><a id=swap href="/archive/2026-06-30">Annual review 2026-06-30</a></li>
+<li><a id=blank href="/archive/2025-12-31?popup" target="_blank">Annual review 2025-12-31</a></li></ul>
 <script>setTimeout(() => { document.getElementById("swap").href = "/evil"; }, 1500);</script>`;
 const SECRET_NAME = `<!doctype html><title>Secret name</title>
 <input type=password id=pw value="HUNTER2PW"><button aria-labelledby=pw>x</button>`;

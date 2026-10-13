@@ -140,7 +140,7 @@ const playwrightLauncher: Launcher = {
           throw new NavigationError("failed");
         }
         // The form's default button: the first submit button in tree order.
-        const submit = form.locator('button:not([type]), button[type="submit"], input[type="submit"], input[type="image"]').first();
+        const submit = form.locator('button:not([type="button" i]):not([type="reset" i]), input[type="submit" i], input[type="image" i]').first();
         if ((await submit.count().catch(() => 0)) === 0) throw new NavigationError("failed");
         const { url, status } = await clickAndLoad(page, submit);
         // The submission's result: the opened document's structured data.
@@ -232,7 +232,7 @@ const playwrightLauncher: Launcher = {
         const url = primary.url();
         if (model.url !== url || before !== url) throw new Error("the document changed during discovery");
         const remaining = Math.max(0, DISCOVERY_TOTAL_MS - CAPTURE_TIMEOUT_MS / 2 - (Date.now() - started));
-        const found = discoverDeclarativeTools(model.root, Math.min(DISCOVERY_BUDGET_MS, remaining));
+        const found = discoverDeclarativeTools(model.root, Math.min(DISCOVERY_BUDGET_MS, remaining), model.encoding);
         return fitTools(discId, url, model.truncated || found.truncated, found.tools);
       },
       async close() {
@@ -260,6 +260,18 @@ async function clickAndLoad(page: Page, target: Locator): Promise<{ url: string;
     if (request.isNavigationRequest() && request.frame() === page.mainFrame()) status = response.status();
   };
   page.on("response", onResponse);
+  // A click that opens a popup instead of navigating the page is not the
+  // approved activation: it fails at once (the popup is closed) rather than
+  // waiting out the navigation timeout.
+  let onPopup: ((popup: Page) => void) | undefined;
+  const popped = new Promise<never>((_, reject) => {
+    onPopup = (popup) => {
+      void popup.close().catch(() => {});
+      reject(new NavigationError("denied"));
+    };
+    page.on("popup", onPopup);
+  });
+  popped.catch(() => {});
   try {
     const navigated = page.waitForEvent("framenavigated", {
       predicate: (frame) => frame === page.mainFrame(),
@@ -271,7 +283,8 @@ async function clickAndLoad(page: Page, target: Locator): Promise<{ url: string;
       navigated.catch(() => {});
       throw new NavigationError("failed");
     }
-    await navigated;
+    await Promise.race([navigated, popped]);
+    navigated.catch(() => {});
     await page.waitForLoadState("load", { timeout: 30_000 });
   } catch (error) {
     if (error instanceof NavigationError) throw error;
@@ -279,6 +292,7 @@ async function clickAndLoad(page: Page, target: Locator): Promise<{ url: string;
     throw new NavigationError("failed");
   } finally {
     page.off("response", onResponse);
+    if (onPopup) page.off("popup", onPopup);
   }
   // A refused navigation lands on Chromium's error page.
   if (page.url().startsWith("chrome-error:")) throw new NavigationError("denied");

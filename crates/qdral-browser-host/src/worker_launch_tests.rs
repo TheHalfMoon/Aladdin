@@ -1148,8 +1148,35 @@ fn an_approved_activation_follows_the_latest_dated_link_and_nothing_else() {
             .is_err(),
         "swapped href followed"
     );
+    // A link that opens a popup fails fast and typed, and the popup's
+    // document is never requested.
+    worker
+        .navigate("https://fixture.test/archive-tricky")
+        .expect("tricky for the popup");
+    let live = worker
+        .observe(&scope)
+        .expect("observe tricky for the popup");
+    let blank = find(&worker, &live, "Annual review 2025-12-31");
+    let (target, mut approval) = approved_click(&worker, &live, &blank);
+    let started = std::time::Instant::now();
+    assert!(
+        worker
+            .activate(&target, &mut approval, 1, "workspace")
+            .is_err(),
+        "a popup was taken as the activation"
+    );
+    assert!(
+        started.elapsed() < Duration::from_secs(15),
+        "the popup activation waited {:?}",
+        started.elapsed()
+    );
+    worker.ping("after-popup").expect("the lifetime survived");
     pump(&mut worker, Duration::from_secs(1));
     let hits = fixture.hits();
+    assert!(
+        !hits.iter().any(|h| h.contains("?popup")),
+        "the popup was requested: {hits:?}"
+    );
     for path in ["/js-dest", "/evil"] {
         assert!(
             !hits.contains(&format!("fixture.test {path}")),
@@ -1202,6 +1229,12 @@ fn webmcp_declarative_tools_are_discovered_read_only_and_bound_to_the_document()
             "shadow_tool",
             "awkward"
         ]
+    );
+    // The page declares no charset, so the engine submits its default
+    // (not UTF-8): no tool on it takes non-ASCII arguments.
+    assert!(
+        found.tools.iter().all(|t| !t.utf8),
+        "an undeclared charset was taken as UTF-8"
     );
     // A script-set lone surrogate arrives replaced (the frame stays valid
     // JSON), a number with a pattern and inverted bounds stays inside the
@@ -1593,6 +1626,38 @@ fn webmcp_tools_execute_only_with_approval_and_return_the_verified_result() {
         .execution_binding(&latin, &args(r#"{"q":"cafe"}"#))
         .is_ok());
 
+    // A parameter the page already fills must be supplied; names the
+    // browser adds (image coordinates, dirname) and an invalid button type
+    // are the form's own; the page declares UTF-8 and the form follows it.
+    let found = open(&mut worker);
+    let tool = |name: &str| found.tools.iter().find(|t| t.name == name).expect(name);
+    assert!(tool("search_reports").utf8, "a utf-8 page");
+    let defaulted = id_of(&found, "defaulted");
+    assert!(worker
+        .execution_binding(&defaulted, &args(r#"{"q":"d"}"#))
+        .is_err());
+    for (name, query) in [
+        ("defaulted", r#"{"q":"filled","year":"2024"}"#),
+        ("browser_names", r#"{"q":"named"}"#),
+        ("odd_button", r#"{"q":"odd"}"#),
+    ] {
+        let found = open(&mut worker);
+        let id = id_of(&found, name);
+        assert!(
+            found
+                .tools
+                .iter()
+                .find(|t| t.tool_id == id)
+                .unwrap()
+                .self_contained,
+            "{name}"
+        );
+        let (target, mut approval) = approved_execution(&worker, &found, &id, &args(query));
+        worker
+            .execute_tool(&target, &mut approval, &args(query), 1, "workspace")
+            .unwrap_or_else(|e| panic!("{name}: {e:?}"));
+    }
+
     // A result too large for one frame is kept in part and marked
     // incomplete, and the lifetime goes on.
     let found = open(&mut worker);
@@ -1643,6 +1708,16 @@ fn webmcp_tools_execute_only_with_approval_and_return_the_verified_result() {
             .any(|h| h.ends_with("/search?csrf=PAGETOKEN&q=tokened")),
         "{hits:?}"
     );
+    for submitted in [
+        "/search?q=filled&year=2024",
+        "/search?q=named&q.dir=ltr&img.x=",
+        "/search?q=odd&go=1",
+    ] {
+        assert!(
+            hits.iter().any(|h| h.contains(submitted)),
+            "{submitted} missing: {hits:?}"
+        );
+    }
     for never in [
         "other.test",
         "q=evil",
@@ -1653,6 +1728,7 @@ fn webmcp_tools_execute_only_with_approval_and_return_the_verified_result() {
         "OTHERFORM",
         "q=evil-rewrite",
         "SCRIPTADDED",
+        "PAGEYEAR",
         "caf%",
     ] {
         assert!(

@@ -66,12 +66,12 @@ test("a declared form becomes a bounded tool with a schema from its controls", (
   assert.equal(tool.autosubmit, true);
   assert.equal(tool.has_password, false);
   assert.deepEqual(tool.params, [
-    { name: "from", required: true, control: "text", type: "string", pattern: "[A-Z]{3}", description: "From airport" },
-    { name: "seats", required: false, control: "text", type: "number", minimum: 1, maximum: 9, multiple_of: 1 },
-    { name: "cabin", required: false, control: "select", type: "string", enum: ["eco", "Business"] },
-    { name: "trip", required: false, control: "radio", type: "string", enum: ["one", "return"], description: "Trip type" },
-    { name: "meal", required: false, control: "checkboxes", type: "array", items_enum: ["veg", "halal"] },
-    { name: "when", required: false, control: "text", type: "string", format: "date", description: "Dates MUST be provided in 'YYYY-MM-DD' format." }
+    { name: "from", required: true, control: "text", has_default: false, type: "string", pattern: "[A-Z]{3}", description: "From airport" },
+    { name: "seats", required: false, control: "text", has_default: false, type: "number", minimum: 1, maximum: 9, multiple_of: 1 },
+    { name: "cabin", required: false, control: "select", has_default: false, type: "string", enum: ["eco", "Business"] },
+    { name: "trip", required: false, control: "radio", has_default: false, type: "string", enum: ["one", "return"], description: "Trip type" },
+    { name: "meal", required: false, control: "checkboxes", has_default: false, type: "array", items_enum: ["veg", "halal"] },
+    { name: "when", required: false, control: "text", has_default: false, type: "string", format: "date", description: "Dates MUST be provided in 'YYYY-MM-DD' format." }
   ]);
   // The hidden field (no description) is not a parameter and its value never appears.
   assert.ok(!JSON.stringify(tools).includes("tok-123"));
@@ -181,7 +181,7 @@ test("the snapshot model keeps shadow trees and text, and drops other node kinds
   assert.equal(model.truncated, false);
   const { tools } = discoverDeclarativeTools(model.root);
   assert.deepEqual(tools.map((t) => [t.name, t.node, t.params]), [
-    ["shadowed", 105, [{ name: "q", required: false, control: "text", type: "string", description: "Query" }]]
+    ["shadowed", 105, [{ name: "q", required: false, control: "text", has_default: false, type: "string", description: "Query" }]]
   ]);
 });
 
@@ -196,7 +196,7 @@ test("a DOM deeper than any call stack is walked without recursion", () => {
   let inner = el("form", { toolname: "deep", tooldescription: "At the bottom." }, el("label", {}, "Deep field ", el("input", { name: "d" })));
   for (let i = 0; i < 200_000; i++) inner = el("div", {}, inner);
   const { tools } = discoverDeclarativeTools(doc(inner));
-  assert.deepEqual(tools.map((t) => [t.name, t.params]), [["deep", [{ name: "d", required: false, control: "text", type: "string", description: "Deep field" }]]]);
+  assert.deepEqual(tools.map((t) => [t.name, t.params]), [["deep", [{ name: "d", required: false, control: "text", has_default: false, type: "string", description: "Deep field" }]]]);
 });
 
 const LONE = /[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/;
@@ -229,8 +229,8 @@ test("text is well formed, control- and bidi-free, and cut at whole code points"
   assert.equal(Array.from(tool.description).length, LIMITS.description);
   assert.equal(tool.title, "Title\ufffd");
   assert.deepEqual(tool.params, [
-    { name: "q", required: false, control: "text", type: "string", description: "Lab\ufffdel" },
-    { name: "pat", required: false, control: "text", type: "string" }
+    { name: "q", required: false, control: "text", has_default: false, type: "string", description: "Lab\ufffdel" },
+    { name: "pat", required: false, control: "text", has_default: false, type: "string" }
   ]);
 });
 
@@ -248,10 +248,10 @@ test("number schemas stay inside the host's subset", () => {
     )
   );
   assert.deepEqual(tools[0]?.params, [
-    { name: "pat", required: false, control: "text", type: "number", multiple_of: 1 },
-    { name: "inverted", required: false, control: "text", type: "number", multiple_of: 1 },
-    { name: "range_high", required: false, control: "text", type: "number", multiple_of: 1 },
-    { name: "range_ok", required: false, control: "text", type: "number", minimum: 5, maximum: 100, multiple_of: 1 }
+    { name: "pat", required: false, control: "text", has_default: false, type: "number", multiple_of: 1 },
+    { name: "inverted", required: false, control: "text", has_default: false, type: "number", multiple_of: 1 },
+    { name: "range_high", required: false, control: "text", has_default: false, type: "number", multiple_of: 1 },
+    { name: "range_ok", required: false, control: "text", has_default: false, type: "number", minimum: 5, maximum: 100, multiple_of: 1 }
   ]);
 });
 
@@ -281,8 +281,8 @@ test("editable regions never contribute text, and labels label one control", () 
     )
   );
   assert.deepEqual(tools[0]?.params, [
-    { name: "q", required: false, control: "text", type: "string", description: "Query" },
-    { name: "second", required: false, control: "text", type: "string" }
+    { name: "q", required: false, control: "text", has_default: false, type: "string", description: "Query" },
+    { name: "second", required: false, control: "text", has_default: false, type: "string" }
   ]);
 });
 
@@ -439,9 +439,85 @@ test("fixed names, base targets and charsets are reported for execution", () => 
   assert.equal(based?.self_contained, false);
   const [own] = tools(el("base", { target: "fr" }), el("form", { toolname: "own", tooldescription: "d", target: "_self" }, el("input", { name: "q" }), go()));
   assert.equal(own?.self_contained, true, "the form's own target wins over the base");
-  // Charsets: accept-charset and the document's meta charset.
+  // Charsets: accept-charset, and the document's encoding as the engine
+  // reports it; an unreported one is not UTF-8.
   const [latin] = tools(el("form", { toolname: "latin", tooldescription: "d", "accept-charset": "windows-1252" }, el("input", { name: "q" }), go()));
   assert.equal(latin?.utf8, false);
+  const form = () => doc(el("form", { toolname: "enc", tooldescription: "d" }, el("input", { name: "q" }), go()));
+  assert.equal(discoverDeclarativeTools(form(), 1000, "windows-1252").tools[0]?.utf8, false);
+  assert.equal(discoverDeclarativeTools(form(), 1000, "").tools[0]?.utf8, false);
+  assert.equal(discoverDeclarativeTools(form(), 1000, "utf-8").tools[0]?.utf8, true);
+  // A meta in the page is not read: the engine's encoding decides.
   const [meta] = tools(el("meta", { charset: "ISO-8859-1" }), el("form", { toolname: "meta", tooldescription: "d" }, el("input", { name: "q" }), go()));
-  assert.equal(meta?.utf8, false);
+  assert.equal(meta?.utf8, true);
+  // Names the browser adds: an image button's coordinates, a dirname.
+  const [image] = tools(el("form", { toolname: "image", tooldescription: "d" }, el("input", { name: "q", dirname: "q.dir" }), el("input", { type: "image", name: "img", src: "/i.png" })));
+  assert.deepEqual([...(image?.fixed_names ?? [])].sort(), ["img", "img.x", "img.y", "q.dir"]);
+  const [bare] = tools(el("form", { toolname: "bare", tooldescription: "d" }, el("input", { name: "q" }), el("input", { type: "image", src: "/i.png" })));
+  assert.deepEqual([...(bare?.fixed_names ?? [])].sort(), ["x", "y"]);
+});
+
+test("a parameter the page already fills is reported as having a default", () => {
+  const go = () => el("button", {}, "Go");
+  const [tool] = discoverDeclarativeTools(
+    doc(
+      el(
+        "form",
+        { toolname: "defaults", tooldescription: "d" },
+        el("input", { name: "empty" }),
+        el("input", { name: "year", value: "2026" }),
+        el("textarea", { name: "note" }, "prefilled"),
+        el("textarea", { name: "blank" }),
+        el("input", { type: "checkbox", name: "on", checked: "" }),
+        el("input", { type: "checkbox", name: "off" }),
+        el("select", { name: "many", multiple: "" }, el("option", { value: "a", selected: "" }), el("option", { value: "b" })),
+        el("select", { name: "none", multiple: "" }, el("option", { value: "a" })),
+        go()
+      )
+    )
+  ).tools;
+  assert.deepEqual(
+    tool?.params.map((p) => [p.name, p.has_default]),
+    [
+      ["empty", false],
+      ["year", true],
+      ["note", true],
+      ["blank", false],
+      ["on", true],
+      ["off", false],
+      ["many", true],
+      ["none", false]
+    ]
+  );
+});
+
+test("the snapshot model reports the engine's encoding and live control state", () => {
+  const strings: string[] = [];
+  const id = (s: string) => {
+    const at = strings.indexOf(s);
+    return at >= 0 ? at : strings.push(s) - 1;
+  };
+  const model = documentModel({
+    strings,
+    documents: [
+      {
+        encodingName: id("windows-1252"),
+        nodes: {
+          parentIndex: [-1, 0, 1, 2, 2, 2, 5],
+          nodeType: [9, 1, 1, 1, 1, 1, 1],
+          nodeName: ["#document", "HTML", "FORM", "INPUT", "INPUT", "SELECT", "OPTION"].map(id),
+          nodeValue: [-1, -1, -1, -1, -1, -1, -1],
+          backendNodeId: [1, 2, 3, 4, 5, 6, 7],
+          attributes: [[], [], [], [id("name"), id("typed")], [id("type"), id("checkbox"), id("name"), id("box")], [id("name"), id("pick"), id("multiple"), id("")], [id("value"), id("v")]],
+          inputValue: { index: [3], value: [id("typed by script")] },
+          inputChecked: { index: [4] },
+          optionSelected: { index: [6] }
+        }
+      }
+    ]
+  });
+  assert.equal(model.encoding, "windows-1252");
+  const form = model.root.children[0] as DomElement;
+  const [typed, box, pick] = (form.children[0] as DomElement).children as DomElement[];
+  assert.deepEqual([typed?.live, box?.live, (pick?.children[0] as DomElement).live], [{ value: "typed by script" }, { checked: true }, { selected: true }]);
 });

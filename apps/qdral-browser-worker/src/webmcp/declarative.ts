@@ -38,6 +38,9 @@ export interface DomElement {
   readonly node: number;
   /// The element lies inside a shadow tree.
   readonly inShadow?: boolean;
+  /// The control's live state, as the engine reports it: an input's or
+  /// textarea's current value, a checked input, a selected option.
+  readonly live?: { readonly value?: string; readonly checked?: boolean; readonly selected?: boolean };
 }
 
 export interface DomText {
@@ -68,6 +71,9 @@ export interface DeclaredParam extends ParamSchema {
   name: string;
   required: boolean;
   control: ControlKind;
+  /// The page already gives it a value (a value, a checked box, a selected
+  /// option), which would be submitted unapproved: it must be supplied.
+  has_default: boolean;
 }
 
 export interface DeclaredTool {
@@ -95,8 +101,9 @@ export interface DeclaredTool {
   /// name. Only their names cross (never their values); a submission may
   /// carry no other undeclared name.
   fixed_names: string[];
-  /// The form submits UTF-8 (no other `accept-charset`, and the document
-  /// declares no other charset); otherwise only ASCII arguments execute.
+  /// The form submits UTF-8 (no other `accept-charset`, and the engine
+  /// reports the document's encoding as UTF-8); otherwise only ASCII
+  /// arguments execute.
   utf8: boolean;
   params: DeclaredParam[];
 }
@@ -266,8 +273,9 @@ const SUBMIT_OVERRIDES = ["form", "formaction", "formmethod", "formenctype", "fo
 
 function isSubmitter(element: DomElement): boolean {
   if (element.tag === "button") {
+    // Any type but button or reset (an invalid one included) submits.
     const type = (attr(element, "type") ?? "submit").trim().toLowerCase();
-    return type === "submit" || type === "";
+    return type !== "button" && type !== "reset";
   }
   return element.tag === "input" && ["submit", "image"].includes(inputType(element));
 }
@@ -276,8 +284,6 @@ interface Pass {
   forms: DomElement[];
   /// The document's first `<base target>`, lowercased ("" when none).
   baseTarget: string;
-  /// The document's declared charset, lowercased ("" when none).
-  charset: string;
   /// Forms whose structure the worker can execute exactly (below).
   unsafe: Set<DomElement>;
   /// Each form's default button (its first submit button in tree order).
@@ -301,7 +307,6 @@ function treePass(root: DomElement, deadline: number): Pass {
   const unsafe = new Set<DomElement>();
   const submitters = new Map<DomElement, DomElement>();
   let baseTarget: string | undefined;
-  let charset: string | undefined;
   let scopes = 0;
   let truncated = false;
   let steps = 0;
@@ -330,14 +335,6 @@ function treePass(root: DomElement, deadline: number): Pass {
       }
       if (scope === 0 && node.tag === "base" && baseTarget === undefined && node.attrs.has("target")) {
         baseTarget = (attr(node, "target") ?? "").trim().toLowerCase();
-      }
-      if (scope === 0 && node.tag === "meta" && charset === undefined) {
-        const declared =
-          attr(node, "charset") ??
-          ((attr(node, "http-equiv") ?? "").trim().toLowerCase() === "content-type"
-            ? /charset=([^;\s]+)/i.exec(attr(node, "content") ?? "")?.[1]
-            : undefined);
-        if (declared !== undefined) charset = declared.trim().toLowerCase();
       }
       if (node.tag === "form") {
         forms.push(node);
@@ -420,7 +417,7 @@ function treePass(root: DomElement, deadline: number): Pass {
     const facts = target && isLabelable(target) ? factsOf.get(target) : undefined;
     facts?.labels.push(label);
   }
-  return { forms, baseTarget: baseTarget ?? "", charset: charset ?? "", unsafe, submitters, controls, options, truncated };
+  return { forms, baseTarget: baseTarget ?? "", unsafe, submitters, controls, options, truncated };
 }
 
 function isReadOnly(control: DomElement): boolean {
@@ -621,21 +618,40 @@ function selfContained(form: DomElement, pass: Pass): boolean {
 
 const isUtf8 = (label: string): boolean => label === "" || label === "utf-8" || label === "utf8" || label === "unicode-1-1-utf-8";
 
-function submitsUtf8(form: DomElement, pass: Pass): boolean {
+function submitsUtf8(form: DomElement, encoding: string): boolean {
   const accept = (attr(form, "accept-charset") ?? "").trim().toLowerCase();
   // `accept-charset` lists labels; the first supported one is used, so only
-  // a list that starts with UTF-8 (or is empty) is certainly UTF-8.
+  // a list that starts with UTF-8 (or is empty) is certainly UTF-8. Without
+  // one the form submits in the document's encoding, which the engine
+  // reports (from the header, a meta, or its default): an unknown one is
+  // not UTF-8.
   const first = accept.split(/[\s,]+/).filter(Boolean)[0] ?? "";
-  return isUtf8(first) && isUtf8(pass.charset);
+  return isUtf8(first) && encoding !== "" && isUtf8(encoding);
 }
 
-/// Read-only controls are submitted but are not parameters: they join the
-/// fixed names. The fixed names must all cross exactly and within bounds,
-/// or the tool is not executable (an unlisted name would be refused).
+/// The page already gives the parameter a value that would be submitted.
+function hasDefault(group: readonly ControlFacts[], options: ReadonlyMap<DomElement, DomElement[]>): boolean {
+  return group.some(({ element }) => {
+    if (element.tag === "select") {
+      return (options.get(element) ?? []).some((option) => option.live?.selected === true || option.attrs.has("selected"));
+    }
+    if (isInput(element, "checkbox") || isInput(element, "radio")) return element.live?.checked === true || element.attrs.has("checked");
+    const written = element.tag === "textarea" ? textOf(element, false) : (attr(element, "value") ?? "");
+    return (element.live?.value ?? "") !== "" || written !== "";
+  });
+}
+
+/// Read-only controls are submitted but are not parameters, and a
+/// `dirname` adds its own name: both join the fixed names. The fixed names
+/// must all cross exactly and within bounds, or the tool is not executable
+/// (an unlisted name would be refused).
 function fixedNamesFit(fixed: Set<string>, controls: readonly ControlFacts[]): boolean {
   for (const facts of controls) {
+    if (facts.disabled) continue;
     const name = (attr(facts.element, "name") ?? "").trim();
-    if (name && !facts.disabled && isReadOnly(facts.element)) fixed.add(name);
+    if (name && isReadOnly(facts.element)) fixed.add(name);
+    const dirname = attr(facts.element, "dirname") ?? "";
+    if (dirname !== "" && (facts.element.tag === "textarea" || ["text", "search"].includes(inputType(facts.element)))) fixed.add(dirname);
   }
   return fixed.size <= LIMITS.params && [...fixed].every((n) => exactValue(n, LIMITS.name));
 }
@@ -655,7 +671,7 @@ export interface Discovery {
 /// valid `toolname` and a `tooldescription`; the first form with a name wins
 /// and later duplicates are dropped (as in the donor). Linear in the size of
 /// the model, and bounded by `budgetMs` of CPU time.
-export function discoverDeclarativeTools(root: DomElement, budgetMs: number = DISCOVERY_BUDGET_MS): Discovery {
+export function discoverDeclarativeTools(root: DomElement, budgetMs: number = DISCOVERY_BUDGET_MS, encoding: string = "utf-8"): Discovery {
   const deadline = Date.now() + budgetMs;
   const pass = treePass(root, deadline);
   let truncated = pass.truncated;
@@ -704,7 +720,11 @@ export function discoverDeclarativeTools(root: DomElement, budgetMs: number = DI
     const fixed = new Set<string>();
     const submitter = pass.submitters.get(form);
     const submitterName = submitter ? (attr(submitter, "name") ?? "").trim() : "";
-    if (submitterName) fixed.add(submitterName);
+    if (submitter && isInput(submitter, "image")) {
+      // An image button submits its click coordinates instead of its name.
+      fixed.add(submitterName ? `${submitterName}.x` : "x");
+      fixed.add(submitterName ? `${submitterName}.y` : "y");
+    } else if (submitterName) fixed.add(submitterName);
     const params: DeclaredParam[] = [];
     for (const [key, group] of groups) {
       if (!exactValue(key, LIMITS.name)) {
@@ -720,7 +740,13 @@ export function discoverDeclarativeTools(root: DomElement, budgetMs: number = DI
         fixed.add(key);
         continue;
       }
-      params.push({ name: key, required: group.some((facts) => facts.element.attrs.has("required")), control: controlKind(group), ...schema });
+      params.push({
+        name: key,
+        required: group.some((facts) => facts.element.attrs.has("required")),
+        control: controlKind(group),
+        has_default: hasDefault(group, pass.options),
+        ...schema
+      });
     }
     if (codePoints(description) > LIMITS.description) truncated = true;
     tools.push({
@@ -734,7 +760,7 @@ export function discoverDeclarativeTools(root: DomElement, budgetMs: number = DI
       method: formMethod(form),
       self_contained: selfContained(form, pass) && fixedNamesFit(fixed, controls),
       fixed_names: [...fixed].filter((n) => exactValue(n, LIMITS.name)).slice(0, LIMITS.params),
-      utf8: submitsUtf8(form, pass),
+      utf8: submitsUtf8(form, encoding),
       params
     });
   }

@@ -236,10 +236,14 @@ impl NavigationPolicy {
         detail: &RequestDetail,
     ) -> Result<(), HostError> {
         let target = self.admitted_target(url)?;
-        // While an approved submission is pending, its document is the only
-        // one: a frame or popup document (a `target` elsewhere) is refused.
-        if self.submission.is_some() && matches!(kind, RouteKind::Frame | RouteKind::Popup) {
-            return Err(refused("a submission may not open a frame or popup"));
+        // While an approved activation is pending, its document is the only
+        // one: a popup (a `target` elsewhere) is refused, and so is a frame
+        // document during a submission.
+        if self.activation.is_some() && matches!(kind, RouteKind::Popup) {
+            return Err(refused("an activation may not open a popup"));
+        }
+        if self.submission.is_some() && matches!(kind, RouteKind::Frame) {
+            return Err(refused("a submission may not open a frame"));
         }
         if !matches!(kind, RouteKind::Document) && !origin.is_empty() {
             let reported = parse_navigation_url(origin)?;
@@ -726,6 +730,24 @@ mod tests {
         let mut multipart = post("note=a%0D%0Ab");
         multipart.content_type = "multipart/form-data; boundary=x".into();
         assert!(note.check("https://f.test/n", &multipart).is_err());
+    }
+
+    #[test]
+    fn a_pending_activation_refuses_popups() {
+        let mut p = policy();
+        p.begin("https://fixture.test/").unwrap();
+        p.commit("https://fixture.test/").unwrap();
+        assert!(p
+            .decide(RouteKind::Popup, "https://fixture.test/a", "")
+            .is_ok());
+        p.expect_activation("https://fixture.test/a").unwrap();
+        assert!(p
+            .decide(RouteKind::Popup, "https://fixture.test/a", "")
+            .is_err());
+        assert!(p
+            .decide(RouteKind::Frame, "https://fixture.test/f", "")
+            .is_ok());
+        assert!(!p.finish_activation());
     }
 
     #[test]

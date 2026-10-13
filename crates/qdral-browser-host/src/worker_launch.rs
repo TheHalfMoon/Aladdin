@@ -2561,11 +2561,11 @@ mod tests {
         use crate::worker_navigation::Submitted;
         let wire: Vec<crate::webmcp::WireTool> = serde_json::from_str(
             r#"[{"name":"t","title":"","description":"d","autosubmit":true,"node":3,"has_password":false,"action":"/s","method":"post","self_contained":true,"fixed_names":["csrf"],"utf8":true,"params":[
-                {"name":"note","required":false,"control":"textarea","type":"string"},
-                {"name":"ok","required":false,"control":"checkbox","type":"boolean"},
-                {"name":"off","required":false,"control":"checkbox","type":"boolean"},
-                {"name":"tags","required":false,"control":"checkboxes","type":"array","items_enum":["a","b"]},
-                {"name":"left","required":false,"control":"text","type":"string"}]}]"#,
+                {"name":"note","required":false,"control":"textarea","has_default":false,"type":"string"},
+                {"name":"ok","required":false,"control":"checkbox","has_default":false,"type":"boolean"},
+                {"name":"off","required":false,"control":"checkbox","has_default":false,"type":"boolean"},
+                {"name":"tags","required":false,"control":"checkboxes","has_default":false,"type":"array","items_enum":["a","b"]},
+                {"name":"left","required":false,"control":"text","has_default":false,"type":"string"}]}]"#,
         )
         .unwrap();
         let tool = crate::webmcp::validate_tools(wire, 1).unwrap().0.remove(0);
