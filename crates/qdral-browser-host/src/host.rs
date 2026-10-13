@@ -239,6 +239,10 @@ impl<T> ReplyChannel<T> {
         self.poisoned
     }
 
+    pub(crate) fn poison(&mut self) {
+        self.poisoned = true;
+    }
+
     /// The reply to the request just sent, within `timeout`.
     pub(crate) fn recv(&mut self, timeout: Duration) -> Result<T, HostError> {
         if self.poisoned {
@@ -309,7 +313,12 @@ impl LiveWorkerHost {
         if self.replies.is_poisoned() {
             return Err(HostError::Unavailable(UnavailableReason::ProtocolViolation));
         }
-        write_frame(&mut self.stdin, request)?;
+        // A failed (possibly partial) write also ends the host's usefulness:
+        // whatever it reads next is no longer a whole request.
+        if let Err(err) = write_frame(&mut self.stdin, request) {
+            self.replies.poison();
+            return Err(err);
+        }
         self.replies.recv(timeout)
     }
 
