@@ -1,0 +1,93 @@
+{
+  "inspected": "2026-10-13",
+  "source": "Hugging Face API and pinned raw text only; no weights",
+  "models": [
+    {
+      "id": "Hcompany/Holo-3.1-0.8B",
+      "revision": "72da4c53b351eb60e10a7022279019633c479292",
+      "license": "apache-2.0",
+      "parameters": 1107265600,
+      "architecture": "Qwen3_5ForConditionalGeneration",
+      "readme_sha256": "d99bf15b6e5cb377b1b7a75f3cd8e2b0e07d4aa3323576c0e1477afe90712d1a",
+      "license_files": []
+    },
+    {
+      "id": "Hcompany/Holo-3.1-4B",
+      "revision": "8c88265a5a159bfd1492db9243733dd2e6e04a6e",
+      "license": "apache-2.0",
+      "parameters": 5174964736,
+      "architecture": "Qwen3_5ForConditionalGeneration",
+      "readme_sha256": "059de62841a8ca6c8d2c32f1210ecf58cd8efc8755c2795000d8d87afe49ad5e",
+      "license_files": []
+    },
+    {
+      "id": "Hcompany/Holo4-35B-A3B",
+      "revision": "508458727831368da85d53a8055c2b0f923ed4f3",
+      "license": "apache-2.0",
+      "parameters": 35107181936,
+      "architecture": "Qwen3_5MoeForConditionalGeneration",
+      "readme_sha256": "4f1aa5006aa9adaeb5ac549e5a5f8ea164352714a00528b1afb8602812d45b44",
+      "license_files": [
+        "LICENSE"
+      ]
+    },
+    {
+      "id": "microsoft/Fara-7B",
+      "revision": "4fca9cdeeff278777751ec558257753b89cf078b",
+      "license": "mit",
+      "parameters": 8292166656,
+      "architecture": "Qwen2_5_VLForConditionalGeneration",
+      "readme_sha256": "c55441f3f9ddae9d87ff5a138fb772fb0179ce2800cb6e143080fa681c513b3e",
+      "license_files": []
+    },
+    {
+      "id": "Qwen/Qwen2-VL-2B-Instruct",
+      "revision": "895c3a49bc3fa70a340399125c650a463535e71c",
+      "license": "apache-2.0",
+      "parameters": 2208985600,
+      "architecture": "Qwen2VLForConditionalGeneration",
+      "readme_sha256": "74fbe869df708593087ae2ee66a6605d33fc2025937644721dc1360963d037f4",
+      "license_files": [
+        "LICENSE"
+      ]
+    },
+    {
+      "id": "Qwen/Qwen3-VL-2B-Instruct",
+      "revision": "89644892e4d85e24eaac8bacfd4f463576704203",
+      "license": "apache-2.0",
+      "parameters": 2127532032,
+      "architecture": "Qwen3VLForConditionalGeneration",
+      "readme_sha256": "5fc5be1ca9a3910399bd6239ee5086ab5d82a2a59c5d2b00e887a8835cc110e4",
+      "license_files": []
+    },
+    {
+      "id": "Qwen/Qwen3-VL-4B-Instruct",
+      "revision": "ebb281ec70b05090aa6165b016eac8ec08e71b17",
+      "license": "apache-2.0",
+      "parameters": 4437815808,
+      "architecture": "Qwen3VLForConditionalGeneration",
+      "readme_sha256": "a884e5e78f7d6f7bfe237f909dbc41a126542e259dc79d8ab33cc8980580ff79",
+      "license_files": []
+    },
+    {
+      "id": "Qwen/Qwen3.5-4B",
+      "revision": "851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a",
+      "license": "apache-2.0",
+      "parameters": 4659865088,
+      "architecture": "Qwen3_5ForConditionalGeneration",
+      "readme_sha256": "1406be1b6b8fd8a6545870da516912804756593628a1d0fb0a7965211e82a7bb",
+      "license_files": [
+        "LICENSE"
+      ]
+    },
+    {
+      "id": "showlab/ShowUI-2B",
+      "revision": "cabec4fcc48d15ffd3efe0b33ea9bc7d41509d60",
+      "license": "mit",
+      "parameters": null,
+      "architecture": "Qwen2VLForConditionalGeneration",
+      "readme_sha256": "40946552d4ce1625d6c234b8b85b33bf70765f1c76a6e56c678cc1ac2d2a72b5",
+      "license_files": []
+    }
+  ]
+}
