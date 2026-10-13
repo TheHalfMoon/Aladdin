@@ -10,8 +10,8 @@ The founder therefore attests that official permission is held to **copy, use, a
 
 | Donor | Public license | Previous rule | Rule from 2026-10-12 |
 |---|---|---|---|
-| [Firecrawl](https://github.com/firecrawl/firecrawl/tree/f84845c864b6e2af22791c18fcf89ac2a21f1434) `f84845c` | AGPL-3.0 (engine) | Behavioral reference only; native rebuild (founder decision 2026-10-11) | Grantor-owned code may be copied and adapted under this permission; an import merges once the permission document is filed (below). |
-| [Skyvern-AI/skyvern](https://github.com/Skyvern-AI/skyvern/tree/f5f3f28a9ce0021a1db24286928a7bff6582a1eb) `f5f3f28` | AGPL-3.0 | Behavioral reference only | Grantor-owned code may be copied and adapted under this permission; an import merges once the permission document is filed (below). |
+| [Firecrawl](https://github.com/firecrawl/firecrawl/tree/f84845c864b6e2af22791c18fcf89ac2a21f1434) `f84845c` | AGPL-3.0 (engine) | Behavioral reference only; native rebuild (founder decision 2026-10-11) | Grantor-owned code may be copied and adapted under this permission; the gate below is satisfied by the founder authorization of 2026-10-13. |
+| [Skyvern-AI/skyvern](https://github.com/Skyvern-AI/skyvern/tree/f5f3f28a9ce0021a1db24286928a7bff6582a1eb) `f5f3f28` | AGPL-3.0 | Behavioral reference only | Grantor-owned code may be copied and adapted under this permission; the gate below is satisfied by the founder authorization of 2026-10-13. |
 
 For permissive donors (MIT, Apache-2.0, BSD) nothing changes. Their licenses already allow copying and renaming, provided the copyright and permission notices travel with the copied code.
 
@@ -23,6 +23,8 @@ For permissive donors (MIT, Apache-2.0, BSD) nothing changes. Their licenses alr
 - **Models.** This record covers source code only. The written-grant requirement for redistributing or rebranding models (`ALADDIN_AI_SERVER_ARCHITECTURE.md`, `MODEL_INTEGRATION_CONTRACTS.md`) is unchanged.
 
 ## The permission documents, and the gate they open
+
+**Updated by the founder decision of 2026-10-13** (`docs/aladdin/grants/2026-10-13-founder-source-authorization.md`). The founder confirmed that the necessary official permissions are held to copy, modify, integrate and rebrand grantor-owned Firecrawl and Skyvern source code and the WebMCP donor sources. The founder also confirmed that the documents are confidential and need not be committed. That record is now the durable direct-permission evidence for the gate below. An import of grantor-owned code merges once its own change is qualified and names the record in its provenance. Notices, provenance, dependency admission, security review and every test and review gate are unchanged. The text below is kept as the history of the gate.
 
 The permission documents themselves are **not in the repository yet**. Aladdin is distributed under Apache-2.0. AGPL-3.0 code may be distributed under other terms only if the copyright holders' permission allows it, so each document must state that scope: copy, modification, combination, redistribution and commercial distribution under Aladdin's license.
 

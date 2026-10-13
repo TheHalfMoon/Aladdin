@@ -116,6 +116,8 @@ Permission gate:
 
 Before any Firecrawl-owned source is copied into a distributable Deskal artifact, the owning grain must reference durable evidence that the direct permission covers the intended copy, modification, combination, redistribution, and commercial distribution. The permission does not supersede third-party dependency licenses.
 
+Evidence on file: the founder authorization of 2026-10-13 (`docs/aladdin/grants/2026-10-13-founder-source-authorization.md`) is that durable internal evidence. The founder confirmed the permissions needed to copy, modify, integrate and rebrand Firecrawl-owned source, and that the documents themselves stay confidential. The owning grain references that record. Third-party dependency licenses still apply.
+
 ## 5. Agent Reach
 
 Repository: `Panniantong/Agent-Reach`
