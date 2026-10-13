@@ -30,6 +30,10 @@ pub const MAX_SKIPPED_REPORTED: usize = 200;
 pub const MAX_PATH_PATTERNS: usize = 16;
 pub const MAX_PATH_PATTERN_BYTES: usize = 256;
 
+/// Links at least this long may have been cut by the worker's 2048-byte
+/// bound (a multi-byte character can stop the cut short): never opened.
+const MAX_LINK_BYTES: usize = 2048 - 3;
+
 /// Path endings that are files, not pages: never opened by a crawl.
 const NOT_PAGES: &[&str] = &[
     ".pdf", ".zip", ".gz", ".tgz", ".rar", ".7z", ".tar", ".png", ".jpg", ".jpeg", ".gif", ".webp",
@@ -68,7 +72,9 @@ pub enum SkipReason {
     Filtered,
     /// A file, not a page (by its path ending).
     NotAPage,
-    /// Dot segments or an encoded dot: not in the form the engine requests.
+    /// Dot segments, an encoded dot, whitespace or a control character
+    /// anywhere (the engine trims or rewrites them), or a link possibly cut
+    /// by the observation's bound: not in the form the engine requests.
     Unnormalized,
     /// Past the depth bound.
     TooDeep,
@@ -134,6 +140,10 @@ pub trait CrawlDriver {
     /// root-relative URLs as written).
     fn links(&mut self) -> Result<Vec<String>, HostError>;
     fn extract(&mut self, options: ExtractOptions) -> Result<PageExtraction, HostError>;
+    /// The browser lifetime has failed closed: nothing more can be opened.
+    /// A failed page (a download link, a load timeout, a network error, an
+    /// observation too large) is not this; the next page gets a fresh one.
+    fn lost(&self) -> bool;
 }
 
 /// The crawl's origin and scope, from its start URL.
@@ -141,8 +151,11 @@ pub trait CrawlDriver {
 struct Scope {
     /// `https://host` (port 443 implied).
     base: String,
-    /// The start URL's directory, ending in `/`.
+    /// Paths under this prefix are in scope.
     prefix: String,
+    /// A start path without a trailing slash that is not a document is in
+    /// scope itself, besides everything below it.
+    exact: Option<String>,
     include: Vec<String>,
     exclude: Vec<String>,
 }
@@ -187,6 +200,27 @@ fn not_a_page(path: &str) -> bool {
     NOT_PAGES.iter().any(|ending| only_path.ends_with(ending))
 }
 
+/// The scope of a start path, as Firecrawl defines it: a path ending in `/`
+/// is its own prefix; a document (`/docs/intro.html`, a last segment ending
+/// in a dot and two or more letters or digits) scopes to its directory;
+/// anything else (`/docs`) is in scope itself and scopes to `/docs/`.
+fn scope_of(path: &str) -> (String, Option<String>) {
+    if path.ends_with('/') {
+        return (path.to_owned(), None);
+    }
+    let last = path.rfind('/').map_or(0, |at| at + 1);
+    let segment = &path[last..];
+    let document = segment.rfind('.').is_some_and(|dot| {
+        let ext = &segment[dot + 1..];
+        ext.len() >= 2 && ext.bytes().all(|b| b.is_ascii_alphanumeric())
+    });
+    if document {
+        (path[..last].to_owned(), None)
+    } else {
+        (format!("{path}/"), Some(path.to_owned()))
+    }
+}
+
 fn checked_patterns(patterns: &[String]) -> Result<Vec<String>, HostError> {
     if patterns.len() > MAX_PATH_PATTERNS {
         return Err(invalid("too many crawl path patterns"));
@@ -214,13 +248,11 @@ impl Scope {
             return Err(invalid("the crawl start URL is not normalized"));
         }
         let only_path = path.split('?').next().unwrap_or("/");
-        let prefix = match only_path.rfind('/') {
-            Some(at) => only_path[..=at].to_owned(),
-            None => "/".to_owned(),
-        };
+        let (prefix, exact) = scope_of(only_path);
         let scope = Self {
             base: base.clone(),
             prefix,
+            exact,
             include: checked_patterns(&spec.include_paths)?,
             exclude: checked_patterns(&spec.exclude_paths)?,
         };
@@ -229,11 +261,17 @@ impl Scope {
 
     /// The normalized URL to open, or why not.
     fn admit(&self, link: &str) -> Result<String, SkipReason> {
+        if link.len() >= MAX_LINK_BYTES
+            || link.chars().any(|ch| ch.is_whitespace() || ch.is_control())
+        {
+            return Err(SkipReason::Unnormalized);
+        }
         let path = split_on(&self.base, link).ok_or(SkipReason::OtherOrigin)?;
         if unnormalized(&path) {
             return Err(SkipReason::Unnormalized);
         }
-        if !path.starts_with(&self.prefix) {
+        let only_path = path.split('?').next().unwrap_or(&path);
+        if !path.starts_with(&self.prefix) && self.exact.as_deref() != Some(only_path) {
             return Err(SkipReason::OutOfScope);
         }
         if not_a_page(&path) {
@@ -263,12 +301,6 @@ fn check_spec(spec: &CrawlSpec) -> Result<(), HostError> {
     Ok(())
 }
 
-/// Whether a driver error ends the browser lifetime (the crawl stops) or
-/// only this page.
-fn fatal(error: &HostError) -> bool {
-    matches!(error, HostError::Unavailable(_))
-}
-
 /// Run a crawl. A refused spec is an error; everything after the start is
 /// in the report. `cancelled` and the deadline are checked between pages.
 pub fn crawl(
@@ -290,6 +322,8 @@ pub fn crawl(
         stopped: None,
     };
     let mut seen: HashSet<String> = HashSet::from([scope_start.clone()]);
+    // Links past the depth bound, reported once each (bounded like `seen`).
+    let mut too_deep: HashSet<String> = HashSet::new();
     // Final URLs already read, so a redirect onto one is not read twice.
     let mut read: HashSet<String> = HashSet::new();
     let mut queue: VecDeque<(String, u32)> = VecDeque::from([(scope_start, 0)]);
@@ -324,7 +358,7 @@ pub fn crawl(
         let visit = match driver.open(&url) {
             Ok(visit) => visit,
             Err(error) => {
-                let stop = fatal(&error);
+                let stop = driver.lost();
                 page.failure = Some(error.to_string());
                 report.pages.push(page);
                 if stop {
@@ -336,15 +370,17 @@ pub fn crawl(
         };
         page.final_url = visit.final_url.clone();
         page.status = visit.status;
-        let in_scope = scope.admit(&visit.final_url);
         let failure = if !(200..300).contains(&visit.status) {
             Some(format!("status {}", visit.status))
-        } else if in_scope.is_err() {
-            Some("redirected out of the crawl scope".to_owned())
-        } else if !read.insert(visit.final_url.clone()) {
-            Some("redirected onto a page already read".to_owned())
         } else {
-            None
+            match scope.admit(&visit.final_url) {
+                Err(_) => Some("redirected out of the crawl scope".to_owned()),
+                // Keyed by the normalized URL (no fragment), as the queue is.
+                Ok(normalized) if !read.insert(normalized.clone()) => {
+                    Some("redirected onto a page already read".to_owned())
+                }
+                Ok(_) => None,
+            }
         };
         if failure.is_some() {
             page.failure = failure;
@@ -354,7 +390,7 @@ pub fn crawl(
         if let Some(options) = spec.extract {
             match driver.extract(options) {
                 Ok(extraction) => page.extraction = Some(extraction),
-                Err(error) if fatal(&error) => {
+                Err(error) if driver.lost() => {
                     page.failure = Some(error.to_string());
                     report.pages.push(page);
                     report.stopped = Some(CrawlStop::WorkerFailed);
@@ -366,7 +402,7 @@ pub fn crawl(
         let links = match driver.links() {
             Ok(links) => links,
             Err(error) => {
-                let stop = fatal(&error);
+                let stop = driver.lost();
                 page.failure.get_or_insert(error.to_string());
                 report.pages.push(page);
                 if stop {
@@ -389,7 +425,9 @@ pub fn crawl(
                 continue;
             }
             if depth + 1 > spec.max_depth {
-                skip(&mut report, admitted, SkipReason::TooDeep);
+                if too_deep.len() < MAX_CRAWL_URLS && too_deep.insert(admitted.clone()) {
+                    skip(&mut report, admitted, SkipReason::TooDeep);
+                }
                 continue;
             }
             if seen.len() >= MAX_CRAWL_URLS {
@@ -400,9 +438,6 @@ pub fn crawl(
             report.discovered.push(admitted.clone());
             queue.push_back((admitted, depth + 1));
         }
-    }
-    if report.stopped.is_none() && !queue.is_empty() {
-        report.stopped = Some(CrawlStop::PageLimit);
     }
     Ok(report)
 }
@@ -419,6 +454,7 @@ mod tests {
         opened: Vec<String>,
         current: Option<String>,
         fail_extract: bool,
+        lost: bool,
     }
 
     impl Site {
@@ -440,6 +476,7 @@ mod tests {
                 opened: Vec::new(),
                 current: None,
                 fail_extract: false,
+                lost: false,
             }
         }
     }
@@ -452,8 +489,14 @@ mod tests {
                 .get(url)
                 .cloned()
                 .ok_or_else(|| HostError::Invalid("navigation denied".into()))?;
+            // 0: the lifetime fails closed; 1: one page fails, typed as the
+            // worker reports it, and the lifetime goes on.
             if status == 0 {
+                self.lost = true;
                 return Err(HostError::Unavailable(UnavailableReason::ProtocolViolation));
+            }
+            if status == 1 {
+                return Err(HostError::Unavailable(UnavailableReason::ActionFailed));
             }
             // The committed page is the final one, after redirects.
             self.current = Some(end.clone());
@@ -469,6 +512,9 @@ mod tests {
                 .get(&current)
                 .map(|(_, _, links)| links.clone())
                 .unwrap_or_default())
+        }
+        fn lost(&self) -> bool {
+            self.lost
         }
         fn extract(&mut self, _options: ExtractOptions) -> Result<PageExtraction, HostError> {
             if self.fail_extract {
@@ -687,6 +733,111 @@ mod tests {
         .unwrap();
         assert_eq!(report.stopped, Some(CrawlStop::WorkerFailed));
         assert_eq!(driver.opened.len(), 2);
+
+        // A page that fails as the worker reports it (a download link, a load
+        // timeout) is recorded, and the crawl goes on.
+        let mut driver = site();
+        driver.pages.insert(
+            "https://site.test/docs/a".into(),
+            (String::new(), 1, Vec::new()),
+        );
+        let report = crawl(
+            &mut driver,
+            &spec("https://site.test/docs/"),
+            &AtomicBool::new(false),
+        )
+        .unwrap();
+        assert_eq!(report.stopped, None);
+        assert!(report.pages[1].failure.is_some());
+        assert!(driver
+            .opened
+            .contains(&"https://site.test/docs/b".to_owned()));
+    }
+
+    #[test]
+    fn whitespace_long_links_fragments_and_repeated_deep_links() {
+        let long = format!("/docs/{}", "x".repeat(MAX_LINK_BYTES));
+        let refs = [
+            "/docs/.. ",
+            "/docs/a\t",
+            " /docs/a",
+            long.as_str(),
+            "/docs/deep",
+            "/docs/deep",
+        ];
+        let mut driver = Site::new(&[
+            (
+                "https://site.test/docs/",
+                "https://site.test/docs/",
+                200,
+                &refs,
+            ),
+            // A redirect whose final URL carries a fragment.
+            (
+                "https://site.test/docs/deep",
+                "https://site.test/docs/#top",
+                200,
+                &[],
+            ),
+        ]);
+        let mut shallow = spec("https://site.test/docs/");
+        shallow.max_depth = 0;
+        let report = crawl(&mut driver, &shallow, &AtomicBool::new(false)).unwrap();
+        let unnormalized = report
+            .skipped
+            .iter()
+            .filter(|s| s.reason == SkipReason::Unnormalized)
+            .count();
+        assert_eq!(unnormalized, 4);
+        // Reported once although linked twice.
+        assert_eq!(
+            report
+                .skipped
+                .iter()
+                .filter(|s| s.reason == SkipReason::TooDeep)
+                .count(),
+            1
+        );
+        let mut deep = spec("https://site.test/docs/");
+        deep.max_depth = 1;
+        let mut driver = Site::new(&[
+            (
+                "https://site.test/docs/",
+                "https://site.test/docs/",
+                200,
+                &["/docs/deep"],
+            ),
+            (
+                "https://site.test/docs/deep",
+                "https://site.test/docs/#top",
+                200,
+                &[],
+            ),
+        ]);
+        let report = crawl(&mut driver, &deep, &AtomicBool::new(false)).unwrap();
+        assert_eq!(
+            report.pages[1].failure.as_deref(),
+            Some("redirected onto a page already read"),
+            "a fragment made a second key"
+        );
+    }
+
+    #[test]
+    fn the_scope_follows_the_reference_rule() {
+        assert_eq!(scope_of("/docs/"), ("/docs/".into(), None));
+        assert_eq!(scope_of("/docs/intro.html"), ("/docs/".into(), None));
+        assert_eq!(scope_of("/docs"), ("/docs/".into(), Some("/docs".into())));
+        assert_eq!(
+            scope_of("/docs/v1.x"),
+            ("/docs/v1.x/".into(), Some("/docs/v1.x".into()))
+        );
+        assert_eq!(scope_of("/"), ("/".into(), None));
+        let (scope, _) = Scope::of(&spec("https://site.test/docs")).unwrap();
+        assert!(scope.admit("/docs").is_ok());
+        assert!(scope.admit("/docs?page=2").is_ok());
+        assert!(scope.admit("/docs/a").is_ok());
+        assert_eq!(scope.admit("/docsx"), Err(SkipReason::OutOfScope));
+        assert_eq!(scope.admit("/other"), Err(SkipReason::OutOfScope));
     }
 
     #[test]
@@ -702,6 +853,9 @@ mod tests {
             }
             fn extract(&mut self, options: ExtractOptions) -> Result<PageExtraction, HostError> {
                 self.0.extract(options)
+            }
+            fn lost(&self) -> bool {
+                self.0.lost()
             }
         }
         let mut quick = spec("https://site.test/docs/");
@@ -744,9 +898,9 @@ mod tests {
         only_a.include_paths = vec!["/docs/a".into(), "/docs/".into()];
         assert!(crawl(&mut site(), &only_a, &AtomicBool::new(false)).is_ok());
         // A start page names its directory as the scope.
-        let (scope, start) = Scope::of(&spec("https://site.test/docs/intro?x=1#top")).unwrap();
+        let (scope, start) = Scope::of(&spec("https://site.test/docs/intro.html?x=1#top")).unwrap();
         assert_eq!(scope.prefix, "/docs/");
-        assert_eq!(start, "https://site.test/docs/intro?x=1");
+        assert_eq!(start, "https://site.test/docs/intro.html?x=1");
         for bad in [
             "http://site.test/",
             "https://site.test:8443/",

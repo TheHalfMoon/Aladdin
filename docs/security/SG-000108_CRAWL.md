@@ -12,16 +12,19 @@ Slice 7 of `docs/aladdin/WEB_CAPABILITIES_DECISION.md` adds a host-side crawl qu
 
 ## Scope rules
 
-- **The start URL** must parse as a navigation URL (`https`, port 443, no userinfo, no backslash, no control characters) and contain no dot segments. Its directory is the scope: `https://host/docs/intro` → `/docs/`.
+- **The start URL** must parse as a navigation URL (`https`, port 443, no userinfo, no backslash, no control characters) and contain no dot segments. Its scope follows Firecrawl's rule:
+  - a path ending in `/` is its own prefix;
+  - a document (a last segment ending in a dot and two or more letters or digits, such as `/docs/intro.html`) scopes to its directory, `/docs/`;
+  - anything else (`/docs`) is in scope itself and scopes to `/docs/`.
 - **A discovered link is opened only if all of these hold:**
   - It resolves on the crawl's origin. Only absolute `https://host/…` and root-relative `/…` links count. Other schemes, protocol-relative `//…`, document-relative paths, credentials, backslashes, other ports, other hosts and IP literals are skipped as `OtherOrigin`.
-  - It has no dot segment and no encoded dot (`%2e`) (`Unnormalized`).
+  - It has no dot segment, no encoded dot (`%2e`), no whitespace or control character anywhere, and is shorter than 2,045 bytes (`Unnormalized`). The engine trims or rewrites the first group (`/site/.. ` would open `/`). A link that long may have been cut by the observation's 2,048-byte bound.
   - Its path is under the scope (`OutOfScope`).
   - It is not a file by its path ending, such as `.pdf`, archives, images, media, executables, office files, `.json`/`.xml`, fonts or scripts (`NotAPage`). Downloads stay with the approval-gated SG-000078 path.
-  - It passes the include and exclude prefixes (`Filtered`; at most 16 of each, 256 bytes each).
-  - It is within `max_depth` link hops (`TooDeep`, at most 5).
+  - It passes the include and exclude prefixes (`Filtered`; at most 16 of each, 256 bytes each). They compare the URL text as written: `/docs/%70rivate` or `/DOCS/private` passes `exclude /docs/private` on a server that decodes escapes or ignores case. The filters narrow a crawl; they are not an access control. The origin is the boundary.
+  - It is within `max_depth` link hops (`TooDeep`, at most 5; each such URL is reported once).
   - The crawl remembers fewer than 1,000 URLs (`TooMany`).
-- **Fragments are dropped, and each URL is opened at most once.**
+- **Fragments are dropped, and each URL is opened at most once.** A page is read once, keyed by its normalized final URL, so a redirect to `…#x` is the same page.
 - **A page is read** (extracted, and its links followed) only if its navigation succeeded with a 2xx status and its final URL, after redirects, is in scope and not already read. Otherwise the report says why:
   - a refused or failed navigation;
   - `status N`;
@@ -34,8 +37,8 @@ Slice 7 of `docs/aladdin/WEB_CAPABILITIES_DECISION.md` adds a host-side crawl qu
 
 - At most 50 pages, depth 5, and 10 minutes; a spec past any of these is refused.
 - The page count, the deadline and the caller's `cancelled` flag are checked before each page. A page that has started keeps its own timeouts: navigation 45 s, observation 10 s, extraction 20 s plus 10 s per further piece. A crawl can therefore overrun its deadline by one page's timeouts.
-- A worker failure the lifetime does not survive (`HostError::Unavailable`) stops the crawl as `WorkerFailed`. Other per-page errors are recorded and the crawl goes on.
-- The report keeps at most 200 skipped links and counts the rest. `discovered` (the map) lists every in-scope URL found, in discovery order.
+- **Worker failure:** the crawl stops as `WorkerFailed` only when the browser lifetime has failed closed (the host's own deadline passed, a protocol violation, or the worker exited). A page that fails as the worker reports it does not stop the crawl. Examples: a download link, a load timeout, a network error, an observation too large to take. That failure is recorded and the crawl goes on, because the next navigation gets a fresh page.
+- The report keeps at most 200 skipped links and counts the rest. `discovered` (the map) lists every URL the crawl admitted and queued, in discovery order. Links skipped as `TooDeep` or `TooMany` appear only in `skipped`.
 - **A map** is a crawl with `extract: None`: pages are opened only to find their links.
 
 ## Limits
@@ -43,6 +46,7 @@ Slice 7 of `docs/aladdin/WEB_CAPABILITIES_DECISION.md` adds a host-side crawl qu
 - **No `robots.txt` and no sitemaps.** Firecrawl honours `robots.txt` by default and reads sitemaps. Aladdin does neither in this slice, because reading them needs a request outside a page navigation. The crawl stays on the one destination the user admitted, sequentially, one page at a time. Follow-up: #317.
 - Links are what the observation reports. A link the bounded observation does not include (past its node bound) is not found, and the observation's `truncated` flag is not surfaced per page.
 - Document-relative links (`page2`, `../x`) are skipped, not resolved, because the observation reports the `href` as written.
+- A start host with Unicode (IDN) characters fails closed: the engine commits its punycode form, which is not the crawl's origin, so every page reads "redirected out of the crawl scope". Start from the punycode name.
 - The engine's own requests (subresources, redirects) are governed by the navigation policy, not by the crawl's path scope.
 
 ## Evidence
@@ -53,7 +57,8 @@ Slice 7 of `docs/aladdin/WEB_CAPABILITIES_DECISION.md` adds a host-side crawl qu
   - `moved` redirecting onto C and read once under `moved`, after which C is "already read";
   - `away` redirecting out of scope and not read;
   - `missing` returning 404, not read;
-  - `deep/2` past depth 2 and skipped.
+  - `deep/2` past depth 2 and skipped;
+  - `dl`, a download link with no file ending, failing that page only, after which the crawl went on.
 - **Extraction:** A reads "Alpha text.", and `moved` reads "Gamma text.".
 - **Skips:** `other.test` and `mailto:` as `OtherOrigin`, `/elsewhere` as `OutOfScope`, `report.pdf` as `NotAPage`, and `/site/private/…` as `Filtered`.
 - **Map:** two pages, stopped at `PageLimit`, nothing extracted, and the unopened `missing` page listed in `discovered`.
@@ -64,7 +69,10 @@ Slice 7 of `docs/aladdin/WEB_CAPABILITIES_DECISION.md` adds a host-side crawl qu
 
 **Unit tests** in `crawl.rs`, through a fake driver:
 - the scope and every skip reason, including backslash, port, look-alike host, IP literal, protocol-relative, credentials, `%2e` and dot segments;
-- read-once across redirects; 404s;
+- read-once across redirects (a fragment on the final URL included); 404s;
+- whitespace, possibly cut and repeated too-deep links;
+- the reference scope rule;
+- a per-page worker failure that does not stop the crawl;
 - depth, page-limit, cancellation, deadline and worker-failure stops;
 - maps; failed extraction (its links are still followed);
 - spec bounds; the URL-memory and skip-report bounds.

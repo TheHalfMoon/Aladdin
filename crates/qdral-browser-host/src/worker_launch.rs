@@ -1024,6 +1024,10 @@ mod platform {
         ) -> Result<crate::extraction::PageExtraction, HostError> {
             self.worker.extract_page(options)
         }
+
+        fn lost(&self) -> bool {
+            self.worker.failed.is_some()
+        }
     }
 
     impl CancelHandle {

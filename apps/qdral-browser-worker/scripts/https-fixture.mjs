@@ -192,6 +192,7 @@ const SITE = {
 <li><a href="/site/moved">Moved</a></li>
 <li><a href="/site/away">Away</a></li>
 <li><a href="/site/missing">Missing</a></li>
+<li><a href="/site/dl">Download</a></li>
 <li><a href="https://other.test/site/x">Other origin</a></li>
 <li><a href="/elsewhere">Elsewhere</a></li>
 <li><a href="/site/report.pdf">A file</a></li>
@@ -268,6 +269,12 @@ const server = createServer({ key, cert }, (request, response) => {
   if (path === "/redirect-same") return redirect("/landing");
   if (path === "/site/moved") return redirect("/site/c");
   if (path === "/site/away") return redirect("/elsewhere");
+  if (path === "/site/dl") {
+    // A download with no file ending: the page fails, the crawl goes on.
+    response.setHeader("content-type", "application/octet-stream");
+    response.setHeader("content-disposition", 'attachment; filename="data"');
+    return response.end("binary");
+  }
   if (path === "/site/missing") {
     response.statusCode = 404;
     response.setHeader("content-type", "text/html");

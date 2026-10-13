@@ -1251,6 +1251,7 @@ fn a_crawl_reads_only_its_scope_through_the_governed_navigation() {
             "https://fixture.test/site/moved",
             "https://fixture.test/site/away",
             "https://fixture.test/site/missing",
+            "https://fixture.test/site/dl",
             "https://fixture.test/site/c",
             "https://fixture.test/site/deep/1",
         ]
@@ -1284,6 +1285,8 @@ fn a_crawl_reads_only_its_scope_through_the_governed_navigation() {
         Some("redirected out of the crawl scope")
     );
     assert_eq!(page("https://fixture.test/site/missing").status, 404);
+    // A download link fails that page only; the lifetime and the crawl go on.
+    assert!(page("https://fixture.test/site/dl").failure.is_some());
     assert!(page("https://fixture.test/site/missing")
         .extraction
         .is_none());
