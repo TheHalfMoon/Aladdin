@@ -36,6 +36,8 @@ export interface DomElement {
   readonly parent: DomElement | null;
   /// The engine's backend node id (stable for the document's lifetime).
   readonly node: number;
+  /// The element lies inside a shadow tree.
+  readonly inShadow?: boolean;
 }
 
 export interface DomText {
@@ -82,6 +84,12 @@ export interface DeclaredTool {
   action: string | null;
   /// The form's method: "get", "post" or "dialog" (HTML's default is get).
   method: "get" | "post" | "dialog";
+  /// Execution can enter exactly the declared fields and submit exactly this
+  /// form: every control and button below it is its own and none of its own
+  /// lies elsewhere; no shadow tree below it holds one; no submit button
+  /// overrides it; it has a default button; it opens no new browsing
+  /// context and posts URL-encoded.
+  self_contained: boolean;
   params: DeclaredParam[];
 }
 
@@ -233,6 +241,8 @@ interface ControlFacts {
 interface Frame {
   node: DomNode;
   form: DomElement | null;
+  /// The nearest form ancestor across shadow-root boundaries.
+  hostForm: DomElement | null;
   disabled: boolean;
   label: { element: DomElement; used: boolean } | null;
   select: DomElement | null;
@@ -243,8 +253,23 @@ interface Frame {
 /// Nearest fieldsets remembered per control.
 const MAX_FIELDSETS = 8;
 
+/// Submit-button attributes that override the form's own submission.
+const SUBMIT_OVERRIDES = ["form", "formaction", "formmethod", "formenctype", "formtarget", "formnovalidate"];
+
+function isSubmitter(element: DomElement): boolean {
+  if (element.tag === "button") {
+    const type = (attr(element, "type") ?? "submit").trim().toLowerCase();
+    return type === "submit" || type === "";
+  }
+  return element.tag === "input" && ["submit", "image"].includes(inputType(element));
+}
+
 interface Pass {
   forms: DomElement[];
+  /// Forms whose structure the worker can execute exactly (below).
+  unsafe: Set<DomElement>;
+  /// Each form's default button (its first submit button in tree order).
+  submitters: Map<DomElement, DomElement>;
   controls: ControlFacts[];
   options: Map<DomElement, DomElement[]>;
   truncated: boolean;
@@ -261,10 +286,12 @@ function treePass(root: DomElement, deadline: number): Pass {
   const formAttr = new Map<ControlFacts, { scope: number; id: string }>();
   const labelFor: Array<{ label: DomElement; scope: number; id: string }> = [];
   const factsOf = new Map<DomElement, ControlFacts>();
+  const unsafe = new Set<DomElement>();
+  const submitters = new Map<DomElement, DomElement>();
   let scopes = 0;
   let truncated = false;
   let steps = 0;
-  const stack: Frame[] = [{ node: root, form: null, disabled: false, label: null, select: null, fieldsets: [], scope: 0 }];
+  const stack: Frame[] = [{ node: root, form: null, hostForm: null, disabled: false, label: null, select: null, fieldsets: [], scope: 0 }];
   for (let frame = stack.pop(); frame; frame = stack.pop()) {
     if ((++steps & 1023) === 0 && Date.now() > deadline) {
       truncated = true;
@@ -273,6 +300,7 @@ function treePass(root: DomElement, deadline: number): Pass {
     const { node } = frame;
     if (node.kind !== "element") continue;
     let { form, disabled, label, select, fieldsets, scope } = frame;
+    const { hostForm } = frame;
     if (node.tag === "#shadow-root") {
       scope = ++scopes;
       form = null;
@@ -286,7 +314,27 @@ function treePass(root: DomElement, deadline: number): Pass {
         const key = `${scope}#${id}`;
         if (!byId.has(key)) byId.set(key, node);
       }
-      if (node.tag === "form") forms.push(node);
+      if (node.tag === "form") {
+        forms.push(node);
+        // A form inside a form (only script can build one) makes both
+        // ambiguous.
+        if (hostForm) {
+          unsafe.add(hostForm);
+          unsafe.add(node);
+        }
+      }
+      // Execution finds a tool's fields and button by position in the form,
+      // so a form is executable only when position and ownership agree: no
+      // control or button in a shadow tree below it, none inside it owned
+      // elsewhere (`form=`), and no submit button that overrides the form.
+      if (CONTROL_TAGS.has(node.tag) || node.tag === "button") {
+        if (hostForm && hostForm !== form) unsafe.add(hostForm);
+        if (form && attr(node, "form") !== undefined) unsafe.add(form);
+        if (form && isSubmitter(node)) {
+          if (SUBMIT_OVERRIDES.some((name) => node.attrs.has(name))) unsafe.add(form);
+          if (!submitters.has(form)) submitters.set(form, node);
+        }
+      }
       if (node.tag === "option" && select) options.get(select)?.push(node);
       if (node.tag === "label") {
         const target = attr(node, "for");
@@ -325,6 +373,7 @@ function treePass(root: DomElement, deadline: number): Pass {
       stack.push({
         node: child,
         form: childForm,
+        hostForm: node.tag === "form" ? node : hostForm,
         disabled: disables && child !== legend ? true : disabled,
         label: childLabel,
         select: childSelect,
@@ -338,13 +387,15 @@ function treePass(root: DomElement, deadline: number): Pass {
   for (const [facts, { scope, id }] of formAttr) {
     const target = byId.get(`${scope}#${id}`);
     facts.owner = target && target.tag === "form" ? target : null;
+    // A control owned from outside the form is not where execution looks.
+    if (facts.owner) unsafe.add(facts.owner);
   }
   for (const { label, scope, id } of labelFor) {
     const target = byId.get(`${scope}#${id}`);
     const facts = target && isLabelable(target) ? factsOf.get(target) : undefined;
     facts?.labels.push(label);
   }
-  return { forms, controls, options, truncated };
+  return { forms, unsafe, submitters, controls, options, truncated };
 }
 
 function isReadOnly(control: DomElement): boolean {
@@ -527,6 +578,21 @@ function controlKind(group: readonly ControlFacts[]): ControlKind {
   return "text";
 }
 
+function selfContained(form: DomElement, pass: Pass): boolean {
+  // A form inside a shadow tree is never executed: the snapshot cannot tell
+  // a nested shadow tree from its parent tree, so ownership there is
+  // unknowable.
+  if (form.inShadow) return false;
+  const target = (attr(form, "target") ?? "").trim().toLowerCase();
+  const enctype = (attr(form, "enctype") ?? "").trim().toLowerCase();
+  return (
+    !pass.unsafe.has(form) &&
+    pass.submitters.has(form) &&
+    (target === "" || target === "_self") &&
+    (enctype === "" || enctype === "application/x-www-form-urlencoded")
+  );
+}
+
 function formMethod(form: DomElement): "get" | "post" | "dialog" {
   const method = (attr(form, "method") ?? "").trim().toLowerCase();
   return method === "post" || method === "dialog" ? method : "get";
@@ -611,6 +677,7 @@ export function discoverDeclarativeTools(root: DomElement, budgetMs: number = DI
       has_password: hasPassword,
       action: ((raw) => (exactValue(raw, LIMITS.action) ? raw : null))(attr(form, "action") ?? ""),
       method: formMethod(form),
+      self_contained: selfContained(form, pass),
       params
     });
   }

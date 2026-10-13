@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { classifyRequest, originOf, type FrameLike, type RequestLike } from "./routing.js";
+import { classifyRequest, MAX_ROUTE_BODY_BYTES, originOf, requestDetail, type FrameLike, type RequestLike } from "./routing.js";
 
 const PRIMARY = { name: "primary" };
 const POPUP = { name: "popup" };
@@ -68,4 +68,23 @@ test("origins are only derived from http(s) URLs", () => {
   for (const url of ["about:blank", "data:text/html,x", "blob:https://fixture.test/1", "javascript:1", "not a url"]) {
     assert.equal(originOf(url), "", url);
   }
+});
+
+test("request detail carries the method and only a bounded printable urlencoded body", () => {
+  const req = (method: string, type: string | undefined, body: Buffer | null) => ({
+    method: () => method,
+    headers: (): Record<string, string> => (type === undefined ? {} : { "content-type": type }),
+    postDataBuffer: () => body
+  });
+  assert.deepEqual(requestDetail(req("get", undefined, null)), { method: "GET", contentType: "", body: "", bodyBytes: 0 });
+  assert.deepEqual(requestDetail(req("POST", "application/x-www-form-urlencoded", Buffer.from("a=1&b=x%20y"))), {
+    method: "POST",
+    contentType: "application/x-www-form-urlencoded",
+    body: "a=1&b=x%20y",
+    bodyBytes: 11
+  });
+  assert.equal(requestDetail(req("POST", "multipart/form-data; boundary=x", Buffer.from("--x"))).body, null);
+  assert.equal(requestDetail(req("POST", "application/x-www-form-urlencoded", Buffer.from("a=\n"))).body, null);
+  const big = requestDetail(req("POST", "application/x-www-form-urlencoded", Buffer.alloc(MAX_ROUTE_BODY_BYTES + 1, 0x61)));
+  assert.deepEqual([big.body, big.bodyBytes], [null, MAX_ROUTE_BODY_BYTES + 1]);
 });

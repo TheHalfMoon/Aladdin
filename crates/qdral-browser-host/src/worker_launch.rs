@@ -116,6 +116,9 @@ pub struct ExecutionOutcome {
     pub status: u16,
     pub document_generation: u64,
     pub structured: Vec<crate::webmcp::PageText>,
+    /// Every structured block was read and kept (false when the snapshot
+    /// failed or blocks were dropped to fit the reply).
+    pub structured_complete: bool,
 }
 
 /// A completed top-level navigation.
@@ -294,6 +297,7 @@ pub(crate) enum WorkerReply {
         url: String,
         status: u16,
         structured: Vec<String>,
+        structured_complete: bool,
     },
     ExecutionFailed {
         exec_id: u64,
@@ -1594,13 +1598,14 @@ mod platform {
             let opened_expected = self.policy.finish_activation();
             self.host_nodes.clear();
             self.host_tools.clear();
-            let (done_url, status, structured) = match reply? {
+            let (done_url, status, structured, structured_complete) = match reply? {
                 WorkerReply::Executed {
                     exec_id: done,
                     url,
                     status,
                     structured,
-                } if done == exec_id => (url, status, structured),
+                    structured_complete,
+                } if done == exec_id => (url, status, structured, structured_complete),
                 WorkerReply::ExecutionFailed {
                     exec_id: done,
                     reason,
@@ -1621,6 +1626,7 @@ mod platform {
                 status,
                 document_generation: next,
                 structured,
+                structured_complete,
             })
         }
 
@@ -2549,6 +2555,47 @@ mod tests {
     }
 
     #[test]
+    fn a_submission_names_exactly_the_approved_fields() {
+        use crate::webmcp::{ControlKind, ExecField};
+        use crate::worker_navigation::Submitted;
+        let wire: Vec<crate::webmcp::WireTool> = serde_json::from_str(
+            r#"[{"name":"t","title":"","description":"d","autosubmit":true,"node":3,"has_password":false,"action":"/s","method":"post","self_contained":true,"params":[
+                {"name":"note","required":false,"control":"textarea","type":"string"},
+                {"name":"ok","required":false,"control":"checkbox","type":"boolean"},
+                {"name":"off","required":false,"control":"checkbox","type":"boolean"},
+                {"name":"tags","required":false,"control":"checkboxes","type":"array","items_enum":["a","b"]},
+                {"name":"left","required":false,"control":"text","type":"string"}]}]"#,
+        )
+        .unwrap();
+        let tool = crate::webmcp::validate_tools(wire, 1).unwrap().0.remove(0);
+        let field = |name: &str, control, values: &[&str]| ExecField {
+            name: name.into(),
+            control,
+            values: values.iter().map(|v| (*v).to_owned()).collect(),
+        };
+        let fields = [
+            field("note", ControlKind::Textarea, &["a\nb"]),
+            field("ok", ControlKind::Checkbox, &["true"]),
+            field("off", ControlKind::Checkbox, &["false"]),
+            field("tags", ControlKind::Checkboxes, &["b"]),
+        ];
+        let submission = submission_of(&tool, &fields, true);
+        assert_eq!(submission.method, "POST");
+        assert_eq!(
+            submission.fields,
+            vec![
+                ("note".to_owned(), Submitted::Values(vec!["a\nb".into()])),
+                ("ok".to_owned(), Submitted::Present),
+                ("off".to_owned(), Submitted::Absent),
+                ("tags".to_owned(), Submitted::Values(vec!["b".into()])),
+            ]
+        );
+        assert_eq!(submission.unsupplied, vec!["left".to_owned()]);
+        assert_eq!(submission.multiline, vec!["note".to_owned()]);
+        assert_eq!(submission_of(&tool, &fields, false).method, "GET");
+    }
+
+    #[test]
     fn execution_frames_are_exact() {
         let json = |request: &WorkerRequest<'_>| serde_json::to_string(request).unwrap();
         let fields = [crate::webmcp::ExecField {
@@ -2566,7 +2613,7 @@ mod tests {
         );
         let reply = |text: &str| serde_json::from_str::<WorkerReply>(text);
         assert!(matches!(
-            reply(r#"{"frame":"executed","exec_id":3,"url":"https://fixture.test/search?q=rust","status":200,"structured":["{}"]}"#).unwrap(),
+            reply(r#"{"frame":"executed","exec_id":3,"url":"https://fixture.test/search?q=rust","status":200,"structured":["{}"],"structured_complete":true}"#).unwrap(),
             WorkerReply::Executed { exec_id: 3, status: 200, .. }
         ));
         assert!(matches!(
@@ -2574,7 +2621,7 @@ mod tests {
             WorkerReply::ExecutionFailed { exec_id: 3, .. }
         ));
         assert!(reply(
-            r#"{"frame":"executed","exec_id":3,"url":"u","status":200,"structured":[],"extra":1}"#
+            r#"{"frame":"executed","exec_id":3,"url":"u","status":200,"structured":[],"structured_complete":true,"extra":1}"#
         )
         .is_err());
     }
@@ -2588,7 +2635,7 @@ mod tests {
         );
         let reply = |text: &str| serde_json::from_str::<WorkerReply>(text);
         let tools = match reply(
-            r#"{"frame":"discovered","disc_id":2,"url":"https://fixture.test/t","truncated":false,"tools":[{"name":"t","title":"","description":"d","autosubmit":false,"node":3,"has_password":false,"action":null,"method":"get","params":[]}]}"#,
+            r#"{"frame":"discovered","disc_id":2,"url":"https://fixture.test/t","truncated":false,"tools":[{"name":"t","title":"","description":"d","autosubmit":false,"node":3,"has_password":false,"action":null,"method":"get","self_contained":false,"params":[]}]}"#,
         )
         .unwrap()
         {
@@ -2602,7 +2649,7 @@ mod tests {
         ));
         // Unknown fields anywhere in a tool are refused.
         assert!(reply(
-            r#"{"frame":"discovered","disc_id":2,"url":"u","truncated":false,"tools":[{"name":"t","title":"","description":"d","autosubmit":false,"node":3,"has_password":false,"action":null,"method":"get","params":[],"run":"x"}]}"#
+            r#"{"frame":"discovered","disc_id":2,"url":"u","truncated":false,"tools":[{"name":"t","title":"","description":"d","autosubmit":false,"node":3,"has_password":false,"action":null,"method":"get","self_contained":false,"params":[],"run":"x"}]}"#
         )
         .is_err());
     }

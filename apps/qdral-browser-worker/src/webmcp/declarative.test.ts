@@ -358,3 +358,67 @@ test("a capture that never settles fails on time, even if detaching hangs too", 
   assert.deepEqual(await captureWithin(quick, 1_000), { documents: [], strings: [] });
   assert.ok(Date.now() - begun < DETACH_WAIT_MS + 150, `took ${Date.now() - begun} ms`);
 });
+
+test("a tool is self-contained only when position and ownership agree", () => {
+  const button = () => el("button", {}, "Go");
+  const discover = (...children: Array<Mutable | string>) => discoverDeclarativeTools(doc(...children)).tools.map((t) => [t.name, t.self_contained]);
+  assert.deepEqual(
+    discover(
+      el("form", { toolname: "plain", tooldescription: "d" }, el("input", { name: "q" }), button()),
+      el("form", { toolname: "no_button", tooldescription: "d" }, el("input", { name: "q" })),
+      el("form", { toolname: "decoy", tooldescription: "d", id: "f" }, el("input", { name: "q", form: "nowhere" }), button()),
+      el("form", { toolname: "owned_outside", tooldescription: "d", id: "g" }, button()),
+      el("input", { name: "q", form: "g" }),
+      el("form", { toolname: "other_button", tooldescription: "d" }, el("input", { name: "q" }), el("button", { form: "x" }, "Go")),
+      el("form", { toolname: "formmethod", tooldescription: "d" }, el("input", { name: "q" }), el("button", { formmethod: "post" }, "Go")),
+      el("form", { toolname: "shadowed", tooldescription: "d" }, el("x-c", {}, el("#shadow-root", {}, el("input", { name: "q" }))), button()),
+      el("form", { toolname: "popup", tooldescription: "d", target: "_blank" }, el("input", { name: "q" }), button()),
+      el("form", { toolname: "multipart", tooldescription: "d", method: "post", enctype: "multipart/form-data" }, el("input", { name: "q" }), button()),
+      el("form", { toolname: "reset_only", tooldescription: "d" }, el("input", { name: "q" }), el("button", { type: "reset" }, "Clear"))
+    ),
+    [
+      ["plain", true],
+      ["no_button", false],
+      ["decoy", false],
+      ["owned_outside", false],
+      ["other_button", false],
+      ["formmethod", false],
+      ["shadowed", false],
+      ["popup", false],
+      ["multipart", false],
+      ["reset_only", false]
+    ]
+  );
+});
+
+test("flattened shadow trees (as Edge reports them) get their boundary back, and their forms never execute", () => {
+  // Edge's snapshot has no shadow-root node: shadow content sits under its
+  // host, marked with `shadowRootType`.
+  const base = snapshot([
+    [-1, 9, "#document"],
+    [0, 1, "HTML"],
+    [1, 1, "BODY"],
+    [2, 1, "FORM", undefined, ["toolname", "outer", "tooldescription", "d"]],
+    [3, 1, "X-FIELD"],
+    [4, 1, "INPUT", undefined, ["name", "shadowed"]],
+    [3, 1, "INPUT", undefined, ["name", "light"]],
+    [3, 1, "BUTTON"],
+    [2, 1, "X-APP"],
+    [8, 1, "FORM", undefined, ["toolname", "inner", "tooldescription", "d"]],
+    [9, 1, "INPUT", undefined, ["name", "q"]],
+    [9, 1, "BUTTON"]
+  ]);
+  const doc0 = base.documents[0];
+  assert.ok(doc0);
+  doc0.nodes.shadowRootType = { index: [5, 9, 10, 11], value: [0, 0, 0, 0] };
+  const { tools } = discoverDeclarativeTools(documentModel(base).root);
+  assert.deepEqual(
+    tools.map((t) => [t.name, t.self_contained, t.params.map((p) => p.name)]),
+    [
+      // The shadow field is not the outer form's, and makes it unsafe.
+      ["outer", false, ["light"]],
+      // A form inside a shadow tree is discovered but never executable.
+      ["inner", false, ["q"]]
+    ]
+  );
+});

@@ -92,14 +92,24 @@ export type WorkerFrame =
   | { frame: "launched" }
   | { frame: "pong"; nonce: string }
   | { frame: "bye" }
-  | { frame: "route_request"; request_id: number; kind: RouteKind; url: string; origin: string }
+  | {
+      frame: "route_request";
+      request_id: number;
+      kind: RouteKind;
+      url: string;
+      origin: string;
+      method: string;
+      content_type: string;
+      body: string | null;
+      body_bytes: number;
+    }
   | { frame: "navigated"; nav_id: number; url: string; status: number }
   | { frame: "navigation_failed"; nav_id: number; reason: NavigationFailure }
   | { frame: "observed"; obs_id: number; url: string; truncated: boolean; nodes: SnapshotNode[] }
   | { frame: "observation_failed"; obs_id: number }
   | { frame: "discovered"; disc_id: number; url: string; truncated: boolean; tools: DeclaredTool[] }
   | { frame: "discovery_failed"; disc_id: number }
-  | { frame: "executed"; exec_id: number; url: string; status: number; structured: string[] }
+  | { frame: "executed"; exec_id: number; url: string; status: number; structured: string[]; structured_complete: boolean }
   | { frame: "execution_failed"; exec_id: number; reason: NavigationFailure }
   | { frame: "activated"; act_id: number; url: string; status: number }
   | { frame: "activation_failed"; act_id: number; reason: NavigationFailure }

@@ -9,6 +9,46 @@ export interface RouteQuery {
   url: string;
   /// The requesting context's origin; empty for a top-level document.
   origin: string;
+  /// What the request carries besides its URL (the host checks an approved
+  /// form submission against it). Absent means a GET with no body.
+  detail?: RequestDetail;
+}
+
+export interface RequestDetail {
+  /// Upper-case HTTP method.
+  method: string;
+  contentType: string;
+  /// The body, only when it is a URL-encoded form of printable ASCII within
+  /// MAX_ROUTE_BODY_BYTES; otherwise null (the host then refuses it as a
+  /// submission).
+  body: string | null;
+  bodyBytes: number;
+}
+
+/// Upper bound on a request body described to the host.
+export const MAX_ROUTE_BODY_BYTES = 16 * 1024;
+
+/// The parts of a Playwright request `requestDetail` reads.
+export interface RequestBodyLike {
+  method(): string;
+  headers(): Record<string, string>;
+  postDataBuffer(): Buffer | null;
+}
+
+/// Describe a request's method and body for the host.
+export function requestDetail(request: RequestBodyLike): RequestDetail {
+  const method = request.method().toUpperCase().slice(0, 16);
+  const contentType = (request.headers()["content-type"] ?? "").slice(0, 256);
+  const buffer = request.postDataBuffer();
+  const bodyBytes = buffer?.length ?? 0;
+  let body: string | null = null;
+  const urlencoded = contentType.split(";")[0]?.trim().toLowerCase() === "application/x-www-form-urlencoded";
+  if (buffer && urlencoded && bodyBytes <= MAX_ROUTE_BODY_BYTES && buffer.every((byte) => byte >= 0x20 && byte < 0x7f)) {
+    body = buffer.toString("ascii");
+  } else if (!buffer) {
+    body = "";
+  }
+  return { method, contentType: /^[\x20-\x7e]*$/.test(contentType) ? contentType : "", body, bodyBytes };
 }
 
 /// The subset of Playwright's Request and Frame this module reads, so it can

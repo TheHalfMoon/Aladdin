@@ -2,7 +2,12 @@
 // with CDP `DOMSnapshot.captureSnapshot`. The engine serialises its own DOM
 // tree; no script runs in the page (so page-defined getters, prototypes and
 // polyfills are never invoked) and nothing in the page changes. Open and
-// closed shadow trees are part of the snapshot.
+// closed shadow trees are part of the snapshot, flattened: the engine
+// reports no shadow-root node, only a `shadowRootType` mark on every node
+// inside a shadow tree. A marked node under an unmarked parent starts a
+// shadow tree of that parent, and the model inserts a `#shadow-root` there.
+// A shadow tree nested in another one cannot be told apart from its parent
+// tree (both are marked), so it is modelled as part of it.
 
 import type { DomElement, DomNode } from "./declarative.js";
 
@@ -19,6 +24,7 @@ export interface CapturedSnapshot {
       nodeValue?: number[];
       backendNodeId?: number[];
       attributes?: number[][];
+      shadowRootType?: { index: number[]; value: number[] };
     };
   }>;
   strings: string[];
@@ -31,6 +37,7 @@ interface MutableElement {
   children: DomNode[];
   parent: MutableElement | null;
   node: number;
+  inShadow?: boolean;
 }
 
 export interface DocumentModel {
@@ -60,9 +67,24 @@ export function documentModel(snapshot: CapturedSnapshot): DocumentModel {
   // Each snapshot index maps to the element its children attach to.
   const slots: Array<MutableElement | undefined> = [];
   const count = Math.min(nodeType.length, MAX_SNAPSHOT_NODES);
+  const shadowed = new Set(nodes.shadowRootType?.index ?? []);
+  // The `#shadow-root` inserted under each host, by host index.
+  const shadowRoots = new Map<number, MutableElement>();
   for (let i = 0; i < count; i++) {
-    const parentSlot = (parentIndex[i] ?? -1) >= 0 ? slots[parentIndex[i] ?? -1] : root;
-    const parent = parentSlot ?? root;
+    const parentAt = parentIndex[i] ?? -1;
+    const parentSlot = parentAt >= 0 ? slots[parentAt] : root;
+    let parent = parentSlot ?? root;
+    const marked = shadowed.has(i);
+    // A shadow tree starts where a marked node sits under an unmarked one.
+    if (marked && parentAt >= 0 && !shadowed.has(parentAt) && nodeType[parentAt] === 1) {
+      let shadow = shadowRoots.get(parentAt);
+      if (!shadow) {
+        shadow = { kind: "element", tag: "#shadow-root", attrs: new Map(), children: [], parent, node: 0, inShadow: true };
+        parent.children.push(shadow);
+        shadowRoots.set(parentAt, shadow);
+      }
+      parent = shadow;
+    }
     const type = nodeType[i];
     if (type === 1) {
       const attrs = new Map<string, string>();
@@ -79,7 +101,8 @@ export function documentModel(snapshot: CapturedSnapshot): DocumentModel {
         attrs,
         children: [],
         parent,
-        node: backend[i] ?? 0
+        node: backend[i] ?? 0,
+        inShadow: marked
       };
       parent.children.push(element);
       slots[i] = element;
@@ -89,8 +112,8 @@ export function documentModel(snapshot: CapturedSnapshot): DocumentModel {
       // The document: its children attach to the root.
       slots[i] = parent;
     } else if (type === 11) {
-      // A shadow root: a separate tree scope under its host.
-      const shadow: MutableElement = { kind: "element", tag: "#shadow-root", attrs: new Map(), children: [], parent, node: backend[i] ?? 0 };
+      // A shadow root, if an engine reports one: a separate tree scope.
+      const shadow: MutableElement = { kind: "element", tag: "#shadow-root", attrs: new Map(), children: [], parent, node: backend[i] ?? 0, inShadow: true };
       parent.children.push(shadow);
       slots[i] = shadow;
     }

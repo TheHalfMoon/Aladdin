@@ -10,6 +10,7 @@
     "has_password": false,
     "action": "",
     "method": "get",
+    "self_contained": false,
     "params": [
      {
       "name": "plain",
@@ -87,6 +88,7 @@
     "has_password": false,
     "action": "",
     "method": "get",
+    "self_contained": false,
     "params": [
      {
       "name": "email",
@@ -136,6 +138,7 @@
     "has_password": false,
     "action": "",
     "method": "get",
+    "self_contained": false,
     "params": [
      {
       "name": "day",
@@ -196,6 +199,7 @@
     "has_password": false,
     "action": "",
     "method": "get",
+    "self_contained": false,
     "params": [
      {
       "name": "single",
@@ -259,6 +263,7 @@
     "has_password": false,
     "action": "",
     "method": "get",
+    "self_contained": false,
     "params": [
      {
       "name": "q",

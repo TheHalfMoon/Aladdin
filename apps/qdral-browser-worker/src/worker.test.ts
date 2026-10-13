@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { validLaunch } from "./fixtures.js";
-import type { WorkerFrame } from "./protocol.js";
+import { encodeFrame, type WorkerFrame } from "./protocol.js";
 import { NavigationError, Worker, type EngineSession, type Launcher, type LaunchSpec, type RoutePolicy } from "./worker.js";
 
 class FakeEngine implements EngineSession {
@@ -32,12 +32,13 @@ class FakeEngine implements EngineSession {
     return this.discoverBehavior();
   }
   executions: Array<{ tool: string; fields: unknown }> = [];
-  executeBehavior: () => Promise<{ url: string; status: number; structured: string[] }> = async () => ({
+  executeBehavior: () => Promise<{ url: string; status: number; structured: string[]; structuredComplete: boolean }> = async () => ({
     url: "https://fixture.test/search?q=rust",
     status: 200,
-    structured: ['{"results":1}']
+    structured: ['{"results":1}'],
+    structuredComplete: true
   });
-  execute(tool: string, fields: unknown): Promise<{ url: string; status: number; structured: string[] }> {
+  execute(tool: string, fields: unknown): Promise<{ url: string; status: number; structured: string[]; structuredComplete: boolean }> {
     this.executions.push({ tool, fields });
     return this.executeBehavior();
   }
@@ -76,7 +77,11 @@ function harness(launchBehavior: (spec: LaunchSpec) => Promise<EngineSession> = 
       return launchBehavior(spec);
     }
   };
-  const worker = new Worker(launcher, (frame) => sent.push(frame), (code) => exits.push(code));
+  const worker = new Worker(launcher, (frame) => {
+    // Encoded like the real worker's send, so an oversized frame throws.
+    encodeFrame(frame);
+    sent.push(frame);
+  }, (code) => exits.push(code));
   return { worker, sent, exits, launches, policies };
 }
 
@@ -276,8 +281,8 @@ test("route requests are described to the host and only its answer applies", asy
   const allowed = policy.decide({ kind: "document", url: "https://fixture.test/a", origin: "" });
   const refused = policy.decide({ kind: "frame", url: "https://other.test/f", origin: "https://fixture.test" });
   assert.deepEqual(sent.slice(-2), [
-    { frame: "route_request", request_id: 1, kind: "document", url: "https://fixture.test/a", origin: "" },
-    { frame: "route_request", request_id: 2, kind: "frame", url: "https://other.test/f", origin: "https://fixture.test" }
+    { frame: "route_request", request_id: 1, kind: "document", url: "https://fixture.test/a", origin: "", method: "GET", content_type: "", body: "", body_bytes: 0 },
+    { frame: "route_request", request_id: 2, kind: "frame", url: "https://other.test/f", origin: "https://fixture.test", method: "GET", content_type: "", body: "", body_bytes: 0 }
   ]);
   // Decisions bypass the queue and may arrive in any order.
   await worker.receive({ frame: "route_decision", request_id: 2, allow: false });
@@ -395,7 +400,12 @@ test("execution runs outside the queue and reports the opened document or a type
   await worker.receive({ frame: "execute", exec_id: 1, tool: "search", fields });
   await settle();
   assert.deepEqual(engine.executions, [{ tool: "search", fields }]);
-  assert.deepEqual(sent.at(-1), { frame: "executed", exec_id: 1, url: "https://fixture.test/search?q=rust", status: 200, structured: ['{"results":1}'] });
+  assert.deepEqual(sent.at(-1), { frame: "executed", exec_id: 1, url: "https://fixture.test/search?q=rust", status: 200, structured: ['{"results":1}'], structured_complete: true });
+  // An outcome too large to send becomes a typed failure, not a crash.
+  engine.executeBehavior = async () => ({ url: "https://fixture.test/x", status: 200, structured: ["x".repeat(70_000)], structuredComplete: true });
+  await worker.receive({ frame: "execute", exec_id: 3, tool: "search", fields });
+  await settle();
+  assert.deepEqual(sent.at(-1), { frame: "execution_failed", exec_id: 3, reason: "failed" });
   engine.executeBehavior = async () => {
     throw new NavigationError("denied");
   };

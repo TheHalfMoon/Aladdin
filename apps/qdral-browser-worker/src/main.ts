@@ -8,13 +8,13 @@ import { Console } from "node:console";
 import { existsSync, writeFileSync } from "node:fs";
 import { chromium, type Locator, type Page } from "playwright-core";
 import { refusedWorkerVariables, startupRefusal } from "./environment.js";
-import { encodeFrame, FrameDecoder, ProtocolViolation, type ExecField, type WorkerFrame } from "./protocol.js";
+import { encodeFrame, FrameDecoder, MAX_FRAME_BYTES, ProtocolViolation, type ExecField, type WorkerFrame } from "./protocol.js";
 import { installRoutes } from "./routes.js";
 import { boundSnapshot } from "./snapshot.js";
 import { discoverDeclarativeTools, DISCOVERY_BUDGET_MS } from "./webmcp/declarative.js";
 import { CAPTURE_TIMEOUT_MS, DISCOVERY_TOTAL_MS, fitTools } from "./webmcp/fit.js";
 import { captureWithin } from "./webmcp/capture.js";
-import { structuredData } from "./webmcp/structured.js";
+import { fitBlocks, MAX_RESULT_BLOCKS, structuredData } from "./webmcp/structured.js";
 import { documentModel, type CapturedSnapshot } from "./webmcp/dom-snapshot.js";
 import { NavigationError, Worker, type EngineSession, type Launcher, type LaunchSpec, type RoutePolicy } from "./worker.js";
 
@@ -145,8 +145,9 @@ const playwrightLauncher: Launcher = {
         const { url, status } = await clickAndLoad(page, submit);
         // The submission's result: the opened document's structured data.
         let structured: string[] = [];
-        const session = await context.newCDPSession(page);
+        let structuredComplete = false;
         try {
+          const session = await context.newCDPSession(page);
           const captured = (await captureWithin(
             {
               capture: () => session.send("DOMSnapshot.captureSnapshot", { computedStyles: [] }),
@@ -154,11 +155,17 @@ const playwrightLauncher: Launcher = {
             },
             CAPTURE_TIMEOUT_MS
           )) as CapturedSnapshot;
-          structured = structuredData(documentModel(captured).root);
+          // The blocks must fit the reply frame with room for its envelope
+          // (the URL is bounded at 2 KiB).
+          const all = structuredData(documentModel(captured).root);
+          const fitted = fitBlocks(all, MAX_FRAME_BYTES - 4_096);
+          structured = fitted.kept;
+          structuredComplete = fitted.complete && all.length < MAX_RESULT_BLOCKS;
         } catch {
           structured = [];
+          structuredComplete = false;
         }
-        return { url, status, structured };
+        return { url, status, structured, structuredComplete };
       },
       async download(ref: string, path: string) {
         if (existsSync(path)) throw new NavigationError("failed");

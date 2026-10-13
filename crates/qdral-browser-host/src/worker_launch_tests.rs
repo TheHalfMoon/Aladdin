@@ -1421,10 +1421,19 @@ fn webmcp_tools_execute_only_with_approval_and_return_the_verified_result() {
         result["csrf"], "csrf-123",
         "the hidden field was not submitted"
     );
-    // A replay, and the old tool identity, are refused.
-    assert!(worker
-        .execute_tool(&target, &mut approval, &wanted, 1, "workspace")
-        .is_err());
+    // The old tool identity is stale after the submission's navigation.
+    assert!(matches!(
+        worker.execute_tool(&target, &mut approval, &wanted, 1, "workspace"),
+        Err(HostError::Invalid(message)) if message.contains("stale")
+    ));
+    // A replay: the spent approval on a fresh identity is refused as a
+    // replay, and nothing is submitted again.
+    let found = open(&mut worker);
+    let (fresh, _) = approved_execution(&worker, &found, &id_of(&found, "search_reports"), &wanted);
+    assert!(matches!(
+        worker.execute_tool(&fresh, &mut approval, &wanted, 1, "workspace"),
+        Err(HostError::Invalid(message)) if message.contains("replay")
+    ));
 
     // POST: the exact action, with a multi-line note.
     let found = open(&mut worker);
@@ -1438,6 +1447,9 @@ fn webmcp_tools_execute_only_with_approval_and_return_the_verified_result() {
     let result: serde_json::Value =
         serde_json::from_str(saved.structured[0].untrusted()).expect("structured data");
     assert_eq!(result["saved"], true);
+    // The fixture saw exactly the approved note ("hello", CRLF, "world").
+    assert_eq!(result["length"], 12);
+    assert!(saved.structured_complete);
 
     // Tools that must not execute: no autosubmit (no binding at all), a
     // cross-origin action (refused before dispatch, approval unspent).
@@ -1493,6 +1505,62 @@ fn webmcp_tools_execute_only_with_approval_and_return_the_verified_result() {
             "workspace"
         )
         .is_err());
+    assert!(
+        approval.consumed,
+        "a dispatched execution must spend its approval"
+    );
+
+    // Structures where position and ownership disagree are not executable:
+    // no binding, so no approval can even be formed.
+    let found = open(&mut worker);
+    for name in ["decoy", "foreign_button", "shadowed", "method_override"] {
+        let tool = found.tools.iter().find(|t| t.name == name).expect(name);
+        assert!(!tool.self_contained, "{name} was taken as self-contained");
+        assert!(
+            worker
+                .execution_binding(&tool.tool_id, &args(r#"{"q":"x"}"#))
+                .is_err(),
+            "{name} was executable"
+        );
+    }
+
+    // A submit handler that rewrites a field is refused at the request: the
+    // request does not carry the approved value.
+    let rewriting = id_of(&found, "rewriting");
+    let (target, mut approval) =
+        approved_execution(&worker, &found, &rewriting, &args(r#"{"q":"approved"}"#));
+    assert!(worker
+        .execute_tool(
+            &target,
+            &mut approval,
+            &args(r#"{"q":"approved"}"#),
+            1,
+            "workspace"
+        )
+        .is_err());
+    assert!(approval.consumed);
+
+    // A result too large for one frame is kept in part and marked
+    // incomplete, and the lifetime goes on.
+    let found = open(&mut worker);
+    let big = id_of(&found, "big_result");
+    let (target, mut approval) = approved_execution(&worker, &found, &big, &args(r#"{"q":"big"}"#));
+    let outcome = worker
+        .execute_tool(
+            &target,
+            &mut approval,
+            &args(r#"{"q":"big"}"#),
+            1,
+            "workspace",
+        )
+        .expect("big result");
+    assert!(!outcome.structured_complete);
+    assert!(
+        outcome.structured.len() < 8,
+        "{} blocks",
+        outcome.structured.len()
+    );
+    worker.ping("after-big").expect("the lifetime survived");
 
     // A tool whose declaration changed after discovery is refused (fresh
     // discovery before dispatch), and its approval is unspent.
@@ -1523,13 +1591,19 @@ fn webmcp_tools_execute_only_with_approval_and_return_the_verified_result() {
         "q=swallowed",
         "/elsewhere",
         "q=moved",
-        "q=m&",
+        "PAGEDEFAULT",
+        "OTHERFORM",
+        "q=evil-rewrite",
     ] {
         assert!(
             !hits.iter().any(|h| h.contains(never)),
             "{never} was requested: {hits:?}"
         );
     }
+    assert!(
+        !hits.iter().any(|h| h.ends_with("/search?q=m")),
+        "the changed tool was submitted: {hits:?}"
+    );
 }
 
 #[test]
