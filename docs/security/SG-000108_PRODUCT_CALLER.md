@@ -1,6 +1,6 @@
 # SG-000108 product caller: the live worker under Deskal's authority
 
-Status: **PROPOSED, pending review** (revision 2, after a design review that blocked revision 1). This is a design record only. It adds no code, no tool, no listener and no authority. Each slice below is a separate implementation PR, qualified on its exact head.
+Status: **PROPOSED, pending review** (revision 3: revision 1 was blocked in design review; revision 2 was closed with follow-ups, all settled here). This is a design record only. It adds no code, no tool, no listener and no authority. Each slice below is a separate implementation PR, qualified on its exact head.
 
 ## Why
 
@@ -45,7 +45,7 @@ MCP client ──> qdrald                      (workspace, policy revision, appr
 
 ### 1. The host binary gains a worker mode (an authority delta of slice 1)
 
-- **What `--worker` changes.** In `--worker` mode the host never spawns the engine itself, so there is never a second browser for `classify_job` to refuse. It serves capability frames over `launch_worker` instead. Arguments, all from `qdrald` and never from a caller:
+- **What `--worker` changes.** In `--worker` mode the host never spawns the engine itself, so there is never a second browser for `classify_job` to refuse. It discovers the engine itself (`discover_engine`; there is no `--engine` argument), and A10 re-verifies it at launch. It serves capability frames over `launch_worker`. Arguments, all from `qdrald` and never from a caller:
   - `--node` and `--worker-main` (see decision 7);
   - `--profile-root`;
   - `--temp-dir`, a `qdrald`-owned staging root, so staging never lands in `%SystemRoot%\Temp`;
@@ -53,13 +53,20 @@ MCP client ──> qdrald                      (workspace, policy revision, appr
 - **Profiles.** The host itself creates its ephemeral profile with `ephemeral_profile_dir(--profile-root)`. That keeps the creator's pid on the name, so the #298 sweep works. It also writes and re-checks the A9 fingerprint marker before launch, which this slice adds to the ephemeral path.
 - **Destinations.** The destination arrives in an `open` frame, never in argv.
 - **One host at a time.** `Supervisor` admits one live host per `qdrald` process, so slices 1–3 support one browser lifetime at a time. A second concurrent lifetime is refused, typed. Lifting that is a later decision.
+- **`Supervisor` worker mode.** Today `Supervisor::launch` and `shutdown` create and remove the host's profile themselves. A worker-mode variant leaves the profile to the host, and keeps the spawn, the job, the single-host rule and the deterministic shutdown.
 
 ### 2. The host's resolution decides the pin
 
 - **`open` takes one destination.** The host resolves and admits it (`AdmittedDestination::admit`, with SG-000075's public-address rules), launches the worker with that pin, and replies with a lifetime nonce and the pinned address.
 - **Approvals bind the host's pin.** `qdrald`'s navigation approval binds the host-reported pin, not `qdrald`'s own preview resolution, so round-robin DNS cannot make the two disagree after an approval is spent. `qdrald` still runs its preview for SG-000075 validation before `open`.
 - **`open` needs no approval.** It loads only `about:blank`, and no consequential action happens. It is counted against a lifetime limit.
-- **Cross-origin navigation.** Navigating a page to another origin ends the lifetime: shutdown, profile removed, and a new `open` with a fresh profile. The page id is kept and its generation advanced; its prior lifetime's node ids become stale.
+- **Cross-origin navigation.** A lifetime admits exactly one destination, and one host runs at a time. So navigating a page to another origin works as follows:
+  1. The current lifetime is shut down (profile removed) before the new one is opened and the prompt is shown, because the approval must bind the new lifetime's pin.
+  2. The page becomes stale at that point, **whether the user then approves or denies**. A denied cross-origin navigation leaves the page without a live lifetime, and the next action on it needs a new navigation.
+  3. The preview tells the user this before they decide.
+  4. On approval, the page id is kept and its generation advanced. The prior lifetime's node ids are stale for good.
+
+  A second, brief lifetime just for the switch would break the one-host rule and is not proposed.
 
 ### 3. Two-part approval binding
 
@@ -103,15 +110,20 @@ For each consequential action, `qdrald` and the host each contribute what only t
 - **What changes:** the live form downloads an observed node of the committed document, keyed by node id. The current model-only form takes caller-supplied `body` bytes and binds their SHA-256.
 - **What the approval binds:** the host binding (node, resolved URL, folder real path, file name, size limit), not a content digest. The bytes do not exist before approval.
 - **What the evidence carries:** the committed file's SHA-256 and size.
-- **The model-only form is retired for live pages:** the tables change together (decision 6).
-- **Generations:** the store advances the page generation on a committed download, mirroring the host's `committed = (url, generation + 1)`.
+- **The caller-supplied-bytes form is gone for live pages.** It is unreachable under `browser_structured`, which lists only the live form. The tables change together (decision 6).
+- **`browser.download/preview` stays.** Under `browser_structured` it returns the host binding (the `bind` frame) and what the prompt will show. It writes nothing and consumes nothing.
+- **Generations:** the store keeps its own page generation, which only increases. It records the host generation it corresponds to in the current lifetime. A committed download advances both, mirroring the host's `committed = (url, generation + 1)`. A new lifetime restarts the host generation, and the store maps it again from the next reply.
 
 ### 6. Exposure and profile selection (slice 3)
 
 - **`ToolSurfaceProfile`** gains `browser_structured`.
 - **`desktop_structured`** becomes an explicit list without browser tools, instead of every contract key, so adding browser tools cannot widen it.
 - **Profile selection.** A local transport selects `browser_structured` only by explicit local configuration, never by a caller.
-- **`qdrald` gains a profile gate.** It reads the same table source and refuses live browser dispatch unless the request's profile is `browser_structured`. This closes the path where anything writing envelopes to `qdrald`'s stdin reaches a live browser.
+- **`qdrald` gains a profile gate.** It refuses live browser dispatch unless the request's profile is `browser_structured`. This closes the path where anything writing envelopes to `qdrald`'s stdin reaches a live browser.
+  - **The source of truth for live shapes** is the TypeScript tool contract (`tool_contract.ts`), as for every other profile.
+  - `qdrald` receives the profile in the envelope and checks it against a Rust list of the live shapes.
+  - A cross-language agreement test fails if the Rust list, the contract's `browser_structured` list and `exposure.rs`'s `LIVE_BROWSER_MCP_TOOLS` differ. The SG-000079 tests already do this between the contract and the documentation.
+- **Why local configuration may pick a profile but never a program.** Selecting `browser_structured` widens only which shapes a caller may ask for, and every consequential one still needs a broker approval from the user. A Node or worker path decides what code runs inside the worker job, with no approval in between, so it is never configurable (decision 7).
 - **OAuth.** `browser_structured` joins `UNMAPPED_REMOTE_PROFILES` (denied), so remote mapping stays disabled.
 - **The SG-000079 tables change in one PR,** with the mechanical agreement tests:
   - `LIVE_BROWSER_MCP_TOOLS`;
@@ -123,15 +135,21 @@ For each consequential action, `qdrald` and the host each contribute what only t
 ### 7. Node and worker sources
 
 - **Never from a caller, and never from a user-writable runtime setting.** `validate_launch` only checks a file name. A same-user config file could otherwise make `qdrald` run any executable inside the worker job.
-- **Until SG-000106:** the Node and worker paths are compiled into a test-only build (decision 8). SG-000106 admits a signed, pinned Node runtime and the worker files, with hash or signature verification at launch.
+- **Until SG-000106: a build-time pin.** A non-default cargo feature, `live-browser-dev`, compiles the Node and worker paths in at build time, together with the SHA-256 of `node.exe` and of the worker's `main.js`, and the host verifies both hashes before every launch.
+  - Without the feature there is no live browser path; this is how a development build is told apart from a release build.
+  - The release build commands never enable it, and release qualification asserts it is absent.
+  - A changed Node or worker file is refused, typed, until rebuilt.
+  - SG-000106 later replaces this with a signed, pinned Node runtime and the worker files in the payload.
 - **Release builds** report the live browser as typed unavailable. This is stricter than SG-000108's scope, which allows a separately installed Node, and is intended until SG-000106 pins both.
 
 ### 8. Gating until the binding and exposure land
 
-- **Slices 1 and 2** compile `qdrald`'s live backing only under a test-only cargo feature (`live-browser-test`). The host's fixture trust is already test-only.
-- **Release qualification asserts the feature is absent,** as the spec's network delta requires for the fixture origin.
+- **Slices 1 and 2** compile `qdrald`'s live backing only under a test-only cargo feature, `live-browser-test`. The feature exists in both crates: in `qdral-browser-host` it also enables fixture admission and fixture-certificate trust in the **binary**, which today are `cfg(test)` only.
+  - The fixture pin can be made only by `AdmittedDestination::fixture`, `#[cfg(test)] pub(crate)`.
+  - The host binary that `Supervisor` spawns is not built with `cfg(test)`.
+- **Release qualification asserts the feature is absent from both crates' artifacts,** as the spec's network delta requires for the fixture origin.
 - **Release builds** of slices 1 and 2 therefore have no live browser path at all.
-- **Slice 3** lifts the gate only together with the profile gate and the exposure change.
+- **Slice 3** lifts the gate only together with the profile gate and the exposure change. Even then, the live path exists only in `live-browser-dev` builds (decision 7).
 
 ## Slices
 
@@ -151,20 +169,21 @@ For each consequential action, `qdrald` and the host each contribute what only t
      - a dead lifetime marks its page stale;
      - the MCP-side timeout versus the worker's longer waits (open question 3).
 3. **Exposure and the public journey.**
-   - Decisions 5 and 6, and the feature gate lifted for development builds.
+   - Decisions 5 and 6. Live browsing becomes available in `live-browser-dev` builds (decision 7), and remains absent from release builds.
    - Native Windows evidence of the `done_when` journey on a public HTTPS site: a dated document list, the latest PDF downloaded create-only, and its bytes and SHA-256 verified by an independent checker. The site is chosen at that slice, and its URL and expected digest are recorded at evidence time.
 
 ## Open questions, each with an initial proposal
 
-1. **Reconciliation after uncertainty.** If the host dies after `approved_folder::commit` renamed a file but before it replied, a committed file exists with no `qdrald` evidence. Proposal: `qdrald` records an intent (folder, file name, record id) before dispatch. After host death it checks the destination for that exact name, adopts it as committed and hashed or reports it absent, and never re-downloads automatically. Partial writes are already safe: the temp file is delete-on-close and the rename never replaces.
+1. **Reconciliation after uncertainty.** If the host dies after `approved_folder::commit` renamed a file but before it replied, a committed file exists with no `qdrald` evidence. Proposal: `qdrald` records an intent (folder, file name, record id) before dispatch. After host death it checks the destination for that exact name, and never re-downloads automatically. It reports the file as **"present, unverified"** with its SHA-256 and size, or as absent. `qdrald` cannot tell the host's committed file from one a same-user process placed there, so it never records the file as a committed download. Partial writes are already safe: the temp file is delete-on-close and the rename never replaces.
 2. **Several `qdrald` processes.** Each MCP connection runs its own `qdrald` over a shared on-disk page store. Proposal: the store records which process and lifetime owns each page, and refuses a page owned by another live process, typed.
 3. **Timeouts.** `KernelClient` waits 30 s by default; worker waits go up to 45, 75 or 90 s, plus approval time. Proposal: live browser requests get their own budget, and the action runs to its bounded completion. If the MCP side has given up, the outcome is still recorded in the store and the audit.
-4. **FailureCode mapping.** Proposal:
-   - `HostError::Unavailable(reason)` maps to Unavailable;
-   - a timeout maps to ProcessTimeout;
-   - a crashed or dead lifetime maps to TargetStale for the page;
-   - an unverified postcondition maps to PostconditionFailed;
-   - a host binding mismatch maps to ApprovalMismatch.
+4. **FailureCode mapping.** Proposal, using existing `qdral_contracts::FailureCode` variants only, with no contract change:
+   - `HostError::Unavailable(reason)` maps to `ProviderUnavailable`;
+   - a timeout maps to `ProcessTimeout`;
+   - a crashed or dead lifetime maps to `TargetStale` for the page;
+   - an unverified postcondition maps to `PostconditionFailed`;
+   - a host binding mismatch at dispatch maps to `TargetStale`, because the approved action no longer matches the page, after the approval was consumed;
+   - a binding that cannot be computed before the prompt maps to `InvalidRequest`.
 5. **Page data on disk and in logs.**
    - Raw accessible names stay in the host, keyed per lifetime.
    - `qdrald`'s stores receive only the bounded, redacted observation it already models.
