@@ -27,13 +27,19 @@ export const MAX_EXEC_VALUE_CHARS = 1024;
 /// Generation 2 adds the slice-3a navigation frames, generation 3 slice-3b
 /// observation, generation 4 slice-3c activation, generation 5 slice-3d
 /// downloads, generation 6 slice-4 WebMCP discovery, generation 7 slice-5
-/// WebMCP execution, generation 8 slice-6 page extraction.
-export const WORKER_PROTOCOL_GENERATION = 8;
+/// WebMCP execution, generation 8 slice-6 page extraction, generation 9
+/// text documents for robots.txt and sitemaps (#317).
+export const WORKER_PROTOCOL_GENERATION = 9;
 export const WORKER_IDENTITY = "qdral-browser-worker";
 export const MAX_FRAME_BYTES = 64 * 1024;
 /// One extraction piece's content on the wire (JSON-escaped UTF-8 bytes),
 /// leaving room for the frame's other fields (the URL is at most 2 KiB).
 export const MAX_PIECE_BYTES = MAX_FRAME_BYTES - 8 * 1024;
+/// A fetched text document's content on the wire (JSON-escaped UTF-8
+/// bytes); longer text is cut and marked truncated.
+export const MAX_FETCH_TEXT_BYTES = MAX_FRAME_BYTES - 8 * 1024;
+/// The media types a text fetch returns content for.
+export const FETCH_TEXT_MEDIA: readonly string[] = ["text/plain", "application/xml", "text/xml"];
 /// Mirrors the host's bound on pieces per extraction.
 export const MAX_EXTRACT_PIECES = 96;
 
@@ -78,6 +84,7 @@ export type HostFrame =
   | { frame: "launch"; engine: string; profile_dir: string; argv: string[]; env: Record<string, string> }
   | { frame: "ping"; nonce: string }
   | { frame: "navigate"; nav_id: number; url: string }
+  | { frame: "fetch_text"; fetch_id: number; url: string }
   | { frame: "route_decision"; request_id: number; allow: boolean }
   | { frame: "observe"; obs_id: number }
   | { frame: "discover"; disc_id: number }
@@ -112,6 +119,8 @@ export type WorkerFrame =
     }
   | { frame: "navigated"; nav_id: number; url: string; status: number }
   | { frame: "navigation_failed"; nav_id: number; reason: NavigationFailure }
+  | { frame: "fetched_text"; fetch_id: number; url: string; status: number; media: string; text: string; truncated: boolean }
+  | { frame: "fetch_failed"; fetch_id: number; reason: NavigationFailure }
   | { frame: "observed"; obs_id: number; url: string; truncated: boolean; nodes: SnapshotNode[] }
   | { frame: "observation_failed"; obs_id: number }
   | { frame: "discovered"; disc_id: number; url: string; truncated: boolean; tools: DeclaredTool[] }
@@ -233,6 +242,13 @@ export function parseHostFrame(raw: unknown): HostFrame {
       const url = boundedString(raw.url, MAX_URL_BYTES, "navigation URL");
       if (!url.startsWith("https://")) throw new ProtocolViolation("navigation URL is not https");
       return { frame: "navigate", nav_id: navId, url };
+    }
+    case "fetch_text": {
+      exactKeys(raw, ["frame", "fetch_id", "url"]);
+      const fetchId = positiveId(raw.fetch_id, "fetch_id");
+      const url = boundedString(raw.url, MAX_URL_BYTES, "fetch URL");
+      if (!url.startsWith("https://")) throw new ProtocolViolation("fetch URL is not https");
+      return { frame: "fetch_text", fetch_id: fetchId, url };
     }
     case "download": {
       exactKeys(raw, ["frame", "dl_id", "ref", "path"]);

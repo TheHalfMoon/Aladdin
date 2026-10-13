@@ -193,6 +193,7 @@ const SITE = {
 <li><a href="/site/away">Away</a></li>
 <li><a href="/site/missing">Missing</a></li>
 <li><a href="/site/dl">Download</a></li>
+<li><a href="/site/blocked/other">Blocked</a></li>
 <li><a href="https://other.test/site/x">Other origin</a></li>
 <li><a href="/elsewhere">Elsewhere</a></li>
 <li><a href="/site/report.pdf">A file</a></li>
@@ -202,6 +203,7 @@ const SITE = {
   "/site/a": `<!doctype html><title>Page A</title><p>Alpha text.</p><a href="/site/c">To C</a> <a href="/site/">Home</a>`,
   "/site/b": `<!doctype html><title>Page B</title><p>Beta text.</p><a href="/site/deep/1">Deeper</a>`,
   "/site/c": `<!doctype html><title>Page C</title><p>Gamma text.</p>`,
+  "/site/only-in-sitemap": `<!doctype html><title>Sitemap only</title><p>Found through the sitemap.</p>`,
   "/site/deep/1": `<!doctype html><title>Deep 1</title><a href="/site/deep/2">Deeper still</a>`,
   "/site/deep/2": `<!doctype html><title>Deep 2</title><p>Too deep to reach.</p>`
 };
@@ -269,6 +271,15 @@ const server = createServer({ key, cert }, (request, response) => {
   if (path === "/redirect-same") return redirect("/landing");
   if (path === "/site/moved") return redirect("/site/c");
   if (path === "/site/away") return redirect("/elsewhere");
+  // #317: robots.txt and a sitemap for the crawl.
+  if (path === "/robots.txt") {
+    response.setHeader("content-type", "text/plain; charset=utf-8");
+    return response.end("User-agent: *\nDisallow: /site/blocked\nSitemap: https://fixture.test/site-map.xml\nSitemap: https://other.test/elsewhere.xml\n");
+  }
+  if (path === "/site-map.xml") {
+    response.setHeader("content-type", "application/xml");
+    return response.end('<?xml version="1.0"?><urlset><url><loc>https://fixture.test/site/only-in-sitemap</loc></url><url><loc>https://fixture.test/site/blocked/page</loc></url></urlset>');
+  }
   if (path === "/site/dl") {
     // A download with no file ending: the page fails, the crawl goes on.
     response.setHeader("content-type", "application/octet-stream");

@@ -33,6 +33,26 @@ Slice 7 of `docs/aladdin/WEB_CAPABILITIES_DECISION.md` adds a host-side crawl qu
 
   A same-origin server redirect out of the path scope is still followed by the engine, because the navigation policy decides redirects and the origin is the boundary. Its page is not read.
 
+## robots.txt and sitemaps (#317)
+
+- **How they are read.** With `robots: true`, the crawl first opens `https://host/robots.txt`, and with `sitemaps: true` it reads sitemaps. Both use `BrowserWorker::fetch_text`, worker protocol generation 9:
+  - It is a governed navigation like `navigate`: the same routes, host decisions, redirect checks, commit and generation advance.
+  - It returns the response body only for `text/plain`, `application/xml` and `text/xml`.
+  - The worker removes control and invisible characters and cuts the text to fit one frame (`truncated`). The host refuses anything else in the reply.
+  - No new request path is added. Playwright's API request context is not used, because it would bypass the page routes.
+- **robots.txt (RFC 9309).**
+  - **Groups:** the groups naming Deskal's product token `deskal` (case-insensitive, exact) apply; otherwise the `*` groups.
+  - **Matching:** the longest matching rule wins, an allow wins a tie, and no match allows. `*` and a final `$` are supported, matched without backtracking. `/robots.txt` itself is always allowed.
+  - **Bounds:** 512 rules of at most 512 bytes each, and 8 `Sitemap:` lines (https only).
+  - **Answers:** a 2xx is parsed, and a 4xx means no rules. A 5xx, or no answer (including a navigation the policy refuses), means the site is unreachable. RFC 9309 then treats everything as disallowed, so the crawl stops as `RobotsUnreachable` before opening any page.
+  - **What it applies to:** every link, the start URL, and every sitemap entry. A page reached by a redirect onto a disallowed path is not read ("redirected onto a page robots.txt disallows"), although the engine already requested it.
+- **Sitemaps.**
+  - **Sources:** the robots.txt `Sitemap:` URLs on the crawl's origin, or `/sitemap.xml` if there are none.
+  - **Index files:** a sitemap index's children on the origin are read in turn, up to 4 sitemaps in all.
+  - **Entries:** each `<loc>` (XML entities and CDATA decoded, at most 1,000 per sitemap) goes through the same scope, robots and bound checks as a link, at depth 1.
+  - **Failures:** a sitemap that fails or answers non-2xx is skipped.
+- `report.robots_status` and `report.sitemaps_read` record what was read.
+
 ## Bounds and stops
 
 - At most 50 pages, depth 5, and 10 minutes; a spec past any of these is refused.
@@ -43,7 +63,11 @@ Slice 7 of `docs/aladdin/WEB_CAPABILITIES_DECISION.md` adds a host-side crawl qu
 
 ## Limits
 
-- **No `robots.txt` and no sitemaps.** Firecrawl honours `robots.txt` by default and reads sitemaps. Aladdin does neither in this slice, because reading them needs a request outside a page navigation. The crawl stays on the one destination the user admitted, sequentially, one page at a time. Follow-up: #317.
+- **robots.txt details.**
+  - Paths are matched as written, without percent-decoding.
+  - A robots.txt larger than one frame (about 56 Ki characters) is read only up to that point. RFC 9309 allows a crawler to stop at its own limit.
+  - The `crawl-delay` extension is not honoured. The crawl is sequential: one page at a time, each a full navigation.
+- **Sitemaps:** gzip-compressed sitemaps and text sitemaps (one URL per line) are not read.
 - Links are what the observation reports. A link the bounded observation does not include (past its node bound) is not found, and the observation's `truncated` flag is not surfaced per page.
 - Document-relative links (`page2`, `../x`) are skipped, not resolved, because the observation reports the `href` as written.
 - A start host with Unicode (IDN) characters fails closed: the engine commits its punycode form, which is not the crawl's origin, so every page reads "redirected out of the crawl scope". Start from the punycode name.
@@ -67,6 +91,19 @@ Slice 7 of `docs/aladdin/WEB_CAPABILITIES_DECISION.md` adds a host-side crawl qu
   - no `other.test`, `report.pdf`, `/site/private`, `/site/deep/2` or `mailto`;
   - `/elsewhere` exactly once, by `away`'s redirect, never as a link.
 
+Since #317, the native test also covers robots.txt and the sitemap:
+- the fixture's robots.txt disallows `/site/blocked` and names a sitemap on the origin and one on `other.test`;
+- the page found only in the sitemap is crawled at depth 1 and extracted;
+- `/site/blocked/...` is skipped as `Robots`, both from a link and from the sitemap, and never requested;
+- `other.test` is never contacted;
+- a crawl starting on `other.test` stops as `RobotsUnreachable` with no page. With `robots: false` the start page itself is refused and reported.
+
+**Unit tests** in `robots.rs`:
+- group selection (exact product token, the `*` fallback, rules outside any group);
+- longest match and ties; `*` and `$`, including a 200-star pattern on a 2,000-byte path;
+- the bounds;
+- sitemap and index parsing, entities and CDATA.
+
 **Unit tests** in `crawl.rs`, through a fake driver:
 - the scope and every skip reason, including backslash, port, look-alike host, IP literal, protocol-relative, credentials, `%2e` and dot segments;
 - read-once across redirects (a fragment on the final URL included); 404s;
@@ -75,4 +112,6 @@ Slice 7 of `docs/aladdin/WEB_CAPABILITIES_DECISION.md` adds a host-side crawl qu
 - a per-page worker failure that does not stop the crawl;
 - depth, page-limit, cancellation, deadline and worker-failure stops;
 - maps; failed extraction (its links are still followed);
-- spec bounds; the URL-memory and skip-report bounds.
+- spec bounds; the URL-memory and skip-report bounds;
+- robots.txt read first and honoured for links, the start URL and redirects; a 404 allows everything; a 5xx or no answer stops the crawl;
+- sitemaps seeding at depth 1 within scope and robots, with an index, foreign sitemaps ignored, and the `/sitemap.xml` default.

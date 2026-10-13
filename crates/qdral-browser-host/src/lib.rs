@@ -18,6 +18,7 @@ mod profile;
 mod proposal;
 mod proto;
 mod remote_leases;
+mod robots;
 mod supervise;
 mod transfers;
 mod uia;
@@ -51,8 +52,8 @@ pub use coordinates::{
 };
 pub use crawl::{
     crawl, CrawlDriver, CrawlReport, CrawlSpec, CrawlStop, CrawledPage, SkipReason, SkippedLink,
-    Visit, MAX_CRAWL_DEPTH, MAX_CRAWL_DURATION, MAX_CRAWL_PAGES, MAX_CRAWL_URLS, MAX_PATH_PATTERNS,
-    MAX_PATH_PATTERN_BYTES, MAX_SKIPPED_REPORTED,
+    TextDocument, Visit, MAX_CRAWL_DEPTH, MAX_CRAWL_DURATION, MAX_CRAWL_PAGES, MAX_CRAWL_URLS,
+    MAX_PATH_PATTERNS, MAX_PATH_PATTERN_BYTES, MAX_SITEMAPS, MAX_SKIPPED_REPORTED,
 };
 pub use discovery::{discover_engine, Engine, EngineKind, SearchConfig};
 pub use error::{HostError, UnavailableReason};
@@ -96,6 +97,10 @@ pub use remote_leases::{
     LeaseScope, RemoteLease, LEASE_CAPABILITIES, MAX_LEASE_CAPABILITIES, MAX_LEASE_FIELD_BYTES,
     MAX_LEASE_TARGETS, MAX_REMOTE_LEASE_MS,
 };
+pub use robots::{
+    sitemap_locations, Robots, MAX_ROBOTS_PATTERN_BYTES, MAX_ROBOTS_RULES, MAX_ROBOTS_SITEMAPS,
+    MAX_SITEMAP_LOCS, ROBOTS_PRODUCT_TOKEN,
+};
 pub use supervise::{
     spawn_engine_null, spawn_host_piped, HostPipes, SupervisedChild, JOB_ACTIVE_PROCESS_LIMIT,
     LAUNCH_GRACE, SHUTDOWN_TIMEOUT,
@@ -123,12 +128,12 @@ pub use webmcp::{
 };
 pub use worker_launch::{
     classify_job, launch_worker, worker_environment, worker_node_args, BrowserWorker, CancelHandle,
-    CommittedDownload, ExecutionOutcome, HostNode, JobProcess, LiveObservation, NavigationOutcome,
-    ShutdownReport, SnapshotNode, WorkerLaunch, WORKER_ACTIVATION_TIMEOUT,
-    WORKER_EXECUTION_TIMEOUT, WORKER_EXTRACTION_TIMEOUT, WORKER_HANDSHAKE_TIMEOUT, WORKER_IDENTITY,
-    WORKER_LAUNCH_TIMEOUT, WORKER_NAVIGATION_TIMEOUT, WORKER_NODE_OPTION,
-    WORKER_OBSERVATION_TIMEOUT, WORKER_PROTOCOL_GENERATION, WORKER_REPLY_TIMEOUT,
-    WORKER_SHUTDOWN_TIMEOUT,
+    CommittedDownload, ExecutionOutcome, FetchedText, HostNode, JobProcess, LiveObservation,
+    NavigationOutcome, ShutdownReport, SnapshotNode, WorkerLaunch, FETCH_TEXT_MEDIA,
+    MAX_FETCH_TEXT_CHARS, WORKER_ACTIVATION_TIMEOUT, WORKER_EXECUTION_TIMEOUT,
+    WORKER_EXTRACTION_TIMEOUT, WORKER_HANDSHAKE_TIMEOUT, WORKER_IDENTITY, WORKER_LAUNCH_TIMEOUT,
+    WORKER_NAVIGATION_TIMEOUT, WORKER_NODE_OPTION, WORKER_OBSERVATION_TIMEOUT,
+    WORKER_PROTOCOL_GENERATION, WORKER_REPLY_TIMEOUT, WORKER_SHUTDOWN_TIMEOUT,
 };
 pub use worker_navigation::{
     decode_form, NavigationPolicy, RequestDetail, RouteKind, Submission, Submitted,
