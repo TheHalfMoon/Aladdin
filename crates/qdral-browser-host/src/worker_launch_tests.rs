@@ -180,11 +180,12 @@ fn non_loopback_endpoints(pids: &[u32]) -> Vec<String> {
     // Row layouts: MIB_TCPROW_OWNER_PID (24 bytes), MIB_TCP6ROW_OWNER_PID
     // (56), MIB_UDPROW_OWNER_PID (12), MIB_UDP6ROW_OWNER_PID (28), after a
     // u32 entry count.
-    for (tcp, family, row, remote, pid_at) in [
-        (true, AF_INET, 24usize, 12usize, 20usize),
-        (true, AF_INET6, 56, 24, 52),
-        (false, AF_INET, 12, 0, 8),
-        (false, AF_INET6, 28, 0, 24),
+    // (tcp, family, row size, local address, remote address, pid)
+    for (tcp, family, row, local, remote, pid_at) in [
+        (true, AF_INET, 24usize, 4usize, 12usize, 20usize),
+        (true, AF_INET6, 56, 0, 24, 52),
+        (false, AF_INET, 12, 0, 0, 8),
+        (false, AF_INET6, 28, 0, 0, 24),
     ] {
         let bytes = table(tcp, family);
         let count = word(&bytes, 0) as usize;
@@ -194,22 +195,29 @@ fn non_loopback_endpoints(pids: &[u32]) -> Vec<String> {
             if !pids.contains(&pid) {
                 continue;
             }
-            // TCP: the remote address; UDP: the local (bound) address.
-            let address: std::net::IpAddr = if family == AF_INET {
-                let at = if tcp { base + remote } else { base };
-                std::net::Ipv4Addr::from(u32::from_be(word(&bytes, at))).into()
-            } else {
-                let at = if tcp { base + remote } else { base };
-                let octets: [u8; 16] = bytes[at..at + 16].try_into().unwrap();
-                std::net::Ipv6Addr::from(octets).into()
+            let at = |offset: usize| -> std::net::IpAddr {
+                if family == AF_INET {
+                    std::net::Ipv4Addr::from(u32::from_be(word(&bytes, base + offset))).into()
+                } else {
+                    let octets: [u8; 16] =
+                        bytes[base + offset..base + offset + 16].try_into().unwrap();
+                    std::net::Ipv6Addr::from(octets).into()
+                }
             };
-            if address.is_loopback() || (tcp && address.is_unspecified()) {
+            // TCP: a connection to anything but loopback, or a listener (no
+            // remote yet) bound to anything but loopback; UDP: any endpoint
+            // bound to anything but loopback.
+            let (kind, address) = if tcp && !at(remote).is_unspecified() {
+                ("tcp", at(remote))
+            } else if tcp {
+                ("tcp-listen", at(local))
+            } else {
+                ("udp", at(local))
+            };
+            if address.is_loopback() {
                 continue;
             }
-            found.push(format!(
-                "{} {address} (pid {pid})",
-                if tcp { "tcp" } else { "udp" }
-            ));
+            found.push(format!("{kind} {address} (pid {pid})"));
         }
     }
     found.sort();

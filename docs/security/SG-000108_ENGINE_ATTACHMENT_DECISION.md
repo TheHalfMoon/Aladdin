@@ -675,3 +675,4 @@ A fresh-context judge's first round on this slice was BLOCK. The destination-nam
   - **Edge versions:** feature names are Edge's own and may change between versions. The OS-level test is what fails if a new service reaches out, and release qualification re-runs it on the installed engine.
   - **The control is host-dependent:** it finds a leak only on a host that has something to leak to (a Microsoft account, LAN devices). Elsewhere it reports its result without requiring a leak.
   - **Duration:** the 90 s window covers start-up and an idle page, not every possible long-running service.
+  - **Polling:** the tables are read every 500 ms, so a connection opened and closed between two reads can be missed. The scan counts outbound connections, non-loopback listeners and non-loopback UDP endpoints. It shows what the OS holds at each read, not every packet.
