@@ -576,7 +576,7 @@ A fresh-context judge's first round on this slice was BLOCK. The destination-nam
   - **Crash:** in a second lifetime, the worker is killed mid-download. The outcome is `WorkerExited`, the approval is spent, nothing is committed or staged, and every member dies. A later `navigate` reports `WorkerExited`, and `kill` cleans up as above.
 - **Known limits (follow-ups in #309).**
   - A worker that writes the staged `.part` file and then dies before replying is handled by reading only: the host removes the staged file on every outcome, and the staging folder at the end of the lifetime. No test reaches that path.
-  - A host crash is outside A6, which is about the worker and its operations. Since #307 it can no longer leave a partial file under the approved name. The content is written to a hidden temporary file marked for deletion, which the system removes when the host's handles close. Two short windows remain, listed in the #307 section below, where a hidden `.qdral-dl-*.part` file can be left behind. It can still leave the staging folder in `temp_dir`.
+  - A host crash is outside A6, which is about the worker and its operations. Since #307 it can no longer leave a partial file under the approved name. The content is written to a hidden temporary file marked for deletion, which the system removes when the host's handles close. Two short windows remain, listed in the #307 section below, where a `.qdral-dl-*.part` file can be left behind. It can still leave the staging folder in `temp_dir`.
 
 **#307: download commits through held handles, and typed download failures.**
 
@@ -588,16 +588,15 @@ A fresh-context judge's first round on this slice was BLOCK. The destination-nam
   - **Replaced:** this takes the place of the earlier path-based checks, which re-canonicalised the folder and could write once before the post-write check removed an escaped file.
 - **No partial file under the approved name.**
   - **Write:** the content goes to a hidden temporary file in the target folder, marked delete-on-close (`FileDispositionInfo`), so the system removes it if the host dies while it is marked.
-  - **Rename:** the file is flushed, the mark is cleared (a file marked for deletion cannot be renamed), and the file takes its name relative to the folder's handle with `NtSetInformationFile` (`FileRenameInformation`, no replace), so an existing file is never replaced.
-  - **After the rename:** the hidden and temporary attributes are cleared, so the committed file is an ordinary file.
+  - **Rename:** the file is flushed and its hidden and temporary attributes are cleared while it still has its temporary name, so the committed file is an ordinary file and never stands under the approved name hidden. Then the mark is cleared (a file marked for deletion cannot be renamed), and the file takes its name relative to the folder's handle with `NtSetInformationFile` (`FileRenameInformation`, no replace), so an existing file is never replaced.
   - **Final check:** the named file's real path must be inside the held folder.
   - **Any failure after creation** marks the file for deletion again, through a drop guard.
   - **The returned path** is the one the held handle reached, not one rebuilt from the caller's text.
   - **Windows that remain if the host dies:**
-    - between creating the temporary file and marking it, which leaves an empty file;
-    - between clearing the mark and the rename, which leaves the full content.
+    - between creating the temporary file and marking it, which leaves an empty, hidden `.qdral-dl-<pid>-<hex>.part` file;
+    - between clearing the mark and the rename, which leaves the full content in a visible `.qdral-dl-<pid>-<hex>.part` file.
 
-    Either leaves a hidden `.qdral-dl-<pid>-<hex>.part` file in the target folder, never a file under the approved name (#309).
+    Neither leaves a file under the approved name (#309). After the rename the commit only checks the result, so a crash there leaves the complete, ordinary file under its approved name.
 - **Typed download failures.** A download that commits nothing reports a `HostError::Download` reason:
   - `HttpStatus`: a non-2xx answer, a redirect included, since the approved document is exactly the approved link;
   - `Oversized`: past the transfer bound;

@@ -307,12 +307,14 @@ pub(crate) fn commit(
         .write_all(content)
         .and_then(|()| staged.file.sync_all())
         .map_err(|err| HostError::Platform(format!("destination write: {err}")))?;
+    // The committed file is an ordinary file, not a hidden temporary one:
+    // its attributes are cleared while it still has its temporary name, so
+    // it never stands under the approved name hidden.
+    set_attributes(staged.raw(), FILE_ATTRIBUTE_NORMAL)?;
     // A file marked for deletion cannot be renamed, so the mark is cleared
     // just before the rename.
     set_delete_on_close(staged.raw(), false)?;
     rename_no_replace(staged.raw(), folder, file_name)?;
-    // The committed file is an ordinary file, not a hidden temporary one.
-    set_attributes(staged.raw(), FILE_ATTRIBUTE_NORMAL)?;
     // Defense in depth: the named file is inside the held folder.
     let committed = final_path(staged.raw())?;
     let inside = committed
