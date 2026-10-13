@@ -690,9 +690,10 @@ A fresh-context judge's first round on this slice was BLOCK. The destination-nam
   - it lists only names with the profile prefix (`FindFirstFileW`), at most 4,096;
   - it removes a profile only when the owning pid is certainly gone, and a process that cannot be queried counts as running;
   - it never touches this host's own pid;
-  - it never follows or removes a reparse point, and ignores a file named like a profile;
+  - it never follows a reparse point: one named like a profile is left alone, and links inside a dead profile are removed as links, their targets untouched; it also ignores a file named like a profile;
   - it removes at most 64 per launch;
   - a profile it cannot remove yet, such as one with a file still held, is left for a later launch and is not counted.
+- **Who may call it.** The host that launches the profile must create it: the name records the creator's pid, so a profile handed to another process would become sweepable once its creator exits. The root must be absolute (a relative one is never swept), and pid 0 is never taken as an owner.
 - **Scope.** Profiles not named this way are never looked at: a caller's persistent profile, a fixed test profile, or an unrelated folder in the same root. A root is swept only once a caller has chosen it for such profiles, by launching one there. There is still no product caller of `launch_worker`; the product caller adopts the helper when it lands.
 - **Reporting.** `BrowserWorker::swept_profiles()` returns how many profiles this launch removed, as `swept_staging()` does for #309.
 - **Evidence.**
@@ -713,3 +714,4 @@ A fresh-context judge's first round on this slice was BLOCK. The destination-nam
 - **Known limits.**
   - A dead host's pid that an unrelated live process reuses keeps that host's profile until the pid is free again, as with #309's staging folders.
   - A root that no later launch uses is never swept.
+  - The sweep runs during launch, so removing many dead profiles (at most 64) adds launch latency. The listing stops at 4,096 prefix-matched names, so dead profiles listed after that many live or still-held ones wait for a later launch.

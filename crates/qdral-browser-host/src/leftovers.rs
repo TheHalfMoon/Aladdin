@@ -59,7 +59,9 @@ pub(crate) fn owner(prefix: &str, name: &str) -> Option<u32> {
     {
         return None;
     }
-    pid.parse().ok()
+    // Pid 0 is the idle process, which no host can be; Windows answers "no
+    // such process" for it, so it would otherwise read as gone.
+    pid.parse().ok().filter(|&pid| pid != 0)
 }
 
 /// The names in `dir` that match `<prefix>*`, at most MAX_ENTRIES.
@@ -164,6 +166,7 @@ mod tests {
             Some(1234)
         );
         assert_eq!(owner(PROFILE_PREFIX, "qdral-sg108-staging-1234-ab12"), None);
+        assert_eq!(owner(PROFILE_PREFIX, "qdral-sg108-profile-0-ab12"), None);
         for name in [
             "qdral-sg108-staging-1234",
             "qdral-sg108-staging--ab",

@@ -506,7 +506,10 @@ pub(crate) fn keyed_name(key: &[u8; 32], name: &str) -> String {
 /// never reused). Launched with `ephemeral_profile: true`, it is removed
 /// at the end of the lifetime and, if this host dies first, by the next
 /// launch of a profile in the same root. Only names made here are swept;
-/// any other profile under `root` is never touched.
+/// any other profile under `root` is never touched. The host that launches
+/// the profile must be the one that calls this: the name records the
+/// caller's pid, so a profile handed to another process becomes sweepable
+/// once its maker exits. `root` must be absolute.
 #[cfg(windows)]
 pub fn ephemeral_profile_dir(root: &Path) -> Result<PathBuf, HostError> {
     let random = lifetime_key()?;
@@ -1193,6 +1196,7 @@ mod platform {
         let swept_profiles = match (spec.profile_dir.parent(), spec.profile_dir.file_name()) {
             (Some(root), Some(name))
                 if spec.ephemeral_profile
+                    && root.is_absolute()
                     && crate::leftovers::owner(
                         crate::leftovers::PROFILE_PREFIX,
                         &name.to_string_lossy(),
