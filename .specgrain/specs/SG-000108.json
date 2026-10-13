@@ -87,7 +87,7 @@
       "question": "Engine compatibility (open question): the supported version window and refusal of unsupported engines",
       "status": "PROPOSED, pending review",
       "record": "docs/security/SG-000108_ENGINE_ATTACHMENT_DECISION.md",
-      "decision": "The live worker runs only on engine kinds and majors listed in QUALIFIED_WORKER_ENGINES (discovery.rs): today Edge 155, on which the full native suite passed with the leak control required. validate_launch refuses any other major, an unparseable version, and Chrome/Chromium (never qualified) with the typed Unavailable(UnsupportedEngine) before anything is spawned; discovery's kind, path and Authenticode checks are unchanged. A new major is added only with a passing native-suite log on that engine."
+      "decision": "The live worker runs only on engine kinds and majors listed in QUALIFIED_WORKER_ENGINES (discovery.rs): Edge 155 (evidence host, native suite with the leak control required) and Chrome 154 (CI windows-latest, the same full native suite). validate_launch refuses any other major or an unparseable version with the typed Unavailable(UnsupportedEngine) before anything is spawned; discovery's kind, path and Authenticode checks are unchanged. A new major is added only by a PR whose own native-suite run on that engine passes; until then the worker is refused on it."
     }
   ],
   "invariants": [

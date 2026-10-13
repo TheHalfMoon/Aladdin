@@ -30,12 +30,18 @@ impl EngineKind {
 
 /// SG-000108 A10: the engine major versions the live worker
 /// (playwright-core 1.63.0) is qualified on. Qualified means that the full
-/// native suite (`npm run browser-launcher:native`) passed on that engine
-/// with the leak control required. Every confinement, policy and
-/// network-endpoint probe re-runs per version, because a new engine can
-/// change how it honours a flag. Any other kind or major is refused at
-/// launch with a typed error until it is qualified and added here.
-pub const QUALIFIED_WORKER_ENGINES: &[(EngineKind, u32)] = &[(EngineKind::Edge, 155)];
+/// native suite (`npm run browser-launcher:native`) passed on that engine:
+/// every confinement, policy and network-endpoint probe re-runs per
+/// version, because a new engine can change how it honours a flag.
+/// - Edge 155: the evidence host, with the #324 leak control required.
+/// - Chrome 154: CI's windows-latest runner, where the same suite passes
+///   (the leak control is not required there: the runner has no account
+///   or LAN devices to leak to).
+///
+/// A new major is added only by a PR whose own native-suite run passes on
+/// it. Any other kind or major is refused at launch with a typed error.
+pub const QUALIFIED_WORKER_ENGINES: &[(EngineKind, u32)] =
+    &[(EngineKind::Edge, 155), (EngineKind::Chromium, 154)];
 
 /// A verified engine executable.
 #[derive(Debug, Clone)]
@@ -487,6 +493,7 @@ mod tests {
         let engine = |kind, version| Engine::for_tests_at(PathBuf::from("x"), kind, version);
         assert!(engine(EngineKind::Edge, "155.0.4283.45").worker_qualified());
         assert_eq!(engine(EngineKind::Edge, "155.0.4283.45").major(), Some(155));
+        assert!(engine(EngineKind::Chromium, "154.0.8037.58").worker_qualified());
         for (kind, version) in [
             (EngineKind::Edge, "154.0.1.2"),
             (EngineKind::Edge, "156.0.1.2"),
@@ -494,8 +501,10 @@ mod tests {
             (EngineKind::Edge, "0.0.0.0"),
             (EngineKind::Edge, ""),
             (EngineKind::Edge, "x155.0"),
-            // Chromium shares majors with Edge but was never qualified.
+            // Each kind has its own qualified majors.
             (EngineKind::Chromium, "155.0.4283.45"),
+            (EngineKind::Chromium, "153.0.1.2"),
+            (EngineKind::Edge, "154.0.8037.58"),
         ] {
             assert!(
                 !engine(kind, version).worker_qualified(),

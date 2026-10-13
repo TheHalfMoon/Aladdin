@@ -718,19 +718,18 @@ A fresh-context judge's first round on this slice was BLOCK. The destination-nam
 
 **A10: the supported engine window.**
 
-- **Decision (narrowing).** The live worker runs only on an engine whose kind and major version are in `QUALIFIED_WORKER_ENGINES` (`discovery.rs`). Today that is **Edge 155**, the engine on which the full native suite passed with the leak control required (#325, #326). `validate_launch` checks this right after the engine file exists, before anything is spawned. Anything else is refused with the typed `Unavailable(UnsupportedEngine)`:
-  - an older or newer Edge major;
-  - an unparseable version;
-  - Chrome or Chromium of any version (they share majors with Edge but were never qualified).
-- **Why a list of qualified majors, not a range.** The engine-drift risk above means a new engine can change how it honours a confinement flag. The leaks #324 found came from services that only some Edge builds start. So "compatible" means that every probe re-ran on that version, not that playwright-core can attach. A range would admit versions no probe has run on.
+- **Decision (narrowing).** The live worker runs only on an engine whose kind and major version are in `QUALIFIED_WORKER_ENGINES` (`discovery.rs`). `validate_launch` checks this right after the engine file exists, before anything is spawned. Anything else is refused with the typed `Unavailable(UnsupportedEngine)`: another major of either kind, or an unparseable version. Today two engines are qualified:
+  - **Edge 155:** the evidence host, Edge 155.0.4283.45. The full native suite passed with the #324 leak control required (#325, #326).
+  - **Chrome 154:** CI's windows-latest runner, Chrome 154.0.8037.58, which the native suite now reports (`SG108-EVIDENCE engine: …`). The same full suite, the #324 endpoint tests included, passes there on every run of main. The leak control is not required there, because the runner has no account and no LAN devices to leak to.
+- **Why a list of qualified majors, not a range.** The engine-drift risk above means a new engine can change how it honours a confinement flag. The leaks #324 found came from services that only some engine builds start. So "supported" means that every probe re-ran on that version, not that playwright-core can attach. A range would admit versions no probe has run on.
 - **What it is checked with.**
   - **Discovery, unchanged:** the engine's kind, path and Authenticode publisher are verified as before (SG-000074).
   - **The window, at launch.** Unit tests:
-    - `only_qualified_engine_versions_run_the_worker` covers Edge 154, 156 and 1550, `0.0.0.0`, an empty and a malformed version, and Chromium 155;
-    - `an_unqualified_engine_version_is_refused_before_anything_runs`: with every other prerequisite present, Edge 154, Edge 156 and Chrome 155 are refused with the typed error, and Edge 155 passes the rule.
-  - **Native:** the native suite launches the installed Edge 155.0.4283.45 under the window.
-- **Qualifying a new version.** On a host with that engine:
-  1. Run `npm run browser-launcher:native` with `QDRAL_SG108_EXPECT_LEAK=1` on a host that has something to leak to.
-  2. Add the major to `QUALIFIED_WORKER_ENGINES` in the same PR, with the log as evidence.
-  3. Until then the worker is unavailable on that engine, with a typed reason, and never runs unqualified.
-- **Known cost.** Edge updates itself about every four weeks, so the worker becomes unavailable on an updated host until the new major is qualified. This is the intended failure mode: a typed refusal, never an unproven launch. There is no product caller yet; the release process must schedule requalification.
+    - `only_qualified_engine_versions_run_the_worker`;
+    - `an_unqualified_engine_version_is_refused_before_anything_runs`: with every other prerequisite present, Edge 154, Edge 156, Chrome 155 and Chrome 153 are refused with the typed error, and Edge 155 passes the rule.
+  - **Native:** every native test runs under the window on the installed engine, which the suite reports once per run.
+- **Qualifying a new version.**
+  1. Open a PR that adds the major to `QUALIFIED_WORKER_ENGINES`.
+  2. Its own native-suite run on that engine is the evidence: CI's run for the runner's engine, and a run on the evidence host for Edge, with `QDRAL_SG108_EXPECT_LEAK=1` on a host with something to leak to.
+  3. Until that PR merges, the worker is unavailable on that engine, with a typed reason, and never runs unqualified.
+- **Known cost.** Edge and Chrome update themselves about every four weeks, and so does CI's runner image. When the runner's Chrome moves to a new major, CI's native suite fails with `UnsupportedEngine` until a qualifying PR merges. This is intended: a typed refusal, never an unproven launch. On an updated user host, the worker becomes unavailable until requalification; there is no product caller yet. The release process must schedule requalification.
