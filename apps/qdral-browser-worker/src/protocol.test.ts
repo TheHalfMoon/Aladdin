@@ -102,6 +102,10 @@ test("a launch frame must match the SG-000108 confinement contract", () => {
     mutate(replaceArg("--webrtc-ip-handling-policy=", "--force-webrtc-ip-handling-policy=disable_non_proxied_udp")),
     mutate(replaceArg("--webrtc-ip-handling-policy=", "--webrtc-ip-handling-policy=default")),
     mutate(replaceArg("--disable-quic", "--enable-quic")),
+    // #324: the disabled network-reaching features, exactly.
+    mutate((l) => l.argv.splice(l.argv.findIndex((arg) => arg.startsWith("--disable-features=")), 1)),
+    mutate(replaceArg("--disable-features=", "--disable-features=MediaRouter")),
+    mutate(replaceArg("--disable-features=", "--enable-features=MediaRouter")),
     mutate(replaceArg("about:blank", "https://example.com/"))
   ];
   for (const [index, reason] of refusals.entries()) {
