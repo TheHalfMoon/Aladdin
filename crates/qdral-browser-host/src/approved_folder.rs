@@ -365,8 +365,20 @@ fn remove_stale(folder: RawHandle, staged_name: &str) -> Result<(), HostError> {
         FILE_OPEN,
         FILE_NON_DIRECTORY_FILE | FILE_SYNCHRONOUS_IO_NONALERT,
     )
-    .map_err(|_| HostError::Invalid("another commit to this destination is in progress".into()))?;
-    set_delete_on_close(stale.as_raw_handle(), true)?;
+    .map_err(|error| match error {
+        // Held without sharing: a commit (or another reader) has it open.
+        HostError::Platform(detail) if detail.contains("0xc0000043") => HostError::Invalid(
+            "another commit to this destination is in progress, or its leftover is in use".into(),
+        ),
+        _ => HostError::Invalid(format!(
+            "a leftover temporary file for this destination cannot be removed ({error})"
+        )),
+    })?;
+    set_delete_on_close(stale.as_raw_handle(), true).map_err(|_| {
+        HostError::Invalid(
+            "a leftover temporary file for this destination cannot be removed (read-only?)".into(),
+        )
+    })?;
     drop(stale);
     Ok(())
 }
@@ -381,9 +393,9 @@ fn crash_point(stage: &str) {
         if let Ok(marker) = std::env::var("QDRAL_309_MARKER") {
             let _ = std::fs::write(marker, stage);
         }
-        loop {
-            std::thread::sleep(std::time::Duration::from_secs(1));
-        }
+        // Killed by the parent; never outlives it by more than two minutes.
+        std::thread::sleep(std::time::Duration::from_secs(120));
+        std::process::exit(3);
     }
 }
 

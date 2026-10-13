@@ -2108,7 +2108,7 @@ fn a_staged_file_never_outlives_a_worker_that_dies_or_hangs() {
         // has terminated the job by then, so the late write never happens.
         (
             "hangs",
-            "Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 60000); write(path, data, options);",
+            "Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 50000); write(path, data, options);",
             UnavailableReason::TimedOut,
         ),
     ] {
@@ -2138,18 +2138,22 @@ fn a_staged_file_never_outlives_a_worker_that_dies_or_hangs() {
             .expect("plain link");
         let (target, mut approval) =
             approved_download(&worker, &live, &node, &approved, "plain.pdf");
-        let started = Instant::now();
+        let worker_pid = worker.worker_pid();
         let result = worker.download(&target, &mut approval, 1, "workspace", &approved, "plain.pdf");
+        let failed = Instant::now();
         assert!(
             matches!(result, Err(HostError::Unavailable(reason)) if reason == expected),
             "{label}: {result:?}"
         );
+        // The guarantee: the worker is gone, so nothing can write later.
+        assert!(
+            all_dead(&[worker_pid], Duration::from_secs(5)),
+            "{label}: the worker survived"
+        );
         if label == "hangs" {
-            // Past the moment the hung worker would have written.
-            let late = Duration::from_secs(65);
-            if let Some(rest) = late.checked_sub(started.elapsed()) {
-                std::thread::sleep(rest);
-            }
+            // And the evidence: past the latest moment the hung worker could
+            // have written (its block began before the host's deadline).
+            std::thread::sleep(Duration::from_secs(55).saturating_sub(failed.elapsed()));
         }
         let staged: Vec<_> = std::fs::read_dir(&staging)
             .map(|entries| entries.flatten().map(|e| e.file_name()).collect())

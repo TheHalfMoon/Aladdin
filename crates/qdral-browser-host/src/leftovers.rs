@@ -6,16 +6,21 @@
 //! next host removes every such folder whose owning process is no longer
 //! running; a folder of a live host (this one included) is never touched.
 
-use std::path::Path;
-use windows_sys::Win32::Foundation::{CloseHandle, STILL_ACTIVE};
-use windows_sys::Win32::Storage::FileSystem::FILE_ATTRIBUTE_REPARSE_POINT;
+use std::os::windows::ffi::{OsStrExt, OsStringExt};
+use std::path::{Path, PathBuf};
+use windows_sys::Win32::Foundation::{CloseHandle, INVALID_HANDLE_VALUE, STILL_ACTIVE};
+use windows_sys::Win32::Storage::FileSystem::{
+    FindClose, FindFirstFileW, FindNextFileW, FILE_ATTRIBUTE_REPARSE_POINT, WIN32_FIND_DATAW,
+};
 use windows_sys::Win32::System::Threading::{
     GetExitCodeProcess, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION,
 };
 
 /// The staging folder prefix (see `BrowserWorker`'s staging directory).
 pub(crate) const STAGING_PREFIX: &str = "qdral-sg108-staging-";
-/// Entries of the temp directory looked at, and folders removed, per launch.
+/// Staging-named entries of the temp directory looked at (only names
+/// matching the prefix are listed, however crowded the directory), and
+/// folders removed, per launch.
 const MAX_ENTRIES: usize = 4096;
 const MAX_REMOVED: usize = 64;
 
@@ -51,28 +56,62 @@ fn owner(name: &str) -> Option<u32> {
     pid.parse().ok()
 }
 
+/// The names in `dir` that match `STAGING_PREFIX*`, at most MAX_ENTRIES.
+fn staging_names(dir: &Path) -> Vec<String> {
+    let mut pattern: Vec<u16> = dir
+        .join(format!("{STAGING_PREFIX}*"))
+        .as_os_str()
+        .encode_wide()
+        .collect();
+    pattern.push(0);
+    // SAFETY: an all-zero WIN32_FIND_DATAW is a valid output buffer.
+    let mut data: WIN32_FIND_DATAW = unsafe { std::mem::zeroed() };
+    // SAFETY: `pattern` is NUL-terminated and outlives the call; `data` is
+    // writable.
+    let find = unsafe { FindFirstFileW(pattern.as_ptr(), &mut data) };
+    if find == INVALID_HANDLE_VALUE {
+        return Vec::new();
+    }
+    let mut names = Vec::new();
+    loop {
+        let length = data
+            .cFileName
+            .iter()
+            .position(|&c| c == 0)
+            .unwrap_or(data.cFileName.len());
+        names.push(
+            std::ffi::OsString::from_wide(&data.cFileName[..length])
+                .to_string_lossy()
+                .into_owned(),
+        );
+        // SAFETY: `find` is the open search handle; `data` is writable.
+        if names.len() >= MAX_ENTRIES || unsafe { FindNextFileW(find, &mut data) } == 0 {
+            break;
+        }
+    }
+    // SAFETY: `find` was opened above and is closed exactly once.
+    unsafe { FindClose(find) };
+    names
+}
+
 /// Remove the staging folders of hosts that are no longer running; returns
 /// how many were removed. Bounded, and never follows a reparse point: a
 /// junction named like a staging folder is left alone.
 pub(crate) fn sweep_stale_staging(temp_dir: &Path) -> usize {
     use std::os::windows::fs::MetadataExt;
-    let Ok(entries) = std::fs::read_dir(temp_dir) else {
-        return 0;
-    };
     let own = std::process::id();
     let mut removed = 0;
-    for entry in entries.take(MAX_ENTRIES).flatten() {
+    for name in staging_names(temp_dir) {
         if removed >= MAX_REMOVED {
             break;
         }
-        let name = entry.file_name();
-        let Some(pid) = name.to_str().and_then(owner) else {
+        let Some(pid) = owner(&name) else {
             continue;
         };
         if pid == own || may_be_running(pid) {
             continue;
         }
-        let path = entry.path();
+        let path: PathBuf = temp_dir.join(&name);
         let plain_folder = std::fs::symlink_metadata(&path).is_ok_and(|meta| {
             meta.is_dir() && meta.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT == 0
         });
@@ -137,6 +176,11 @@ mod tests {
         let link = temp.join(format!("{STAGING_PREFIX}{dead}-ef56"));
         crate::approved_folder::tests::junction(&link, &outside);
 
+        // A crowded directory does not starve the sweep: entries that sort
+        // before the prefix are never listed.
+        for i in 0..MAX_ENTRIES + 10 {
+            std::fs::write(temp.join(format!("a-{i:05}")), b"").unwrap();
+        }
         assert_eq!(sweep_stale_staging(&temp), 1);
         assert!(!stale.exists(), "the dead host's folder stayed");
         assert!(mine.exists(), "a live host's folder was removed");
