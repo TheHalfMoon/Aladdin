@@ -1,0 +1,50 @@
+{
+  "evidence_date": "2026-10-13",
+  "status": "ILLUSTRATIVE_SENSITIVITY_NOT_MEASURED",
+  "month_hours": 730,
+  "prices": [5, 8, 10, 15, 20],
+  "subscribers": [10, 50, 100, 500, 1000],
+  "payment": {
+    "percent": 0.05,
+    "fixed_usd": 0.50,
+    "refund_rate": 0.02,
+    "chargeback_rate": 0.001,
+    "chargeback_fee_usd": 15,
+    "tax_included_rate": 0,
+    "note": "Paddle published headline; sub-$10 quote/merchant eligibility unverified. Dispute reserve is an estimate, not a Paddle fee quote. Tax zero means tax-exclusive scenario, not exemption."
+  },
+  "hosting": {
+    "small_flex_usd_hour": 0.69,
+    "small_warm_usd_hour": 0.59,
+    "advanced_flex_usd_hour": 2.72,
+    "idle_seconds_per_request": 5,
+    "small_cold_probability": 0.25,
+    "small_cold_seconds": 30,
+    "advanced_cold_probability": 0.50,
+    "advanced_cold_seconds": 90,
+    "utilization_ceiling": 0.50,
+    "peak_to_mean": 8,
+    "control_plane_usd_month": 15,
+    "model_storage_gb": 20,
+    "advanced_model_storage_gb": 80,
+    "model_storage_usd_gb_month": 0.07,
+    "disk_backup_usd_month": 2,
+    "egress_usd_gb": 0.10,
+    "per_account_state_usd_month": 0.05,
+    "note": "RunPod public small 24GB flex and L4 pod rates; not equal-performance GPU pools. Advanced A100 flex is a BF16 fitting hypothesis. Start time, capacity and egress are unmeasured estimates. No region or SLA quote."
+  },
+  "labor": {
+    "support_usd_hour": 20,
+    "maintenance_hours_month": 15,
+    "maintenance_usd_hour": 20,
+    "signing_compliance_usd_month": 0,
+    "note": "Planning estimates. Zero signing/compliance is an unresolved cash provision; add actual quotes before launch. One product fleet allocation; do not double-count shared maintenance between tiers."
+  },
+  "basic": {"price_usd": 3, "support_minutes_month": 1, "per_account_infrastructure_usd_month": 0.05, "relay_usd_month": 0},
+  "cohorts": {
+    "light": {"share": 0.40, "tasks_month": 20, "steps_task": 4, "calls_task": 1, "input_tokens_call": 1200, "output_tokens_call": 128, "images_call": 0.2, "image_kib": 200, "retry_fraction": 0.05, "success_probability": 0.95, "small_gpu_seconds_call": 3, "escalation_probability": 0, "advanced_gpu_seconds_call": 15, "support_minutes_month": 1},
+    "regular": {"share": 0.45, "tasks_month": 100, "steps_task": 8, "calls_task": 3, "input_tokens_call": 2000, "output_tokens_call": 192, "images_call": 0.5, "image_kib": 250, "retry_fraction": 0.15, "success_probability": 0.90, "small_gpu_seconds_call": 6, "escalation_probability": 0, "advanced_gpu_seconds_call": 20, "support_minutes_month": 3},
+    "heavy": {"share": 0.13, "tasks_month": 400, "steps_task": 15, "calls_task": 8, "input_tokens_call": 3500, "output_tokens_call": 256, "images_call": 0.8, "image_kib": 300, "retry_fraction": 0.25, "success_probability": 0.80, "small_gpu_seconds_call": 8, "escalation_probability": 0, "advanced_gpu_seconds_call": 30, "support_minutes_month": 8},
+    "power": {"share": 0.02, "tasks_month": 1500, "steps_task": 30, "calls_task": 20, "input_tokens_call": 6000, "output_tokens_call": 384, "images_call": 1, "image_kib": 400, "retry_fraction": 0.35, "success_probability": 0.70, "small_gpu_seconds_call": 12, "escalation_probability": 0, "advanced_gpu_seconds_call": 45, "support_minutes_month": 20}
+  }
+}
