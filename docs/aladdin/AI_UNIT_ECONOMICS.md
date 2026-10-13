@@ -18,6 +18,8 @@ are the authority for calculations; [all tables](research/AI_COST_SCENARIOS.md)
 cover $5/$8/$10/$15/$20 and all subscriber counts. The old
 `tools/unit_economics.py` remains preserved as a historical cost-only helper.
 New tariff research supersedes neither its evidence nor adopted deferred billing.
+The committed generated Markdown normalizes platform stdout line endings to LF;
+its content is exactly the calculator's default output.
 
 ## Definitions and formulas
 
