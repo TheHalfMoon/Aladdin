@@ -118,6 +118,12 @@ pub struct WireParam {
 pub struct PageText(String);
 
 impl PageText {
+    /// Label text the page supplied (the caller has bounded and checked it).
+    #[cfg(any(windows, test))]
+    pub(crate) fn from_page(text: String) -> Self {
+        Self(text)
+    }
+
     /// The untrusted text itself.
     pub fn untrusted(&self) -> &str {
         &self.0
@@ -190,7 +196,7 @@ fn violation() -> HostError {
 /// Invisible format characters: bidi controls, zero-width marks, the BOM,
 /// the soft hyphen, interlinear annotation marks and tag characters (the
 /// worker removes them from text and refuses them in exact values).
-fn is_bidi_or_format(ch: char) -> bool {
+pub(crate) fn is_bidi_or_format(ch: char) -> bool {
     matches!(
         ch,
         '\u{61c}'

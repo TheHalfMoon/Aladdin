@@ -14,8 +14,10 @@
 // would deadlock). A request the host does not answer in time is refused.
 
 import type { DeclaredTool } from "./webmcp/declarative.js";
+import type { Piece } from "./extract/pieces.js";
 import {
   launchRefusal,
+  MAX_EXTRACT_PIECES,
   MAX_ORIGIN_BYTES,
   MAX_URL_BYTES,
   parseHostFrame,
@@ -56,6 +58,9 @@ export interface EngineSession {
   /// The primary page's declarative WebMCP tools, read without running
   /// page script; bounded so the reply frame fits.
   discover(discId: number): Promise<{ url: string; truncated: boolean; tools: DeclaredTool[] }>;
+  /// The primary page's rendered content as Markdown, read from an engine
+  /// snapshot without running page script, in frame-sized pieces.
+  extract(options: { links: boolean; images: boolean }): Promise<{ url: string; truncated: boolean; pieces: Piece[] }>;
   /// Fill the declared tool form with host-validated fields, click its
   /// default submit button and wait for the resulting document; returns it
   /// with its structured data. Rejects with NavigationError.
@@ -78,6 +83,8 @@ export type WorkerState = "awaiting_hello" | "ready" | "launched" | "closed";
 
 export class Worker {
   private state: WorkerState = "awaiting_hello";
+  /// The last extraction's remaining pieces, until the host has read them.
+  private extraction: { extId: number; url: string; truncated: boolean; pieces: Piece[] } | null = null;
   private session: EngineSession | null = null;
   private launchedOnce = false;
   private queue: Promise<void> = Promise.resolve();
@@ -218,6 +225,45 @@ export class Worker {
         } catch {
           this.send({ frame: "discovery_failed", disc_id: frame.disc_id });
         }
+        return;
+      }
+      case "extract": {
+        if (this.state !== "launched" || !this.session) return this.fail("not_ready");
+        this.extraction = null;
+        try {
+          const { url, truncated, pieces } = await this.session.extract({ links: frame.links, images: frame.images });
+          if (pieces.length === 0 || pieces.length > MAX_EXTRACT_PIECES) throw new Error("piece count out of range");
+          // A page can give itself a long URL (pushState); the pieces are
+          // sized for one of at most MAX_URL_BYTES.
+          if (Buffer.byteLength(url) > MAX_URL_BYTES) throw new Error("the page URL is too long");
+          const first = pieces[0] ?? { chunk: 0, content: "" };
+          this.send({ frame: "extracted", ext_id: frame.ext_id, url, truncated, piece: 0, total: pieces.length, chunk: first.chunk, content: first.content });
+          // Kept only until the host has read every piece.
+          if (pieces.length > 1) this.extraction = { extId: frame.ext_id, url, truncated, pieces };
+        } catch {
+          this.send({ frame: "extraction_failed", ext_id: frame.ext_id });
+        }
+        return;
+      }
+      case "extract_more": {
+        if (this.state !== "launched" || !this.session) return this.fail("not_ready");
+        const kept = this.extraction;
+        const piece = kept && kept.extId === frame.ext_id ? kept.pieces[frame.piece] : undefined;
+        if (!kept || piece === undefined) {
+          this.send({ frame: "extraction_failed", ext_id: frame.ext_id });
+          return;
+        }
+        if (frame.piece === kept.pieces.length - 1) this.extraction = null;
+        this.send({
+          frame: "extracted",
+          ext_id: frame.ext_id,
+          url: kept.url,
+          truncated: kept.truncated,
+          piece: frame.piece,
+          total: kept.pieces.length,
+          chunk: piece.chunk,
+          content: piece.content
+        });
         return;
       }
       case "observe": {

@@ -1198,6 +1198,125 @@ fn an_approved_activation_follows_the_latest_dated_link_and_nothing_else() {
 
 #[test]
 #[ignore = "requires the built browser worker and Edge; run by npm run browser-launcher:native"]
+fn a_page_is_extracted_as_untrusted_markdown_in_pieces_without_hidden_text() {
+    let fixture = HttpsFixture::start();
+    let profile = temp_profile("extract");
+    let mut launch = spec(&profile, true);
+    launch.destinations =
+        vec![
+            AdmittedDestination::fixture("fixture.test", IpAddr::V4(Ipv4Addr::LOCALHOST))
+                .expect("fixture.test"),
+        ];
+    launch.test_trusted_spki = Some(fixture.spki.clone());
+    let mut worker = launch_worker(&launch, &Policy(PolicyKeyState::Absent)).expect("launch");
+    // Nothing is committed yet: nothing to extract.
+    assert!(matches!(
+        worker.extract_page(crate::extraction::ExtractOptions::default()),
+        Err(HostError::Invalid(_))
+    ));
+
+    worker.navigate("https://fixture.test/read").expect("read");
+    pump(&mut worker, Duration::from_millis(500));
+    let before = fixture.hits().len();
+    let started = std::time::Instant::now();
+    let page = worker
+        .extract_page(crate::extraction::ExtractOptions::default())
+        .expect("extract");
+    let elapsed = started.elapsed();
+    assert_eq!(page.url, "https://fixture.test/read");
+    assert!(!page.truncated);
+    assert!(page.chunks.len() > 1, "{} chunks", page.chunks.len());
+    let text: String = page
+        .chunks
+        .iter()
+        .map(crate::webmcp::PageText::untrusted)
+        .collect::<Vec<_>>()
+        .join("\n");
+    println!(
+        "SG108-EVIDENCE extraction: {} chunks, {} chars, {:?}",
+        page.chunks.len(),
+        text.chars().count(),
+        elapsed
+    );
+    assert!(text.contains("# Reading room"), "{}", &text[..200]);
+    assert!(text.contains("Visible opening paragraph"));
+    assert!(text.contains("end-0") && text.contains("end-159"));
+    assert!(text.contains("Closing paragraph."));
+    assert!(
+        text.contains("\u{e9}\u{4e2d}"),
+        "non-ASCII text survives the pieces"
+    );
+    // Hidden text never crosses; page-injected syntax stays literal.
+    assert!(!text.contains("LEAK"), "hidden text leaked");
+    assert!(
+        !text.contains("[click me](javascript"),
+        "a page-injected link formed"
+    );
+    assert!(
+        text.contains("\\[click me\\]"),
+        "the injected link is escaped"
+    );
+    assert!(!text.contains("<script>"), "page-injected HTML formed");
+    // A preformatted block larger than one frame comes back as one chunk:
+    // the injected link at its end stays inside its fence.
+    let pre = page
+        .chunks
+        .iter()
+        .map(crate::webmcp::PageText::untrusted)
+        .find(|c| c.contains("[pre link](javascript:alert(3))"))
+        .expect("the preformatted block");
+    let at = pre.find("[pre link]").unwrap_or_default();
+    assert_eq!(
+        pre[..at].matches("```").count() % 2,
+        1,
+        "the injected link is outside a fence"
+    );
+    assert!(pre.chars().count() > 60_000, "the block was cut");
+    // Links and images are opt-in.
+    assert!(!text.contains("](https://"));
+    // The engine read its own DOM: the page requested nothing.
+    assert_eq!(fixture.hits().len(), before, "the extraction made requests");
+
+    let linked = worker
+        .extract_page(crate::extraction::ExtractOptions {
+            links: true,
+            images: true,
+        })
+        .expect("extract with links");
+    let text: String = linked
+        .chunks
+        .iter()
+        .map(crate::webmcp::PageText::untrusted)
+        .collect();
+    assert!(
+        text.contains("[the archive](https://fixture.test/archive)"),
+        "{}",
+        &text[..400]
+    );
+    assert!(text.contains("![a chart](https://fixture.test/img.png)"));
+
+    // A generation later, the old extraction's document is gone; a new one
+    // is of the new document.
+    worker
+        .navigate("https://fixture.test/archive")
+        .expect("archive");
+    let archive = worker
+        .extract_page(crate::extraction::ExtractOptions::default())
+        .expect("extract archive");
+    assert_eq!(archive.document_generation, page.document_generation + 1);
+    assert!(archive
+        .chunks
+        .iter()
+        .any(|c| c.untrusted().contains("Annual review 2026-09-30")));
+    worker.ping("after-extract").expect("the lifetime goes on");
+
+    let report = worker.shutdown();
+    assert!(report.job_empty, "the job did not empty");
+    assert_profile_gone(report.profile_removed, &profile);
+}
+
+#[test]
+#[ignore = "requires the built browser worker and Edge; run by npm run browser-launcher:native"]
 fn webmcp_declarative_tools_are_discovered_read_only_and_bound_to_the_document() {
     let fixture = HttpsFixture::start();
     let profile = temp_profile("webmcp");

@@ -27,10 +27,15 @@ export const MAX_EXEC_VALUE_CHARS = 1024;
 /// Generation 2 adds the slice-3a navigation frames, generation 3 slice-3b
 /// observation, generation 4 slice-3c activation, generation 5 slice-3d
 /// downloads, generation 6 slice-4 WebMCP discovery, generation 7 slice-5
-/// WebMCP execution.
-export const WORKER_PROTOCOL_GENERATION = 7;
+/// WebMCP execution, generation 8 slice-6 page extraction.
+export const WORKER_PROTOCOL_GENERATION = 8;
 export const WORKER_IDENTITY = "qdral-browser-worker";
 export const MAX_FRAME_BYTES = 64 * 1024;
+/// One extraction piece's content on the wire (JSON-escaped UTF-8 bytes),
+/// leaving room for the frame's other fields (the URL is at most 2 KiB).
+export const MAX_PIECE_BYTES = MAX_FRAME_BYTES - 8 * 1024;
+/// Mirrors the host's bound on pieces per extraction.
+export const MAX_EXTRACT_PIECES = 96;
 
 export const MAX_ARGV_ENTRIES = 64;
 export const MAX_ARG_BYTES = 8192;
@@ -76,6 +81,8 @@ export type HostFrame =
   | { frame: "route_decision"; request_id: number; allow: boolean }
   | { frame: "observe"; obs_id: number }
   | { frame: "discover"; disc_id: number }
+  | { frame: "extract"; ext_id: number; links: boolean; images: boolean }
+  | { frame: "extract_more"; ext_id: number; piece: number }
   | { frame: "execute"; exec_id: number; tool: string; fields: ExecField[] }
   | { frame: "activate"; act_id: number; ref: string }
   | { frame: "download"; dl_id: number; ref: string; path: string }
@@ -109,6 +116,8 @@ export type WorkerFrame =
   | { frame: "observation_failed"; obs_id: number }
   | { frame: "discovered"; disc_id: number; url: string; truncated: boolean; tools: DeclaredTool[] }
   | { frame: "discovery_failed"; disc_id: number }
+  | { frame: "extracted"; ext_id: number; url: string; truncated: boolean; piece: number; total: number; chunk: number; content: string }
+  | { frame: "extraction_failed"; ext_id: number }
   | { frame: "executed"; exec_id: number; url: string; status: number; structured: string[]; structured_complete: boolean }
   | { frame: "execution_failed"; exec_id: number; reason: NavigationFailure }
   | { frame: "activated"; act_id: number; url: string; status: number }
@@ -252,6 +261,19 @@ export function parseHostFrame(raw: unknown): HostFrame {
     case "discover": {
       exactKeys(raw, ["frame", "disc_id"]);
       return { frame: "discover", disc_id: positiveId(raw.disc_id, "disc_id") };
+    }
+    case "extract": {
+      exactKeys(raw, ["frame", "ext_id", "links", "images"]);
+      if (typeof raw.links !== "boolean" || typeof raw.images !== "boolean") {
+        throw new ProtocolViolation("extract options are not booleans");
+      }
+      return { frame: "extract", ext_id: positiveId(raw.ext_id, "ext_id"), links: raw.links, images: raw.images };
+    }
+    case "extract_more": {
+      exactKeys(raw, ["frame", "ext_id", "piece"]);
+      const piece = positiveId(raw.piece, "piece");
+      if (piece >= MAX_EXTRACT_PIECES) throw new ProtocolViolation("extract piece is out of range");
+      return { frame: "extract_more", ext_id: positiveId(raw.ext_id, "ext_id"), piece };
     }
     case "execute": {
       exactKeys(raw, ["frame", "exec_id", "tool", "fields"]);

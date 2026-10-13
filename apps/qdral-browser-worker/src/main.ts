@@ -8,7 +8,10 @@ import { Console } from "node:console";
 import { existsSync, writeFileSync } from "node:fs";
 import { chromium, type Locator, type Page } from "playwright-core";
 import { refusedWorkerVariables, startupRefusal } from "./environment.js";
-import { encodeFrame, FrameDecoder, MAX_FRAME_BYTES, ProtocolViolation, type ExecField, type WorkerFrame } from "./protocol.js";
+import { encodeFrame, FrameDecoder, MAX_EXTRACT_PIECES, MAX_FRAME_BYTES, MAX_PIECE_BYTES, ProtocolViolation, type ExecField, type WorkerFrame } from "./protocol.js";
+import { CONTENT_STYLES, EXTRACT_DEFAULTS, extractMarkdown } from "./extract/index.js";
+import type { LayoutSnapshot } from "./extract/model.js";
+import { toPieces } from "./extract/pieces.js";
 import { installRoutes } from "./routes.js";
 import { boundSnapshot } from "./snapshot.js";
 import { discoverDeclarativeTools, DISCOVERY_BUDGET_MS } from "./webmcp/declarative.js";
@@ -235,6 +238,24 @@ const playwrightLauncher: Launcher = {
         const found = discoverDeclarativeTools(model.root, Math.min(DISCOVERY_BUDGET_MS, remaining), model.encoding);
         return fitTools(discId, url, model.truncated || found.truncated, found.tools);
       },
+      async extract(options: { links: boolean; images: boolean }) {
+        // The engine serialises its own DOM and layout: no page script runs,
+        // and nothing on the page is scrolled, clicked or rendered first.
+        const before = primary.url();
+        const session = await context.newCDPSession(primary);
+        const captured = (await captureWithin(
+          {
+            capture: () => session.send("DOMSnapshot.captureSnapshot", { computedStyles: [...CONTENT_STYLES] }),
+            detach: () => session.detach()
+          },
+          EXTRACT_CAPTURE_TIMEOUT_MS
+        )) as unknown as LayoutSnapshot;
+        const url = primary.url();
+        const extraction = extractMarkdown(captured, { ...options, budgetMs: EXTRACT_DEFAULTS.budgetMs });
+        if (extraction.url !== url || before !== url) throw new Error("the document changed during extraction");
+        const { pieces, truncated } = toPieces(extraction.chunks, MAX_PIECE_BYTES, MAX_EXTRACT_PIECES);
+        return { url, truncated: extraction.truncated || truncated, pieces };
+      },
       async close() {
         closing = true;
         await context.close();
@@ -247,6 +268,10 @@ const playwrightLauncher: Launcher = {
     };
   }
 };
+
+/// The engine's layout snapshot for an extraction (larger than discovery's
+/// style-free one).
+const EXTRACT_CAPTURE_TIMEOUT_MS = 5_000;
 
 /// The worker's budget for locating and filling a tool's fields.
 const FILL_BUDGET_MS = 10_000;
