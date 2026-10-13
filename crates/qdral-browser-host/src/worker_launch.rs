@@ -1074,6 +1074,7 @@ mod platform {
                 status: fetched.status,
                 text: fetched.text.untrusted().to_owned(),
                 truncated: fetched.truncated,
+                media: fetched.media,
             })
         }
     }

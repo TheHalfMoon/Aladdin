@@ -46,12 +46,12 @@ Slice 7 of `docs/aladdin/WEB_CAPABILITIES_DECISION.md` adds a host-side crawl qu
   - **Matching:** the longest matching rule wins, an allow wins a tie, and no match allows. `*` and a final `$` are supported, matched without backtracking. `/robots.txt` itself is always allowed.
   - **Bounds:** 512 rules of at most 512 bytes each, and 8 `Sitemap:` lines (https only).
   - **Answers:** a 2xx is parsed, and a 4xx means no rules. A 5xx, or no answer (including a navigation the policy refuses), means the site is unreachable. RFC 9309 then treats everything as disallowed, so the crawl stops as `RobotsUnreachable` before opening any page.
-  - **Size:** a robots.txt larger than one frame (about 56 Ki characters, so `truncated`), or with more than 512 rules for the chosen groups, cannot be honoured in full. RFC 9309 asks a crawler to parse at least 500 KiB, so such a crawl stops as `RobotsUnreachable` rather than dropping late rules.
+  - **Size:** a robots.txt larger than one frame (about 56 Ki characters, so `truncated`), or one where the groups that apply have more than 512 rules or a rule longer than 512 bytes, cannot be honoured in full. RFC 9309 asks a crawler to parse at least 500 KiB, so such a crawl stops as `RobotsUnreachable` rather than dropping late rules. The exception is an HTML page answering `/robots.txt` (a catch-all route) whose text read so far holds no robots records. It is taken as no robots.txt, as an HTML answer of any size always was.
   - **What it applies to:** every link, the start URL, every sitemap document (including the `/sitemap.xml` fallback and an index's children), and every sitemap entry. A page reached by a redirect onto a disallowed path is not read ("redirected onto a page robots.txt disallows"), although the engine already requested it.
 - **Sitemaps.**
   - **Sources:** the robots.txt `Sitemap:` URLs on the crawl's origin, or `/sitemap.xml` if there are none.
   - **Index files:** a sitemap index's children on the origin are read in turn, up to 4 sitemaps in all.
-  - **Entries:** each `<loc>` (XML entities and CDATA decoded, at most 1,000 per sitemap) goes through the same scope, robots and bound checks as a link, at depth 1.
+  - **Entries:** each `<loc>` (XML's five entities decoded, CDATA taken literally, at most 1,000 per sitemap) goes through the same scope, robots and bound checks as a link, at depth 1.
   - **Failures:** a sitemap that fails or answers non-2xx is skipped. One that yields no `<loc>` (not a sitemap, or styled and transformed as above) is counted in `sitemaps_empty`, not `sitemaps_read`.
   - **Stops:** cancellation and the deadline are checked before each sitemap as well as before each page.
 - `report.robots_status`, `report.sitemaps_read` and `report.sitemaps_empty` record what was read.

@@ -163,6 +163,8 @@ pub struct TextDocument {
     pub text: String,
     /// The text was cut to fit one frame.
     pub truncated: bool,
+    /// The document's media type, as the worker reported it.
+    pub media: String,
 }
 
 /// The browser side of a crawl.
@@ -478,7 +480,10 @@ fn read_robots(
                     // crawler to parse at least 500 KiB, so the crawl fails
                     // closed instead of dropping late rules.
                     let robots = Robots::parse(&document.text);
-                    if document.truncated || !robots.complete() {
+                    // An HTML page answering /robots.txt (a catch-all route)
+                    // with no records in what was read is no robots.txt.
+                    let page_not_robots = document.media == "text/html" && !robots.has_records();
+                    if !robots.complete() || (document.truncated && !page_not_robots) {
                         return Err(CrawlStop::RobotsUnreachable);
                     }
                     Ok(robots)
@@ -731,14 +736,21 @@ mod tests {
                     final_url: url.to_owned(),
                     status: *status % 1000,
                     text: text.clone(),
-                    // A status above 1000 marks the text as cut.
+                    // A status above 1000 marks the text as cut; HTML text is
+                    // served as text/html.
                     truncated: *status > 1000,
+                    media: if text.starts_with("<html") {
+                        "text/html".into()
+                    } else {
+                        "text/plain".into()
+                    },
                 }),
                 None => Ok(TextDocument {
                     final_url: url.to_owned(),
                     status: 404,
                     text: String::new(),
                     truncated: false,
+                    media: "text/plain".into(),
                 }),
             }
         }
@@ -1136,6 +1148,16 @@ mod tests {
             assert_eq!(report.stopped, Some(CrawlStop::RobotsUnreachable));
             assert!(report.pages.is_empty());
         }
+
+        // A cut HTML page with no robots records is no robots.txt.
+        let mut driver = site();
+        driver.texts.insert(
+            "https://site.test/robots.txt".into(),
+            (1200, "<html><body>An app shell</body></html>".into()),
+        );
+        let report = crawl(&mut driver, &wanted, &AtomicBool::new(false)).unwrap();
+        assert_eq!(report.stopped, None);
+        assert!(report.pages.len() > 1);
 
         // A 5xx answer, or none, stops the crawl before any page.
         for answer in [(503, String::new()), (0, String::new())] {

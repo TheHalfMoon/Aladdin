@@ -28,9 +28,12 @@ pub struct Robots {
     rules: Vec<Rule>,
     /// Nothing may be crawled (robots.txt unreachable, RFC 9309 2.3.1.4).
     disallow_all: bool,
-    /// Some rules were dropped by MAX_ROBOTS_RULES: the rules are not the
+    /// Rules of the groups that apply were dropped (past MAX_ROBOTS_RULES,
+    /// or longer than MAX_ROBOTS_PATTERN_BYTES): the rules are not the
     /// file's, and a crawl must not rely on them.
     capped: bool,
+    /// The file has at least one `user-agent`, `allow` or `disallow` line.
+    records: bool,
     pub sitemaps: Vec<String>,
 }
 
@@ -59,14 +62,16 @@ impl Robots {
 
     /// Parse a robots.txt. The groups naming Deskal's product token apply;
     /// if none does, the `*` groups do; a group is one or more
-    /// `user-agent` lines and the rules after them. Unknown lines and
-    /// over-long rules are ignored.
+    /// `user-agent` lines and the rules after them. Unknown lines are
+    /// ignored; a rule dropped by a bound makes the result incomplete.
     pub fn parse(text: &str) -> Self {
         let mut ours: Vec<Rule> = Vec::new();
         let mut star: Vec<Rule> = Vec::new();
         let mut matched_ours = false;
         let mut sitemaps = Vec::new();
-        let mut capped = false;
+        // Dropped rules, for our groups and for the `*` groups.
+        let mut capped = (false, false);
+        let mut records = false;
         // The agents of the group being read, and whether a rule has been
         // seen since its last `user-agent` line.
         let mut current = (false, false);
@@ -80,6 +85,9 @@ impl Robots {
             };
             let key = key.trim().to_ascii_lowercase();
             let value = value.trim();
+            if matches!(key.as_str(), "user-agent" | "allow" | "disallow") {
+                records = true;
+            }
             match key.as_str() {
                 "user-agent" => {
                     if in_rules {
@@ -110,25 +118,21 @@ impl Robots {
                 "allow" | "disallow" => {
                     in_rules = true;
                     // An empty disallow is no rule; patterns must be paths.
-                    if value.is_empty()
-                        || value.len() > MAX_ROBOTS_PATTERN_BYTES
-                        || !(value.starts_with('/') || value.starts_with('*'))
-                    {
+                    if value.is_empty() || !(value.starts_with('/') || value.starts_with('*')) {
                         continue;
                     }
-                    let rule = Rule {
-                        allow: key == "allow",
-                        pattern: value.to_owned(),
-                    };
-                    let target = match group {
-                        Group::Ours => &mut ours,
-                        Group::Star => &mut star,
+                    let (target, dropped) = match group {
+                        Group::Ours => (&mut ours, &mut capped.0),
+                        Group::Star => (&mut star, &mut capped.1),
                         Group::None | Group::Other => continue,
                     };
-                    if target.len() < MAX_ROBOTS_RULES {
-                        target.push(rule);
+                    if target.len() < MAX_ROBOTS_RULES && value.len() <= MAX_ROBOTS_PATTERN_BYTES {
+                        target.push(Rule {
+                            allow: key == "allow",
+                            pattern: value.to_owned(),
+                        });
                     } else {
-                        capped = true;
+                        *dropped = true;
                     }
                 }
                 "sitemap"
@@ -142,14 +146,22 @@ impl Robots {
         Self {
             rules: if matched_ours { ours } else { star },
             disallow_all: false,
-            capped,
+            // Only the groups that apply count.
+            capped: if matched_ours { capped.0 } else { capped.1 },
+            records,
             sitemaps,
         }
     }
 
-    /// Every rule of the file was kept (none dropped by MAX_ROBOTS_RULES).
+    /// Every rule of the groups that apply was kept.
     pub fn complete(&self) -> bool {
         !self.capped
+    }
+
+    /// The text holds robots.txt records at all (an HTML page answering
+    /// `/robots.txt` usually holds none).
+    pub fn has_records(&self) -> bool {
+        self.records
     }
 
     /// Whether `path` (path and query, as requested) may be crawled: the
@@ -339,6 +351,17 @@ mod tests {
         assert!(Robots::parse("User-agent: *\nDisallow: /a\n").complete());
         assert_eq!(robots.sitemaps.len(), MAX_ROBOTS_SITEMAPS);
         assert!(robots.allowed(&format!("/{}", "x".repeat(MAX_ROBOTS_PATTERN_BYTES))));
+        // An over-long rule in the group that applies makes it incomplete; a
+        // capped group that does not apply does not.
+        let long = format!(
+            "User-agent: *\nDisallow: /{}\n",
+            "y".repeat(MAX_ROBOTS_PATTERN_BYTES)
+        );
+        assert!(!Robots::parse(&long).complete());
+        let ours_apply = format!("User-agent: deskal\nDisallow: /a\n{long}");
+        assert!(Robots::parse(&ours_apply).complete());
+        assert!(Robots::parse(&ours_apply).has_records());
+        assert!(!Robots::parse("<html><body>Not found</body></html>").has_records());
     }
 
     #[test]
