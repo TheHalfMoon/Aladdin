@@ -220,7 +220,7 @@ For each consequential action, `qdrald` and the host each contribute what only t
 - any exposure.
 
 **Evidence:**
-- `tests/sg000108_worker_host.rs`, run by `npm run browser-launcher:native` as a second, feature-enabled pass (2 tests). It drives the real binary under `Supervisor` against the fixture and checks:
+- `tests/sg000108_worker_host.rs`, run by `npm run browser-launcher:native` as a second, feature-enabled pass (4 tests). It drives the real binary under `Supervisor` against the fixture and checks:
   - open: 32-hex nonce, pin 127.0.0.1, the host-pid-named profile;
   - a second open is refused, typed;
   - navigate returns 200, and another origin is refused;
@@ -237,7 +237,9 @@ For each consequential action, `qdrald` and the host each contribute what only t
 
   In the manifest it may appear only as its own empty definition: no default and no other feature enables it. No other crate depends on the host crate, and the release build compiles only `qdrald` and `qdral-lifecycle`.
 - **Cleanup paths:**
-  - a refused `open` removes the profile it made (`a_refused_open_leaves_no_profile_behind`);
+  - a refused `open` leaves no profile:
+    - checks that need no profile come first (`a_refused_open_leaves_no_profile_behind`);
+    - a launch refused after the profile exists removes it (`a_launch_refused_after_the_profile_exists_removes_it`). With only that removal deleted, the test fails (mutation run);
   - `Supervisor::shutdown` and its drop also shut a worker-mode host down.
 - **Unit tests under the feature:** the native launcher also runs the feature-enabled `--lib` unit tests (the closed vocabulary, closed error codes, frame before hello).
 - **Follow-ups recorded:**

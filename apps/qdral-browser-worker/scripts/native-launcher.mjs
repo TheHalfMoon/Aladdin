@@ -14,7 +14,7 @@ import { fileURLToPath } from "node:url";
 // Every native test must run: a filter that matches nothing (for example
 // after a module rename) exits 0 and would otherwise pass vacuously.
 const EXPECTED_TESTS = 26;
-const EXPECTED_WORKER_HOST_TESTS = 3;
+const EXPECTED_WORKER_HOST_TESTS = 4;
 
 const app = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const repo = resolve(app, "..", "..");

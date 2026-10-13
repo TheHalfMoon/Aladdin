@@ -248,6 +248,52 @@ fn a_refused_open_leaves_no_profile_behind() {
 
 #[test]
 #[ignore = "requires the built browser worker and Edge; run by npm run browser-launcher:native"]
+fn a_launch_refused_after_the_profile_exists_removes_it() {
+    // The worker entry is an existing file that is not `main.js`: the open
+    // passes every check that needs no profile, makes the lifetime's
+    // profile, and is then refused by the launch (typed). The profile it
+    // made must be gone.
+    let fixture = Fixture::start();
+    let (node, _) = prerequisites();
+    let root = temp_root("refused-launch");
+    let launch = WorkerHostLaunch {
+        worker_main: node.clone(),
+        node,
+        profile_root: root.join("profiles"),
+        temp_dir: root.join("staging"),
+        state_root: root.join("state"),
+    };
+    for dir in [&launch.profile_root, &launch.temp_dir, &launch.state_root] {
+        std::fs::create_dir_all(dir).expect("dirs");
+    }
+    let mut supervisor = Supervisor::new();
+    supervisor
+        .launch_worker_host(&host_binary(), &launch)
+        .expect("launch the worker-mode host");
+    let host = supervisor.worker_host().expect("live worker host");
+    let reply = host
+        .request(&WorkerHostRequest::Open {
+            workspace: "ws-sg108".into(),
+            host: "fixture.test".into(),
+            fixture_spki: fixture.spki.clone(),
+        })
+        .expect("open");
+    assert_eq!(
+        reply,
+        WorkerHostReply::Error {
+            code: "unavailable:unsupportedruntime".into()
+        }
+    );
+    assert!(
+        entries(&launch.profile_root).is_empty(),
+        "the refused launch left its profile"
+    );
+    assert!(supervisor.shutdown().expect("shutdown"));
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+#[ignore = "requires the built browser worker and Edge; run by npm run browser-launcher:native"]
 fn shutting_the_host_down_mid_lifetime_takes_the_worker_and_profile_with_it() {
     let fixture = Fixture::start();
     let (mut supervisor, launch, root) = launch("shutdown");
