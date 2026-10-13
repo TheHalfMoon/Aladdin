@@ -2390,7 +2390,11 @@ fn the_journey_downloads_the_latest_report_create_only_and_verified() {
         )
         .expect("approved download");
     assert!(approval.consumed);
-    assert_eq!(committed.path, approved.join("reports").join("latest.pdf"));
+    // The path the commit's held handle reached (#307): the canonical form.
+    assert_eq!(
+        committed.path,
+        std::fs::canonicalize(approved.join("reports").join("latest.pdf")).unwrap()
+    );
     // Independent check: the exact fixture bytes and their SHA-256.
     let expected = b"%PDF-1.4\n% /reports/2026-09-30.pdf\n1 0 obj << /Type /Catalog >> endobj\ntrailer << /Root 1 0 R >>\n%%EOF\n";
     let on_disk = std::fs::read(&committed.path).expect("read committed file");

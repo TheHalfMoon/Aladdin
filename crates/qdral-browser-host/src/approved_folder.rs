@@ -23,11 +23,11 @@ use windows_sys::Wdk::Storage::FileSystem::{
 };
 use windows_sys::Win32::Foundation::{HANDLE, UNICODE_STRING};
 use windows_sys::Win32::Storage::FileSystem::{
-    FileDispositionInfo, GetFinalPathNameByHandleW, SetFileInformationByHandle, DELETE,
-    FILE_ADD_FILE, FILE_ADD_SUBDIRECTORY, FILE_ATTRIBUTE_HIDDEN, FILE_ATTRIBUTE_NORMAL,
-    FILE_ATTRIBUTE_TEMPORARY, FILE_DISPOSITION_INFO, FILE_FLAG_BACKUP_SEMANTICS,
+    FileBasicInfo, FileDispositionInfo, GetFinalPathNameByHandleW, SetFileInformationByHandle,
+    DELETE, FILE_ADD_FILE, FILE_ADD_SUBDIRECTORY, FILE_ATTRIBUTE_HIDDEN, FILE_ATTRIBUTE_NORMAL,
+    FILE_ATTRIBUTE_TEMPORARY, FILE_BASIC_INFO, FILE_DISPOSITION_INFO, FILE_FLAG_BACKUP_SEMANTICS,
     FILE_LIST_DIRECTORY, FILE_READ_ATTRIBUTES, FILE_SHARE_READ, FILE_SHARE_WRITE, FILE_TRAVERSE,
-    FILE_WRITE_DATA, SYNCHRONIZE, VOLUME_NAME_DOS,
+    FILE_WRITE_ATTRIBUTES, FILE_WRITE_DATA, SYNCHRONIZE, VOLUME_NAME_DOS,
 };
 use windows_sys::Win32::System::Kernel::OBJ_DONT_REPARSE;
 use windows_sys::Win32::System::IO::IO_STATUS_BLOCK;
@@ -36,6 +36,9 @@ const OBJ_CASE_INSENSITIVE: u32 = 0x40;
 const STATUS_OBJECT_NAME_COLLISION: i32 = 0xC000_0035_u32 as i32;
 const STATUS_REPARSE_POINT_ENCOUNTERED: i32 = 0xC000_050B_u32 as i32;
 const STATUS_NOT_A_DIRECTORY: i32 = 0xC000_0103_u32 as i32;
+/// A folder turned into a mount point while held (its name now leads
+/// nowhere the relative open may follow).
+const STATUS_REPARSE_POINT_NOT_RESOLVED: i32 = 0xC000_0280_u32 as i32;
 const STATUS_FILE_IS_A_DIRECTORY: i32 = 0xC000_00BA_u32 as i32;
 
 /// Directory rights the commit needs on a folder it holds.
@@ -129,7 +132,8 @@ fn open_relative(
         )
     };
     match status {
-        0 => {
+        // NT_SUCCESS: any non-negative status.
+        0.. => {
             // SAFETY: NtCreateFile succeeded, so `handle` is a new handle
             // this function now owns.
             Ok(unsafe { OwnedHandle::from_raw_handle(handle as RawHandle) })
@@ -137,9 +141,11 @@ fn open_relative(
         STATUS_OBJECT_NAME_COLLISION => Err(HostError::Invalid(
             "destination exists (create-only)".into(),
         )),
-        STATUS_REPARSE_POINT_ENCOUNTERED => Err(HostError::Invalid(
-            "destination escapes the approved folder (a reparse point below it)".into(),
-        )),
+        STATUS_REPARSE_POINT_ENCOUNTERED | STATUS_REPARSE_POINT_NOT_RESOLVED => {
+            Err(HostError::Invalid(
+                "destination escapes the approved folder (a reparse point below it)".into(),
+            ))
+        }
         STATUS_NOT_A_DIRECTORY | STATUS_FILE_IS_A_DIRECTORY => Err(HostError::Invalid(
             "destination escapes the approved folder (not a folder)".into(),
         )),
@@ -281,40 +287,95 @@ pub(crate) fn commit(
     let staged = open_relative(
         folder,
         &staged_name,
-        FILE_WRITE_DATA | DELETE | FILE_READ_ATTRIBUTES | SYNCHRONIZE,
+        FILE_WRITE_DATA | FILE_WRITE_ATTRIBUTES | DELETE | FILE_READ_ATTRIBUTES | SYNCHRONIZE,
         0,
         FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_TEMPORARY,
         FILE_CREATE,
         FILE_NON_DIRECTORY_FILE | FILE_SYNCHRONOUS_IO_NONALERT,
     )?;
-    let raw = staged.as_raw_handle();
+    // From here on, any failure marks the file for deletion again (the
+    // guard), so nothing staged or half-committed outlives the commit.
+    let mut staged = Staged {
+        file: File::from(staged),
+        keep: false,
+    };
     // Until it has its name, the file goes away with the last handle, even
     // if the host dies.
-    set_delete_on_close(raw, true)?;
-    let mut file = File::from(staged);
-    file.write_all(content)
-        .and_then(|()| file.sync_all())
+    set_delete_on_close(staged.raw(), true)?;
+    staged
+        .file
+        .write_all(content)
+        .and_then(|()| staged.file.sync_all())
         .map_err(|err| HostError::Platform(format!("destination write: {err}")))?;
-    set_delete_on_close(file.as_raw_handle(), false)?;
-    if let Err(error) = rename_no_replace(file.as_raw_handle(), folder, file_name) {
-        let _ = set_delete_on_close(file.as_raw_handle(), true);
-        return Err(error);
-    }
+    // A file marked for deletion cannot be renamed, so the mark is cleared
+    // just before the rename.
+    set_delete_on_close(staged.raw(), false)?;
+    rename_no_replace(staged.raw(), folder, file_name)?;
+    // The committed file is an ordinary file, not a hidden temporary one.
+    set_attributes(staged.raw(), FILE_ATTRIBUTE_NORMAL)?;
     // Defense in depth: the named file is inside the held folder.
-    let committed = final_path(file.as_raw_handle())?;
+    let committed = final_path(staged.raw())?;
     let inside = committed
         .strip_prefix(&real_root)
         .is_ok_and(|rest| rest.components().count() == parts.len());
     if !inside {
-        let _ = set_delete_on_close(file.as_raw_handle(), true);
         return Err(HostError::Invalid(format!(
             "destination escapes the approved folder (committed as {})",
             committed.display()
         )));
     }
-    drop(file);
+    staged.keep = true;
+    drop(staged);
     drop(held);
-    Ok(root.join(relative))
+    // The path the held handle reached, not one rebuilt from the caller's
+    // text.
+    Ok(committed)
+}
+
+/// The staged file; unless `keep` is set, dropping it marks the file for
+/// deletion, so it goes away when its handle closes.
+struct Staged {
+    file: File,
+    keep: bool,
+}
+
+impl Staged {
+    fn raw(&self) -> RawHandle {
+        self.file.as_raw_handle()
+    }
+}
+
+impl Drop for Staged {
+    fn drop(&mut self) {
+        if !self.keep {
+            let _ = set_delete_on_close(self.raw(), true);
+        }
+    }
+}
+
+fn set_attributes(file: RawHandle, attributes: u32) -> Result<(), HostError> {
+    // Zero times leave the file's timestamps unchanged.
+    let info = FILE_BASIC_INFO {
+        CreationTime: 0,
+        LastAccessTime: 0,
+        LastWriteTime: 0,
+        ChangeTime: 0,
+        FileAttributes: attributes,
+    };
+    // SAFETY: `file` is an open handle with FILE_WRITE_ATTRIBUTES access;
+    // `info` is a valid FILE_BASIC_INFO for the size given.
+    let ok = unsafe {
+        SetFileInformationByHandle(
+            file as HANDLE,
+            FileBasicInfo,
+            (&info as *const FILE_BASIC_INFO).cast(),
+            std::mem::size_of::<FILE_BASIC_INFO>() as u32,
+        )
+    };
+    if ok == 0 {
+        return Err(HostError::Platform("destination attributes".into()));
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -408,8 +469,19 @@ pub(crate) mod tests {
     fn a_file_is_committed_create_only_inside_the_held_folder() {
         let root = scratch("plain");
         let path = commit(&root, &bound(&root), "reports\\2026\\r.pdf", b"%PDF-1.4").unwrap();
-        assert_eq!(path, root.join("reports\\2026\\r.pdf"));
+        assert_eq!(
+            path,
+            std::fs::canonicalize(root.join("reports\\2026\\r.pdf")).unwrap()
+        );
         assert_eq!(std::fs::read(&path).unwrap(), b"%PDF-1.4");
+        // An ordinary file: neither hidden nor temporary.
+        use std::os::windows::fs::MetadataExt;
+        let attributes = std::fs::metadata(&path).unwrap().file_attributes();
+        assert_eq!(
+            attributes & (FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_TEMPORARY),
+            0,
+            "{attributes:#x}"
+        );
         assert!(matches!(
             commit(&root, &bound(&root), "reports\\2026\\r.pdf", b"other"),
             Err(HostError::Invalid(message)) if message.contains("create-only")

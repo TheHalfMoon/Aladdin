@@ -576,17 +576,28 @@ A fresh-context judge's first round on this slice was BLOCK. The destination-nam
   - **Crash:** in a second lifetime, the worker is killed mid-download. The outcome is `WorkerExited`, the approval is spent, nothing is committed or staged, and every member dies. A later `navigate` reports `WorkerExited`, and `kill` cleans up as above.
 - **Known limits (follow-ups in #309).**
   - A worker that writes the staged `.part` file and then dies before replying is handled by reading only: the host removes the staged file on every outcome, and the staging folder at the end of the lifetime. No test reaches that path.
-  - A host crash is outside A6, which is about the worker and its operations. Since #307 it can no longer leave a file in the approved folder: the content is written to a temporary file marked for deletion, which the system removes when the host's handles close. It can still leave the staging folder in `temp_dir`.
+  - A host crash is outside A6, which is about the worker and its operations. Since #307 it can no longer leave a partial file under the approved name. The content is written to a hidden temporary file marked for deletion, which the system removes when the host's handles close. Two short windows remain, listed in the #307 section below, where a hidden `.qdral-dl-*.part` file can be left behind. It can still leave the staging folder in `temp_dir`.
 
 **#307: download commits through held handles, and typed download failures.**
 
 - **The approved folder is bound at commit.** The approval's `download_binding` names the approved folder's real path. At commit, the host opens the folder once and requires the handle's real path (`GetFinalPathNameByHandleW`) to equal the bound one. A folder whose path now leads elsewhere, such as a junction retargeted between approval and commit, is refused as "the approved folder changed since it was approved".
 - **No window between check and create.**
-  - **The folder is held:** it is held without delete sharing for the whole commit, so it cannot be renamed, removed or replaced.
+  - **The folder is held:** it is held without delete sharing for the whole commit, so it cannot be renamed or removed. Because the hold shares write access, another process could still turn the held, empty folder into a mount point. The next relative open then fails as a reparse point (`STATUS_REPARSE_POINT_NOT_RESOLVED`) and nothing is written.
   - **Handle-relative opens:** each subfolder, and the file, is opened or created relative to its parent's handle with `NtCreateFile` and `OBJ_DONT_REPARSE`. A junction, symlink or mount point anywhere below the folder therefore refuses the write ("a reparse point below it") instead of redirecting it.
   - **Subfolders are held too:** each is held without delete sharing until the file has its name.
   - **Replaced:** this takes the place of the earlier path-based checks, which re-canonicalised the folder and could write once before the post-write check removed an escaped file.
-- **No partial file, even if the host dies.** The content is written to a hidden temporary file in the target folder, marked delete-on-close (`FileDispositionInfo`), so the system removes it if the host dies first. It is flushed, the mark is cleared, and the file is renamed onto its name relative to the folder's handle with `NtSetInformationFile` (`FileRenameInformation`, no replace), so an existing file is never replaced. A final check requires the named file's real path to be inside the held folder. Otherwise the file is marked for deletion again and the commit refused.
+- **No partial file under the approved name.**
+  - **Write:** the content goes to a hidden temporary file in the target folder, marked delete-on-close (`FileDispositionInfo`), so the system removes it if the host dies while it is marked.
+  - **Rename:** the file is flushed, the mark is cleared (a file marked for deletion cannot be renamed), and the file takes its name relative to the folder's handle with `NtSetInformationFile` (`FileRenameInformation`, no replace), so an existing file is never replaced.
+  - **After the rename:** the hidden and temporary attributes are cleared, so the committed file is an ordinary file.
+  - **Final check:** the named file's real path must be inside the held folder.
+  - **Any failure after creation** marks the file for deletion again, through a drop guard.
+  - **The returned path** is the one the held handle reached, not one rebuilt from the caller's text.
+  - **Windows that remain if the host dies:**
+    - between creating the temporary file and marking it, which leaves an empty file;
+    - between clearing the mark and the rename, which leaves the full content.
+
+    Either leaves a hidden `.qdral-dl-<pid>-<hex>.part` file in the target folder, never a file under the approved name (#309).
 - **Typed download failures.** A download that commits nothing reports a `HostError::Download` reason:
   - `HttpStatus`: a non-2xx answer, a redirect included, since the approved document is exactly the approved link;
   - `Oversized`: past the transfer bound;
@@ -596,7 +607,7 @@ A fresh-context judge's first round on this slice was BLOCK. The destination-nam
   A worker that reports `busy` stays `Unavailable(ActionFailed)`, and unknown reasons stay `ProtocolViolation`.
 - **Evidence.**
   - **Unit tests on real NTFS** (`approved_folder.rs`, Windows; junctions made with `FSCTL_SET_REPARSE_POINT`, no shell):
-    - a nested create-only commit leaves exactly one file and no temporary file;
+    - a nested create-only commit leaves exactly one file, an ordinary one (neither hidden nor temporary), and no temporary file;
     - a second commit to the same name is refused, and the first is unchanged;
     - a junction directly below, or two levels below, the folder refuses the write, and its target stays empty, while the same folder accepts a write that does not pass through it;
     - a folder path retargeted from one real folder to another after approval is refused, and neither folder receives a file;
@@ -608,4 +619,7 @@ A fresh-context judge's first round on this slice was BLOCK. The destination-nam
     - a 404 and a same-origin redirect are both `Download(HttpStatus)`, and nothing lands;
     - a real download to `link\plain.pdf`, where `link` is a junction inside the approved folder to a writable outside folder, is refused with "reparse point", and the outside folder stays empty;
     - the same download to `real\plain.pdf` commits the fixture's exact bytes.
-- **Known limit.** A request the browser policy refuses during a download surfaces as `TimedOut`, not as a policy refusal, because the refused request never produces a response for the capture.
+- **Known limits.**
+  - A request the browser policy refuses during a download surfaces as `TimedOut`, not as a policy refusal, because the refused request never produces a response for the capture.
+  - The hold needs the approved folder to be shareable: if another process already holds it with delete access, or without sharing write, the commit is refused as "cannot be held" (fails closed; Explorer and indexers share everything).
+  - Subfolders created for a destination stay if the commit is then refused (for example on a name collision); they are empty.
