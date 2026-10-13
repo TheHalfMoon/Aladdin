@@ -501,15 +501,16 @@ pub(crate) fn keyed_name(key: &[u8; 32], name: &str) -> String {
 }
 
 /// #298: a new ephemeral profile directory under `root`, a directory the
-/// caller owns: `qdral-sg108-profile-<this host's pid>-<random hex>`. It is
-/// not created here. Launched with `ephemeral_profile: true`, it is removed
+/// caller owns: `qdral-sg108-profile-<this host's pid>-<random hex>`,
+/// created here and new (an existing directory of that name is an error,
+/// never reused). Launched with `ephemeral_profile: true`, it is removed
 /// at the end of the lifetime and, if this host dies first, by the next
 /// launch of a profile in the same root. Only names made here are swept;
 /// any other profile under `root` is never touched.
 #[cfg(windows)]
 pub fn ephemeral_profile_dir(root: &Path) -> Result<PathBuf, HostError> {
     let random = lifetime_key()?;
-    Ok(root.join(format!(
+    let profile = root.join(format!(
         "{}{}-{}",
         crate::leftovers::PROFILE_PREFIX,
         std::process::id(),
@@ -517,7 +518,10 @@ pub fn ephemeral_profile_dir(root: &Path) -> Result<PathBuf, HostError> {
             .iter()
             .map(|byte| format!("{byte:02x}"))
             .collect::<String>()
-    )))
+    ));
+    std::fs::create_dir(&profile)
+        .map_err(|err| HostError::Platform(format!("ephemeral profile: {err}")))?;
+    Ok(profile)
 }
 
 /// A random per-lifetime key from the system RNG.
