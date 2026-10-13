@@ -13,6 +13,7 @@
 // Test-only: never packaged. Windows with an installed Edge.
 
 import { spawn, spawnSync } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import { createSocket } from "node:dgram";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createConnection, createServer } from "node:net";
@@ -97,27 +98,49 @@ probe.close();
 arrivals.datagrams.length = 0;
 arrivals.connections.length = 0;
 
-// Negative control: an Edge without the confinement, sent to the same IP
-// literal, does reach the listener, so the bypass probe is a real one. It
-// reaches nothing else: the listener is its proxy, so every request it
-// makes lands there, and the services that ignore the proxy (#324) are off.
+// Negative control: an Edge without the confinement does send a navigation
+// to a LAN IP literal, so the bypass probe is a real one. Its proxy is a
+// separate listener at the same address that records each request line,
+// and it must see this exact navigation (a nonce path, on a port nothing
+// else uses), not merely some connection: Edge's own background requests
+// also reach a proxy. It reaches nothing else: every request it makes goes
+// to that proxy, and the services that ignore the proxy (#324) are off.
 {
+  const requests = [];
+  const proxy = createServer((socket) => {
+    let head = "";
+    socket.on("data", (chunk) => {
+      head += chunk;
+      const end = head.indexOf("\r\n");
+      if (end >= 0) {
+        requests.push(head.slice(0, end));
+        socket.destroy();
+      }
+    });
+    socket.on("error", () => {});
+  });
+  await new Promise((resolve) => proxy.listen(0, lan, resolve));
+  const proxyPort = proxy.address().port;
+  const nonce = randomBytes(8).toString("hex");
+  const target = `http://${lan}:${tcpPort}/control-${nonce}`;
+  const expected = `GET ${target} HTTP/1.1`;
   const profile = mkdtempSync(join(tmpdir(), "qdral-a8-control-"));
   const raw = spawn(
     edgeExe,
     [
       ...protocol.FROZEN_FLAGS,
       `--user-data-dir=${profile}`,
-      `--proxy-server=http://${lan}:${tcpPort}`,
+      `--proxy-server=http://${lan}:${proxyPort}`,
       "--proxy-bypass-list=<-loopback>",
       protocol.WEBRTC_POLICY,
       protocol.DISABLE_QUIC,
       protocol.DISABLE_FEATURES,
-      `http://${lan}:${tcpPort}/`,
+      target,
     ],
     { stdio: "ignore", env: engineEnv },
   );
-  const reached = await settle(() => arrivals.connections.length > 0);
+  for (let i = 0; i < 300 && !requests.includes(expected); i++) await sleep(100);
+  const reached = requests.includes(expected);
   if (isEdge(raw.pid)) spawnSync("taskkill", ["/PID", String(raw.pid), "/T", "/F"], { stdio: "ignore" });
   for (let attempt = 0; attempt < 40 && existsSync(profile); attempt++) {
     try {
@@ -126,10 +149,15 @@ arrivals.connections.length = 0;
       await sleep(250);
     }
   }
-  process.stdout.write(`A8-EVIDENCE negative control: an unconfined Edge reached ${lan}:${tcpPort}: ${reached}\n`);
-  if (!reached) failures.push("the negative control never reached the listener: the bypass probe proves nothing");
+  proxy.close();
+  process.stdout.write(
+    `A8-EVIDENCE negative control: an Edge without the confinement sent "${expected}": ${reached} (${requests.length} requests at its proxy)\n`,
+  );
+  if (!reached) failures.push("the negative control's navigation never reached its proxy: the bypass probe proves nothing");
   if (isEdge(raw.pid)) failures.push(`the negative control's Edge ${raw.pid} still runs`);
   if (existsSync(profile)) failures.push(`the negative control left its profile: ${profile}`);
+  // Nothing of the control may count as the suite's.
+  arrivals.datagrams.length = 0;
   arrivals.connections.length = 0;
 }
 

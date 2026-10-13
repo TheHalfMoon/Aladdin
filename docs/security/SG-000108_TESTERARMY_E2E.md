@@ -42,8 +42,9 @@ The engine environment is only the allowlisted keys (`ENGINE_ENV_ALLOWLIST`). Ev
 
 `run.mjs` decides the outcome from outside the browser:
 - **LAN listeners.** It opens a UDP and a TCP listener on this host's own LAN IPv4 address. A positive control first proves they are reachable there: the runner sends to them itself.
-- **Negative control.** An Edge without the confinement, pointed at the same IP literal, must reach the TCP listener. This proves the probe is a real one.
-  - That Edge reaches nothing else. The listener is its proxy (`--proxy-server=http://<LAN IP>:<port>`, `--proxy-bypass-list=<-loopback>`), and the services that ignore the proxy are off: the WebRTC policy, QUIC, and the #324 disabled features, plus the frozen `--disable-background-networking`.
+- **Negative control.** An Edge without the confinement is sent to `http://<LAN IP>:<port>/control-<nonce>`. Its proxy is a separate listener at the same LAN address that records each request line, and the run fails unless it sees exactly `GET http://<LAN IP>:<port>/control-<nonce> HTTP/1.1`. This proves the probe is a real one: a browser that is not confined does send that navigation.
+  - "Some connection arrived" would not be enough. Edge's own background requests (`CONNECT edge.microsoft.com:443`, SmartScreen, Bing) also reach a proxy, and often before the navigation does.
+  - That Edge reaches nothing else. Every request it makes goes to its proxy (`--proxy-bypass-list=<-loopback>`), and the services that ignore the proxy are off: the WebRTC policy, QUIC, and the #324 disabled features, plus the frozen `--disable-background-networking`.
   - In a separate probe, run with the proxy on a dead port and the whole process tree scanned for 25 s, its only non-loopback endpoint was the proxy address itself (`SynSent 192.168.100.5:9`).
   - The run fails if its process or profile is left behind.
 - **OS connection tables.** During the suite, `scan.ps1` samples the TCP and UDP tables (`Get-NetTCPConnection` / `Get-NetUDPEndpoint`, read-only) every 0.5 to 3 s. It covers the whole process tree of the suite's Edge, helpers included: the recorded root and every descendant. The run fails if:
@@ -79,9 +80,9 @@ The engine environment is only the allowlisted keys (`ENGINE_ENV_ALLOWLIST`). Ev
 - **Production launch contract:** accepted by `launchRefusal`.
 - **Tests:** 3 of 3 passed.
 - **The report:** `https://fixture.test/reports/2026-09-30.pdf` with SHA-256 `5523ba2d22b98403ba0f7d9166a9a8cc48ef8330656637f28d8cbf125381994a`, equal to the fixture's report.
-- **Negative control:** it reached the LAN listener at the IP literal.
+- **Negative control:** its proxy saw `GET http://192.168.100.5:16700/control-6748c2fe3c577ff7 HTTP/1.1`, among 9 requests in all.
 - **Bypass denied:** during the suite, the LAN listeners received **0 datagrams and 0 connections**.
-- **OS tables:** 28 samples, up to 16 Edge processes, nothing flagged; 6 ICE UDP sockets (4 to 8 across runs).
+- **OS tables:** 14 samples, up to 20 Edge processes, nothing flagged; 6 ICE UDP sockets (4 to 8 across runs).
 - **Fixture log:** only `fixture.test` (`/reports`, `/favicon.ico`, `/reports/2026-09-30.pdf`, `/rtc?…`); no older report and no other host.
 - **Cleanup:** the suite's Edge and the control's Edge gone, no profile left.
 
