@@ -102,6 +102,15 @@ document links resolved, generated cost tables matched and the 97 CLOSED/two
 GRAIN ledger remained unchanged. These are local research checks, not a rerun
 of the upstream A8 suite or qualification of new-head required CI.
 
+Both independent reviewers then **PASS** on exact refreshed research head
+`a5ef51f0095308636547af9cf6f4b76779622e0d`, confirming A8's test-only limits,
+the 15-file diff against R10, unchanged economics, clean published checkout
+and seven cryptographically verified signed+DCO research/merge commits.
+Local OCR v1.13.0 preview on exact `9b3f838e..a5ef51f0` again reports three
+eligible JSON/Python files and 12 exclusions; exclusions were manually reviewed.
+GitHub reports the a5ef51f0 signature verified/valid. This later evidence-only
+receipt introduces no implementation change and grants no paid-CI exception.
+
 Review repairs: allow zero success while retaining failed-task spend; emit null
 and `UNDEFINED_NO_VERIFIED_TASKS` for no verified tasks; allow fractional/zero
 expected admission counts; add a discrete one-power-customer-in-ten sensitivity;
