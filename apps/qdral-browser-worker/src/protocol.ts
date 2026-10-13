@@ -79,7 +79,7 @@ export const DISABLE_QUIC = "--disable-quic";
 export const DISABLE_SHARED_WORKER = "--disable-blink-features=SharedWorker";
 /// #324: browser-process services that reach the network outside the
 /// resolver and no-route layers (Media Router; Edge account integration).
-export const DISABLE_FEATURES = "--disable-features=MediaRouter,DialMediaRouteProvider,CastMediaRouteProvider,msImplicitSignin,msEdgeOSAccountInfoSubstrate,msEdgeOnlineAccounts,msOneAuthWAM,msLoadOneAuthInBackground,msIdentityCore";
+export const DISABLE_FEATURES = "--disable-features=MediaRouter,DialMediaRouteProvider,CastMediaRouteProvider,msImplicitSignin,msEdgeOSAccountInfoSubstrate,msEdgeOnlineAccounts,msOneAuthWAM,msLoadOneAuthInBackground,msIdentityCore,WebRtcHideLocalIpsWithMdns";
 export const PIPE = "--remote-debugging-pipe";
 export const INITIAL_URL = "about:blank";
 

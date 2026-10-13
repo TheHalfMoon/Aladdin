@@ -250,6 +250,32 @@ const server = createServer({ key, cert }, (request, response) => {
     response.setHeader("location", location);
     response.end();
   };
+  // #324: a page that tries every way a page reaches a LAN address: WebRTC
+  // ICE (STUN over UDP and TCP), fetch, WebSocket and sendBeacon. The test
+  // listens on that address; nothing may arrive.
+  if (path.startsWith("/rtc?")) {
+    const query = new URL(path, "https://fixture.test").searchParams;
+    const ip = (query.get("ip") ?? "").replace(/[^0-9a-f.:]/gi, "");
+    const udp = Number(query.get("udp")) | 0;
+    const tcp = Number(query.get("tcp")) | 0;
+    response.setHeader("content-type", "text/html");
+    return response.end(`<!doctype html><title>rtc</title><script>
+const ip = ${JSON.stringify(ip)}, udp = ${udp}, tcp = ${tcp};
+const round = async () => {
+  try {
+    const pc = new RTCPeerConnection({ iceServers: [{ urls: ["stun:" + ip + ":" + udp, "turn:" + ip + ":" + tcp + "?transport=tcp"], username: "u", credential: "c" }] });
+    pc.createDataChannel("x");
+    await pc.setLocalDescription(await pc.createOffer());
+    setTimeout(() => pc.close(), 3000);
+  } catch {}
+  fetch("http://" + ip + ":" + tcp + "/").catch(() => {});
+  try { new WebSocket("ws://" + ip + ":" + tcp + "/"); } catch {}
+  try { navigator.sendBeacon("http://" + ip + ":" + tcp + "/b", "x"); } catch {}
+};
+round();
+setInterval(round, 5000);
+</script><p>rtc</p>`);
+  }
   if (path.startsWith("/search?")) {
     const query = new URL(path, "https://fixture.test").searchParams;
     const data = JSON.stringify({ "@type": "SearchResultsPage", query: query.get("q"), year: query.get("year"), exact: query.get("exact"), csrf: query.get("csrf") });

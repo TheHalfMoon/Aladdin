@@ -70,7 +70,7 @@ function confinedArgv(profile: string, destinations: Destination[]): string[] {
     WEBRTC_POLICY,
     "--disable-quic",
     "--disable-blink-features=SharedWorker",
-    "--disable-features=MediaRouter,DialMediaRouteProvider,CastMediaRouteProvider,msImplicitSignin,msEdgeOSAccountInfoSubstrate,msEdgeOnlineAccounts,msOneAuthWAM,msLoadOneAuthInBackground,msIdentityCore",
+    "--disable-features=MediaRouter,DialMediaRouteProvider,CastMediaRouteProvider,msImplicitSignin,msEdgeOSAccountInfoSubstrate,msEdgeOnlineAccounts,msOneAuthWAM,msLoadOneAuthInBackground,msIdentityCore,WebRtcHideLocalIpsWithMdns",
     "about:blank"
   ];
 }

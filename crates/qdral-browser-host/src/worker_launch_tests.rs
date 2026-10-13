@@ -240,7 +240,8 @@ fn endpoints_over(duration: Duration, pids: impl Fn() -> Vec<u32>) -> Vec<String
 #[ignore = "requires the built browser worker and Edge; run by npm run browser-launcher:native"]
 fn a_confined_lifetime_holds_no_network_endpoint_but_loopback() {
     // #324: the whole job (browser, every helper, identity_helper included)
-    // reaches nothing but the loopback fixture, as the OS reports it.
+    // holds no non-loopback endpoint while idle on the loopback fixture, as
+    // the OS reports it.
     let fixture = HttpsFixture::start();
     let profile = temp_profile("endpoints");
     let mut launch = spec(&profile, true);
@@ -250,14 +251,100 @@ fn a_confined_lifetime_holds_no_network_endpoint_but_loopback() {
         .navigate("https://fixture.test/reports")
         .expect("the fixture is reachable through the admitted path");
     let seen = endpoints_over(Duration::from_secs(90), || job_pids(&worker));
-    println!("SG108-EVIDENCE confined endpoints over 90 s: {seen:?}");
+    println!("SG108-EVIDENCE confined idle endpoints over 90 s: {seen:?}");
     assert!(
         seen.is_empty(),
-        "the confined lifetime reached the network: {seen:?}"
+        "the idle confined lifetime holds a network endpoint: {seen:?}"
     );
     worker
         .ping("after-endpoints")
         .expect("the lifetime goes on");
+    let report = worker.shutdown();
+    assert!(report.job_empty, "the job did not empty");
+    assert_profile_gone(report.profile_removed, &profile);
+}
+
+/// This host's own non-loopback IPv4 address, if it has one (a UDP
+/// "connect" sends nothing; it only selects the route).
+fn lan_address() -> Option<Ipv4Addr> {
+    let probe = std::net::UdpSocket::bind("0.0.0.0:0").ok()?;
+    probe.connect("192.0.2.1:9").ok()?;
+    match probe.local_addr().ok()?.ip() {
+        IpAddr::V4(address) if !address.is_loopback() && !address.is_unspecified() => Some(address),
+        _ => None,
+    }
+}
+
+#[test]
+#[ignore = "requires the built browser worker and Edge; run by npm run browser-launcher:native"]
+fn a_page_cannot_reach_the_lan_through_webrtc_fetch_or_sockets() {
+    // #324: an admitted page tries WebRTC ICE (STUN over UDP and TCP),
+    // fetch, WebSocket and sendBeacon toward this host's own LAN address,
+    // where the test listens. The enforcement evidence is twofold: nothing
+    // arrives at the listeners, and the OS shows no TCP connection, no
+    // listener and no mDNS endpoint of the job beyond loopback. WebRTC's
+    // ephemeral ICE sockets (bound, sending nothing under the UDP policy)
+    // are reported.
+    let Some(lan) = lan_address() else {
+        println!("SG108-EVIDENCE no non-loopback interface: the LAN egress check is skipped");
+        return;
+    };
+    let udp = std::net::UdpSocket::bind((lan, 0)).expect("udp listener");
+    udp.set_read_timeout(Some(Duration::from_millis(200)))
+        .expect("timeout");
+    let tcp = std::net::TcpListener::bind((lan, 0)).expect("tcp listener");
+    tcp.set_nonblocking(true).expect("nonblocking");
+    let (udp_port, tcp_port) = (
+        udp.local_addr().unwrap().port(),
+        tcp.local_addr().unwrap().port(),
+    );
+    let fixture = HttpsFixture::start();
+    let profile = temp_profile("endpoints-page");
+    let mut launch = spec(&profile, true);
+    launch.test_trusted_spki = Some(fixture.spki.clone());
+    let mut worker = launch_worker(&launch, &Policy(PolicyKeyState::Absent)).expect("launch");
+    worker
+        .navigate(&format!(
+            "https://fixture.test/rtc?ip={lan}&udp={udp_port}&tcp={tcp_port}"
+        ))
+        .expect("rtc page");
+    let deadline = Instant::now() + Duration::from_secs(60);
+    let mut seen = std::collections::BTreeSet::new();
+    let (mut datagrams, mut connections) = (0usize, 0usize);
+    let mut buffer = [0u8; 2048];
+    while Instant::now() < deadline {
+        seen.extend(non_loopback_endpoints(&job_pids(&worker)));
+        if udp.recv_from(&mut buffer).is_ok() {
+            datagrams += 1;
+        }
+        if tcp.accept().is_ok() {
+            connections += 1;
+        }
+    }
+    let flagged: Vec<&String> = seen
+        .iter()
+        .filter(|entry| {
+            entry.starts_with("tcp ") || entry.starts_with("tcp-listen ") || entry.contains(":5353")
+        })
+        .collect();
+    let ice: usize = seen
+        .iter()
+        .filter(|entry| entry.starts_with("udp "))
+        .count();
+    println!(
+        "SG108-EVIDENCE page egress: {datagrams} datagrams and {connections} connections at {lan}; flagged endpoints {flagged:?}; {ice} ephemeral ICE UDP endpoints"
+    );
+    assert_eq!(
+        (datagrams, connections),
+        (0, 0),
+        "a page reached the LAN listener"
+    );
+    assert!(
+        flagged.is_empty(),
+        "the job held a network endpoint beyond loopback: {flagged:?}"
+    );
+    // The page did run: the fixture served it.
+    assert!(fixture.hits().iter().any(|hit| hit.contains("/rtc?")));
     let report = worker.shutdown();
     assert!(report.job_empty, "the job did not empty");
     assert_profile_gone(report.profile_removed, &profile);
@@ -328,9 +415,20 @@ fn the_endpoint_scan_detects_an_unconfined_engine() {
     let _ = std::fs::remove_dir_all(&profile);
     println!("SG108-EVIDENCE unconfined control endpoints over 90 s: {seen:?}");
     if std::env::var("QDRAL_SG108_EXPECT_LEAK").as_deref() == Ok("1") {
+        // What #324 saw: an outbound TCP connection to a remote address, and
+        // a UDP endpoint. A scan that mislocates the remote address (for
+        // example by reading the local one) cannot satisfy the first.
+        let tcp_out = seen.iter().any(|entry| {
+            entry
+                .strip_prefix("tcp ")
+                .and_then(|rest| rest.split(' ').next())
+                .and_then(|address| address.parse::<IpAddr>().ok())
+                .is_some_and(|address| lan_address().map(IpAddr::V4) != Some(address))
+        });
+        let udp = seen.iter().any(|entry| entry.starts_with("udp "));
         assert!(
-            !seen.is_empty(),
-            "the scan missed a leak this host is known to produce"
+            tcp_out && udp,
+            "the scan missed a leak this host is known to produce: {seen:?}"
         );
     }
 }

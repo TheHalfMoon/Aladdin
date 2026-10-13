@@ -40,9 +40,11 @@ const SHARED_WORKER_FLAG: &str = "--disable-blink-features=SharedWorker";
 /// Windows-account sign-in, OneAuth/WAM, the Microsoft 365 "Substrate"
 /// account info) were measured connecting to the LAN and to Microsoft 365
 /// from a confined lifetime; none is needed by a headless automation
-/// browser. The native network-endpoint test verifies the job holds no
-/// endpoint but loopback.
-const DISABLED_FEATURES_FLAG: &str = "--disable-features=MediaRouter,DialMediaRouteProvider,CastMediaRouteProvider,msImplicitSignin,msEdgeOSAccountInfoSubstrate,msEdgeOnlineAccounts,msOneAuthWAM,msLoadOneAuthInBackground,msIdentityCore";
+/// browser. WebRTC's mDNS responder (WebRtcHideLocalIpsWithMdns) bound
+/// UDP 5353 on all interfaces and answers LAN queries: off as well (WebRTC
+/// sends no non-proxied UDP under the policy flag above). The native
+/// network-endpoint test verifies what the job holds and sends.
+const DISABLED_FEATURES_FLAG: &str = "--disable-features=MediaRouter,DialMediaRouteProvider,CastMediaRouteProvider,msImplicitSignin,msEdgeOSAccountInfoSubstrate,msEdgeOnlineAccounts,msOneAuthWAM,msLoadOneAuthInBackground,msIdentityCore,WebRtcHideLocalIpsWithMdns";
 
 /// The no-route proxy: connecting to 0.0.0.0 fails on Windows even when a
 /// local process listens on port 9 (Windows-only; on Linux it is loopback).
@@ -196,7 +198,7 @@ pub fn proxy_bypass_list(destinations: &[AdmittedDestination]) -> Result<String,
 }
 
 /// Build the exact worker-launch argv: the SG-000074 frozen flags, the
-/// profile, the six confinement flags, and the blank initial page.
+/// profile, the eight confinement flags, and the blank initial page.
 pub fn build_worker_argv(
     profile_dir: &Path,
     destinations: &[AdmittedDestination],
@@ -471,7 +473,7 @@ mod tests {
             "--webrtc-ip-handling-policy=disable_non_proxied_udp",
             "--disable-quic",
             "--disable-blink-features=SharedWorker",
-            "--disable-features=MediaRouter,DialMediaRouteProvider,CastMediaRouteProvider,msImplicitSignin,msEdgeOSAccountInfoSubstrate,msEdgeOnlineAccounts,msOneAuthWAM,msLoadOneAuthInBackground,msIdentityCore",
+            "--disable-features=MediaRouter,DialMediaRouteProvider,CastMediaRouteProvider,msImplicitSignin,msEdgeOSAccountInfoSubstrate,msEdgeOnlineAccounts,msOneAuthWAM,msLoadOneAuthInBackground,msIdentityCore,WebRtcHideLocalIpsWithMdns",
             "about:blank",
         ]
         .iter()
