@@ -140,8 +140,11 @@ pub struct CrawlReport {
     pub stopped: Option<CrawlStop>,
     /// The robots.txt answer's status, when it was read.
     pub robots_status: Option<u16>,
-    /// Sitemaps read (opened with a 2xx answer).
+    /// Sitemaps read that yielded at least one location.
     pub sitemaps_read: usize,
+    /// Sitemaps opened (2xx) that yielded none: not a sitemap, or one the
+    /// engine transformed with its XSLT stylesheet before the text was read.
+    pub sitemaps_empty: usize,
 }
 
 /// One page as the driver saw it.
@@ -156,8 +159,10 @@ pub struct Visit {
 pub struct TextDocument {
     pub final_url: String,
     pub status: u16,
-    /// Empty unless the document was plain text or XML.
+    /// Empty unless the document was text, XML or HTML.
     pub text: String,
+    /// The text was cut to fit one frame.
+    pub truncated: bool,
 }
 
 /// The browser side of a crawl.
@@ -341,6 +346,7 @@ fn read_sitemaps(
     robots: &Robots,
     frontier: &mut Frontier,
     report: &mut CrawlReport,
+    (started, cancelled): (Instant, &AtomicBool),
 ) {
     let mut sources: VecDeque<String> = robots
         .sitemaps
@@ -356,6 +362,22 @@ fn read_sitemaps(
         if opened >= MAX_SITEMAPS {
             break;
         }
+        if cancelled.load(Ordering::SeqCst) {
+            report.stopped = Some(CrawlStop::Cancelled);
+            return;
+        }
+        if started.elapsed() >= spec.deadline {
+            report.stopped = Some(CrawlStop::Deadline);
+            return;
+        }
+        // The sitemap document itself must be one robots.txt allows.
+        let Some(path) = split_on(&scope.base, &source) else {
+            continue;
+        };
+        if !robots.allowed(&path) {
+            skip(report, source, SkipReason::Robots);
+            continue;
+        }
         opened += 1;
         let document = match driver.fetch_text(&source) {
             Ok(document) if (200..300).contains(&document.status) => document,
@@ -366,8 +388,12 @@ fn read_sitemaps(
             }
             Err(_) => continue,
         };
-        report.sitemaps_read += 1;
         let (locations, index) = sitemap_locations(&document.text);
+        if locations.is_empty() {
+            report.sitemaps_empty += 1;
+            continue;
+        }
+        report.sitemaps_read += 1;
         for location in locations {
             if index {
                 if split_on(&scope.base, &location).is_some() && sources.len() < MAX_SITEMAPS {
@@ -446,7 +472,17 @@ fn read_robots(
         Ok(document) => {
             report.robots_status = Some(document.status);
             match document.status {
-                200..=299 => Ok(Robots::parse(&document.text)),
+                200..=299 => {
+                    // A file larger than one frame, or with more rules than
+                    // kept, cannot be honoured in full: RFC 9309 asks a
+                    // crawler to parse at least 500 KiB, so the crawl fails
+                    // closed instead of dropping late rules.
+                    let robots = Robots::parse(&document.text);
+                    if document.truncated || !robots.complete() {
+                        return Err(CrawlStop::RobotsUnreachable);
+                    }
+                    Ok(robots)
+                }
                 // "Unavailable": no rules (RFC 9309 2.3.1.3).
                 400..=499 => Ok(Robots::allow_all()),
                 _ => Err(CrawlStop::RobotsUnreachable),
@@ -479,6 +515,7 @@ pub fn crawl(
         stopped: None,
         robots_status: None,
         sitemaps_read: 0,
+        sitemaps_empty: 0,
     };
     let robots = if spec.robots {
         match read_robots(driver, &scope, &mut report) {
@@ -498,7 +535,15 @@ pub fn crawl(
     };
     frontier.offer(&mut report, &scope, &robots, scope_start, 0, spec.max_depth);
     if spec.sitemaps {
-        read_sitemaps(driver, spec, &scope, &robots, &mut frontier, &mut report);
+        read_sitemaps(
+            driver,
+            spec,
+            &scope,
+            &robots,
+            &mut frontier,
+            &mut report,
+            (started, cancelled),
+        );
         if report.stopped.is_some() {
             return Ok(report);
         }
@@ -684,13 +729,16 @@ mod tests {
                 Some((0, _)) => Err(HostError::Invalid("navigation denied".into())),
                 Some((status, text)) => Ok(TextDocument {
                     final_url: url.to_owned(),
-                    status: *status,
+                    status: *status % 1000,
                     text: text.clone(),
+                    // A status above 1000 marks the text as cut.
+                    truncated: *status > 1000,
                 }),
                 None => Ok(TextDocument {
                     final_url: url.to_owned(),
                     status: 404,
                     text: String::new(),
+                    truncated: false,
                 }),
             }
         }
@@ -1070,6 +1118,25 @@ mod tests {
         assert_eq!(report.robots_status, Some(404));
         assert!(report.pages.len() > 1);
 
+        // A cut robots.txt, or one with more rules than kept, is not
+        // honoured in part: the crawl stops before any page.
+        let mut many = String::from("User-agent: *\n");
+        for i in 0..crate::robots::MAX_ROBOTS_RULES + 1 {
+            many.push_str(&format!("Disallow: /x{i}\n"));
+        }
+        for answer in [
+            (1200, "User-agent: *\nDisallow: /a\n".to_owned()),
+            (200, many),
+        ] {
+            let mut driver = site();
+            driver
+                .texts
+                .insert("https://site.test/robots.txt".into(), answer);
+            let report = crawl(&mut driver, &wanted, &AtomicBool::new(false)).unwrap();
+            assert_eq!(report.stopped, Some(CrawlStop::RobotsUnreachable));
+            assert!(report.pages.is_empty());
+        }
+
         // A 5xx answer, or none, stops the crawl before any page.
         for answer in [(503, String::new()), (0, String::new())] {
             let mut driver = site();
@@ -1128,6 +1195,33 @@ mod tests {
         assert_eq!(only.depth, 1);
         assert!(reasons(&report).contains(&("https://site.test/docs/blocked", SkipReason::Robots)));
         assert!(reasons(&report).contains(&("https://site.test/elsewhere", SkipReason::OutOfScope)));
+
+        // A sitemap robots.txt disallows is not opened, and one that yields
+        // no location (an XSLT-transformed page) is counted apart.
+        let mut driver = site();
+        driver.texts.insert(
+            "https://site.test/robots.txt".into(),
+            (200, "User-agent: *\nDisallow: /sitemap.xml\n".into()),
+        );
+        let report = crawl(&mut driver, &wanted, &AtomicBool::new(false)).unwrap();
+        assert!(!driver
+            .opened
+            .contains(&"https://site.test/sitemap.xml".to_owned()));
+        assert!(reasons(&report).contains(&("https://site.test/sitemap.xml", SkipReason::Robots)));
+        let mut driver = site();
+        driver.texts.insert(
+            "https://site.test/sitemap.xml".into(),
+            (200, "<html><body>Styled sitemap</body></html>".into()),
+        );
+        let mut plain = spec("https://site.test/docs/");
+        plain.sitemaps = true;
+        let report = crawl(&mut driver, &plain, &AtomicBool::new(false)).unwrap();
+        assert_eq!((report.sitemaps_read, report.sitemaps_empty), (0, 1));
+        // Cancellation is checked before each sitemap too.
+        let mut driver = site();
+        let report = crawl(&mut driver, &plain, &AtomicBool::new(true)).unwrap();
+        assert_eq!(report.stopped, Some(CrawlStop::Cancelled));
+        assert!(driver.opened.is_empty());
 
         // Without robots.txt sitemaps, /sitemap.xml is tried.
         let mut driver = site();

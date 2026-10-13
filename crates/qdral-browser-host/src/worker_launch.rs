@@ -115,8 +115,10 @@ pub struct FetchedText {
     pub truncated: bool,
 }
 
-/// The media types a text fetch returns content for (mirrors the worker).
-pub const FETCH_TEXT_MEDIA: [&str; 3] = ["text/plain", "application/xml", "text/xml"];
+/// The media types a text fetch returns content for (mirrors the worker):
+/// text, XML, HTML and none at all.
+pub const FETCH_TEXT_MEDIA: [&str; 5] =
+    ["text/plain", "application/xml", "text/xml", "text/html", ""];
 /// Characters of one fetched text (it fits one frame).
 pub const MAX_FETCH_TEXT_CHARS: usize = 56 * 1024;
 
@@ -1071,6 +1073,7 @@ mod platform {
                 final_url: fetched.url,
                 status: fetched.status,
                 text: fetched.text.untrusted().to_owned(),
+                truncated: fetched.truncated,
             })
         }
     }

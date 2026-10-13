@@ -28,6 +28,9 @@ pub struct Robots {
     rules: Vec<Rule>,
     /// Nothing may be crawled (robots.txt unreachable, RFC 9309 2.3.1.4).
     disallow_all: bool,
+    /// Some rules were dropped by MAX_ROBOTS_RULES: the rules are not the
+    /// file's, and a crawl must not rely on them.
+    capped: bool,
     pub sitemaps: Vec<String>,
 }
 
@@ -63,12 +66,14 @@ impl Robots {
         let mut star: Vec<Rule> = Vec::new();
         let mut matched_ours = false;
         let mut sitemaps = Vec::new();
+        let mut capped = false;
         // The agents of the group being read, and whether a rule has been
         // seen since its last `user-agent` line.
         let mut current = (false, false);
         let mut group = Group::None;
         let mut in_rules = true;
-        for raw in text.lines() {
+        // RFC 9309 lines end at CR, LF or CRLF.
+        for raw in text.split(['\n', '\r']) {
             let line = raw.split('#').next().unwrap_or("").trim();
             let Some((key, value)) = line.split_once(':') else {
                 continue;
@@ -81,7 +86,13 @@ impl Robots {
                         current = (false, false);
                         in_rules = false;
                     }
-                    let token = value.to_ascii_lowercase();
+                    // A product token, optionally with a version (`deskal/1.0`).
+                    let token = value
+                        .split('/')
+                        .next()
+                        .unwrap_or("")
+                        .trim()
+                        .to_ascii_lowercase();
                     if token == "*" {
                         current.1 = true;
                     } else if token == ROBOTS_PRODUCT_TOKEN {
@@ -116,6 +127,8 @@ impl Robots {
                     };
                     if target.len() < MAX_ROBOTS_RULES {
                         target.push(rule);
+                    } else {
+                        capped = true;
                     }
                 }
                 "sitemap"
@@ -129,8 +142,14 @@ impl Robots {
         Self {
             rules: if matched_ours { ours } else { star },
             disallow_all: false,
+            capped,
             sitemaps,
         }
+    }
+
+    /// Every rule of the file was kept (none dropped by MAX_ROBOTS_RULES).
+    pub fn complete(&self) -> bool {
+        !self.capped
     }
 
     /// Whether `path` (path and query, as requested) may be crawled: the
@@ -212,17 +231,20 @@ pub fn sitemap_locations(text: &str) -> (Vec<String>, bool) {
         };
         let end = start + close;
         let raw = text[start..end].trim();
-        let raw = raw
+        // CDATA is literal; otherwise XML's five entities are decoded
+        // (`&amp;` last, so `&amp;lt;` stays `&lt;`).
+        let decoded = match raw
             .strip_prefix("<![CDATA[")
             .and_then(|r| r.strip_suffix("]]>"))
-            .unwrap_or(raw)
-            .trim();
-        let decoded = raw
-            .replace("&lt;", "<")
-            .replace("&gt;", ">")
-            .replace("&quot;", "\"")
-            .replace("&apos;", "'")
-            .replace("&amp;", "&");
+        {
+            Some(literal) => literal.trim().to_owned(),
+            None => raw
+                .replace("&lt;", "<")
+                .replace("&gt;", ">")
+                .replace("&quot;", "\"")
+                .replace("&apos;", "'")
+                .replace("&amp;", "&"),
+        };
         if !decoded.is_empty() {
             locations.push(decoded);
         }
@@ -261,6 +283,9 @@ mod tests {
         );
         assert!(robots.allowed("/a/b"), "a tie is an allow");
         assert!(robots.allowed("/b"));
+        // A version after the token still names it; CR alone ends a line.
+        assert!(!Robots::parse("User-agent: Deskal/1.0\nDisallow: /\n").allowed("/x"));
+        assert!(!Robots::parse("User-agent: deskal\rDisallow: /\r").allowed("/x"));
         // A group must name the product token itself, not a prefix of it.
         assert!(Robots::parse("User-agent: desk\nDisallow: /\n").allowed("/x"));
         assert!(!Robots::parse("User-agent: DESKAL\nDisallow: /\n").allowed("/x"));
@@ -310,6 +335,8 @@ mod tests {
         }
         let robots = Robots::parse(&text);
         assert_eq!(robots.rules.len(), MAX_ROBOTS_RULES);
+        assert!(!robots.complete(), "dropped rules are reported");
+        assert!(Robots::parse("User-agent: *\nDisallow: /a\n").complete());
         assert_eq!(robots.sitemaps.len(), MAX_ROBOTS_SITEMAPS);
         assert!(robots.allowed(&format!("/{}", "x".repeat(MAX_ROBOTS_PATTERN_BYTES))));
     }
@@ -320,6 +347,15 @@ mod tests {
             "<?xml version=\"1.0\"?><urlset><url><LOC> https://site.test/a?x=1&amp;y=2 </LOC></url><url><loc><![CDATA[https://site.test/b]]></loc></url><url><loc></loc></url><url><loc>https://site.test/unclosed",
         );
         assert_eq!(urls, ["https://site.test/a?x=1&y=2", "https://site.test/b"]);
+        let (urls, _) = sitemap_locations("<loc><![CDATA[https://site.test/a?b=1&amp;c=2]]></loc><loc>https://site.test/x&amp;lt;y</loc>");
+        assert_eq!(
+            urls,
+            [
+                "https://site.test/a?b=1&amp;c=2",
+                "https://site.test/x&lt;y"
+            ],
+            "CDATA is literal"
+        );
         assert!(!index);
         let (urls, index) = sitemap_locations(
             "<sitemapindex><sitemap><loc>https://site.test/s1.xml</loc></sitemap></sitemapindex>",

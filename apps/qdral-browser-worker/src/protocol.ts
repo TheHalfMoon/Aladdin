@@ -38,8 +38,9 @@ export const MAX_PIECE_BYTES = MAX_FRAME_BYTES - 8 * 1024;
 /// A fetched text document's content on the wire (JSON-escaped UTF-8
 /// bytes); longer text is cut and marked truncated.
 export const MAX_FETCH_TEXT_BYTES = MAX_FRAME_BYTES - 8 * 1024;
-/// The media types a text fetch returns content for.
-export const FETCH_TEXT_MEDIA: readonly string[] = ["text/plain", "application/xml", "text/xml"];
+/// The media types a text fetch returns content for: text, XML, HTML (a
+/// robots.txt served as a page is still read as one) and none at all.
+export const FETCH_TEXT_MEDIA: readonly string[] = ["text/plain", "application/xml", "text/xml", "text/html", ""];
 /// Mirrors the host's bound on pieces per extraction.
 export const MAX_EXTRACT_PIECES = 96;
 
