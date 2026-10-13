@@ -236,6 +236,11 @@ impl NavigationPolicy {
         detail: &RequestDetail,
     ) -> Result<(), HostError> {
         let target = self.admitted_target(url)?;
+        // While an approved submission is pending, its document is the only
+        // one: a frame or popup document (a `target` elsewhere) is refused.
+        if self.submission.is_some() && matches!(kind, RouteKind::Frame | RouteKind::Popup) {
+            return Err(refused("a submission may not open a frame or popup"));
+        }
         if !matches!(kind, RouteKind::Document) && !origin.is_empty() {
             let reported = parse_navigation_url(origin)?;
             if reported.origin != self.current_origin()? {
@@ -264,7 +269,12 @@ impl NavigationPolicy {
                         ));
                     }
                     if let Some(submission) = &self.submission {
-                        submission.check(url, detail)?;
+                        if let Err(error) = submission.check(url, detail) {
+                            // A refused submission spends the expectation:
+                            // nothing later opens it, and it is unverified.
+                            expected.clear();
+                            return Err(error);
+                        }
                     }
                     *taken = true;
                     self.chain = Some(RedirectChain::start(url)?);
@@ -340,6 +350,9 @@ pub struct Submission {
     pub unsupplied: Vec<String>,
     /// Textarea fields: the engine submits line breaks as CRLF.
     pub multiline: Vec<String>,
+    /// The form's own non-parameter names (hidden, read-only, the default
+    /// button), with any value; no other undeclared name may appear.
+    pub fixed: Vec<String>,
 }
 
 fn refused(reason: &str) -> HostError {
@@ -436,6 +449,14 @@ impl Submission {
             };
             if !ok {
                 return Err(refused("an approved field carries other values"));
+            }
+        }
+        for (key, _) in &pairs {
+            let known = self.fields.iter().any(|(name, _)| name == key)
+                || self.unsupplied.contains(key)
+                || self.fixed.contains(key);
+            if !known {
+                return Err(refused("an undeclared name was added to the submission"));
             }
         }
         for name in &self.unsupplied {
@@ -625,6 +646,7 @@ mod tests {
             fields: Vec::new(),
             unsupplied: Vec::new(),
             multiline: Vec::new(),
+            fixed: vec!["q".into(), "csrf".into()],
         }
     }
 
@@ -634,6 +656,7 @@ mod tests {
             fields: vec![("note".into(), Submitted::Values(vec!["a\nb".into()]))],
             unsupplied: Vec::new(),
             multiline: vec!["note".into()],
+            fixed: Vec::new(),
         }
     }
 
@@ -661,6 +684,7 @@ mod tests {
             ],
             unsupplied: vec!["year".into()],
             multiline: Vec::new(),
+            fixed: vec!["csrf".into()],
         };
         let get = RequestDetail {
             method: "GET".into(),
@@ -702,6 +726,34 @@ mod tests {
         let mut multipart = post("note=a%0D%0Ab");
         multipart.content_type = "multipart/form-data; boundary=x".into();
         assert!(note.check("https://f.test/n", &multipart).is_err());
+    }
+
+    #[test]
+    fn a_pending_submission_refuses_other_names_frames_and_popups_and_stays_spent() {
+        let mut p = policy();
+        p.begin("https://fixture.test/").unwrap();
+        p.commit("https://fixture.test/").unwrap();
+        p.expect_submission("https://fixture.test/search", true, any_get())
+            .unwrap();
+        assert!(p
+            .decide(RouteKind::Popup, "https://fixture.test/search?q=1", "")
+            .is_err());
+        assert!(p
+            .decide(RouteKind::Frame, "https://fixture.test/search?q=1", "")
+            .is_err());
+        assert!(p
+            .decide(
+                RouteKind::Document,
+                "https://fixture.test/search?q=1&added=x",
+                ""
+            )
+            .is_err());
+        assert!(
+            p.decide(RouteKind::Document, "https://fixture.test/search?q=1", "")
+                .is_err(),
+            "a refused submission is spent"
+        );
+        assert!(!p.finish_activation());
     }
 
     #[test]

@@ -163,7 +163,10 @@ const EXEC = `<!doctype html><title>Exec</title>
 <form toolname="shadowed" tooldescription="A field inside a shadow tree." action="/search" toolautosubmit><x-field><template shadowrootmode="open"><input name="q"></template></x-field><button>Go</button></form>
 <form toolname="method_override" tooldescription="The button changes the method." action="/search" toolautosubmit><input name="q"><button formmethod="post">Go</button></form>
 <form toolname="rewriting" tooldescription="A submit handler rewrites the field." action="/search" toolautosubmit onsubmit="this.q.value='evil-rewrite'"><input name="q"><button>Go</button></form>
-<form toolname="big_result" tooldescription="Answers with large structured data." action="/big" toolautosubmit><input name="q"><button>Go</button></form>`;
+<form toolname="big_result" tooldescription="Answers with large structured data." action="/big" toolautosubmit><input name="q"><button>Go</button></form>
+<form toolname="hidden_token" tooldescription="Carries its own hidden token." action="/search" toolautosubmit><input type="hidden" name="csrf" value="PAGETOKEN"><input name="q"><button>Go</button></form>
+<form toolname="adding" tooldescription="A submit handler adds a field." action="/search" toolautosubmit onsubmit="const i=document.createElement('input');i.type='hidden';i.name='added';i.value='SCRIPTADDED';this.append(i)"><input name="q"><button>Go</button></form>
+<form toolname="latin" tooldescription="Submits Latin-1." action="/search" accept-charset="iso-8859-1" toolautosubmit><input name="q"><button>Go</button></form>`;
 const NO_TOOLS = `<!doctype html><title>No tools</title><p>Nothing declared.</p><form><input name="q"></form>`;
 const FILES = `<!doctype html><title>Files</title><ul>
 <li><a href="/files/oversized.pdf">Oversized 2026-01-01</a></li>

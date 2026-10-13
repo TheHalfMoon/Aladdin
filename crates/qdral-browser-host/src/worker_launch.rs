@@ -669,6 +669,7 @@ pub(crate) fn submission_of(
             .filter(|field| field.control == ControlKind::Textarea)
             .map(|field| field.name.clone())
             .collect(),
+        fixed: tool.fixed_names.clone(),
     }
 }
 
@@ -2559,7 +2560,7 @@ mod tests {
         use crate::webmcp::{ControlKind, ExecField};
         use crate::worker_navigation::Submitted;
         let wire: Vec<crate::webmcp::WireTool> = serde_json::from_str(
-            r#"[{"name":"t","title":"","description":"d","autosubmit":true,"node":3,"has_password":false,"action":"/s","method":"post","self_contained":true,"params":[
+            r#"[{"name":"t","title":"","description":"d","autosubmit":true,"node":3,"has_password":false,"action":"/s","method":"post","self_contained":true,"fixed_names":["csrf"],"utf8":true,"params":[
                 {"name":"note","required":false,"control":"textarea","type":"string"},
                 {"name":"ok","required":false,"control":"checkbox","type":"boolean"},
                 {"name":"off","required":false,"control":"checkbox","type":"boolean"},
@@ -2592,6 +2593,7 @@ mod tests {
         );
         assert_eq!(submission.unsupplied, vec!["left".to_owned()]);
         assert_eq!(submission.multiline, vec!["note".to_owned()]);
+        assert_eq!(submission.fixed, vec!["csrf".to_owned()]);
         assert_eq!(submission_of(&tool, &fields, false).method, "GET");
     }
 
@@ -2635,7 +2637,7 @@ mod tests {
         );
         let reply = |text: &str| serde_json::from_str::<WorkerReply>(text);
         let tools = match reply(
-            r#"{"frame":"discovered","disc_id":2,"url":"https://fixture.test/t","truncated":false,"tools":[{"name":"t","title":"","description":"d","autosubmit":false,"node":3,"has_password":false,"action":null,"method":"get","self_contained":false,"params":[]}]}"#,
+            r#"{"frame":"discovered","disc_id":2,"url":"https://fixture.test/t","truncated":false,"tools":[{"name":"t","title":"","description":"d","autosubmit":false,"node":3,"has_password":false,"action":null,"method":"get","self_contained":false,"fixed_names":[],"utf8":true,"params":[]}]}"#,
         )
         .unwrap()
         {
@@ -2649,7 +2651,7 @@ mod tests {
         ));
         // Unknown fields anywhere in a tool are refused.
         assert!(reply(
-            r#"{"frame":"discovered","disc_id":2,"url":"u","truncated":false,"tools":[{"name":"t","title":"","description":"d","autosubmit":false,"node":3,"has_password":false,"action":null,"method":"get","self_contained":false,"params":[],"run":"x"}]}"#
+            r#"{"frame":"discovered","disc_id":2,"url":"u","truncated":false,"tools":[{"name":"t","title":"","description":"d","autosubmit":false,"node":3,"has_password":false,"action":null,"method":"get","self_contained":false,"fixed_names":[],"utf8":true,"params":[],"run":"x"}]}"#
         )
         .is_err());
     }

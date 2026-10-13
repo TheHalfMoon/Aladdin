@@ -90,6 +90,14 @@ export interface DeclaredTool {
   /// overrides it; it has a default button; it opens no new browsing
   /// context and posts URL-encoded.
   self_contained: boolean;
+  /// Names the form submits that are not parameters: its own hidden,
+  /// read-only and other non-parameter controls, and its default button's
+  /// name. Only their names cross (never their values); a submission may
+  /// carry no other undeclared name.
+  fixed_names: string[];
+  /// The form submits UTF-8 (no other `accept-charset`, and the document
+  /// declares no other charset); otherwise only ASCII arguments execute.
+  utf8: boolean;
   params: DeclaredParam[];
 }
 
@@ -266,6 +274,10 @@ function isSubmitter(element: DomElement): boolean {
 
 interface Pass {
   forms: DomElement[];
+  /// The document's first `<base target>`, lowercased ("" when none).
+  baseTarget: string;
+  /// The document's declared charset, lowercased ("" when none).
+  charset: string;
   /// Forms whose structure the worker can execute exactly (below).
   unsafe: Set<DomElement>;
   /// Each form's default button (its first submit button in tree order).
@@ -288,6 +300,8 @@ function treePass(root: DomElement, deadline: number): Pass {
   const factsOf = new Map<DomElement, ControlFacts>();
   const unsafe = new Set<DomElement>();
   const submitters = new Map<DomElement, DomElement>();
+  let baseTarget: string | undefined;
+  let charset: string | undefined;
   let scopes = 0;
   let truncated = false;
   let steps = 0;
@@ -313,6 +327,17 @@ function treePass(root: DomElement, deadline: number): Pass {
       if (id) {
         const key = `${scope}#${id}`;
         if (!byId.has(key)) byId.set(key, node);
+      }
+      if (scope === 0 && node.tag === "base" && baseTarget === undefined && node.attrs.has("target")) {
+        baseTarget = (attr(node, "target") ?? "").trim().toLowerCase();
+      }
+      if (scope === 0 && node.tag === "meta" && charset === undefined) {
+        const declared =
+          attr(node, "charset") ??
+          ((attr(node, "http-equiv") ?? "").trim().toLowerCase() === "content-type"
+            ? /charset=([^;\s]+)/i.exec(attr(node, "content") ?? "")?.[1]
+            : undefined);
+        if (declared !== undefined) charset = declared.trim().toLowerCase();
       }
       if (node.tag === "form") {
         forms.push(node);
@@ -395,7 +420,7 @@ function treePass(root: DomElement, deadline: number): Pass {
     const facts = target && isLabelable(target) ? factsOf.get(target) : undefined;
     facts?.labels.push(label);
   }
-  return { forms, unsafe, submitters, controls, options, truncated };
+  return { forms, baseTarget: baseTarget ?? "", charset: charset ?? "", unsafe, submitters, controls, options, truncated };
 }
 
 function isReadOnly(control: DomElement): boolean {
@@ -583,7 +608,8 @@ function selfContained(form: DomElement, pass: Pass): boolean {
   // a nested shadow tree from its parent tree, so ownership there is
   // unknowable.
   if (form.inShadow) return false;
-  const target = (attr(form, "target") ?? "").trim().toLowerCase();
+  // The form's own target, else the document's `<base target>`.
+  const target = form.attrs.has("target") ? (attr(form, "target") ?? "").trim().toLowerCase() : pass.baseTarget;
   const enctype = (attr(form, "enctype") ?? "").trim().toLowerCase();
   return (
     !pass.unsafe.has(form) &&
@@ -591,6 +617,27 @@ function selfContained(form: DomElement, pass: Pass): boolean {
     (target === "" || target === "_self") &&
     (enctype === "" || enctype === "application/x-www-form-urlencoded")
   );
+}
+
+const isUtf8 = (label: string): boolean => label === "" || label === "utf-8" || label === "utf8" || label === "unicode-1-1-utf-8";
+
+function submitsUtf8(form: DomElement, pass: Pass): boolean {
+  const accept = (attr(form, "accept-charset") ?? "").trim().toLowerCase();
+  // `accept-charset` lists labels; the first supported one is used, so only
+  // a list that starts with UTF-8 (or is empty) is certainly UTF-8.
+  const first = accept.split(/[\s,]+/).filter(Boolean)[0] ?? "";
+  return isUtf8(first) && isUtf8(pass.charset);
+}
+
+/// Read-only controls are submitted but are not parameters: they join the
+/// fixed names. The fixed names must all cross exactly and within bounds,
+/// or the tool is not executable (an unlisted name would be refused).
+function fixedNamesFit(fixed: Set<string>, controls: readonly ControlFacts[]): boolean {
+  for (const facts of controls) {
+    const name = (attr(facts.element, "name") ?? "").trim();
+    if (name && !facts.disabled && isReadOnly(facts.element)) fixed.add(name);
+  }
+  return fixed.size <= LIMITS.params && [...fixed].every((n) => exactValue(n, LIMITS.name));
 }
 
 function formMethod(form: DomElement): "get" | "post" | "dialog" {
@@ -653,6 +700,11 @@ export function discoverDeclarativeTools(root: DomElement, budgetMs: number = DI
       if (group) group.push(facts);
       else groups.set(key, [facts]);
     }
+    // Every other name the form submits, by name only.
+    const fixed = new Set<string>();
+    const submitter = pass.submitters.get(form);
+    const submitterName = submitter ? (attr(submitter, "name") ?? "").trim() : "";
+    if (submitterName) fixed.add(submitterName);
     const params: DeclaredParam[] = [];
     for (const [key, group] of groups) {
       if (!exactValue(key, LIMITS.name)) {
@@ -664,7 +716,10 @@ export function discoverDeclarativeTools(root: DomElement, budgetMs: number = DI
         break;
       }
       const schema = parameterSchema(group, pass.options);
-      if (!schema) continue;
+      if (!schema) {
+        fixed.add(key);
+        continue;
+      }
       params.push({ name: key, required: group.some((facts) => facts.element.attrs.has("required")), control: controlKind(group), ...schema });
     }
     if (codePoints(description) > LIMITS.description) truncated = true;
@@ -677,7 +732,9 @@ export function discoverDeclarativeTools(root: DomElement, budgetMs: number = DI
       has_password: hasPassword,
       action: ((raw) => (exactValue(raw, LIMITS.action) ? raw : null))(attr(form, "action") ?? ""),
       method: formMethod(form),
-      self_contained: selfContained(form, pass),
+      self_contained: selfContained(form, pass) && fixedNamesFit(fixed, controls),
+      fixed_names: [...fixed].filter((n) => exactValue(n, LIMITS.name)).slice(0, LIMITS.params),
+      utf8: submitsUtf8(form, pass),
       params
     });
   }

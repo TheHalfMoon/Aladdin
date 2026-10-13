@@ -422,3 +422,26 @@ test("flattened shadow trees (as Edge reports them) get their boundary back, and
     ]
   );
 });
+
+test("fixed names, base targets and charsets are reported for execution", () => {
+  const go = () => el("button", { name: "confirm", value: "yes" }, "Go");
+  const tools = (...children: Array<Mutable | string>) => discoverDeclarativeTools(doc(...children)).tools;
+  const [plain] = tools(
+    el("form", { toolname: "plain", tooldescription: "d" }, el("input", { name: "q" }), el("input", { type: "hidden", name: "csrf", value: "secret-token" }), el("input", { name: "ro", readonly: "" }), go())
+  );
+  assert.ok(plain);
+  assert.equal(plain.self_contained, true);
+  assert.deepEqual([...plain.fixed_names].sort(), ["confirm", "csrf", "ro"]);
+  assert.equal(plain.utf8, true);
+  assert.ok(!JSON.stringify(plain).includes("secret-token"), "a hidden value crossed");
+  // A document-wide <base target> sends the submission elsewhere.
+  const [based] = tools(el("base", { target: "fr" }), el("form", { toolname: "based", tooldescription: "d" }, el("input", { name: "q" }), go()));
+  assert.equal(based?.self_contained, false);
+  const [own] = tools(el("base", { target: "fr" }), el("form", { toolname: "own", tooldescription: "d", target: "_self" }, el("input", { name: "q" }), go()));
+  assert.equal(own?.self_contained, true, "the form's own target wins over the base");
+  // Charsets: accept-charset and the document's meta charset.
+  const [latin] = tools(el("form", { toolname: "latin", tooldescription: "d", "accept-charset": "windows-1252" }, el("input", { name: "q" }), go()));
+  assert.equal(latin?.utf8, false);
+  const [meta] = tools(el("meta", { charset: "ISO-8859-1" }), el("form", { toolname: "meta", tooldescription: "d" }, el("input", { name: "q" }), go()));
+  assert.equal(meta?.utf8, false);
+});

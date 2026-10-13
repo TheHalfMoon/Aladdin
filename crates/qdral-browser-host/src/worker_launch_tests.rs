@@ -1540,6 +1540,59 @@ fn webmcp_tools_execute_only_with_approval_and_return_the_verified_result() {
         .is_err());
     assert!(approval.consumed);
 
+    // The form's own hidden token is submitted as the page set it.
+    let found = open(&mut worker);
+    let hidden = id_of(&found, "hidden_token");
+    let tool = found.tools.iter().find(|t| t.tool_id == hidden).unwrap();
+    assert_eq!(tool.fixed_names, vec!["csrf".to_owned()]);
+    let (target, mut approval) =
+        approved_execution(&worker, &found, &hidden, &args(r#"{"q":"tokened"}"#));
+    worker
+        .execute_tool(
+            &target,
+            &mut approval,
+            &args(r#"{"q":"tokened"}"#),
+            1,
+            "workspace",
+        )
+        .expect("a hidden token is the page's own");
+
+    // A submit handler that adds a name the form never declared is refused
+    // at the request.
+    let found = open(&mut worker);
+    let adding = id_of(&found, "adding");
+    let (target, mut approval) =
+        approved_execution(&worker, &found, &adding, &args(r#"{"q":"plain"}"#));
+    assert!(worker
+        .execute_tool(
+            &target,
+            &mut approval,
+            &args(r#"{"q":"plain"}"#),
+            1,
+            "workspace"
+        )
+        .is_err());
+    assert!(approval.consumed);
+
+    // A form that submits another charset takes only ASCII arguments: a
+    // non-ASCII one gets no binding.
+    let found = open(&mut worker);
+    let latin = id_of(&found, "latin");
+    assert!(
+        !found
+            .tools
+            .iter()
+            .find(|t| t.tool_id == latin)
+            .unwrap()
+            .utf8
+    );
+    assert!(worker
+        .execution_binding(&latin, &args(r#"{"q":"café"}"#))
+        .is_err());
+    assert!(worker
+        .execution_binding(&latin, &args(r#"{"q":"cafe"}"#))
+        .is_ok());
+
     // A result too large for one frame is kept in part and marked
     // incomplete, and the lifetime goes on.
     let found = open(&mut worker);
@@ -1585,6 +1638,11 @@ fn webmcp_tools_execute_only_with_approval_and_return_the_verified_result() {
             .any(|h| h.ends_with("/search?q=rust&year=2025&exact=on&csrf=csrf-123")),
         "{hits:?}"
     );
+    assert!(
+        hits.iter()
+            .any(|h| h.ends_with("/search?csrf=PAGETOKEN&q=tokened")),
+        "{hits:?}"
+    );
     for never in [
         "other.test",
         "q=evil",
@@ -1594,6 +1652,8 @@ fn webmcp_tools_execute_only_with_approval_and_return_the_verified_result() {
         "PAGEDEFAULT",
         "OTHERFORM",
         "q=evil-rewrite",
+        "SCRIPTADDED",
+        "caf%",
     ] {
         assert!(
             !hits.iter().any(|h| h.contains(never)),

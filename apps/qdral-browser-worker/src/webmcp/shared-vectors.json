@@ -11,6 +11,8 @@
     "action": "",
     "method": "get",
     "self_contained": false,
+    "fixed_names": [],
+    "utf8": true,
     "params": [
      {
       "name": "plain",
@@ -89,6 +91,10 @@
     "action": "",
     "method": "get",
     "self_contained": false,
+    "fixed_names": [
+     "token"
+    ],
+    "utf8": true,
     "params": [
      {
       "name": "email",
@@ -139,6 +145,8 @@
     "action": "",
     "method": "get",
     "self_contained": false,
+    "fixed_names": [],
+    "utf8": true,
     "params": [
      {
       "name": "day",
@@ -200,6 +208,10 @@
     "action": "",
     "method": "get",
     "self_contained": false,
+    "fixed_names": [
+     "too_many"
+    ],
+    "utf8": true,
     "params": [
      {
       "name": "single",
@@ -264,6 +276,8 @@
     "action": "",
     "method": "get",
     "self_contained": false,
+    "fixed_names": [],
+    "utf8": true,
     "params": [
      {
       "name": "q",

@@ -111,14 +111,14 @@ Status: implementation record for slice 5 of SG-000108 (worker protocol generati
   - no shadow tree below it holds a control or button;
   - no submit button overrides the form (`form`, `formaction`, `formmethod`, `formenctype`, `formtarget`, `formnovalidate`);
   - it has a default submit button;
-  - it opens no new browsing context (`target` empty or `_self`);
+  - it opens no new browsing context (`target` empty or `_self`, or, without one, the document's `<base target>`);
   - it posts URL-encoded;
   - the form itself does not sit inside a shadow tree.
 
 ## How approval binds
 
 - A new SG-000077 action, `execute` (role `webmcp-tool`), is required. A click or download approval is refused.
-- The target's `state` is `execution_binding`: the tool name, a digest of its discovered record, the method, the resolved action, and the canonical arguments with keys sorted. The one-shot approval therefore covers exactly what is submitted, and where.
+- The target's `state` is `execution_binding`: the tool name, a digest of its discovered record, the method, the resolved action, and the canonical arguments with keys sorted. The one-shot approval therefore covers every value the caller supplies, the method, and where it goes. The form's own fixed names (below) are submitted with the page's values, which the approval does not cover.
 - An approval for other arguments, a forged approval and undeclared arguments are all refused unspent.
 
 ## What happens
@@ -136,9 +136,12 @@ Status: implementation record for slice 5 of SG-000108 (worker protocol generati
 4. **The submitted request is checked.** Each route request now carries its method, content type and body (a URL-encoded body of printable ASCII up to 16 KiB; otherwise none). The one expected request must use the bound method, and its query (GET) or body (POST) must give each approved field exactly its approved values:
    - a checked checkbox exactly once, an unchecked one not at all;
    - textarea line breaks as the engine's CRLF;
-   - no other value on a declared parameter the caller did not supply.
+   - no other value on a declared parameter the caller did not supply;
+   - a select or radio parameter is always supplied, since the page's default would be submitted otherwise.
 
-   Names the tool does not declare, such as hidden CSRF tokens the browser submits as usual, may carry any value. A page script that rewrites a field, a method override and a different form's submission are all refused at the request.
+   Discovery also reports the form's **fixed names**: the names of its hidden, read-only and other non-parameter controls, and of its default button, but never their values. Those names may carry any value, such as a CSRF token. Any other name is refused, and so is a frame or popup document while the submission is pending. A refused submission spends the expectation, so no later request can satisfy it. A page script that rewrites a field or adds one, a method override and a different form's submission are all refused at the request.
+
+   A form submits UTF-8 unless its `accept-charset` starts with another label or the document declares another charset. A form that does not submit UTF-8 executes only ASCII arguments; others are refused before dispatch.
 5. **Dispatch.** `dispatch` consumes the approval.
 6. **Filling.** The worker locates the form by `toolname` (exactly one match) and enters each field through Playwright's typed actions (`fill`, `selectOption`, `setChecked`, `check`), on host-built selectors with quoted names, within one 10 s filling budget. Discovery stays read-only; only execution enters values. The worker then clicks the form's default submit button.
 7. **Verification.** A submission that opens no document is not a verified execution. Examples are a page script that calls `preventDefault`, or a field that fails native validation. A script that navigates elsewhere is refused at the request.
@@ -152,7 +155,8 @@ Aladdin evaluates no page-, model- or caller-supplied script. It calls no page-r
 
 - An `<option>` without a `value` is matched by its reported text. If that differs from the submitted value (see slice 4), the selection fails, which fails closed.
 - A POST whose body is larger than 16 KiB, or not URL-encoded printable ASCII, cannot be checked and is refused.
-- Undeclared fields (hidden inputs, fields a submit handler adds) are submitted as the page sets them. They are the page's own data, not the caller's, and the approval covers only the declared ones.
+- The fixed names' values are submitted as the page sets them. They are the page's own data, not the caller's, and the approval covers only the declared parameters. A submit handler may change a fixed value; it cannot add a name.
+- The charset rule reads the `accept-charset` attribute and the document's first `<meta>` charset. A charset set only by the HTTP `Content-Type` header is not seen: such a page counts as UTF-8, so a non-ASCII argument could be submitted in another encoding than the approval names. The value check at the request still refuses a value that decodes differently, as long as the body is printable ASCII.
 - A form inside a shadow tree is discovered but never executed, and nested shadow trees are modelled as part of their parent tree.
 
 ## Evidence
@@ -167,9 +171,10 @@ Native test `webmcp_tools_execute_only_with_approval_and_return_the_verified_res
 - **Elsewhere:** `redirecting` (script moves to `/elsewhere`) is refused at the request, and its approval is spent.
 - **Structure:** `decoy` (a decoy field, with the real one owned from outside), `foreign_button` (its button submits another form), `shadowed` (a field in a shadow tree) and `method_override` (`formmethod` on the button) are not self-contained and get no binding.
 - **Rewritten:** `rewriting`, whose submit handler replaces the approved value, is refused at the request.
+- **Fixed names:** `hidden_token` reports `csrf` as fixed and submits the page's token. `adding`, whose submit handler appends a field, is refused at the request. `latin` (`accept-charset="iso-8859-1"`) refuses a non-ASCII argument with no binding and binds an ASCII one.
 - **Large result:** `big_result` returns 8 blocks of emoji too large for one frame. The outcome keeps fewer blocks, marks them incomplete, and the lifetime goes on.
 - **Changed:** `mutating`, whose description changes after discovery, is refused as changed, with its approval unspent.
-- **Never requested,** per the fixture log: `other.test`, `/elsewhere`, the refused arguments, the page defaults and other-form values (`PAGEDEFAULT`, `OTHERFORM`), the rewritten value, and the changed tool's submission.
+- **Never requested,** per the fixture log: `other.test`, `/elsewhere`, the refused arguments, the page defaults and other-form values (`PAGEDEFAULT`, `OTHERFORM`), the rewritten value, the script-added field (`SCRIPTADDED`), any non-ASCII argument to `latin`, and the changed tool's submission. The page's own token was submitted (`csrf=PAGETOKEN&q=tokened`).
 
 The host's unit tests cover:
 - the argument rules, executability, action resolution (canonical form) and result bounds;
