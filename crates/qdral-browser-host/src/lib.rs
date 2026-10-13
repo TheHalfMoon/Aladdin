@@ -130,6 +130,8 @@ pub use webmcp::{
     MAX_RESULT_BLOCK, MAX_RESULT_BLOCKS, MAX_TOOLS, MAX_TOOL_DESCRIPTION, MAX_TOOL_NAME,
     MAX_TOOL_PARAMS, MAX_TOOL_TITLE,
 };
+#[cfg(windows)]
+pub use worker_launch::ephemeral_profile_dir;
 pub use worker_launch::{
     classify_job, launch_worker, worker_environment, worker_node_args, BrowserWorker, CancelHandle,
     CommittedDownload, ExecutionOutcome, FetchedText, HostNode, JobProcess, LiveObservation,

@@ -368,10 +368,13 @@ fn host_child_entry() {
     let Some(out) = std::env::var_os(CHILD_MARKER) else {
         return;
     };
-    let profile =
-        PathBuf::from(std::env::var_os("QDRAL_SG108_HOST_CHILD_PROFILE").expect("profile"));
+    // #298: an ephemeral profile made the product way, under the root the
+    // parent names; the parent learns its path from the published file.
+    let root =
+        PathBuf::from(std::env::var_os("QDRAL_SG108_HOST_CHILD_PROFILE").expect("profile root"));
+    let profile = crate::worker_launch::ephemeral_profile_dir(&root).expect("profile name");
     let worker =
-        launch_worker(&spec(&profile, false), &Policy(PolicyKeyState::Absent)).expect("launch");
+        launch_worker(&spec(&profile, true), &Policy(PolicyKeyState::Absent)).expect("launch");
     // The worker and the browser first, then every other current member.
     let first = [worker.worker_pid(), worker.browser_pid()];
     let mut pids = first.to_vec();
@@ -380,7 +383,8 @@ fn host_child_entry() {
             .into_iter()
             .filter(|pid| !first.contains(pid)),
     );
-    let text: Vec<String> = pids.iter().map(u32::to_string).collect();
+    let mut text: Vec<String> = vec![profile.display().to_string()];
+    text.extend(pids.iter().map(u32::to_string));
     std::fs::write(PathBuf::from(out), text.join("\n")).expect("publish pids");
     std::thread::sleep(Duration::from_secs(120));
     drop(worker);
@@ -389,8 +393,10 @@ fn host_child_entry() {
 #[test]
 #[ignore = "requires the built browser worker and Edge; run by npm run browser-launcher:native"]
 fn killing_the_host_process_takes_the_worker_and_engine_down() {
-    let profile = temp_profile("host-death");
-    let out = profile.with_extension("pids");
+    // The profile root, owned by this test; the child host makes its
+    // ephemeral profile inside it.
+    let root = temp_profile("host-death");
+    let out = root.with_extension("pids");
     let (node, main) = prerequisites();
     let mut child = std::process::Command::new(std::env::current_exe().expect("test binary"))
         .args([
@@ -400,7 +406,7 @@ fn killing_the_host_process_takes_the_worker_and_engine_down() {
             "--test-threads=1",
         ])
         .env(CHILD_MARKER, &out)
-        .env("QDRAL_SG108_HOST_CHILD_PROFILE", &profile)
+        .env("QDRAL_SG108_HOST_CHILD_PROFILE", &root)
         .env("QDRAL_SG108_NODE", node)
         .env("QDRAL_SG108_WORKER_MAIN", main)
         .stdout(std::process::Stdio::null())
@@ -408,14 +414,13 @@ fn killing_the_host_process_takes_the_worker_and_engine_down() {
         .spawn()
         .expect("spawn child host");
     let deadline = Instant::now() + Duration::from_secs(90);
-    let pids: Vec<u32> = loop {
+    let (child_profile, pids): (PathBuf, Vec<u32>) = loop {
         if let Ok(text) = std::fs::read_to_string(&out) {
-            let pids: Vec<u32> = text
-                .lines()
-                .filter_map(|line| line.trim().parse().ok())
-                .collect();
+            let mut lines = text.lines();
+            let profile = PathBuf::from(lines.next().unwrap_or_default());
+            let pids: Vec<u32> = lines.filter_map(|line| line.trim().parse().ok()).collect();
             if pids.len() >= 2 {
-                break pids;
+                break (profile, pids);
             }
         }
         assert!(Instant::now() < deadline, "the child host never launched");
@@ -435,7 +440,40 @@ fn killing_the_host_process_takes_the_worker_and_engine_down() {
         "worker or engine outlived the host"
     );
     let _ = std::fs::remove_file(&out);
-    assert_profile_gone(remove_profile(&profile), &profile);
+    // #298: the dead host's profile is left behind (no destructor ran) ...
+    assert_eq!(child_profile.parent(), Some(root.as_path()));
+    assert!(
+        child_profile.join("Default").is_dir(),
+        "the child's profile was never made"
+    );
+    // ... and the next launch of an ephemeral profile in the same root
+    // removes it and says so. A file the dead engine still held for a moment
+    // can make one launch leave it for the next, so up to three launches.
+    let mut swept = 0;
+    for _ in 0..3 {
+        let next = crate::worker_launch::ephemeral_profile_dir(&root).expect("profile name");
+        let worker =
+            launch_worker(&spec(&next, true), &Policy(PolicyKeyState::Absent)).expect("launch");
+        swept += worker.swept_profiles();
+        let report = worker.shutdown();
+        assert!(report.job_empty, "the job did not empty");
+        assert_profile_gone(report.profile_removed, &next);
+        if !child_profile.exists() {
+            break;
+        }
+        std::thread::sleep(Duration::from_secs(2));
+    }
+    println!(
+        "SG108-EVIDENCE host-death profile swept: {swept} (gone: {})",
+        !child_profile.exists()
+    );
+    assert!(
+        !child_profile.exists(),
+        "the dead host's profile stayed: {}",
+        child_profile.display()
+    );
+    assert_eq!(swept, 1, "the sweep did not report the removal");
+    assert_profile_gone(remove_profile(&root), &root);
 }
 
 #[test]

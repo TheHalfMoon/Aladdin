@@ -500,6 +500,26 @@ pub(crate) fn keyed_name(key: &[u8; 32], name: &str) -> String {
         .collect()
 }
 
+/// #298: a new ephemeral profile directory under `root`, a directory the
+/// caller owns: `qdral-sg108-profile-<this host's pid>-<random hex>`. It is
+/// not created here. Launched with `ephemeral_profile: true`, it is removed
+/// at the end of the lifetime and, if this host dies first, by the next
+/// launch of a profile in the same root. Only names made here are swept;
+/// any other profile under `root` is never touched.
+#[cfg(windows)]
+pub fn ephemeral_profile_dir(root: &Path) -> Result<PathBuf, HostError> {
+    let random = lifetime_key()?;
+    Ok(root.join(format!(
+        "{}{}-{}",
+        crate::leftovers::PROFILE_PREFIX,
+        std::process::id(),
+        random[..8]
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect::<String>()
+    )))
+}
+
 /// A random per-lifetime key from the system RNG.
 #[cfg(windows)]
 pub(crate) fn lifetime_key() -> Result<[u8; 32], HostError> {
@@ -1139,6 +1159,9 @@ mod platform {
         staging: PathBuf,
         /// Staging folders of hosts that died, removed at this launch (#309).
         swept_staging: usize,
+        /// Ephemeral profiles of hosts that died, removed at this launch
+        /// (#298).
+        swept_profiles: usize,
         /// The committed document: URL and document generation.
         committed: Option<(String, u64)>,
         /// Raw names of the last observation, by host-issued node id.
@@ -1160,6 +1183,21 @@ mod platform {
             .map_err(|_| HostError::Unavailable(UnavailableReason::ManagedPolicy))?;
         // What a host that died left in the temp directory (#309).
         let swept_staging = crate::leftovers::sweep_stale_staging(&spec.temp_dir);
+        // And its ephemeral profiles beside this one (#298): only when this
+        // profile is itself one `ephemeral_profile_dir` made, so a root is
+        // swept only once a caller has chosen it for such profiles.
+        let swept_profiles = match (spec.profile_dir.parent(), spec.profile_dir.file_name()) {
+            (Some(root), Some(name))
+                if spec.ephemeral_profile
+                    && crate::leftovers::owner(
+                        crate::leftovers::PROFILE_PREFIX,
+                        &name.to_string_lossy(),
+                    ) == Some(std::process::id()) =>
+            {
+                crate::leftovers::sweep_stale_profiles(root)
+            }
+            _ => 0,
+        };
         #[allow(unused_mut)] // mutated in test builds only
         let mut argv = build_worker_argv(&spec.profile_dir, &spec.destinations)?;
         #[cfg(test)]
@@ -1212,6 +1250,7 @@ mod platform {
             next_dl: 0,
             next_exec: 0,
             swept_staging,
+            swept_profiles,
             staging: spec.temp_dir.join(format!(
                 "{}{}-{:x}",
                 crate::leftovers::STAGING_PREFIX,
@@ -2277,6 +2316,12 @@ mod platform {
         /// How many staging folders of hosts that died this launch removed.
         pub fn swept_staging(&self) -> usize {
             self.swept_staging
+        }
+
+        /// How many ephemeral profiles of hosts that died this launch
+        /// removed (#298).
+        pub fn swept_profiles(&self) -> usize {
+            self.swept_profiles
         }
 
         /// Test-only: this lifetime's download staging directory.
