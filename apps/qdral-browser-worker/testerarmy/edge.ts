@@ -1,7 +1,11 @@
 // A fresh installed-Edge browser for one attempt: headless, a throwaway
-// profile, loopback DevTools on an OS-chosen port, fixture.test only.
+// profile, loopback DevTools on an OS-chosen port, and the production
+// network confinement (run.mjs hands over the worker's own flag values):
+// fixture.test is the only admitted destination, every other name fails to
+// resolve, and everything not admitted (IP literals included) goes to the
+// no-route proxy.
 import { spawn } from 'node:child_process';
-import { appendFileSync, existsSync, mkdtempSync, readFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -15,8 +19,12 @@ const EDGE = [
 export async function freshEdge(signal: AbortSignal): Promise<string> {
   if (!EDGE) throw new Error('Edge is not installed');
   const spki = process.env.FIXTURE_SPKI;
-  if (!spki) throw new Error('FIXTURE_SPKI is not set (run through run.mjs)');
+  const confinement = JSON.parse(process.env.A8_CONFINEMENT ?? 'null') as string[] | null;
+  if (!spki || !confinement) throw new Error('FIXTURE_SPKI or A8_CONFINEMENT is not set (run through run.mjs)');
   const profile = mkdtempSync(join(tmpdir(), 'qdral-a8-edge-'));
+  // As the host seeds a profile: no network prediction (preconnect).
+  mkdirSync(join(profile, 'Default'));
+  writeFileSync(join(profile, 'Default', 'Preferences'), '{"net":{"network_prediction_options":2}}');
   const child = spawn(
     EDGE,
     [
@@ -30,8 +38,10 @@ export async function freshEdge(signal: AbortSignal): Promise<string> {
       '--disable-background-networking',
       '--disable-sync',
       '--disable-component-update',
-      // Fixture origin only: every other name fails to resolve.
-      '--host-resolver-rules=MAP fixture.test 127.0.0.1, MAP * ~NOTFOUND',
+      // The host's grammar for one admitted destination (confinement.rs).
+      '--host-resolver-rules=MAP fixture.test 127.0.0.1:443, MAP * ~NOTFOUND',
+      '--proxy-bypass-list=fixture.test;<-loopback>',
+      ...confinement,
       `--ignore-certificate-errors-spki-list=${spki}`,
       'about:blank',
     ],

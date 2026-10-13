@@ -50,3 +50,28 @@ test('nothing outside the fixture origin is reachable', async ({ app, browser })
   }
   expect(reached).toBe(false);
 });
+
+test('an IP-literal bypass of the resolver is denied', async ({ app, browser }) => {
+  // An IP literal never meets the resolver rules; only the no-route proxy
+  // stands between it and the network. run.mjs listens at this address
+  // (this host's own LAN address) and requires that nothing arrives, and
+  // samples the OS's connection tables for every process of this browser.
+  const ip = process.env.A8_LAN_IP;
+  const tcp = process.env.A8_TCP_PORT;
+  const udp = process.env.A8_UDP_PORT;
+  if (!ip || !tcp || !udp) throw new Error('A8_LAN_IP, A8_TCP_PORT or A8_UDP_PORT is not set (run through run.mjs)');
+  // From an admitted page: WebRTC ICE (STUN over UDP, TURN over TCP),
+  // fetch, WebSocket and sendBeacon toward the same address, every 5 s.
+  await app.open(`/rtc?ip=${ip}&udp=${udp}&tcp=${tcp}`);
+  await new Promise((resolve) => setTimeout(resolve, 12_000));
+  for (const target of [`https://${ip}:${tcp}/`, `http://${ip}:${tcp}/`]) {
+    let reached = true;
+    try {
+      await browser.goto(target);
+    } catch {
+      reached = false;
+    }
+    expect(reached).toBe(false);
+  }
+  console.log(`A8-EVIDENCE bypass attempted toward ${ip}:${tcp} (tcp) and :${udp} (udp)`);
+});
