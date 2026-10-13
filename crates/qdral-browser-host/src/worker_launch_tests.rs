@@ -128,6 +128,205 @@ fn job_pids(worker: &BrowserWorker) -> Vec<u32> {
         .collect()
 }
 
+/// #324: every TCP connection and UDP endpoint that a process in `pids`
+/// owns and that is not loopback, as the OS reports them
+/// (`GetExtendedTcpTable` / `GetExtendedUdpTable`, IPv4 and IPv6). The
+/// enforcement view, independent of any browser flag or request log.
+fn non_loopback_endpoints(pids: &[u32]) -> Vec<String> {
+    use windows_sys::Win32::NetworkManagement::IpHelper::{
+        GetExtendedTcpTable, GetExtendedUdpTable, TCP_TABLE_OWNER_PID_ALL, UDP_TABLE_OWNER_PID,
+    };
+    // Winsock address families (documented values).
+    const AF_INET: u16 = 2;
+    const AF_INET6: u16 = 23;
+    fn table(tcp: bool, family: u16) -> Vec<u8> {
+        let mut size = 0u32;
+        let mut buffer = Vec::new();
+        for _ in 0..8 {
+            buffer.resize(size as usize + 4096, 0);
+            size = buffer.len() as u32;
+            // SAFETY: `buffer` is writable for `size` bytes; the call writes
+            // at most that and reports the size it needs otherwise.
+            let status = unsafe {
+                if tcp {
+                    GetExtendedTcpTable(
+                        buffer.as_mut_ptr().cast(),
+                        &mut size,
+                        0,
+                        family as u32,
+                        TCP_TABLE_OWNER_PID_ALL,
+                        0,
+                    )
+                } else {
+                    GetExtendedUdpTable(
+                        buffer.as_mut_ptr().cast(),
+                        &mut size,
+                        0,
+                        family as u32,
+                        UDP_TABLE_OWNER_PID,
+                        0,
+                    )
+                }
+            };
+            if status == 0 {
+                buffer.truncate(size as usize);
+                return buffer;
+            }
+        }
+        panic!("the connection table could not be read");
+    }
+    let word = |bytes: &[u8], at: usize| u32::from_le_bytes(bytes[at..at + 4].try_into().unwrap());
+    let mut found = Vec::new();
+    // Row layouts: MIB_TCPROW_OWNER_PID (24 bytes), MIB_TCP6ROW_OWNER_PID
+    // (56), MIB_UDPROW_OWNER_PID (12), MIB_UDP6ROW_OWNER_PID (28), after a
+    // u32 entry count.
+    for (tcp, family, row, remote, pid_at) in [
+        (true, AF_INET, 24usize, 12usize, 20usize),
+        (true, AF_INET6, 56, 24, 52),
+        (false, AF_INET, 12, 0, 8),
+        (false, AF_INET6, 28, 0, 24),
+    ] {
+        let bytes = table(tcp, family);
+        let count = word(&bytes, 0) as usize;
+        for index in 0..count {
+            let base = 4 + index * row;
+            let pid = word(&bytes, base + pid_at);
+            if !pids.contains(&pid) {
+                continue;
+            }
+            // TCP: the remote address; UDP: the local (bound) address.
+            let address: std::net::IpAddr = if family == AF_INET {
+                let at = if tcp { base + remote } else { base };
+                std::net::Ipv4Addr::from(u32::from_be(word(&bytes, at))).into()
+            } else {
+                let at = if tcp { base + remote } else { base };
+                let octets: [u8; 16] = bytes[at..at + 16].try_into().unwrap();
+                std::net::Ipv6Addr::from(octets).into()
+            };
+            if address.is_loopback() || (tcp && address.is_unspecified()) {
+                continue;
+            }
+            found.push(format!(
+                "{} {address} (pid {pid})",
+                if tcp { "tcp" } else { "udp" }
+            ));
+        }
+    }
+    found.sort();
+    found.dedup();
+    found
+}
+
+/// Poll `pids()` for `duration`, collecting every non-loopback endpoint.
+fn endpoints_over(duration: Duration, pids: impl Fn() -> Vec<u32>) -> Vec<String> {
+    let deadline = Instant::now() + duration;
+    let mut all = std::collections::BTreeSet::new();
+    while Instant::now() < deadline {
+        all.extend(non_loopback_endpoints(&pids()));
+        std::thread::sleep(Duration::from_millis(500));
+    }
+    all.into_iter().collect()
+}
+
+#[test]
+#[ignore = "requires the built browser worker and Edge; run by npm run browser-launcher:native"]
+fn a_confined_lifetime_holds_no_network_endpoint_but_loopback() {
+    // #324: the whole job (browser, every helper, identity_helper included)
+    // reaches nothing but the loopback fixture, as the OS reports it.
+    let fixture = HttpsFixture::start();
+    let profile = temp_profile("endpoints");
+    let mut launch = spec(&profile, true);
+    launch.test_trusted_spki = Some(fixture.spki.clone());
+    let mut worker = launch_worker(&launch, &Policy(PolicyKeyState::Absent)).expect("launch");
+    worker
+        .navigate("https://fixture.test/reports")
+        .expect("the fixture is reachable through the admitted path");
+    let seen = endpoints_over(Duration::from_secs(90), || job_pids(&worker));
+    println!("SG108-EVIDENCE confined endpoints over 90 s: {seen:?}");
+    assert!(
+        seen.is_empty(),
+        "the confined lifetime reached the network: {seen:?}"
+    );
+    worker
+        .ping("after-endpoints")
+        .expect("the lifetime goes on");
+    let report = worker.shutdown();
+    assert!(report.job_empty, "the job did not empty");
+    assert_profile_gone(report.profile_removed, &profile);
+}
+
+#[test]
+#[ignore = "requires the built browser worker and Edge; run by npm run browser-launcher:native"]
+fn the_endpoint_scan_detects_an_unconfined_engine() {
+    // #324 negative control: the same scan, over an Edge started with the
+    // production argv minus the disabled features. On a host whose Edge
+    // reaches out (a Microsoft account, Cast devices on the LAN), it must
+    // find the leak; QDRAL_SG108_EXPECT_LEAK=1 makes that a requirement.
+    // Elsewhere the result is reported only.
+    use windows_sys::Win32::System::Diagnostics::ToolHelp::{
+        CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W,
+        TH32CS_SNAPPROCESS,
+    };
+    fn descendants(root: u32) -> Vec<u32> {
+        // SAFETY: snapshot of all processes; closed below.
+        let snap = unsafe { CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0) };
+        let mut pairs = Vec::new();
+        // SAFETY: an all-zero PROCESSENTRY32W with dwSize set is valid input.
+        let mut entry: PROCESSENTRY32W = unsafe { std::mem::zeroed() };
+        entry.dwSize = std::mem::size_of::<PROCESSENTRY32W>() as u32;
+        // SAFETY: `snap` is a process snapshot; `entry` is writable.
+        let mut more = unsafe { Process32FirstW(snap, &mut entry) } != 0;
+        while more {
+            pairs.push((entry.th32ProcessID, entry.th32ParentProcessID));
+            // SAFETY: as above.
+            more = unsafe { Process32NextW(snap, &mut entry) } != 0;
+        }
+        // SAFETY: `snap` was opened above and is closed exactly once.
+        unsafe { CloseHandle(snap) };
+        let mut tree = vec![root];
+        let mut grew = true;
+        while grew {
+            grew = false;
+            for (pid, parent) in &pairs {
+                if tree.contains(parent) && !tree.contains(pid) {
+                    tree.push(*pid);
+                    grew = true;
+                }
+            }
+        }
+        tree
+    }
+    let profile = temp_profile("endpoints-control");
+    let destinations =
+        [
+            AdmittedDestination::fixture("fixture.test", IpAddr::V4(Ipv4Addr::LOCALHOST))
+                .expect("fixture destination"),
+        ];
+    let mut argv = crate::confinement::build_worker_argv(&profile, &destinations).expect("argv");
+    // Unconfined in exactly the way #324 measured: no disabled features. No
+    // pipe either, as nothing drives this engine.
+    argv.retain(|arg| !arg.starts_with("--disable-features=") && arg != "--remote-debugging-pipe");
+    let mut edge = std::process::Command::new(engine().path())
+        .args(&argv)
+        .spawn()
+        .expect("control engine");
+    let root = edge.id();
+    let seen = endpoints_over(Duration::from_secs(90), || descendants(root));
+    let _ = std::process::Command::new("taskkill")
+        .args(["/PID", &root.to_string(), "/T", "/F"])
+        .output();
+    let _ = edge.wait();
+    std::thread::sleep(Duration::from_secs(2));
+    let _ = std::fs::remove_dir_all(&profile);
+    println!("SG108-EVIDENCE unconfined control endpoints over 90 s: {seen:?}");
+    if std::env::var("QDRAL_SG108_EXPECT_LEAK").as_deref() == Ok("1") {
+        assert!(
+            !seen.is_empty(),
+            "the scan missed a leak this host is known to produce"
+        );
+    }
+}
+
 #[test]
 #[ignore = "requires the built browser worker and Edge; run by npm run browser-launcher:native"]
 fn launch_verifies_the_job_and_shuts_down_without_residue() {

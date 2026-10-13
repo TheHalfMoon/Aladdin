@@ -34,6 +34,15 @@ const QUIC_FLAG: &str = "--disable-quic";
 /// SharedWorker requests are never routed (measured), so the API is removed
 /// from the engine (SG-000108 slice 3a amendment).
 const SHARED_WORKER_FLAG: &str = "--disable-blink-features=SharedWorker";
+/// #324: browser-process services that reach the network outside the
+/// resolver and no-route layers. Media Router (Cast device sockets to LAN
+/// addresses, mDNS discovery) and Edge's account integration (implicit
+/// Windows-account sign-in, OneAuth/WAM, the Microsoft 365 "Substrate"
+/// account info) were measured connecting to the LAN and to Microsoft 365
+/// from a confined lifetime; none is needed by a headless automation
+/// browser. The native network-endpoint test verifies the job holds no
+/// endpoint but loopback.
+const DISABLED_FEATURES_FLAG: &str = "--disable-features=MediaRouter,DialMediaRouteProvider,CastMediaRouteProvider,msImplicitSignin,msEdgeOSAccountInfoSubstrate,msEdgeOnlineAccounts,msOneAuthWAM,msLoadOneAuthInBackground,msIdentityCore";
 
 /// The no-route proxy: connecting to 0.0.0.0 fails on Windows even when a
 /// local process listens on port 9 (Windows-only; on Linux it is loopback).
@@ -210,6 +219,7 @@ pub fn build_worker_argv(
     argv.push(format!("{WEBRTC_FLAG}={WEBRTC_POLICY}"));
     argv.push(QUIC_FLAG.into());
     argv.push(SHARED_WORKER_FLAG.into());
+    argv.push(DISABLED_FEATURES_FLAG.into());
     argv.push(INITIAL_URL.into());
     Ok(argv)
 }
@@ -461,6 +471,7 @@ mod tests {
             "--webrtc-ip-handling-policy=disable_non_proxied_udp",
             "--disable-quic",
             "--disable-blink-features=SharedWorker",
+            "--disable-features=MediaRouter,DialMediaRouteProvider,CastMediaRouteProvider,msImplicitSignin,msEdgeOSAccountInfoSubstrate,msEdgeOnlineAccounts,msOneAuthWAM,msLoadOneAuthInBackground,msIdentityCore",
             "about:blank",
         ]
         .iter()
