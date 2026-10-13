@@ -103,7 +103,7 @@ impl AdmittedDestination {
     /// Test-only: pin a fixture name to a non-public (loopback) address.
     /// Compiled only into this crate's unit tests; release builds cannot
     /// construct a non-public pin.
-    #[cfg(test)]
+    #[cfg(any(test, all(windows, feature = "live-browser-test")))]
     pub(crate) fn fixture(host: &str, pin: IpAddr) -> Result<Self, HostError> {
         validate_admitted_host(host)?;
         Ok(Self {

@@ -200,3 +200,34 @@ For each consequential action, `qdrald` and the host each contribute what only t
 - Remote browser control and relay mapping.
 - Uploads beyond SG-000078's recorded sources.
 - The SG-000106 packaging itself.
+
+## Implementation status
+
+**Slice 1a: host worker mode (test builds only).** Its authority delta is the worker-mode host vocabulary, generation 2.
+
+**What it adds:**
+- **Feature.** `qdral-browser-host` gains the test-only `live-browser-test` feature. With it, the binary has a `--worker` mode, and fixture admission and fixture-certificate trust become available to that mode.
+- **Worker mode (`worker_host.rs`).** It serves a closed generation-2 vocabulary: hello, `open` (loopback fixture only), navigate, observe, close and shutdown. It allows one lifetime at a time.
+  - **Profile.** Each lifetime runs in the host's own `ephemeral_profile_dir` profile, carrying the A9 marker that is checked by an adopt-back before launch.
+  - **Lifetime nonce.** A 128-bit nonce from the system RNG.
+  - **What crosses.** Observations cross as identities and digests only. A reply that does not fit one frame drops nodes and says so. Errors cross as closed codes, never as message text.
+- **Supervision.** `Supervisor::launch_worker_host` keeps the single-host rule across both modes and leaves the profile to the host.
+
+**What it does not add:**
+- the `bind` frame and the two-part binding (slice 1b);
+- link activation and download (slice 1b);
+- any `qdrald` dispatch;
+- any exposure.
+
+**Evidence:**
+- `tests/sg000108_worker_host.rs`, run by `npm run browser-launcher:native` as a second, feature-enabled pass (2 tests). It drives the real binary under `Supervisor` against the fixture and checks:
+  - open: 32-hex nonce, pin 127.0.0.1, the host-pid-named profile;
+  - a second open is refused, typed;
+  - navigate returns 200, and another origin is refused;
+  - observe returns no raw page text;
+  - close: job empty, profile removed;
+  - a mid-lifetime shutdown takes the worker and the profile with it;
+  - a second host is refused.
+- **Without the feature:** `worker_mode_does_not_exist_without_the_test_feature` shows that `--worker` is an unknown argument.
+- **Release guard:** `the_live_browser_test_feature_never_reaches_a_release_build` (release-blocker sweep) allows the feature to be named only in the host crate's own definition and code, its worker-host test, the native-suite launcher and documentation, and never as a default feature.
+- **sg000085:** its certificate-flag rule accepts the feature gate, `cfg(any(test, feature = "live-browser-test"))`, besides `cfg(test)`.

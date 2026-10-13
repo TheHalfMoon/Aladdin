@@ -27,6 +27,8 @@ mod supervise;
 mod transfers;
 mod uia;
 mod webmcp;
+#[cfg(all(windows, feature = "live-browser-test"))]
+pub mod worker_host;
 mod worker_launch;
 mod worker_navigation;
 #[cfg(windows)]
@@ -70,6 +72,8 @@ pub use extraction::{
     ExtractOptions, PageExtraction, MAX_EXTRACT_CHARS, MAX_EXTRACT_PIECES, MAX_PIECE_CHARS,
 };
 pub use host::{HostIdentity, LiveHost, Supervisor, HANDSHAKE_TIMEOUT};
+#[cfg(all(windows, feature = "live-browser-test"))]
+pub use host::{LiveWorkerHost, WorkerHostLaunch};
 pub use navigation::{
     check_rebinding_consistent, download_trigger_allowed, external_handler_allowed, mediate_frame,
     mediate_popup, mediate_service_worker, mediate_subresource, mediate_worker,

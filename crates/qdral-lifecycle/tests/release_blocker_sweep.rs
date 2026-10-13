@@ -320,7 +320,8 @@ fn only_the_documented_ignored_tests_exist() {
                         && line.contains(
                             "performs one real HTTPS request; run with --ignored for live evidence",
                         ))
-                    || (relative == "crates/qdral-browser-host/src/worker_launch_tests.rs"
+                    || ((relative == "crates/qdral-browser-host/src/worker_launch_tests.rs"
+                        || relative == "crates/qdral-browser-host/tests/sg000108_worker_host.rs")
                         && line.contains(
                             "requires the built browser worker and Edge; run by npm run browser-launcher:native",
                         ));
@@ -335,6 +336,44 @@ fn only_the_documented_ignored_tests_exist() {
         "unexpected ignored tests:\n{}",
         hits.join("\n")
     );
+}
+
+/// SG-000108 product caller: the test-only `live-browser-test` feature
+/// (worker mode with the loopback fixture admitted) never reaches a release
+/// build. Only the host crate's own definition and code, its worker-host
+/// test, the native-suite launcher and documentation may name it, and it is
+/// never a default feature.
+#[test]
+fn the_live_browser_test_feature_never_reaches_a_release_build() {
+    let root = repo_root();
+    let mut hits = Vec::new();
+    for (relative, text) in text_files(&root) {
+        if !text.contains("live-browser-test") {
+            continue;
+        }
+        let allowed = relative == "crates/qdral-browser-host/Cargo.toml"
+            || (relative.starts_with("crates/qdral-browser-host/src/")
+                && relative.ends_with(".rs"))
+            || relative == "crates/qdral-browser-host/tests/sg000108_worker_host.rs"
+            || relative == "apps/qdral-browser-worker/scripts/native-launcher.mjs"
+            || relative.starts_with("docs/");
+        if !allowed {
+            hits.push(relative);
+        }
+    }
+    assert!(
+        hits.is_empty(),
+        "live-browser-test is named outside its test-only places:\n{}",
+        hits.join("\n")
+    );
+    let manifest = fs::read_to_string(root.join("crates/qdral-browser-host/Cargo.toml")).unwrap();
+    for line in manifest.lines() {
+        let line = line.trim();
+        assert!(
+            !(line.starts_with("default") && line.contains("live-browser-test")),
+            "live-browser-test must never be a default feature: {line}"
+        );
+    }
 }
 
 #[test]

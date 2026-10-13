@@ -64,6 +64,30 @@ pub fn setup_ephemeral_profile(
     Ok(AutomationProfile { dir, identity })
 }
 
+/// Mark a fresh, empty profile directory (SG-000108 product caller: the
+/// host's own `ephemeral_profile_dir`) with this engine's marker, so
+/// `adopt_profile` can re-check it before the launch (A9). A directory with
+/// anything in it is refused.
+#[cfg(any(test, all(windows, feature = "live-browser-test")))]
+pub fn mark_profile(dir: &Path, engine_fingerprint: &str) -> Result<AutomationProfile, HostError> {
+    if !dir.is_absolute() || fs::read_dir(dir)?.next().is_some() {
+        return Err(HostError::Invalid(
+            "only a fresh, empty profile directory is marked".into(),
+        ));
+    }
+    let identity = profile_identity(engine_fingerprint, dir);
+    let marker = serde_json::json!({
+        "schema": MARKER_SCHEMA,
+        "engine_fingerprint": engine_fingerprint,
+        "identity": identity,
+    });
+    fs::write(dir.join(MARKER_FILE), serde_json::to_vec(&marker).unwrap())?;
+    Ok(AutomationProfile {
+        dir: dir.to_path_buf(),
+        identity,
+    })
+}
+
 /// Adopt an existing directory only if it carries our marker for this
 /// engine. Anything else is refused, never repaired.
 pub fn adopt_profile(dir: &Path, engine_fingerprint: &str) -> Result<AutomationProfile, HostError> {
@@ -114,6 +138,26 @@ fn random_nonce() -> u64 {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn only_a_fresh_empty_directory_is_marked_and_then_adopted() {
+        let dir = std::env::temp_dir().join(format!("qdral-mark-{:016x}", random_nonce()));
+        fs::create_dir_all(&dir).unwrap();
+        let marked = mark_profile(&dir, "Edge:1:x").unwrap();
+        let adopted = adopt_profile(&dir, "Edge:1:x").unwrap();
+        assert_eq!(marked.identity(), adopted.identity());
+        assert!(
+            adopt_profile(&dir, "Edge:2:x").is_err(),
+            "another engine's marker"
+        );
+        assert!(
+            mark_profile(&dir, "Edge:1:x").is_err(),
+            "not empty any more"
+        );
+        assert!(mark_profile(Path::new("relative"), "Edge:1:x").is_err());
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
     use super::*;
 
     fn temp_root(label: &str) -> PathBuf {

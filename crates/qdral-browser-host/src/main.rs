@@ -22,6 +22,13 @@ fn main() {
 }
 
 fn run() -> Result<(), String> {
+    // SG-000108 product caller: worker mode exists only in builds with the
+    // test-only `live-browser-test` feature. Elsewhere `--worker` is an
+    // unknown argument, and the host exits.
+    #[cfg(all(windows, feature = "live-browser-test"))]
+    if std::env::args().nth(1).as_deref() == Some("--worker") {
+        return run_worker_mode();
+    }
     let mut engine: Option<PathBuf> = None;
     let mut profile_dir: Option<PathBuf> = None;
     let mut host_id: Option<String> = None;
@@ -58,6 +65,59 @@ fn run() -> Result<(), String> {
     let engine_child = qdral_browser_host::spawn_engine_null(verified.path(), &argv, &env)
         .map_err(|err| format!("engine launch failed: {err}"))?;
     serve(host_id, engine_child)
+}
+
+/// Worker mode: `--worker --host-id <id> --node <node.exe> --worker-main
+/// <main.js> --profile-root <dir> --temp-dir <dir>`, every value from Deskal
+/// supervision (in this slice, from the test harness), never from a caller.
+#[cfg(all(windows, feature = "live-browser-test"))]
+fn run_worker_mode() -> Result<(), String> {
+    let mut values = std::collections::HashMap::new();
+    let mut args = std::env::args().skip(2);
+    while let Some(arg) = args.next() {
+        let value = args
+            .next()
+            .ok_or_else(|| format!("missing value for {arg}"))?;
+        match arg.as_str() {
+            "--host-id" | "--node" | "--worker-main" | "--profile-root" | "--temp-dir" => {
+                if values.insert(arg.clone(), value).is_some() {
+                    return Err(format!("repeated argument: {arg}"));
+                }
+            }
+            _ => return Err(format!("unknown argument: {arg}")),
+        }
+    }
+    let mut take = |name: &str| {
+        values
+            .remove(name)
+            .ok_or_else(|| format!("{name} is required"))
+    };
+    let host_id = take("--host-id")?;
+    if host_id.is_empty() || host_id.len() > 64 {
+        return Err("invalid --host-id".to_string());
+    }
+    let worker_args = qdral_browser_host::worker_host::WorkerHostArgs {
+        host_id,
+        node: PathBuf::from(take("--node")?),
+        worker_main: PathBuf::from(take("--worker-main")?),
+        profile_root: PathBuf::from(take("--profile-root")?),
+        temp_dir: PathBuf::from(take("--temp-dir")?),
+    };
+    for path in [
+        &worker_args.node,
+        &worker_args.worker_main,
+        &worker_args.profile_root,
+        &worker_args.temp_dir,
+    ] {
+        if !path.is_absolute() {
+            return Err("worker-mode paths must be absolute".to_string());
+        }
+    }
+    let stdin = std::io::stdin();
+    let mut input = BufReader::new(stdin.lock());
+    let stdout = std::io::stdout();
+    let mut output = stdout.lock();
+    qdral_browser_host::worker_host::serve_worker_mode(&worker_args, &mut input, &mut output)
 }
 
 /// Scrubbed environment for the engine: OS locations plus profile-scoped
