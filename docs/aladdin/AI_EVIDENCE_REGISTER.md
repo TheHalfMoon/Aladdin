@@ -89,7 +89,7 @@ above. Shell invocations use `rtk` per the supplied RTK instructions.
 | Existing native FS control | `cargo test --locked --offline -p qdrald fs_mutation::tests --target-dir <isolated work/cargo-ai> -- --test-threads=1`: **3 passed**, 78 filtered, 0.13s test time. Build 1m57s. Existing test brokers, not Windows Hello/user-installed task or Hala inference |
 | Graft structural pass | v0.21.1, non-deep $0 build, scoped daemon/FS/MCP/browser host; 104 files, 2,204 nodes, 3,738 edges, no source import/AI call. BrowserWorker caller query undercounts duplicate names; raw imports/Cargo/dispatch inspected independently |
 | Alibaba OpenCodeReview | Local v1.13.0 exact `9098adde..5dac3aeb` preview: 15 files, 3 reviewable/12 excluded (11 Markdown, one test path); rules retrieved for eligible JSON/Python, and exclusions manually reviewed by the fresh-context panel. CI pinned v1.12.9 remains required; no managed-model review claim |
-| PStack | Fresh-context cost/correctness/parsimony/product and separate architecture/security/licensing reviewers inspected immutable `9098adde..5dac3aeb`. Cost review found two real boundaries; fixes and four additional regressions added. Architecture review found no blocker and its two evaluation refinements were adopted. Repair-delta qualification follows; no required Jev/CI gate substituted |
+| PStack | Fresh-context cost/correctness/parsimony/product and separate architecture/security/licensing reviewers inspected immutable `9098adde..5dac3aeb`. Cost review found two real boundaries; fixes and four additional regressions added. Both reviewers then **PASS** on exact repair delta `5dac3aeb..ea16e52f48f06753592e4efa428080fd03653512`; no unresolved blocker. Architecture's two evaluation refinements adopted; no required Jev/CI gate substituted |
 | Jev | Local `jev --version`: 2026.919.0; **not invoked for paid judgments**. Required TypeSafe CI gate unrun for new head until narrow spending exception. Never substitute an inline review for this required check |
 | REA | Official repo inspected/pinned `4c838469477f0b6ea844c235f78534a55118ddca`; prior Aladdin REA reports read as historical evidence. No new reverse-engineering run: own source resolves reachability and avoids inferring capability from binaries. No bypass/paid provider or runtime result fabricated |
 | New-head required CI / merge | Pending publication. Baseline green does not qualify this change. PR creation automatically runs paid Jev; no workflow disabled or bypassed |
@@ -103,6 +103,12 @@ evidence is pinned rather than treating its better scores as commercially eligib
 The broad default cost tables and product recommendation did not change from
 these corrections. Reviewer findings and results are factual local evidence;
 this panel is not an Alibaba-managed model review or a paid security audit.
+The cost reviewer independently confirmed 14/14 tests, unchanged original
+scenario tables, exact regenerated Markdown and $211.0407167 GPU/month for
+the discrete ten-customer sensitivity. The architecture reviewer independently
+confirmed the repaired confidence/verification gates and noncommercial pin.
+Panel manifest: full — correctness/parsimony/product PASS; separate
+architecture/security/licensing PASS; final vendor/CI qualification UNPROVEN.
 
 Research exceeds Diffcipline's default 12-file/600-line **implementation** packet
 target because the founder requested one integrated 22-section study, executable
@@ -114,6 +120,11 @@ grain-state delta. Split into focused signed+DCO commits, one reviewable PR.
 ## Publication and resume state
 
 Research branch: `research/aladdin-native-hala-2026-10-13`, based on R1.
+Four signed+DCO commits through `ea16e52f48f06753592e4efa428080fd03653512`
+were pushed to that branch without opening a PR. Signatures were checked
+cryptographically against the configured public SSH signing key using an
+isolated allowed-signers file; DCO footers are present. Subsequent evidence-only
+commits do not imply an already qualified PR or merged main.
 Check the latest signed head and final validation receipt when resuming; this
 document cannot claim the SHA of its eventual own commit or merge.
 Publish/qualify only after the explicit no-spending exception for existing
