@@ -91,7 +91,7 @@ The donor integration record (copied paths, commits, modifications, notices) is 
    - Results are bounded and untrusted.
    - Negative controls: a stale generation, an undeclared tool, a schema violation, a denied approval and a hostile description.
 5. **6: native extraction.** Scrape to Markdown, HTML and structured output of the observed page. The extraction dependency is admitted separately. *As built:* Markdown only, through Aladdin's own port of the browser-use pipeline, so no dependency was admitted. HTML is not handed out, and structured data crosses on execution results. See `docs/security/SG-000108_EXTRACTION.md`.
-6. **7: map and crawl.** The host queue described above. Negative controls cover localhost, private, link-local and metadata addresses, redirect chains, DNS rebinding through the pin, URL parser confusion, other schemes, credentials in URLs, cross-origin scope, cancellation and timeouts.
+6. **7: map and crawl.** The host queue described above. *As built:* an Aladdin-native queue (Firecrawl as behavioural reference only, no code copied) over one admitted destination; see `docs/security/SG-000108_CRAWL.md`. Negative controls cover localhost, private, link-local and metadata addresses, redirect chains, DNS rebinding through the pin, URL parser confusion, other schemes, credentials in URLs, cross-origin scope, cancellation and timeouts.
 
 Each slice runs the full review gates (CI, native Windows, Jev, OCR delegation, a PStack-role judge, Graft) and merges with a normal merge commit. No slice may add an MCP-facing tool before its approval policy is qualified.
 

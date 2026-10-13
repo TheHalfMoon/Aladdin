@@ -6,6 +6,7 @@ mod argv;
 mod capture;
 mod confinement;
 mod coordinates;
+mod crawl;
 mod discovery;
 mod error;
 mod exposure;
@@ -47,6 +48,11 @@ pub use coordinates::{
     arbitrary_drag, clipboard_typing, execute_one, hotkey_press, input_stream, proposal_digest,
     validate_proposal, CoordinateAction, CoordinateProposal, InputLease, InterruptionTracker,
     INPUT_LEASE_TTL_MS, MAX_INPUT_TEXT_CHARS, MAX_SCROLL_DELTA,
+};
+pub use crawl::{
+    crawl, CrawlDriver, CrawlReport, CrawlSpec, CrawlStop, CrawledPage, SkipReason, SkippedLink,
+    Visit, MAX_CRAWL_DEPTH, MAX_CRAWL_DURATION, MAX_CRAWL_PAGES, MAX_CRAWL_URLS, MAX_PATH_PATTERNS,
+    MAX_PATH_PATTERN_BYTES, MAX_SKIPPED_REPORTED,
 };
 pub use discovery::{discover_engine, Engine, EngineKind, SearchConfig};
 pub use error::{HostError, UnavailableReason};

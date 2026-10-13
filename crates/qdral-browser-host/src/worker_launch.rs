@@ -982,6 +982,54 @@ mod platform {
         cancelled: Arc<AtomicBool>,
     }
 
+    /// A crawl's view of the worker.
+    struct WorkerCrawl<'a> {
+        worker: &'a mut BrowserWorker,
+        scope: &'a crate::observation::ObservationScope,
+    }
+
+    impl crate::crawl::CrawlDriver for WorkerCrawl<'_> {
+        fn open(&mut self, url: &str) -> Result<crate::crawl::Visit, HostError> {
+            let outcome = self.worker.navigate(url)?;
+            Ok(crate::crawl::Visit {
+                final_url: outcome.url,
+                status: outcome.status,
+            })
+        }
+
+        fn links(&mut self) -> Result<Vec<String>, HostError> {
+            let live = self.worker.observe(self.scope)?;
+            // Document order: a preorder walk of the observation.
+            let mut links = Vec::new();
+            let mut stack: Vec<&crate::observation::ObservedNode> =
+                live.observation.nodes.iter().rev().collect();
+            while let Some(node) = stack.pop() {
+                if let Some(url) = self
+                    .worker
+                    .host_nodes
+                    .get(&node.node_id)
+                    .filter(|host| host.role == "link")
+                    .and_then(|host| host.url.clone())
+                {
+                    links.push(url);
+                }
+                stack.extend(node.children.iter().rev());
+            }
+            Ok(links)
+        }
+
+        fn extract(
+            &mut self,
+            options: crate::extraction::ExtractOptions,
+        ) -> Result<crate::extraction::PageExtraction, HostError> {
+            self.worker.extract_page(options)
+        }
+
+        fn lost(&self) -> bool {
+            self.worker.failed.is_some()
+        }
+    }
+
     impl CancelHandle {
         /// Cancel; true if a live job was terminated.
         pub fn cancel(&self) -> bool {
@@ -1512,6 +1560,24 @@ mod platform {
                 truncated,
                 tools,
             })
+        }
+
+        /// Map or crawl the admitted destination from `spec.start_url`
+        /// (slice 7): every page is opened by the governed navigation, its
+        /// links come from an observation under `scope`, and its content,
+        /// if asked, from `extract_page`. `cancelled` and the deadline are
+        /// checked between pages; a page's own timeouts still apply.
+        pub fn crawl_site(
+            &mut self,
+            spec: &crate::crawl::CrawlSpec,
+            scope: &crate::observation::ObservationScope,
+            cancelled: &std::sync::atomic::AtomicBool,
+        ) -> Result<crate::crawl::CrawlReport, HostError> {
+            let mut driver = WorkerCrawl {
+                worker: self,
+                scope,
+            };
+            crate::crawl::crawl(&mut driver, spec, cancelled)
         }
 
         /// The committed page's rendered content as Markdown, read by the
@@ -2205,6 +2271,18 @@ mod fallback {
 
         /// API parity: no worker ever exists off Windows.
         pub fn discover_tools(&mut self) -> Result<crate::webmcp::DiscoveredTools, HostError> {
+            Err(HostError::Unavailable(
+                UnavailableReason::UnsupportedRuntime,
+            ))
+        }
+
+        /// API parity: no worker ever exists off Windows.
+        pub fn crawl_site(
+            &mut self,
+            _spec: &crate::crawl::CrawlSpec,
+            _scope: &crate::observation::ObservationScope,
+            _cancelled: &std::sync::atomic::AtomicBool,
+        ) -> Result<crate::crawl::CrawlReport, HostError> {
             Err(HostError::Unavailable(
                 UnavailableReason::UnsupportedRuntime,
             ))
