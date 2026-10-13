@@ -633,7 +633,7 @@ A fresh-context judge's first round on this slice was BLOCK. The destination-nam
   - **A worker that hangs:** it blocks for 50 s, past the host's 45 s deadline, then writes. The download fails as `TimedOut`, because the host terminates the job on its own deadline. Right after the failure the worker process is dead (the guarantee), and 55 s after the failure, past the latest moment the block could end, nothing was written (the evidence).
   - **In both cases:** nothing is staged afterwards, nothing reaches the approved folder, the job empties, and the staging folder is removed at shutdown.
 - **A host killed mid-commit.**
-  - **The test:** the unit test runs a real commit in a child process (the test binary itself). The child stops at a test-only crash point and is killed hard (`TerminateProcess`):
+  - **The test:** an ordinary test (no browser needed) runs a real commit in a child process: the test binary itself, running a child test that does nothing without its parent's environment. The child stops at a test-only crash point and is killed hard (`TerminateProcess`):
     - after the temporary file is created: an empty hidden temporary file is left;
     - after the content is written, while marked for deletion: nothing is left;
     - after the mark is cleared, before the rename: the full content is left in a visible temporary file.

@@ -2702,8 +2702,9 @@ mod host_crash {
 
     /// Run only as a child of `a_host_killed_mid_commit_*`: commit one file
     /// and stop at the crash point the parent names.
+    /// Without the parent's environment it does nothing (an ordinary test
+    /// that passes at once), so it is not an ignored test.
     #[test]
-    #[ignore = "a child process of the crash test, not a test of its own"]
     fn crash_child() {
         let Ok(root) = std::env::var("QDRAL_309_ROOT") else {
             return;
@@ -2729,7 +2730,6 @@ mod host_crash {
                 .args([
                     "worker_launch::native_tests::host_crash::crash_child",
                     "--exact",
-                    "--ignored",
                     "--test-threads=1",
                 ])
                 .env("QDRAL_309_ROOT", &root)
