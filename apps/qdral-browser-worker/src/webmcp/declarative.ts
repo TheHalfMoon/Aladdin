@@ -273,8 +273,9 @@ const SUBMIT_OVERRIDES = ["form", "formaction", "formmethod", "formenctype", "fo
 
 function isSubmitter(element: DomElement): boolean {
   if (element.tag === "button") {
-    // Any type but button or reset (an invalid one included) submits.
-    const type = (attr(element, "type") ?? "submit").trim().toLowerCase();
+    // Any type but button or reset (an invalid one included, such as one
+    // with surrounding spaces, which HTML does not trim) submits.
+    const type = (attr(element, "type") ?? "submit").toLowerCase();
     return type !== "button" && type !== "reset";
   }
   return element.tag === "input" && ["submit", "image"].includes(inputType(element));

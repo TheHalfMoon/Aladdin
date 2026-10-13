@@ -439,6 +439,12 @@ test("fixed names, base targets and charsets are reported for execution", () => 
   assert.equal(based?.self_contained, false);
   const [own] = tools(el("base", { target: "fr" }), el("form", { toolname: "own", tooldescription: "d", target: "_self" }, el("input", { name: "q" }), go()));
   assert.equal(own?.self_contained, true, "the form's own target wins over the base");
+  // HTML does not trim a button's type: " button" is invalid, so it submits,
+  // and its override makes the form not self-contained.
+  const [spaced] = tools(el("form", { toolname: "spaced", tooldescription: "d" }, el("input", { name: "q" }), el("button", { type: " button", formaction: "/elsewhere" }, "Go")));
+  assert.equal(spaced?.self_contained, false);
+  const [plainButton] = tools(el("form", { toolname: "plain_button", tooldescription: "d" }, el("input", { name: "q" }), el("button", { type: "BUTTON", formaction: "/x" }, "No"), go()));
+  assert.equal(plainButton?.self_contained, true, "a real button type is not a submitter");
   // Charsets: accept-charset, and the document's encoding as the engine
   // reports it; an unreported one is not UTF-8.
   const [latin] = tools(el("form", { toolname: "latin", tooldescription: "d", "accept-charset": "windows-1252" }, el("input", { name: "q" }), go()));
