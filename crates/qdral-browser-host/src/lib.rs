@@ -73,7 +73,7 @@ pub use extraction::{
 };
 pub use host::{HostIdentity, LiveHost, Supervisor, HANDSHAKE_TIMEOUT};
 #[cfg(all(windows, feature = "live-browser-test"))]
-pub use host::{LiveWorkerHost, WorkerHostLaunch};
+pub use host::{LiveWorkerHost, WorkerHostLaunch, WORKER_HOST_REPLY_TIMEOUT};
 pub use navigation::{
     check_rebinding_consistent, download_trigger_allowed, external_handler_allowed, mediate_frame,
     mediate_popup, mediate_service_worker, mediate_subresource, mediate_worker,

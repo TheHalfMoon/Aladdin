@@ -1,14 +1,15 @@
-//! SG-000108 product caller, slice 1a: the real `qdral-browser-host
+//! SG-000108 product caller, slices 1a–1b: the real `qdral-browser-host
 //! --worker` binary under Deskal supervision, against the loopback HTTPS
 //! fixture. Native Windows only, with the built worker and an installed
 //! engine; run by `npm run browser-launcher:native`.
 #![cfg(all(windows, feature = "live-browser-test"))]
 
-use qdral_browser_host::worker_host::{WorkerHostReply, WorkerHostRequest};
+use qdral_browser_host::worker_host::{BindAction, WorkerHostReply, WorkerHostRequest};
 use qdral_browser_host::{
-    assert_no_managed_policy, discover_engine, RegistryPolicySource, SearchConfig, Supervisor,
-    WorkerHostLaunch,
+    assert_no_managed_policy, discover_engine, LiveWorkerHost, RegistryPolicySource, SearchConfig,
+    Supervisor, WorkerHostLaunch,
 };
+use sha2::{Digest, Sha256};
 use std::io::BufRead;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc;
@@ -81,12 +82,15 @@ impl Drop for Fixture {
     }
 }
 
-fn launch(label: &str) -> (Supervisor, WorkerHostLaunch, PathBuf) {
-    let (node, worker_main) = prerequisites();
+fn launch_with(
+    label: &str,
+    worker_main: Option<PathBuf>,
+) -> (Supervisor, WorkerHostLaunch, PathBuf) {
+    let (node, main) = prerequisites();
     let root = temp_root(label);
     let launch = WorkerHostLaunch {
         node,
-        worker_main,
+        worker_main: worker_main.unwrap_or(main),
         profile_root: root.join("profiles"),
         temp_dir: root.join("staging"),
         state_root: root.join("state"),
@@ -99,6 +103,10 @@ fn launch(label: &str) -> (Supervisor, WorkerHostLaunch, PathBuf) {
         .launch_worker_host(&host_binary(), &launch)
         .expect("launch the worker-mode host");
     (supervisor, launch, root)
+}
+
+fn launch(label: &str) -> (Supervisor, WorkerHostLaunch, PathBuf) {
+    launch_with(label, None)
 }
 
 /// The host binary reads the real registry (SG-000074 managed-policy
@@ -143,73 +151,145 @@ fn entries(dir: &Path) -> Vec<String> {
         .unwrap_or_default()
 }
 
+fn open_request(fixture: &Fixture) -> WorkerHostRequest {
+    WorkerHostRequest::Open {
+        workspace: "ws-sg108".into(),
+        policy_revision: 1,
+        host: "fixture.test".into(),
+        fixture_spki: fixture.spki.clone(),
+    }
+}
+
+/// Open a lifetime; None when a managed policy refused it (checked).
+fn open(host: &mut LiveWorkerHost, fixture: &Fixture, profile_root: &Path) -> Option<String> {
+    let reply = host.request(&open_request(fixture)).expect("open");
+    if refused_by_managed_policy(&reply, profile_root) {
+        return None;
+    }
+    match reply {
+        WorkerHostReply::Opened { lifetime, pinned } => {
+            assert_eq!(lifetime.len(), 32, "a 128-bit lifetime nonce");
+            assert!(lifetime.bytes().all(|b| b.is_ascii_hexdigit()));
+            assert_eq!(pinned, "127.0.0.1");
+            Some(lifetime)
+        }
+        other => panic!("open refused: {other:?}"),
+    }
+}
+
+/// The host's binding for an action (Deskal would now prompt and consume a
+/// broker approval for it).
+fn bind(host: &mut LiveWorkerHost, action: BindAction) -> (String, String) {
+    match host
+        .request(&WorkerHostRequest::Bind { action })
+        .expect("bind")
+    {
+        WorkerHostReply::Bound { binding, target } => {
+            assert_eq!(binding.len(), 64);
+            (binding, target)
+        }
+        other => panic!("bind refused: {other:?}"),
+    }
+}
+
+fn navigate(host: &mut LiveWorkerHost, url: &str, record: &str) -> WorkerHostReply {
+    let (binding, _) = bind(host, BindAction::Navigate { url: url.into() });
+    host.request(&WorkerHostRequest::Navigate {
+        url: url.into(),
+        record_id: record.into(),
+        binding,
+    })
+    .expect("navigate")
+}
+
+fn observe(host: &mut LiveWorkerHost) -> WorkerHostReply {
+    host.request(&WorkerHostRequest::Observe {})
+        .expect("observe")
+}
+
+fn select_latest(host: &mut LiveWorkerHost) -> String {
+    match host
+        .request(&WorkerHostRequest::SelectLatestDatedLink {})
+        .expect("select")
+    {
+        WorkerHostReply::Selected { node_id } => node_id,
+        other => panic!("selection refused: {other:?}"),
+    }
+}
+
+/// Every observed node, depth-first.
+fn all_nodes(
+    nodes: &[qdral_browser_host::worker_host::WireNode],
+) -> Vec<&qdral_browser_host::worker_host::WireNode> {
+    let mut out = Vec::new();
+    for node in nodes {
+        out.push(node);
+        out.extend(all_nodes(&node.children));
+    }
+    out
+}
+
+fn error_code(reply: &WorkerHostReply) -> &str {
+    match reply {
+        WorkerHostReply::Error { code } => code,
+        other => panic!("expected a refusal, got {other:?}"),
+    }
+}
+
+/// The fixture's report bytes, exactly as scripts/https-fixture.mjs builds
+/// them: the independent checker's expectation.
+fn fixture_report(path: &str) -> Vec<u8> {
+    format!(
+        "%PDF-1.4\n% {path}\n1 0 obj << /Type /Catalog >> endobj\ntrailer << /Root 1 0 R >>\n%%EOF\n"
+    )
+    .into_bytes()
+}
+
+fn sha256_hex(bytes: &[u8]) -> String {
+    Sha256::digest(bytes)
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect()
+}
+
 #[test]
 #[ignore = "requires the built browser worker and Edge; run by npm run browser-launcher:native"]
 fn a_lifetime_through_the_real_host_binary_navigates_observes_and_closes_clean() {
     let fixture = Fixture::start();
     let (mut supervisor, launch, root) = launch("lifetime");
     let host = supervisor.worker_host().expect("live worker host");
-    let opened = host
-        .request(&WorkerHostRequest::Open {
-            workspace: "ws-sg108".into(),
-            host: "fixture.test".into(),
-            fixture_spki: fixture.spki.clone(),
-        })
-        .expect("open");
-    if refused_by_managed_policy(&opened, &launch.profile_root) {
+    let pid = host.pid();
+    if open(host, &fixture, &launch.profile_root).is_none() {
         assert!(supervisor.shutdown().expect("shutdown"));
         let _ = std::fs::remove_dir_all(&root);
         return;
     }
-    let (lifetime, pinned) = match opened {
-        WorkerHostReply::Opened { lifetime, pinned } => (lifetime, pinned),
-        other => panic!("open refused: {other:?}"),
-    };
-    assert_eq!(lifetime.len(), 32, "a 128-bit lifetime nonce");
-    assert!(lifetime.bytes().all(|b| b.is_ascii_hexdigit()));
-    assert_eq!(pinned, "127.0.0.1");
     // The host made its own pid-named profile under the root (#298).
     let profiles = entries(&launch.profile_root);
     assert_eq!(profiles.len(), 1, "{profiles:?}");
     assert!(
-        profiles[0].starts_with(&format!("qdral-sg108-profile-{}-", host.pid())),
+        profiles[0].starts_with(&format!("qdral-sg108-profile-{pid}-")),
         "{profiles:?}"
     );
     // A second lifetime while one is open is refused, typed.
     assert_eq!(
-        host.request(&WorkerHostRequest::Open {
-            workspace: "ws-sg108".into(),
-            host: "fixture.test".into(),
-            fixture_spki: fixture.spki.clone(),
-        })
-        .expect("second open"),
-        WorkerHostReply::Error {
-            code: "lifetime_open".into()
-        }
+        error_code(&host.request(&open_request(&fixture)).expect("second open")),
+        "lifetime_open"
     );
-    match host
-        .request(&WorkerHostRequest::Navigate {
-            url: "https://fixture.test/reports".into(),
-        })
-        .expect("navigate")
-    {
+    match navigate(host, "https://fixture.test/reports", "rec-nav-1") {
         WorkerHostReply::Navigated { url, status } => {
             assert_eq!(url, "https://fixture.test/reports");
             assert_eq!(status, 200);
         }
         other => panic!("navigation refused: {other:?}"),
     }
-    // Another origin is outside the lifetime's single destination.
+    // Another origin is outside the lifetime's single destination, even
+    // with a correct binding.
     assert!(matches!(
-        host.request(&WorkerHostRequest::Navigate {
-            url: "https://other.test/".into(),
-        })
-        .expect("navigate elsewhere"),
+        navigate(host, "https://other.test/", "rec-nav-2"),
         WorkerHostReply::Error { .. }
     ));
-    let observed = host
-        .request(&WorkerHostRequest::Observe {})
-        .expect("observe");
+    let observed = observe(host);
     let text = serde_json::to_string(&observed).expect("reply text");
     match &observed {
         WorkerHostReply::Observed {
@@ -243,18 +323,221 @@ fn a_lifetime_through_the_real_host_binary_navigates_observes_and_closes_clean()
         entries(&launch.profile_root).is_empty(),
         "the profile stayed"
     );
-    // After the lifetime: typed refusals, the host keeps serving.
-    assert_eq!(
-        host.request(&WorkerHostRequest::Observe {})
-            .expect("observe after close"),
-        WorkerHostReply::Error {
-            code: "no_lifetime".into()
-        }
-    );
+    assert_eq!(error_code(&observe(host)), "no_lifetime");
     assert!(
-        supervisor.shutdown_worker_host().expect("shutdown"),
+        supervisor.shutdown().expect("shutdown"),
         "the host family stayed"
     );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+#[ignore = "requires the built browser worker and Edge; run by npm run browser-launcher:native"]
+fn the_journey_downloads_the_latest_report_through_bound_approvals_and_verifies_it() {
+    let fixture = Fixture::start();
+    let (mut supervisor, launch, root) = launch("journey");
+    let approved = root.join("approved");
+    std::fs::create_dir_all(&approved).expect("approved folder");
+    let folder = approved.to_string_lossy().into_owned();
+    let host = supervisor.worker_host().expect("live worker host");
+    if open(host, &fixture, &launch.profile_root).is_none() {
+        assert!(supervisor.shutdown().expect("shutdown"));
+        let _ = std::fs::remove_dir_all(&root);
+        return;
+    }
+    assert!(matches!(
+        navigate(host, "https://fixture.test/reports", "rec-1"),
+        WorkerHostReply::Navigated { status: 200, .. }
+    ));
+    assert!(matches!(observe(host), WorkerHostReply::Observed { .. }));
+    let latest = select_latest(host);
+    let action = BindAction::Download {
+        node_id: latest.clone(),
+        role: "link".into(),
+        folder: folder.clone(),
+        relative: "reports/latest.pdf".into(),
+    };
+    let (binding, target) = bind(host, action);
+    assert_eq!(target, "https://fixture.test/reports/2026-09-30.pdf");
+    let download = |host: &mut LiveWorkerHost, record: &str, binding: &str| {
+        host.request(&WorkerHostRequest::Download {
+            node_id: latest.clone(),
+            role: "link".into(),
+            folder: folder.clone(),
+            relative: "reports/latest.pdf".into(),
+            record_id: record.into(),
+            binding: binding.into(),
+        })
+        .expect("download")
+    };
+    let (sha256, bytes) = match download(host, "rec-2", &binding) {
+        WorkerHostReply::Downloaded {
+            relative,
+            sha256,
+            bytes,
+            source_url,
+        } => {
+            assert_eq!(relative, "reports/latest.pdf");
+            assert_eq!(source_url, "https://fixture.test/reports/2026-09-30.pdf");
+            (sha256, bytes)
+        }
+        other => panic!("download refused: {other:?}"),
+    };
+    // The independent checker: the committed file's bytes and digest are
+    // the fixture's latest report, exactly.
+    let committed = std::fs::read(approved.join("reports").join("latest.pdf")).expect("committed");
+    let expected = fixture_report("/reports/2026-09-30.pdf");
+    assert_eq!(committed, expected);
+    assert_eq!(sha256, sha256_hex(&expected));
+    assert_eq!(bytes, expected.len() as u64);
+    println!(
+        "SG108-EVIDENCE worker host journey: latest report committed create-only, sha256 {sha256}"
+    );
+    // The same approval again: refused (the record id was spent).
+    assert_eq!(
+        error_code(&download(host, "rec-2", &binding)),
+        "approval_replay"
+    );
+    // A fresh record with the old binding: the page moved on (the download
+    // ended the observation), so the approved action no longer exists.
+    assert_eq!(
+        error_code(&download(host, "rec-3", &binding)),
+        "binding_mismatch"
+    );
+    // Create-only: the same name is never replaced, even with a fresh binding.
+    assert!(matches!(
+        navigate(host, "https://fixture.test/reports", "rec-3b"),
+        WorkerHostReply::Navigated { status: 200, .. }
+    ));
+    assert!(matches!(observe(host), WorkerHostReply::Observed { .. }));
+    let latest_again = select_latest(host);
+    let (fresh, _) = bind(
+        host,
+        BindAction::Download {
+            node_id: latest_again.clone(),
+            role: "link".into(),
+            folder: folder.clone(),
+            relative: "reports/latest.pdf".into(),
+        },
+    );
+    let again = host
+        .request(&WorkerHostRequest::Download {
+            node_id: latest_again,
+            role: "link".into(),
+            folder: folder.clone(),
+            relative: "reports/latest.pdf".into(),
+            record_id: "rec-4".into(),
+            binding: fresh,
+        })
+        .expect("download again");
+    assert!(matches!(again, WorkerHostReply::Error { .. }), "{again:?}");
+    assert_eq!(
+        std::fs::read(approved.join("reports").join("latest.pdf")).expect("still there"),
+        expected
+    );
+    assert!(supervisor.shutdown().expect("shutdown"));
+    assert!(entries(&launch.profile_root).is_empty());
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+#[ignore = "requires the built browser worker and Edge; run by npm run browser-launcher:native"]
+fn a_binding_names_one_lifetime_node_and_file_and_nothing_else() {
+    let fixture = Fixture::start();
+    let (mut supervisor, launch, root) = launch("binding");
+    let approved = root.join("approved");
+    std::fs::create_dir_all(&approved).expect("approved folder");
+    let folder = approved.to_string_lossy().into_owned();
+    let host = supervisor.worker_host().expect("live worker host");
+    if open(host, &fixture, &launch.profile_root).is_none() {
+        assert!(supervisor.shutdown().expect("shutdown"));
+        let _ = std::fs::remove_dir_all(&root);
+        return;
+    }
+    // A navigation binding names its URL: presented for another URL, refused.
+    let (nav_binding, _) = bind(
+        host,
+        BindAction::Navigate {
+            url: "https://fixture.test/reports".into(),
+        },
+    );
+    assert_eq!(
+        error_code(
+            &host
+                .request(&WorkerHostRequest::Navigate {
+                    url: "https://fixture.test/".into(),
+                    record_id: "rec-a".into(),
+                    binding: nav_binding.clone(),
+                })
+                .expect("navigate")
+        ),
+        "binding_mismatch"
+    );
+    assert!(matches!(
+        navigate(host, "https://fixture.test/reports", "rec-b"),
+        WorkerHostReply::Navigated { .. }
+    ));
+    assert!(matches!(observe(host), WorkerHostReply::Observed { .. }));
+    let latest = select_latest(host);
+    let (binding, _) = bind(
+        host,
+        BindAction::Download {
+            node_id: latest.clone(),
+            role: "link".into(),
+            folder: folder.clone(),
+            relative: "a.pdf".into(),
+        },
+    );
+    let present = |host: &mut LiveWorkerHost, node: &str, relative: &str, record: &str| {
+        host.request(&WorkerHostRequest::Download {
+            node_id: node.into(),
+            role: "link".into(),
+            folder: folder.clone(),
+            relative: relative.into(),
+            record_id: record.into(),
+            binding: binding.clone(),
+        })
+        .expect("download")
+    };
+    // Another file name, or another node, under the same binding: refused.
+    assert_eq!(
+        error_code(&present(host, &latest, "b.pdf", "rec-c")),
+        "binding_mismatch"
+    );
+    let other = match observe(host) {
+        WorkerHostReply::Observed { nodes, .. } => all_nodes(&nodes)
+            .into_iter()
+            .find(|node| node.role == "link" && node.node_id != latest)
+            .map(|node| node.node_id.clone())
+            .expect("another link"),
+        other => panic!("{other:?}"),
+    };
+    assert_eq!(
+        error_code(&present(host, &other, "a.pdf", "rec-d")),
+        "binding_mismatch"
+    );
+    // A binding from another lifetime: close, reopen, present it again.
+    assert!(matches!(
+        host.request(&WorkerHostRequest::Close {}).expect("close"),
+        WorkerHostReply::Closed { .. }
+    ));
+    assert!(open(host, &fixture, &launch.profile_root).is_some());
+    assert_eq!(
+        error_code(
+            &host
+                .request(&WorkerHostRequest::Navigate {
+                    url: "https://fixture.test/reports".into(),
+                    record_id: "rec-e".into(),
+                    binding: nav_binding,
+                })
+                .expect("navigate")
+        ),
+        "binding_mismatch"
+    );
+    // Nothing was written by any refused frame.
+    assert!(entries(&approved).is_empty(), "{:?}", entries(&approved));
+    println!("SG108-EVIDENCE worker host binding: other URL, file, node and lifetime refused");
+    assert!(supervisor.shutdown().expect("shutdown"));
     let _ = std::fs::remove_dir_all(&root);
 }
 
@@ -271,6 +554,7 @@ fn a_refused_open_leaves_no_profile_behind() {
         assert!(matches!(
             host.request(&WorkerHostRequest::Open {
                 workspace: "ws-sg108".into(),
+                policy_revision: 1,
                 host: host_name.into(),
                 fixture_spki: spki,
             })
@@ -295,34 +579,11 @@ fn a_launch_refused_after_the_profile_exists_removes_it() {
     // made must be gone.
     let fixture = Fixture::start();
     let (node, _) = prerequisites();
-    let root = temp_root("refused-launch");
-    let launch = WorkerHostLaunch {
-        worker_main: node.clone(),
-        node,
-        profile_root: root.join("profiles"),
-        temp_dir: root.join("staging"),
-        state_root: root.join("state"),
-    };
-    for dir in [&launch.profile_root, &launch.temp_dir, &launch.state_root] {
-        std::fs::create_dir_all(dir).expect("dirs");
-    }
-    let mut supervisor = Supervisor::new();
-    supervisor
-        .launch_worker_host(&host_binary(), &launch)
-        .expect("launch the worker-mode host");
+    let (mut supervisor, launch, root) = launch_with("refused-launch", Some(node));
     let host = supervisor.worker_host().expect("live worker host");
-    let reply = host
-        .request(&WorkerHostRequest::Open {
-            workspace: "ws-sg108".into(),
-            host: "fixture.test".into(),
-            fixture_spki: fixture.spki.clone(),
-        })
-        .expect("open");
     assert_eq!(
-        reply,
-        WorkerHostReply::Error {
-            code: "unavailable:unsupportedruntime".into()
-        }
+        error_code(&host.request(&open_request(&fixture)).expect("open")),
+        "unavailable:unsupportedruntime"
     );
     assert!(
         entries(&launch.profile_root).is_empty(),
@@ -338,21 +599,9 @@ fn shutting_the_host_down_mid_lifetime_takes_the_worker_and_profile_with_it() {
     let fixture = Fixture::start();
     let (mut supervisor, launch, root) = launch("shutdown");
     let host = supervisor.worker_host().expect("live worker host");
-    let opened = host
-        .request(&WorkerHostRequest::Open {
-            workspace: "ws-sg108".into(),
-            host: "fixture.test".into(),
-            fixture_spki: fixture.spki.clone(),
-        })
-        .expect("open");
     // Under a managed policy there is no lifetime; the single-host rule and
     // the shutdown below still hold for the live host.
-    if !refused_by_managed_policy(&opened, &launch.profile_root) {
-        assert!(
-            matches!(opened, WorkerHostReply::Opened { .. }),
-            "{opened:?}"
-        );
-    }
+    let _ = open(host, &fixture, &launch.profile_root);
     // Only one host at a time, of either mode.
     assert!(supervisor
         .launch_worker_host(&host_binary(), &launch)

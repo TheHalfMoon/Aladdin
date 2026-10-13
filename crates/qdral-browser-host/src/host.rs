@@ -210,8 +210,19 @@ pub struct LiveWorkerHost {
     host_id: String,
     child: SupervisedChild,
     stdin: std::process::ChildStdin,
-    stdout: std::io::BufReader<std::process::ChildStdout>,
+    /// Frames read by a reader thread, so every wait has a deadline (a host
+    /// that is alive but silent can never block the supervisor).
+    replies: std::sync::mpsc::Receiver<Result<crate::worker_host::WorkerHostReply, HostError>>,
 }
+
+/// The longest a worker-mode reply may take: above the worker's own longest
+/// operation bound (a download), so the host times out first and answers.
+#[cfg(all(windows, feature = "live-browser-test"))]
+pub const WORKER_HOST_REPLY_TIMEOUT: Duration = Duration::from_secs(150);
+
+/// The hello and shutdown deadlines.
+#[cfg(all(windows, feature = "live-browser-test"))]
+const WORKER_HOST_CONTROL_TIMEOUT: Duration = Duration::from_secs(30);
 
 #[cfg(all(windows, feature = "live-browser-test"))]
 impl LiveWorkerHost {
@@ -223,38 +234,51 @@ impl LiveWorkerHost {
         self.child.pid()
     }
 
-    /// One request, one reply. A reply that does not decode ends nothing
-    /// by itself; the caller treats it as a protocol violation.
+    /// One request, one reply, within `WORKER_HOST_REPLY_TIMEOUT`.
     pub fn request(
         &mut self,
         request: &crate::worker_host::WorkerHostRequest,
     ) -> Result<crate::worker_host::WorkerHostReply, HostError> {
-        write_frame(&mut self.stdin, request)?;
-        decode_frame(&mut self.stdout)
+        self.request_within(request, WORKER_HOST_REPLY_TIMEOUT)
     }
 
-    /// Ask the host to stop (it ends any lifetime first), then confirm the
-    /// whole family is gone.
+    /// One request, one reply, within `timeout`. A silent host is a typed
+    /// timeout; a closed or malformed channel is a protocol violation.
+    pub fn request_within(
+        &mut self,
+        request: &crate::worker_host::WorkerHostRequest,
+        timeout: Duration,
+    ) -> Result<crate::worker_host::WorkerHostReply, HostError> {
+        write_frame(&mut self.stdin, request)?;
+        match self.replies.recv_timeout(timeout) {
+            Ok(reply) => reply,
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+                Err(HostError::Unavailable(UnavailableReason::TimedOut))
+            }
+            Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+                Err(HostError::Unavailable(UnavailableReason::ProtocolViolation))
+            }
+        }
+    }
+
+    /// Ask the host to stop (it ends any lifetime first), wait for its bye
+    /// within a bounded time, then confirm the whole family is gone (the
+    /// job is terminated if the host did not leave by itself).
     pub fn shutdown(mut self) -> Result<bool, HostError> {
         let _ = write_frame(
             &mut self.stdin,
             &crate::worker_host::WorkerHostRequest::Shutdown {},
         );
-        let deadline = Instant::now() + Duration::from_secs(30);
-        while self.child.is_alive() && Instant::now() < deadline {
-            match decode_frame::<crate::worker_host::WorkerHostReply, _>(&mut self.stdout) {
-                Ok(crate::worker_host::WorkerHostReply::Bye {}) => break,
-                Ok(_) => continue,
-                Err(_) => break,
+        let deadline = Instant::now() + WORKER_HOST_CONTROL_TIMEOUT;
+        while let Some(left) = deadline.checked_duration_since(Instant::now()) {
+            match self.replies.recv_timeout(left) {
+                Ok(Ok(crate::worker_host::WorkerHostReply::Bye {})) => break,
+                Ok(Ok(_)) => continue,
+                Ok(Err(_)) | Err(_) => break,
             }
         }
-        let LiveWorkerHost {
-            child,
-            stdin,
-            stdout,
-            ..
-        } = self;
-        drop((stdin, stdout));
+        let LiveWorkerHost { child, stdin, .. } = self;
+        drop(stdin);
         child.shutdown()
     }
 }
@@ -272,8 +296,8 @@ pub struct WorkerHostLaunch {
 
 #[cfg(all(windows, feature = "live-browser-test"))]
 impl Supervisor {
-    /// Launch `host_binary` in worker mode and complete the generation-2
-    /// hello. Refused while any host is live (one lifetime at a time).
+    /// Launch `host_binary` in worker mode and complete the worker-mode
+    /// hello, within a deadline. Refused while any host is live (one lifetime at a time).
     pub fn launch_worker_host(
         &mut self,
         host_binary: &Path,
@@ -304,15 +328,35 @@ impl Supervisor {
         ];
         let env = host_env(&launch.state_root);
         let (child, pipes) = spawn_host_piped(host_binary, &args, &env)?;
+        let (sender, replies) = std::sync::mpsc::channel();
+        let mut stdout = pipes.stdout;
+        std::thread::spawn(move || loop {
+            let frame = decode_frame::<crate::worker_host::WorkerHostReply, _>(&mut stdout);
+            let stop = frame.is_err();
+            if sender.send(frame).is_err() || stop {
+                return;
+            }
+        });
         let mut host = LiveWorkerHost {
             host_id: host_id.clone(),
             child,
             stdin: pipes.stdin,
-            stdout: pipes.stdout,
+            replies,
         };
-        match host.request(&crate::worker_host::WorkerHostRequest::Hello {
-            generation: crate::worker_host::WORKER_HOST_GENERATION,
-        })? {
+        let hello = host.request_within(
+            &crate::worker_host::WorkerHostRequest::Hello {
+                generation: crate::worker_host::WORKER_HOST_GENERATION,
+            },
+            WORKER_HOST_CONTROL_TIMEOUT,
+        );
+        let hello = match hello {
+            Ok(reply) => reply,
+            Err(err) => {
+                let _ = host.shutdown();
+                return Err(err);
+            }
+        };
+        match hello {
             crate::worker_host::WorkerHostReply::Hello {
                 generation,
                 host: id,

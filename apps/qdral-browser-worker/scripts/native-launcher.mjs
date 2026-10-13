@@ -14,7 +14,7 @@ import { fileURLToPath } from "node:url";
 // Every native test must run: a filter that matches nothing (for example
 // after a module rename) exits 0 and would otherwise pass vacuously.
 const EXPECTED_TESTS = 26;
-const EXPECTED_WORKER_HOST_TESTS = 4;
+const EXPECTED_WORKER_HOST_TESTS = 6;
 
 const app = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const repo = resolve(app, "..", "..");
@@ -94,6 +94,21 @@ if (workerHost.status !== 0) {
   process.exit(workerHost.status ?? 1);
 }
 const workerSummary = /test result: ok\. (\d+) passed; 0 failed; 0 ignored/.exec(workerHost.stdout ?? "");
+// A silent skip never counts as evidence: each lifetime test reports either
+// its journey or a managed-policy refusal. On the evidence host (no managed
+// policy) QDRAL_SG108_REQUIRE_JOURNEY=1 requires the journeys themselves.
+const workerOut = workerHost.stdout ?? "";
+const journeys = ["SG108-EVIDENCE worker host observation", "SG108-EVIDENCE worker host journey", "SG108-EVIDENCE worker host binding"];
+const refusedByPolicy = workerOut.includes("SG108-EVIDENCE worker host: managed policy present");
+const journeysSeen = journeys.every((line) => workerOut.includes(line));
+if (!journeysSeen && !refusedByPolicy) {
+  process.stderr.write("browser-launcher:native: the worker-host tests reported neither their journeys nor a managed-policy refusal\n");
+  process.exit(1);
+}
+if (process.env.QDRAL_SG108_REQUIRE_JOURNEY === "1" && !journeysSeen) {
+  process.stderr.write("browser-launcher:native: QDRAL_SG108_REQUIRE_JOURNEY=1, yet the worker-host journeys did not run\n");
+  process.exit(1);
+}
 if (!workerSummary || Number(workerSummary[1]) !== EXPECTED_WORKER_HOST_TESTS) {
   process.stderr.write(
     `browser-launcher:native: expected ${EXPECTED_WORKER_HOST_TESTS} worker-host tests to pass, saw ${workerSummary ? workerSummary[1] : "none"}\n`
