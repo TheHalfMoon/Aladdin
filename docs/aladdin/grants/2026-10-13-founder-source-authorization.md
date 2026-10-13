@@ -20,6 +20,16 @@ The founder also stated that:
 
 This builds on the founder's attestation of 2026-10-12 recorded in `docs/aladdin/SOURCE_PERMISSIONS.md`.
 
+## Distribution: how this record reads the scope
+
+The gates ask for evidence covering copy, modification, combination, redistribution and commercial distribution under Aladdin's license (Apache-2.0). The founder's words were "copy, modify, integrate, and rebrand", and did not enumerate redistribution or commercial distribution separately.
+
+This record reads two things together as covering distribution of the integrated code as part of Aladdin:
+- the permission to **integrate** the code into Aladdin, a product distributed under Apache-2.0;
+- the founder's instruction that this authorization is **sufficient internal approval** and must not block authorized implementation.
+
+That reading is the record's own, not a further statement by the founder. The founder holds the documents and is the party who would correct it. A one-line founder confirmation of the distribution scope would replace this paragraph.
+
 ## What this record does not contain
 
 - **No details beyond what was given.** It does not name licensors or signatories, and it does not cite document numbers or terms, because none were provided. None may be added unless the founder provides them.
