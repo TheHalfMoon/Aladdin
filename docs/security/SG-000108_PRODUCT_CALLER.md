@@ -156,6 +156,8 @@ For each consequential action, `qdrald` and the host each contribute what only t
 1. **Host worker mode and the two-part binding, behind `live-browser-test`.**
    - The host binary gains `--worker`, the `open`, `bind`, navigate, observe, activate and download frames, the lifetime nonce and the ephemeral marker.
    - Native tests drive `qdrald`'s dispatch functions against the controlled fixture.
+   - **Feature relationship.** `live-browser-test` does not enable `live-browser-dev`. Native tests take Node and the worker from `QDRAL_SG108_NODE` and `QDRAL_SG108_WORKER_MAIN`, a source compiled only into test builds and unreachable from a `live-browser-dev` or release build.
+   - **No gap between check and launch.** The hashed `node.exe` and worker files stay open, without write or delete sharing, from the hash check until the worker has started. Otherwise the launched handle is the one verified. The engine's A10 `reverify` adopts the same hold.
    - Binding negative tests:
      - a replayed record id;
      - a binding from another lifetime;
