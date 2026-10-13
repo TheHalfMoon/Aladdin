@@ -397,7 +397,7 @@ Shutdown asks for `bye` and waits for exit 0. It then terminates the job regardl
 - **Kernel-held profile files.** After every job member is dead, Restart Manager has reported `System` (pid 4) briefly holding memory-mapped profile files. Under load this exceeded 10 s. No Edge or Node process outside the job held a profile in these runs. Removal now retries for up to 30 s and reports `profile_removed: false` if the files are still held. The tests fail unless the launcher itself reported removal; on failure they diagnose the held file and clean up.
 - **Profile lock after a crash.** Chromium's exclusive `lockfile` in the profile stays held for 0.2–4.4 s after every job member has exited. A relaunch on the same profile inside that window makes the new engine exit (typed `LaunchFailed`). The crash test now waits, with a bound, for the lock to be released before it relaunches. A fresh profile per lifetime, as production uses, avoids this entirely.
 - **No out-of-job residue.** At the end of every supervised native test, a machine-wide native process snapshot (Toolhelp, plus each process's OS command line) must find no inspectable process that still names the profile on its command line. A leftover engine of the same user is always inspectable; processes of other users or protected processes are skipped. A control confirms that the same query does see the engine while it runs.
-- **Known limitation: host death leaves the profile directory.** Kill-on-close takes the worker and the engine down, but nothing removes the ephemeral profile once the host itself has died. The sweep belongs with the product caller, which decides where profiles live. It is tracked in #298.
+- **Host death and the profile directory (#298, resolved below).** Kill-on-close takes the worker and the engine down, but a host that dies never removes its ephemeral profile itself. A profile named by `ephemeral_profile_dir` is removed by the next launch in the same root; see the #298 section.
 - **Crash-session restore.** A profile reused after a crash restores the previous session (9 renderers instead of 2). Production must use a fresh ephemeral profile per lifetime, because reusing one carries state over. The launcher does not enforce this (`ephemeral_profile: false` is accepted, and the crash test reuses a profile on purpose), so the future product caller must.
 - **Unit variants in serde.** With `deny_unknown_fields`, serde still accepts unknown fields on unit variants of an internally tagged enum. The worker replies use empty struct variants instead. The SG-000074 host protocol (`proto.rs`: `Shutdown`, `Bye`) has the same looseness; it is tracked in #296.
 - **No crash-report uploads from a crash.** An abrupt worker kill leaves only Crashpad metadata (no report or dump), so a crash produces no upload candidate.
@@ -652,7 +652,7 @@ A fresh-context judge's first round on this slice was BLOCK. The destination-nam
 - **Known limits.**
   - A leftover temporary file for a destination that is never committed again stays until the user removes it; it is in Deskal's own hidden `.qdral-dl-*.part` namespace.
   - A dead host's pid reused by an unrelated live process keeps that host's staging folder until the pid is free again.
-  - Ephemeral browser profiles left by a host crash are #298, unchanged here.
+  - Ephemeral browser profiles left by a host crash are handled by #298 (section below).
   - The temporary name folds case with Rust's Unicode lowercasing, not NTFS's upcase table. Two names NTFS keeps distinct but that fold together (the Kelvin sign and `k`) share a temporary name. One commit is then refused while the other runs, and the approved names stay protected by the no-replace rename.
 
 **#324: browser-process services that reach the network outside the policy layers.**
@@ -683,3 +683,36 @@ A fresh-context judge's first round on this slice was BLOCK. The destination-nam
   - **Polling:** the tables are read every 500 ms, so a connection opened and closed between two reads can be missed. The scan counts outbound connections, non-loopback listeners and non-loopback UDP endpoints. It shows what the OS holds at each read, not every packet.
   - **Blind spots of the tables:** a connection in TIME_WAIT is owned by pid 0 and is not attributed to the job. A TCP socket that is bound but neither listening nor connected is not in these tables at all (one was seen with `Get-NetTCPConnection`: `0.0.0.0` in the network service, sending nothing). Traffic that Edge delegates to a Windows service (for example the Windows account broker, or DNS through the system resolver service) is owned by that service, not by the job. The 5353 and LAN-listener checks cover the services this finding saw; they do not prove that no system service acts on the browser's behalf.
   - **Scope of the claim:** these tests show that the confined lifetime opened no non-loopback TCP connection or listener and sent nothing to the LAN address under test, during the windows measured. They are not a firewall. An OS-level egress boundary (a Windows Filtering Platform filter or an AppContainer) would need system configuration, which this grain does not make.
+
+**#298: ephemeral profiles of a host that died.**
+
+- **Ownership is provable from the name.** `ephemeral_profile_dir(root)` names a new profile `qdral-sg108-profile-<owning host pid>-<16 random hex>` under `root`, a directory the caller owns. The random part comes from the system RNG. The helper creates the directory new: an existing one of that name is an error, never reused.
+- **Sweep at launch.** A launch with `ephemeral_profile: true` whose profile carries this host's own pid in such a name sweeps that profile's root first. The sweep is #309's (`leftovers.rs`), now generalized over a name prefix:
+  - it lists only names with the profile prefix (`FindFirstFileW`), at most 4,096;
+  - it removes a profile only when the owning pid is certainly gone, and a process that cannot be queried counts as running;
+  - it never touches this host's own pid;
+  - it never follows a reparse point: one named like a profile is left alone, and links inside a dead profile are removed as links, their targets untouched; it also ignores a file named like a profile;
+  - it removes at most 64 per launch;
+  - a profile it cannot remove yet, such as one with a file still held, is left for a later launch and is not counted.
+- **Who may call it.** The host that launches the profile must create it: the name records the creator's pid, so a profile handed to another process would become sweepable once its creator exits. The root must be absolute (a relative one is never swept), and pid 0 is never taken as an owner.
+- **Scope.** Profiles not named this way are never looked at: a caller's persistent profile, a fixed test profile, or an unrelated folder in the same root. A root is swept only once a caller has chosen it for such profiles, by launching one there. There is still no product caller of `launch_worker`; the product caller adopts the helper when it lands.
+- **Reporting.** `BrowserWorker::swept_profiles()` returns how many profiles this launch removed, as `swept_staging()` does for #309.
+- **Evidence.**
+  - **Unit test:** `only_profiles_of_hosts_that_are_gone_are_removed` sets up a dead owner's profile with `Default/Preferences`, which is removed and counted. These are left alone:
+    - a live owner's profile;
+    - a dead owner's folder with the staging prefix (each sweep keeps to its own prefix);
+    - a persistent profile;
+    - a junction named like a profile, whose target keeps its file;
+    - a file named like a profile.
+
+    A second sweep finds nothing. Name parsing is strict for both prefixes.
+  - **Native test:** `killing_the_host_process_takes_the_worker_and_engine_down` covers the real crash path.
+    - The child host makes its profile with `ephemeral_profile_dir` and launches it as ephemeral.
+    - After the hard kill, the dead host's profile is still on disk.
+    - The next ephemeral launch in the same root removes it and reports `swept_profiles() == 1`.
+    - The test allows up to three launches, because a file the dead engine held for a moment can delay removal by one launch.
+    - **Mutation run:** with the launch-time sweep replaced by `0`, the test fails: "the dead host's profile stayed", `swept_profiles() == 0`.
+- **Known limits.**
+  - A dead host's pid that an unrelated live process reuses keeps that host's profile until the pid is free again, as with #309's staging folders.
+  - A root that no later launch uses is never swept.
+  - The sweep runs during launch, so removing many dead profiles (at most 64) adds launch latency. The listing stops at 4,096 prefix-matched names, so dead profiles listed after that many live or still-held ones wait for a later launch.
