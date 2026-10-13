@@ -128,11 +128,30 @@ fn job_pids(worker: &BrowserWorker) -> Vec<u32> {
         .collect()
 }
 
-/// #324: every TCP connection and UDP endpoint that a process in `pids`
-/// owns and that is not loopback, as the OS reports them
-/// (`GetExtendedTcpTable` / `GetExtendedUdpTable`, IPv4 and IPv6). The
-/// enforcement view, independent of any browser flag or request log.
-fn non_loopback_endpoints(pids: &[u32]) -> Vec<String> {
+/// #324: a socket as the OS connection tables report it.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+struct Endpoint {
+    /// "tcp" (a connection), "tcp-listen" (no remote yet) or "udp".
+    kind: &'static str,
+    local: SocketAddr,
+    /// The peer of a TCP connection.
+    remote: Option<SocketAddr>,
+    pid: u32,
+}
+
+impl Endpoint {
+    /// The address that makes it non-loopback: the peer of a connection,
+    /// else the bound address.
+    fn exposed(&self) -> SocketAddr {
+        self.remote.unwrap_or(self.local)
+    }
+}
+
+/// Every row of the OS's TCP and UDP tables (`GetExtendedTcpTable` /
+/// `GetExtendedUdpTable`, IPv4 and IPv6, all owners), with ports. Sockets
+/// that are bound but neither listening nor connected do not appear in
+/// these tables.
+fn socket_table() -> Vec<Endpoint> {
     use windows_sys::Win32::NetworkManagement::IpHelper::{
         GetExtendedTcpTable, GetExtendedUdpTable, TCP_TABLE_OWNER_PID_ALL, UDP_TABLE_OWNER_PID,
     };
@@ -176,57 +195,82 @@ fn non_loopback_endpoints(pids: &[u32]) -> Vec<String> {
         panic!("the connection table could not be read");
     }
     let word = |bytes: &[u8], at: usize| u32::from_le_bytes(bytes[at..at + 4].try_into().unwrap());
-    let mut found = Vec::new();
-    // Row layouts: MIB_TCPROW_OWNER_PID (24 bytes), MIB_TCP6ROW_OWNER_PID
-    // (56), MIB_UDPROW_OWNER_PID (12), MIB_UDP6ROW_OWNER_PID (28), after a
-    // u32 entry count.
-    // (tcp, family, row size, local address, remote address, pid)
-    for (tcp, family, row, local, remote, pid_at) in [
-        (true, AF_INET, 24usize, 4usize, 12usize, 20usize),
-        (true, AF_INET6, 56, 0, 24, 52),
-        (false, AF_INET, 12, 0, 0, 8),
-        (false, AF_INET6, 28, 0, 0, 24),
+    let mut rows = Vec::new();
+    // Row layouts after a u32 entry count: MIB_TCPROW_OWNER_PID (24 bytes),
+    // MIB_TCP6ROW_OWNER_PID (56), MIB_UDPROW_OWNER_PID (12),
+    // MIB_UDP6ROW_OWNER_PID (28). Ports are in network order in the low two
+    // bytes of their DWORD.
+    // (tcp, family, row size, local address, local port, remote address,
+    // remote port, pid)
+    for (tcp, family, row, local, local_port, remote, remote_port, pid_at) in [
+        (
+            true, AF_INET, 24usize, 4usize, 8usize, 12usize, 16usize, 20usize,
+        ),
+        (true, AF_INET6, 56, 0, 20, 24, 44, 52),
+        (false, AF_INET, 12, 0, 4, 0, 0, 8),
+        (false, AF_INET6, 28, 0, 20, 0, 0, 24),
     ] {
         let bytes = table(tcp, family);
         let count = word(&bytes, 0) as usize;
         for index in 0..count {
             let base = 4 + index * row;
-            let pid = word(&bytes, base + pid_at);
-            if !pids.contains(&pid) {
-                continue;
-            }
-            let at = |offset: usize| -> std::net::IpAddr {
-                if family == AF_INET {
-                    std::net::Ipv4Addr::from(u32::from_be(word(&bytes, base + offset))).into()
+            let socket = |address: usize, port: usize| -> SocketAddr {
+                let ip: IpAddr = if family == AF_INET {
+                    Ipv4Addr::from(u32::from_be(word(&bytes, base + address))).into()
                 } else {
-                    let octets: [u8; 16] =
-                        bytes[base + offset..base + offset + 16].try_into().unwrap();
+                    let octets: [u8; 16] = bytes[base + address..base + address + 16]
+                        .try_into()
+                        .unwrap();
                     std::net::Ipv6Addr::from(octets).into()
+                };
+                SocketAddr::new(
+                    ip,
+                    u16::from_be_bytes([bytes[base + port], bytes[base + port + 1]]),
+                )
+            };
+            let local = socket(local, local_port);
+            let (kind, remote) = if !tcp {
+                ("udp", None)
+            } else {
+                let peer = socket(remote, remote_port);
+                if peer.ip().is_unspecified() {
+                    ("tcp-listen", None)
+                } else {
+                    ("tcp", Some(peer))
                 }
             };
-            // TCP: a connection to anything but loopback, or a listener (no
-            // remote yet) bound to anything but loopback; UDP: any endpoint
-            // bound to anything but loopback.
-            let (kind, address) = if tcp && !at(remote).is_unspecified() {
-                ("tcp", at(remote))
-            } else if tcp {
-                ("tcp-listen", at(local))
-            } else {
-                ("udp", at(local))
-            };
-            if address.is_loopback() {
-                continue;
-            }
-            found.push(format!("{kind} {address} (pid {pid})"));
+            rows.push(Endpoint {
+                kind,
+                local,
+                remote,
+                pid: word(&bytes, base + pid_at),
+            });
         }
     }
+    rows
+}
+
+/// #324: every socket a process in `pids` holds that is not loopback: a TCP
+/// connection to anything but loopback, a TCP listener or UDP endpoint
+/// bound to anything but loopback. The enforcement view, independent of any
+/// browser flag or request log.
+fn non_loopback_endpoints(pids: &[u32]) -> Vec<Endpoint> {
+    let mut found: Vec<Endpoint> = socket_table()
+        .into_iter()
+        .filter(|row| pids.contains(&row.pid) && !row.exposed().ip().is_loopback())
+        .collect();
     found.sort();
     found.dedup();
     found
 }
 
+/// Every address this host's own sockets are bound to (both families).
+fn local_addresses() -> std::collections::BTreeSet<IpAddr> {
+    socket_table().iter().map(|row| row.local.ip()).collect()
+}
+
 /// Poll `pids()` for `duration`, collecting every non-loopback endpoint.
-fn endpoints_over(duration: Duration, pids: impl Fn() -> Vec<u32>) -> Vec<String> {
+fn endpoints_over(duration: Duration, pids: impl Fn() -> Vec<u32>) -> Vec<Endpoint> {
     let deadline = Instant::now() + duration;
     let mut all = std::collections::BTreeSet::new();
     while Instant::now() < deadline {
@@ -341,16 +385,12 @@ fn a_page_cannot_reach_the_lan_through_webrtc_fetch_or_sockets() {
             connections += 1;
         }
     }
-    let flagged: Vec<&String> = seen
+    // Any TCP connection or listener, and mDNS (UDP 5353) on any address.
+    let flagged: Vec<&Endpoint> = seen
         .iter()
-        .filter(|entry| {
-            entry.starts_with("tcp ") || entry.starts_with("tcp-listen ") || entry.contains(":5353")
-        })
+        .filter(|entry| entry.kind != "udp" || entry.local.port() == 5353)
         .collect();
-    let ice: usize = seen
-        .iter()
-        .filter(|entry| entry.starts_with("udp "))
-        .count();
+    let ice = seen.iter().filter(|entry| entry.kind == "udp").count();
     println!(
         "SG108-EVIDENCE page egress: {datagrams} datagrams and {connections} connections at {lan}; flagged endpoints {flagged:?}; {ice} ephemeral ICE UDP endpoints"
     );
@@ -359,6 +399,9 @@ fn a_page_cannot_reach_the_lan_through_webrtc_fetch_or_sockets() {
         (0, 0),
         "a page reached the LAN listener"
     );
+    // The page's script did run: WebRTC gathered candidates on sockets of
+    // its own.
+    assert!(ice > 0, "the page never created a peer connection");
     assert!(
         flagged.is_empty(),
         "the job held a network endpoint beyond loopback: {flagged:?}"
@@ -438,14 +481,19 @@ fn the_endpoint_scan_detects_an_unconfined_engine() {
         // What #324 saw: an outbound TCP connection to a remote address, and
         // a UDP endpoint. A scan that mislocates the remote address (for
         // example by reading the local one) cannot satisfy the first.
+        // A connection to a known remote service port (Cast 8009, TLS 443)
+        // on an address that is none of this host's own (any family). A
+        // scan that read the local fields for the remote ones cannot satisfy
+        // it.
+        let own = local_addresses();
         let tcp_out = seen.iter().any(|entry| {
-            entry
-                .strip_prefix("tcp ")
-                .and_then(|rest| rest.split(' ').next())
-                .and_then(|address| address.parse::<IpAddr>().ok())
-                .is_some_and(|address| lan_address().map(IpAddr::V4) != Some(address))
+            entry.remote.is_some_and(|peer| {
+                matches!(peer.port(), 443 | 8009)
+                    && peer.ip() != entry.local.ip()
+                    && !own.contains(&peer.ip())
+            })
         });
-        let udp = seen.iter().any(|entry| entry.starts_with("udp "));
+        let udp = seen.iter().any(|entry| entry.kind == "udp");
         assert!(
             tcp_out && udp,
             "the scan missed a leak this host is known to produce: {seen:?}"

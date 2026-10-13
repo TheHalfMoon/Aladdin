@@ -268,9 +268,12 @@ const round = async () => {
     await pc.setLocalDescription(await pc.createOffer());
     setTimeout(() => pc.close(), 3000);
   } catch {}
-  fetch("http://" + ip + ":" + tcp + "/").catch(() => {});
-  try { new WebSocket("ws://" + ip + ":" + tcp + "/"); } catch {}
-  try { navigator.sendBeacon("http://" + ip + ":" + tcp + "/b", "x"); } catch {}
+  // https and wss: a secure page's mixed-content blocking would stop
+  // http and ws in the renderer, before any network layer is tested.
+  const origin = "https://" + ip + ":" + tcp;
+  fetch(origin + "/").catch(() => {});
+  try { new WebSocket("wss://" + ip + ":" + tcp + "/"); } catch {}
+  try { navigator.sendBeacon(origin + "/b", "x"); } catch {}
 };
 round();
 setInterval(round, 5000);
