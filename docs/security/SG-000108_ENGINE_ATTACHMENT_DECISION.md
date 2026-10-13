@@ -645,11 +645,11 @@ A fresh-context judge's first round on this slice was BLOCK. The destination-nam
 - **Staging folders of a host that died.**
   - **The sweep:** at launch, the host removes every `qdral-sg108-staging-<pid>-<hex>` folder in its temp directory whose owning process is no longer running. A process that cannot be queried for any other reason counts as running, so only certainly-dead owners lose their folder.
   - **What it never touches:** its own folder, and a reparse point named like a staging folder (or its target).
-  - **Bounds:** 4,096 entries looked at and 64 folders removed per launch. `BrowserWorker::swept_staging()` reports the count.
+  - **Bounds:** 4,096 staging-named entries looked at and 64 folders removed per launch. `BrowserWorker::swept_staging()` reports the count.
   - **Enumeration:** only names matching `qdral-sg108-staging-*` are listed (`FindFirstFileW` with that pattern), so a crowded temp directory cannot use up the bound before them.
   - **Tested:** with a pid no process can have (`0xFFFF_FFFC`; spawning a process is reserved to `worker_launch_tests.rs`), plus a live host's folder, an unrelated folder, such a junction, and more than 4,096 entries sorting before the prefix. The judge verified separately that a really exited pid, with or without its handle still held, counts as not running.
 - **Known limits.**
   - A leftover temporary file for a destination that is never committed again stays until the user removes it; it is in Deskal's own hidden `.qdral-dl-*.part` namespace.
   - A dead host's pid reused by an unrelated live process keeps that host's staging folder until the pid is free again.
   - Ephemeral browser profiles left by a host crash are #298, unchanged here.
-  - The temporary name folds case with Rust's Unicode lowercasing, not NTFS's upcase table. Two distinct names that fold together (the Kelvin sign and `k`, Greek final sigma) share a temporary name. One commit is then refused while the other runs, and the approved names stay protected by the no-replace rename.
+  - The temporary name folds case with Rust's Unicode lowercasing, not NTFS's upcase table. Two names NTFS keeps distinct but that fold together (the Kelvin sign and `k`) share a temporary name. One commit is then refused while the other runs, and the approved names stay protected by the no-replace rename.
