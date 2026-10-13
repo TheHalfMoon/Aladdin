@@ -232,9 +232,12 @@ export class Worker {
         try {
           const { url, truncated, pieces } = await this.session.extract({ links: frame.links, images: frame.images });
           if (pieces.length === 0 || pieces.length > MAX_EXTRACT_PIECES) throw new Error("piece count out of range");
+          // A page can give itself a long URL (pushState); the pieces are
+          // sized for one of at most MAX_URL_BYTES.
+          if (Buffer.byteLength(url) > MAX_URL_BYTES) throw new Error("the page URL is too long");
+          this.send({ frame: "extracted", ext_id: frame.ext_id, url, truncated, piece: 0, total: pieces.length, content: pieces[0] ?? "" });
           // Kept only until the host has read every piece.
           if (pieces.length > 1) this.extraction = { extId: frame.ext_id, url, truncated, pieces };
-          this.send({ frame: "extracted", ext_id: frame.ext_id, url, truncated, piece: 0, total: pieces.length, content: pieces[0] ?? "" });
         } catch {
           this.send({ frame: "extraction_failed", ext_id: frame.ext_id });
         }

@@ -432,6 +432,12 @@ test("extraction is served in pieces on request, released after the last, or fai
   engine.extractBehavior = async () => ({ url: "https://fixture.test/", truncated: false, pieces: [] });
   await worker.receive({ frame: "extract", ext_id: 9, links: false, images: false });
   assert.deepEqual(sent.at(-1), { frame: "extraction_failed", ext_id: 9 });
+  // A URL the page lengthened itself fails typed, and nothing is kept.
+  engine.extractBehavior = async () => ({ url: "https://fixture.test/" + "a".repeat(3000), truncated: false, pieces: ["x", "y"] });
+  await worker.receive({ frame: "extract", ext_id: 10, links: false, images: false });
+  assert.deepEqual(sent.at(-1), { frame: "extraction_failed", ext_id: 10 });
+  await worker.receive({ frame: "extract_more", ext_id: 10, piece: 1 });
+  assert.deepEqual(sent.at(-1), { frame: "extraction_failed", ext_id: 10 });
   const fresh = harness();
   await fresh.worker.receive({ frame: "hello", generation: 8 });
   await fresh.worker.receive({ frame: "extract", ext_id: 1, links: false, images: false });
