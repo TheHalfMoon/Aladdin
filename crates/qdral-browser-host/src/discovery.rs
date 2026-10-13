@@ -50,6 +50,9 @@ pub struct Engine {
     kind: EngineKind,
     version: String,
     publisher_verified: bool,
+    /// A unit-test stand-in, which `reverify` does not re-read.
+    #[cfg(test)]
+    stand_in: bool,
 }
 
 impl Engine {
@@ -68,6 +71,23 @@ impl Engine {
     /// The major version, if the version starts with one.
     pub fn major(&self) -> Option<u32> {
         self.version.split('.').next()?.parse().ok()
+    }
+
+    /// A10: verify the engine file again, now, exactly as discovery did
+    /// (name, presence, version resource and, on Windows, Authenticode), and
+    /// require the same kind and version. An engine updated or replaced in
+    /// place since discovery is refused, so the window and the signature
+    /// are checked against the file that is about to run.
+    pub fn reverify(&self) -> Result<(), HostError> {
+        #[cfg(test)]
+        if self.stand_in {
+            return Ok(());
+        }
+        let fresh = verify_candidate(&self.path)?;
+        if fresh.kind != self.kind || fresh.version != self.version {
+            return Err(HostError::Unavailable(UnavailableReason::UnsupportedEngine));
+        }
+        Ok(())
     }
 
     /// Whether the live worker is qualified on this engine (A10): its kind
@@ -102,6 +122,7 @@ impl Engine {
             kind,
             version: version.into(),
             publisher_verified: false,
+            stand_in: true,
         }
     }
 
@@ -205,6 +226,8 @@ fn verify_candidate(path: &Path) -> Result<Engine, HostError> {
         kind,
         version,
         publisher_verified,
+        #[cfg(test)]
+        stand_in: false,
     })
 }
 

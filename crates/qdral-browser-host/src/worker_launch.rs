@@ -863,7 +863,10 @@ pub(crate) fn validate_launch(spec: &WorkerLaunch) -> Result<(), HostError> {
     if !spec.engine.path().is_file() {
         return Err(HostError::Unavailable(UnavailableReason::NoEngine));
     }
-    // A10: only an engine version the worker is qualified on.
+    // A10: the file about to run is still the engine discovery verified
+    // (an in-place update or replacement is refused), and its version is
+    // one the worker is qualified on.
+    spec.engine.reverify()?;
     if !spec.engine.worker_qualified() {
         return Err(HostError::Unavailable(UnavailableReason::UnsupportedEngine));
     }
