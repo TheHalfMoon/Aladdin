@@ -14,6 +14,8 @@ mod error;
 mod exposure;
 mod extraction;
 mod host;
+#[cfg(windows)]
+mod leftovers;
 mod navigation;
 mod observation;
 mod profile;
