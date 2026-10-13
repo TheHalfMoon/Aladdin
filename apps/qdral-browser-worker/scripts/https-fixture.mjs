@@ -183,6 +183,27 @@ const READ = `<!doctype html><meta charset="utf-8"><title>Reading</title>
 ${Array.from({ length: 160 }, (_, i) => `<h2>Section ${i}</h2><p>${"Paragraph text \u00e9\u4e2d ".repeat(60)}end-${i}</p>`).join("\n")}
 <pre>${"preformatted line of code\n".repeat(3000)}[pre link](javascript:alert(3))</pre>
 <p>Closing paragraph.</p>`;
+// Slice 7: a small site to crawl. /site/ is the scope; everything else is
+// outside it, a file, filtered, or on another origin.
+const SITE = {
+  "/site/": `<!doctype html><title>Site home</title><h1>Site home</h1><ul>
+<li><a href="/site/a">Page A</a></li>
+<li><a href="/site/b#section">Page B</a></li>
+<li><a href="/site/moved">Moved</a></li>
+<li><a href="/site/away">Away</a></li>
+<li><a href="/site/missing">Missing</a></li>
+<li><a href="https://other.test/site/x">Other origin</a></li>
+<li><a href="/elsewhere">Elsewhere</a></li>
+<li><a href="/site/report.pdf">A file</a></li>
+<li><a href="/site/private/secret">Private</a></li>
+<li><a href="mailto:someone@fixture.test">Mail</a></li>
+<li><a href="/site/a">Page A again</a></li></ul>`,
+  "/site/a": `<!doctype html><title>Page A</title><p>Alpha text.</p><a href="/site/c">To C</a> <a href="/site/">Home</a>`,
+  "/site/b": `<!doctype html><title>Page B</title><p>Beta text.</p><a href="/site/deep/1">Deeper</a>`,
+  "/site/c": `<!doctype html><title>Page C</title><p>Gamma text.</p>`,
+  "/site/deep/1": `<!doctype html><title>Deep 1</title><a href="/site/deep/2">Deeper still</a>`,
+  "/site/deep/2": `<!doctype html><title>Deep 2</title><p>Too deep to reach.</p>`
+};
 const NO_TOOLS = `<!doctype html><title>No tools</title><p>Nothing declared.</p><form><input name="q"></form>`;
 const FILES = `<!doctype html><title>Files</title><ul>
 <li><a href="/files/oversized.pdf">Oversized 2026-01-01</a></li>
@@ -245,6 +266,13 @@ const server = createServer({ key, cert }, (request, response) => {
     return;
   }
   if (path === "/redirect-same") return redirect("/landing");
+  if (path === "/site/moved") return redirect("/site/c");
+  if (path === "/site/away") return redirect("/elsewhere");
+  if (path === "/site/missing") {
+    response.statusCode = 404;
+    response.setHeader("content-type", "text/html");
+    return response.end("<!doctype html><title>Missing</title><p>not here</p>");
+  }
   if (path === "/redirect-cross") return redirect("https://other.test/landing");
   if (path === "/redirect-evil") return redirect("https://other.test/evil");
   if (path === "/loop-a") return redirect("/loop-b");
@@ -307,6 +335,7 @@ trailer << /Root 1 0 R >>
     response.setHeader("content-security-policy", "img-src 'self'; report-to csp");
   }
   const pages = { "/mixed": MIXED, "/spec-escape": SPEC_ESCAPE, "/reports": REPORTS, "/self-move": SELF_MOVE, "/archive": ARCHIVE, "/archive-hostile": ARCHIVE_HOSTILE, "/files": FILES, "/archive-tricky": ARCHIVE_TRICKY, "/secret-name": SECRET_NAME, "/tools": TOOLS, "/tools-none": NO_TOOLS, "/tools-control": TOOLS_CONTROL, "/exec": EXEC, "/read": READ };
+  if (SITE[path]) return response.end(SITE[path]);
   response.end(pages[path] ?? `<!doctype html><title>${host}${path}</title><p>fixture</p>`);
 });
 server.listen({ port: 443, host: "127.0.0.1" }, () => process.stdout.write(`READY ${spki}\n`));

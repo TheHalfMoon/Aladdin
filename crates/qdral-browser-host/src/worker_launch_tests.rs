@@ -1198,6 +1198,175 @@ fn an_approved_activation_follows_the_latest_dated_link_and_nothing_else() {
 
 #[test]
 #[ignore = "requires the built browser worker and Edge; run by npm run browser-launcher:native"]
+fn a_crawl_reads_only_its_scope_through_the_governed_navigation() {
+    use crate::crawl::{CrawlSpec, CrawlStop, SkipReason};
+    use std::sync::atomic::AtomicBool;
+    let fixture = HttpsFixture::start();
+    let profile = temp_profile("crawl");
+    let mut launch = spec(&profile, true);
+    launch.destinations =
+        vec![
+            AdmittedDestination::fixture("fixture.test", IpAddr::V4(Ipv4Addr::LOCALHOST))
+                .expect("fixture.test"),
+        ];
+    launch.test_trusted_spki = Some(fixture.spki.clone());
+    let mut worker = launch_worker(&launch, &Policy(PolicyKeyState::Absent)).expect("launch");
+    let scope = crate::observation::ObservationScope {
+        workspace: "workspace".into(),
+        profile_identity: "profile".into(),
+    };
+    let crawl_spec = CrawlSpec {
+        start_url: "https://fixture.test/site/".into(),
+        max_pages: 20,
+        max_depth: 2,
+        include_paths: Vec::new(),
+        exclude_paths: vec!["/site/private".into()],
+        extract: Some(crate::extraction::ExtractOptions::default()),
+        deadline: Duration::from_secs(300),
+    };
+
+    // Cancelled before it starts: nothing is opened.
+    let report = worker
+        .crawl_site(&crawl_spec, &scope, &AtomicBool::new(true))
+        .expect("cancelled crawl");
+    assert_eq!(report.stopped, Some(CrawlStop::Cancelled));
+    assert!(report.pages.is_empty());
+
+    let report = worker
+        .crawl_site(&crawl_spec, &scope, &AtomicBool::new(false))
+        .expect("crawl");
+    let opened: Vec<(&str, u16, Option<&str>)> = report
+        .pages
+        .iter()
+        .map(|p| (p.url.as_str(), p.status, p.failure.as_deref()))
+        .collect();
+    println!("SG108-EVIDENCE crawl: {opened:?}");
+    let urls: Vec<&str> = report.pages.iter().map(|p| p.url.as_str()).collect();
+    assert_eq!(
+        urls,
+        [
+            "https://fixture.test/site/",
+            "https://fixture.test/site/a",
+            "https://fixture.test/site/b",
+            "https://fixture.test/site/moved",
+            "https://fixture.test/site/away",
+            "https://fixture.test/site/missing",
+            "https://fixture.test/site/c",
+            "https://fixture.test/site/deep/1",
+        ]
+    );
+    let page = |url: &str| report.pages.iter().find(|p| p.url == url).expect(url);
+    let text = |url: &str| {
+        page(url)
+            .extraction
+            .as_ref()
+            .map(|e| {
+                e.chunks
+                    .iter()
+                    .map(crate::webmcp::PageText::untrusted)
+                    .collect::<String>()
+            })
+            .unwrap_or_default()
+    };
+    assert!(text("https://fixture.test/site/a").contains("Alpha text."));
+    // /site/moved redirects onto /site/c: read once, as /site/moved.
+    assert_eq!(
+        page("https://fixture.test/site/moved").final_url,
+        "https://fixture.test/site/c"
+    );
+    assert!(text("https://fixture.test/site/moved").contains("Gamma text."));
+    assert_eq!(
+        page("https://fixture.test/site/c").failure.as_deref(),
+        Some("redirected onto a page already read")
+    );
+    assert_eq!(
+        page("https://fixture.test/site/away").failure.as_deref(),
+        Some("redirected out of the crawl scope")
+    );
+    assert_eq!(page("https://fixture.test/site/missing").status, 404);
+    assert!(page("https://fixture.test/site/missing")
+        .extraction
+        .is_none());
+    let skipped = |reason: SkipReason| {
+        report
+            .skipped
+            .iter()
+            .filter(|s| s.reason == reason)
+            .map(|s| s.url.as_str())
+            .collect::<Vec<_>>()
+    };
+    assert!(skipped(SkipReason::OtherOrigin)
+        .iter()
+        .any(|u| u.contains("other.test")));
+    assert!(skipped(SkipReason::OtherOrigin)
+        .iter()
+        .any(|u| u.starts_with("mailto:")));
+    assert!(skipped(SkipReason::OutOfScope)
+        .iter()
+        .any(|u| u.ends_with("/elsewhere")));
+    assert!(skipped(SkipReason::NotAPage)
+        .iter()
+        .any(|u| u.ends_with("report.pdf")));
+    assert!(skipped(SkipReason::Filtered)
+        .iter()
+        .any(|u| u.contains("/site/private")));
+    assert!(skipped(SkipReason::TooDeep)
+        .iter()
+        .any(|u| u.ends_with("/site/deep/2")));
+    assert_eq!(report.stopped, None);
+
+    // A map: the same scope, links only, within a page budget.
+    let mut map_spec = crawl_spec.clone();
+    map_spec.extract = None;
+    map_spec.max_pages = 2;
+    let map = worker
+        .crawl_site(&map_spec, &scope, &AtomicBool::new(false))
+        .expect("map");
+    assert_eq!(map.pages.len(), 2);
+    assert_eq!(map.stopped, Some(CrawlStop::PageLimit));
+    assert!(map.pages.iter().all(|p| p.extraction.is_none()));
+    assert!(map
+        .discovered
+        .contains(&"https://fixture.test/site/missing".to_owned()));
+
+    // A start URL off the admitted destination is refused by the navigation.
+    let mut foreign = crawl_spec.clone();
+    foreign.start_url = "https://other.test/site/".into();
+    let refused = worker
+        .crawl_site(&foreign, &scope, &AtomicBool::new(false))
+        .expect("a refused start is reported");
+    assert!(refused.pages[0].failure.is_some());
+    worker.ping("after-crawl").expect("the lifetime goes on");
+
+    pump(&mut worker, Duration::from_secs(1));
+    let hits = fixture.hits();
+    // /elsewhere is reached once, by /site/away's same-origin server
+    // redirect (the navigation policy decides redirects; the origin is the
+    // boundary). Its link was skipped, so it was never opened as a page.
+    assert_eq!(
+        hits.iter().filter(|h| h.ends_with(" /elsewhere")).count(),
+        1,
+        "{hits:?}"
+    );
+    for never in [
+        "other.test",
+        "report.pdf",
+        "/site/private",
+        "/site/deep/2",
+        "mailto",
+    ] {
+        assert!(
+            !hits.iter().any(|h| h.contains(never)),
+            "{never} was requested: {hits:?}"
+        );
+    }
+    let report = worker.shutdown();
+    assert!(report.job_empty, "the job did not empty");
+    assert_profile_gone(report.profile_removed, &profile);
+}
+
+#[test]
+#[ignore = "requires the built browser worker and Edge; run by npm run browser-launcher:native"]
 fn a_page_is_extracted_as_untrusted_markdown_in_pieces_without_hidden_text() {
     let fixture = HttpsFixture::start();
     let profile = temp_profile("extract");
