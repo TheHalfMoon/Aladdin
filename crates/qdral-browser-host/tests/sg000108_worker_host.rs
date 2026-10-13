@@ -5,7 +5,10 @@
 #![cfg(all(windows, feature = "live-browser-test"))]
 
 use qdral_browser_host::worker_host::{WorkerHostReply, WorkerHostRequest};
-use qdral_browser_host::{Supervisor, WorkerHostLaunch};
+use qdral_browser_host::{
+    assert_no_managed_policy, discover_engine, RegistryPolicySource, SearchConfig, Supervisor,
+    WorkerHostLaunch,
+};
 use std::io::BufRead;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc;
@@ -98,6 +101,38 @@ fn launch(label: &str) -> (Supervisor, WorkerHostLaunch, PathBuf) {
     (supervisor, launch, root)
 }
 
+/// The host binary reads the real registry (SG-000074 managed-policy
+/// precondition). On a host with a managed browser policy (CI's runner has
+/// one) every open is refused, typed, before anything starts; the tests
+/// then require exactly that refusal and no profile left behind.
+fn managed_policy_present() -> bool {
+    let engine = discover_engine(&SearchConfig::production()).expect("an installed engine");
+    assert_no_managed_policy(engine.kind(), &RegistryPolicySource).is_err()
+}
+
+/// Under a managed policy: the open is refused with the closed code and the
+/// lifetime's profile is gone. Returns true when the test should stop.
+fn refused_by_managed_policy(reply: &WorkerHostReply, profile_root: &Path) -> bool {
+    if !managed_policy_present() {
+        return false;
+    }
+    assert_eq!(
+        reply,
+        &WorkerHostReply::Error {
+            code: "unavailable:managedpolicy".into()
+        },
+        "a managed policy is present, yet the open was not refused for it"
+    );
+    assert!(
+        entries(profile_root).is_empty(),
+        "the refused open left its profile"
+    );
+    println!(
+        "SG108-EVIDENCE worker host: managed policy present; open refused typed, no profile left"
+    );
+    true
+}
+
 fn entries(dir: &Path) -> Vec<String> {
     std::fs::read_dir(dir)
         .map(|read| {
@@ -114,14 +149,19 @@ fn a_lifetime_through_the_real_host_binary_navigates_observes_and_closes_clean()
     let fixture = Fixture::start();
     let (mut supervisor, launch, root) = launch("lifetime");
     let host = supervisor.worker_host().expect("live worker host");
-    let (lifetime, pinned) = match host
+    let opened = host
         .request(&WorkerHostRequest::Open {
             workspace: "ws-sg108".into(),
             host: "fixture.test".into(),
             fixture_spki: fixture.spki.clone(),
         })
-        .expect("open")
-    {
+        .expect("open");
+    if refused_by_managed_policy(&opened, &launch.profile_root) {
+        assert!(supervisor.shutdown().expect("shutdown"));
+        let _ = std::fs::remove_dir_all(&root);
+        return;
+    }
+    let (lifetime, pinned) = match opened {
         WorkerHostReply::Opened { lifetime, pinned } => (lifetime, pinned),
         other => panic!("open refused: {other:?}"),
     };
@@ -298,15 +338,21 @@ fn shutting_the_host_down_mid_lifetime_takes_the_worker_and_profile_with_it() {
     let fixture = Fixture::start();
     let (mut supervisor, launch, root) = launch("shutdown");
     let host = supervisor.worker_host().expect("live worker host");
-    assert!(matches!(
-        host.request(&WorkerHostRequest::Open {
+    let opened = host
+        .request(&WorkerHostRequest::Open {
             workspace: "ws-sg108".into(),
             host: "fixture.test".into(),
             fixture_spki: fixture.spki.clone(),
         })
-        .expect("open"),
-        WorkerHostReply::Opened { .. }
-    ));
+        .expect("open");
+    // Under a managed policy there is no lifetime; the single-host rule and
+    // the shutdown below still hold for the live host.
+    if !refused_by_managed_policy(&opened, &launch.profile_root) {
+        assert!(
+            matches!(opened, WorkerHostReply::Opened { .. }),
+            "{opened:?}"
+        );
+    }
     // Only one host at a time, of either mode.
     assert!(supervisor
         .launch_worker_host(&host_binary(), &launch)

@@ -228,6 +228,9 @@ For each consequential action, `qdrald` and the host each contribute what only t
   - close: job empty, profile removed;
   - a mid-lifetime shutdown takes the worker and the profile with it;
   - a second host is refused.
+- **Managed-policy precondition.** The host binary reads the real registry (the SG-000074 managed-policy precondition), so on a host with a managed browser policy every `open` is refused, typed, before anything starts. CI's windows-latest runner has one.
+  - There, the worker-host tests require exactly `unavailable:managedpolicy` with no profile left, and still check the single-host rule and shutdown.
+  - The full lifetime journey is evidenced on the evidence host, which has no managed policy. This mirrors `the_real_registry_precondition_decides_the_launch`.
 - **Without the feature:** `worker_mode_does_not_exist_without_the_test_feature` shows that `--worker` is an unknown argument.
 - **Release guard:** `the_live_browser_test_feature_never_reaches_a_release_build` (release-blocker sweep) is a source scan. It allows the feature to be named only in:
   - the host crate's own definition and code;
