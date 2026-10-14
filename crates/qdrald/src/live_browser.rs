@@ -309,7 +309,12 @@ pub fn journal_open_intents(path: &Path) -> Result<Vec<JournaledIntent>, Provide
     };
     let mut open: Vec<JournaledIntent> = Vec::new();
     for raw in text.split(|byte| *byte == b'\n') {
-        if raw.iter().all(u8::is_ascii_whitespace) {
+        // Blank, or zero-filled (a power loss can leave allocated but
+        // unwritten bytes): no line was written there.
+        if raw
+            .iter()
+            .all(|byte| byte.is_ascii_whitespace() || *byte == 0)
+        {
             continue;
         }
         let line = match serde_json::from_slice::<JournalLine>(raw) {
@@ -1174,6 +1179,13 @@ mod tests {
         assert!(journal_open_intents(&journal).unwrap().is_empty());
         let sealed = std::fs::read_to_string(&journal).unwrap();
         assert!(sealed.contains("\"deskal-sg\n{"), "{sealed}");
+        // A zero-filled tail (a power loss) is not a line, sealed or not.
+        let mut zeroed = format!("{body}\n").into_bytes();
+        zeroed.extend_from_slice(&[0u8; 16]);
+        std::fs::write(&journal, &zeroed).unwrap();
+        assert_eq!(journal_open_intents(&journal).unwrap().len(), 1);
+        journal_append(&journal, &JournalLine::event("settled", "r2")).unwrap();
+        assert!(journal_open_intents(&journal).unwrap().is_empty());
         // A torn line that split a multi-byte path character is still torn.
         let torn = pending("r7", &dir.join("bericht-\u{e4}"), "a.pdf", 1, 2);
         let cut = torn.find('\u{e4}').unwrap() + 1;
@@ -2001,6 +2013,13 @@ mod native {
             "{tampered:?}"
         );
         assert_eq!(files(&scene.approved), 0, "a refused approval wrote a file");
+        // The unspent approval's intent was closed as abandoned, so no
+        // restart reports a lost download for it.
+        let journal = std::fs::read_to_string(&scene.state().intents).expect("journal");
+        assert!(journal.contains("\"abandoned\""), "{journal}");
+        assert!(journal_open_intents(&scene.state().intents)
+            .expect("journal")
+            .is_empty());
         // The lifetime is still live and in step: an approved download runs.
         assert!(browser.is_usable());
         browser

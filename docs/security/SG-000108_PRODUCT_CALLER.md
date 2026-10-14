@@ -398,6 +398,7 @@ So a denied, unavailable or mismatched approval never reaches the host. Host ref
   - The reader skips a line only when its JSON ends early (the only way a prefix can fail), wherever it is. This includes a prefix that splits a multi-byte path character, because lines are read as bytes.
   - A torn `settled` or `reconciled` line leaves its intent open, and it is then reported again: still safe.
   - Any other unreadable line, unknown event or schema, or a pending line without its destination fails closed.
+  - A zero-filled run (bytes allocated but never written, after a power loss) is not a line and is skipped.
 
 **Open question 3 (the MCP-side timeout budget) moves to slice 3.** No MCP path reaches the live browser until exposure lands there, so the budget is designed together with the `browser_structured` shapes it applies to.
 
@@ -423,6 +424,12 @@ So a denied, unavailable or mismatched approval never reaches the host. Host ref
   - a lost lifetime that leaves its page open;
   - consuming the approval before the intent is durable;
   - appending without sealing a torn tail.
+
+**Accepted residuals (judge, PR #334), to handle in slice 3:**
+- A recorded host pid reused by a protected or other-user process answers "unknown", so its intent stays open (safe, but unreported) until that pid is free. Fix: an intent whose host started before the current boot is gone; and expose the intents left open, not only the reconciled ones.
+- Pages of lifetimes ended by a qdrald crash, or whose close failed to write, stay open on disk and count toward the per-workspace page bound. They can never be acted on again, so this affects availability only. Recovery should close them, keeping open question 2 in mind: another qdrald may own a page.
+- In-session `reconcile()` drops its in-memory intent on an error (the journal keeps it for the next start), and journals a non-transient error only at startup.
+- Slice 3 must re-derive the page fields at consume time if prompting and consuming are ever separated.
 
 **Still deferred to slice 3:**
 - the profile gate;
