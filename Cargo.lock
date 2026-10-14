@@ -267,6 +267,7 @@ version = "0.2.0"
 dependencies = [
  "qdral-approval",
  "qdral-audit",
+ "qdral-browser-host",
  "qdral-contracts",
  "qdral-policy",
  "qdral-provider-browser",

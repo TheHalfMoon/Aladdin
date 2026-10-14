@@ -321,7 +321,8 @@ fn only_the_documented_ignored_tests_exist() {
                             "performs one real HTTPS request; run with --ignored for live evidence",
                         ))
                     || ((relative == "crates/qdral-browser-host/src/worker_launch_tests.rs"
-                        || relative == "crates/qdral-browser-host/tests/sg000108_worker_host.rs")
+                        || relative == "crates/qdral-browser-host/tests/sg000108_worker_host.rs"
+                        || relative == "crates/qdrald/src/live_browser.rs")
                         && line.contains(
                             "requires the built browser worker and Edge; run by npm run browser-launcher:native",
                         ));
@@ -357,6 +358,9 @@ fn the_live_browser_test_feature_never_reaches_a_release_build() {
             || relative == "crates/qdral-browser-host/tests/sg000108_worker_host.rs"
             || relative == "crates/qdral-browser-host/tests/sg000074_host.rs"
             || relative == "crates/qdral-browser-host/tests/sg000085_qualification.rs"
+            || relative == "crates/qdrald/Cargo.toml"
+            || relative == "crates/qdrald/src/live_browser.rs"
+            || relative == "crates/qdrald/src/sg000039_main.rs"
             || relative == "apps/qdral-browser-worker/scripts/native-launcher.mjs"
             || relative.starts_with("docs/");
         if !allowed {
@@ -380,6 +384,24 @@ fn the_live_browser_test_feature_never_reaches_a_release_build() {
         naming,
         ["live-browser-test = []"],
         "live-browser-test may only be defined, never enabled by another feature"
+    );
+    // qdrald may only define its own feature of that name, which enables the
+    // host crate's (an optional dependency, so a default build has neither).
+    let qdrald = fs::read_to_string(root.join("crates/qdrald/Cargo.toml")).unwrap();
+    let naming: Vec<&str> = qdrald
+        .lines()
+        .map(str::trim)
+        .filter(|line| line.contains("live-browser-test") && !line.starts_with('#'))
+        .collect();
+    assert_eq!(
+        naming,
+        ["live-browser-test = [\"dep:qdral-browser-host\", \"qdral-browser-host/live-browser-test\"]"],
+        "qdrald may only define live-browser-test, never enable it by default"
+    );
+    assert!(
+        qdrald.lines().any(|line| line.trim()
+            == "qdral-browser-host = { path = \"../qdral-browser-host\", optional = true }"),
+        "qdrald's dependency on the browser host must stay optional"
     );
 }
 

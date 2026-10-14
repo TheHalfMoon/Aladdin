@@ -15,6 +15,7 @@ import { fileURLToPath } from "node:url";
 // after a module rename) exits 0 and would otherwise pass vacuously.
 const EXPECTED_TESTS = 26;
 const EXPECTED_WORKER_HOST_TESTS = 7;
+const EXPECTED_QDRALD_LIVE_TESTS = 2;
 
 const app = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const repo = resolve(app, "..", "..");
@@ -115,6 +116,59 @@ if (!journeysSeen && !refusedByPolicy) {
 }
 if (process.env.QDRAL_SG108_REQUIRE_JOURNEY === "1" && !journeysSeen) {
   process.stderr.write("browser-launcher:native: QDRAL_SG108_REQUIRE_JOURNEY=1, yet the worker-host journeys did not run\n");
+  process.exit(1);
+}
+
+// SG-000108 product caller (slice 1b): qdrald drives the worker-mode host
+// under the approval broker. The host binary is built with the test-only
+// feature first; qdrald's tests receive its path (a test-only source).
+const hostBuild = spawnSync(
+  "cargo",
+  ["build", "-p", "qdral-browser-host", "--features", "live-browser-test", "--bin", "qdral-browser-host"],
+  { cwd: repo, stdio: ["ignore", "inherit", "inherit"], shell: false }
+);
+if (hostBuild.error || hostBuild.status !== 0) {
+  process.stderr.write("browser-launcher:native: could not build the worker-mode host binary\n");
+  process.exit(1);
+}
+const targetDir = process.env.CARGO_TARGET_DIR ? resolve(process.env.CARGO_TARGET_DIR) : join(repo, "target");
+const hostBinary = join(targetDir, "debug", "qdral-browser-host.exe");
+const qdraldLive = spawnSync(
+  "cargo",
+  [
+    "test", "-p", "qdrald", "--features", "live-browser-test", "--bin", "qdrald", "live_browser::native",
+    "--", "--ignored", "--test-threads=1", "--nocapture"
+  ],
+  {
+    cwd: repo,
+    stdio: ["ignore", "pipe", "inherit"],
+    encoding: "utf8",
+    maxBuffer: 64 * 1024 * 1024,
+    shell: false,
+    env: { ...process.env, QDRAL_SG108_NODE: process.execPath, QDRAL_SG108_WORKER_MAIN: main, QDRAL_SG108_HOST_BINARY: hostBinary }
+  }
+);
+process.stdout.write(qdraldLive.stdout ?? "");
+if (qdraldLive.error || qdraldLive.status !== 0) {
+  process.exit(qdraldLive.status ?? 1);
+}
+const qdraldOut = qdraldLive.stdout ?? "";
+const qdraldSummary = /test result: ok\. (\d+) passed; 0 failed; 0 ignored/.exec(qdraldOut);
+if (!qdraldSummary || Number(qdraldSummary[1]) !== EXPECTED_QDRALD_LIVE_TESTS) {
+  process.stderr.write(
+    `browser-launcher:native: expected ${EXPECTED_QDRALD_LIVE_TESTS} qdrald live tests to pass, saw ${qdraldSummary ? qdraldSummary[1] : "none"}\n`
+  );
+  process.exit(1);
+}
+const qdraldJourneys = ["SG108-EVIDENCE qdrald live journey", "SG108-EVIDENCE qdrald live denial"];
+const qdraldJourneysSeen = qdraldJourneys.every((line) => qdraldOut.includes(line));
+const qdraldRefusals = qdraldOut.split("SG108-EVIDENCE qdrald live: managed policy present").length - 1;
+if (!qdraldJourneysSeen && qdraldRefusals < qdraldJourneys.length) {
+  process.stderr.write("browser-launcher:native: the qdrald live tests reported neither their journeys nor managed-policy refusals\n");
+  process.exit(1);
+}
+if (process.env.QDRAL_SG108_REQUIRE_JOURNEY === "1" && !qdraldJourneysSeen) {
+  process.stderr.write("browser-launcher:native: QDRAL_SG108_REQUIRE_JOURNEY=1, yet the qdrald live journeys did not run\n");
   process.exit(1);
 }
 if (!workerSummary || Number(workerSummary[1]) !== EXPECTED_WORKER_HOST_TESTS) {

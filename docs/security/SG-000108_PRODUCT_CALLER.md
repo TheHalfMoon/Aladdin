@@ -305,3 +305,27 @@ For each consequential action, `qdrald` and the host each contribute what only t
 - **Click path.** `a_bound_click_follows_the_approved_link_once`: a bound activation opens exactly the approved link. Its replay is refused, and the old binding with a fresh record is refused.
 - **Exact codes.** The other-origin navigation and the create-only refusal both assert the exact code `invalid`: the binding matched, and the policy or the commit refused.
 - **Launcher.** Under a managed policy, every lifetime-opening test must report the refusal itself: four journeys plus the shutdown test.
+
+**Slice 1b, qdrald side: the approval broker in front of the host (test builds only).**
+
+**The feature.** `qdrald` gains a test-only `live-browser-test` feature, which enables the host crate's feature, and an optional dependency on the host crate. A default or release `qdrald` build has neither. The release-blocker sweep allows exactly that feature definition and that optional dependency in `qdrald`'s manifest.
+
+**`qdrald/src/live_browser.rs` runs decision 3's two-part approval for each consequential action:**
+1. The host binds the action (`bind`).
+2. `qdrald` builds the approval digest: SHA-256 over a domain tag, the workspace, `qdrald`'s policy revision, the lifetime nonce, the action, and the host binding.
+3. It prompts. The broker mints the approval, then consumes it against that exact digest, workspace and revision.
+4. Only then does it send the frame, with the broker's record id and the host binding.
+
+So a denied, unavailable or mismatched approval never reaches the host. Host refusals map onto existing `FailureCode`s: binding mismatch → `TargetStale`, replay → `ApprovalDenied`, timeout → `ProcessTimeout`, unavailable → `ProviderUnavailable`.
+
+**No envelope dispatch yet.** The native tests drive the module directly. The live-backed page store and exposure arrive together in slice 3.
+
+**Evidence: a fourth native pass, `qdrald` live tests, 2 tests.** The launcher first builds the host binary with the feature, then hands its path to the tests through a test-only variable, `QDRAL_SG108_HOST_BINARY`.
+- **`the_journey_runs_under_the_broker_and_commits_the_verified_report`:** broker-approved navigation, observation, the host's selection, and a broker-approved, create-only download. An independent checker verifies the bytes and the SHA-256, `5523ba2d…994a`.
+- **`a_denied_or_mismatched_approval_never_reaches_the_host`:**
+  - a denied navigation and a denied download fail with `ApprovalDenied`;
+  - an approval whose consume fails, because the token's digest was changed, is refused;
+  - nothing was written;
+  - the lifetime stays usable, and the next approved download commits.
+- **Mutation run:** with the broker's consume removed, the mismatched approval's download is committed, and the test fails.
+- **Under a managed policy** (CI), both tests require the typed refusal instead. The launcher requires their evidence lines, or the refusal lines. With `QDRAL_SG108_REQUIRE_JOURNEY=1` it requires the journeys.
