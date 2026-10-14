@@ -337,3 +337,39 @@ So a denied, unavailable or mismatched approval never reaches the host. Host ref
   - the lifetime stays usable, and the next approved download commits.
 - **Mutation run:** with the broker's consume removed, the mismatched approval's download is committed, and the test fails.
 - **Under a managed policy** (CI), both tests require the typed refusal instead. The launcher requires their evidence lines, or the refusal lines. With `QDRAL_SG108_REQUIRE_JOURNEY=1` it requires the journeys.
+
+**Slice 2a: the real ledger, lost replies and reconciliation (test builds only).**
+
+**The real broker in tests.** `qdral-approval` gains a test-support-only constructor, `LocalApprovalBroker::with_path_and_soft_decider`. It replaces exactly one step, the SOFT consent dialog (a system-modal `MessageBoxW`), with a scripted decision. Everything else is the real broker: the ledger, the nonce, expiry, single use, digest and scope checks, and the records. STRONG approvals still need the presence verifier.
+- `test-support` is enabled only through dev-dependencies, and the workspace uses resolver 2, so release builds never contain it.
+- Unit tests over a real ledger: an approval is consumed once, a second consume is refused, a wrong digest is refused, the record is marked consumed, and a scripted denial issues nothing.
+
+**A lost reply ends the lifetime.** `qdrald`'s `LiveBrowser` dispatches every consequential frame through one path, which records each consumed approval's outcome: Executed, Refused (closed code), or Lost. This is decision 3's "consumed, not dispatched" record.
+- A lost reply (timeout, or a dead or broken host) ends the lifetime. The next action fails with `TargetStale` before any prompt, so no further approval is spent.
+- **A lost reply also ends the host.** A silent host may not be a dead one: a suspended or slow host could still commit the file after qdrald gives up on it. So on any lost reply `LiveBrowser` shuts the whole host family down at once (job termination if it does not leave by itself) and records whether its end was confirmed. That record is set once and never revised, because a second shutdown finds no host and would report a vacuous success.
+- Every dispatch error path records Lost, including a dispatch that found no host.
+- Transport failures (a broken pipe, a platform fault) map to `ProviderUnavailable`; a silent host maps to `ProcessTimeout`.
+
+**Reconciliation.** A download's intent (record id, folder, file name) is recorded before its frame is sent. After a lost reply, `reconcile()` reports what is at that destination: present, unverified (with SHA-256 and size), or absent. It never re-downloads and never records the file as committed.
+- **Only after the host's end is confirmed.** Until then `reconcile()` refuses with `ProviderUnavailable` and keeps the intent; it is never silently dropped.
+- **Path safety.** The file name must pass the host's own destination validator (`validate_relative_destination`: no root, traversal, alternate data streams, trailing dots or spaces, reserved device names, control or format characters). No segment below the approved folder may be a reparse point, intermediate segments must be directories, and the name must be a regular file; anything else is refused, not reported.
+- The file is opened without following a reparse point (`FILE_FLAG_OPEN_REPARSE_POINT`), the opened handle's own metadata is checked again, and the hash is streamed from that handle, never past `MAX_TRANSFER_BYTES`. A larger file is refused.
+
+**Evidence: the `qdrald` live pass, 4 tests.**
+- **The journey now runs on the real ledger** (scripted consent). The ledger holds exactly the two approvals, both consumed. Both outcomes are Executed. Reconciling the committed name reports exactly the committed file's SHA-256 and size.
+- **`a_host_lost_after_the_consume_is_recorded_reconciled_and_ends_the_lifetime`:**
+  - A test-only hook kills the host after the broker consumed the download's approval and before the frame reached it.
+  - The approval is consumed in the ledger, and its outcome is Lost.
+  - The lifetime is over: the next navigation is `TargetStale`, and no new prompt is recorded.
+  - Reconciliation reports the destination absent.
+  - The host process itself is confirmed exited (a handle opened before the kill is waited on), and the family's end is confirmed before reconciling.
+  - **Mutation run:** with the lifetime kept after a lost reply, the test fails.
+- **`a_suspended_host_is_ended_before_its_lost_download_is_reconciled`** (the judge's reproduction of the gap, now a regression test):
+  - The hook suspends the host (`NtSuspendProcess`) instead of killing it, so the download's reply is lost while the host is alive. A test-only reply budget (5 s) stands in for the 150 s production one.
+  - The outcome is Lost with `ProcessTimeout`, the family's end is confirmed, and the suspended process itself has exited.
+  - Reconciliation reports the destination absent, and it is still absent 3 s later.
+  - **Mutation run:** with the shutdown skipped (the end recorded as confirmed without it), the test fails: the suspended host is still running.
+- **Unit tests:** the reconciliation gate (running or unconfirmed: refused and the intent kept), a hostless dispatch recorded Lost, the I/O and platform error mapping, and path safety (streams, trailing dots and spaces, reserved names, an intermediate junction, a junction at the name, the size limit at and past `MAX_TRANSFER_BYTES`). Mutations removing the gate, the size limit, or the hostless record each fail a test.
+  - **Not covered:** removing the explicit reparse-attribute check is not caught, because junctions and symlinks are already refused as neither directory nor file. The check remains as defense in depth for reparse points that are not name surrogates (cloud placeholders such as OneDrive's, deduplicated files); the unit test cannot create one portably, so it is uncovered.
+  - **Residual (accepted, judge round 2):** intermediate segments are checked by path and the file is then opened by path, so a same-user process swapping an intermediate directory for a junction in between could have an outside file's hash and size reported as present, unverified. That process could equally place the file at the destination itself, and the result is only reported, never adopted. Optional later hardening: compare the opened handle's final path with the canonical folder.
+- **Still deferred to slice 2b:** the page id and store generation in `qdrald`'s half of the digest, the live-backed page store, persisting the intent across a `qdrald` restart, and the MCP-side timeout budget (open question 3).
