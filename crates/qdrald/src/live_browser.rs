@@ -1053,8 +1053,9 @@ mod native {
                 .args(["/PID", &pid.to_string(), "/T", "/F"])
                 .output()
                 .expect("taskkill");
-            // SAFETY: the handle opened above, then closed once.
+            // SAFETY: the handle opened above, still open.
             let waited = unsafe { WaitForSingleObject(process, 10_000) };
+            // SAFETY: closing the handle opened above, once.
             unsafe { CloseHandle(process) };
             assert_eq!(waited, WAIT_OBJECT_0, "the host did not die");
         }));
