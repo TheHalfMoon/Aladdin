@@ -21,7 +21,7 @@ import type { OAuthScope } from "./oauth_authorization.js";
  *   peers) or runs a registered executable whose effects are not modelled.
  */
 
-export type ToolSurfaceProfile = "core" | "desktop_structured";
+export type ToolSurfaceProfile = "core" | "desktop_structured" | "browser_structured";
 
 export type EffectClass =
   | "read"
@@ -272,15 +272,99 @@ export const LOCAL_ONLY_TOOL_NAMES: readonly string[] = Object.keys(TOOL_CONTRAC
 );
 
 /**
+ * SG-000108 decision 6: the live browser MCP tools, served only under
+ * `browser_structured`. They must equal `LIVE_BROWSER_SHAPES` in
+ * `crates/qdrald/src/profile_gate.rs` and `LIVE_BROWSER_MCP_TOOLS` in
+ * `crates/qdral-browser-host/src/exposure.rs` (browser-exposure.test.ts).
+ * Empty until slice 3b exposes the live shapes.
+ */
+export const LIVE_BROWSER_TOOLS: readonly string[] = Object.freeze([]);
+
+/**
+ * `desktop_structured`, listed explicitly instead of every contract key, so
+ * that adding a tool to the contract (a browser tool in particular) never
+ * widens it.
+ */
+export const DESKTOP_STRUCTURED_TOOLS: readonly string[] = Object.freeze([
+  "system_status",
+  "workspace_get",
+  "fs_stat",
+  "fs_list",
+  "fs_read",
+  "fs_search",
+  "fs_read_range",
+  "fs_find",
+  "git_status",
+  "git_diff",
+  "git_log",
+  "fs_write_preview",
+  "git_fetch_preview",
+  "git_push_preview",
+  "fs_write",
+  "fs_mkdir",
+  "fs_move",
+  "fs_edit",
+  "fs_remove",
+  "git_branch_create",
+  "git_stage",
+  "git_unstage",
+  "git_commit",
+  "git_fetch",
+  "git_push",
+  "process_spawn",
+  "desktop_cursor_get",
+  "desktop_element_invoke",
+  "desktop_element_scroll",
+  "desktop_element_select",
+  "desktop_element_set_value",
+  "desktop_element_toggle",
+  "desktop_input_execute",
+  "desktop_window_action",
+  "desktop_window_capture",
+  "desktop_window_list",
+  "desktop_window_tree",
+  "clipboard_read",
+  "clipboard_write",
+  "web_fetch"
+] as const);
+
+/**
  * Exact profile membership. `core` is the remote ceiling; local transports
- * serve `desktop_structured`, which adds the local-only tools. The
- * `developer` and `coordinate_fallback` profiles from the plan are not
- * mapped and deny.
+ * serve `desktop_structured`, which adds the local-only tools, or, only when
+ * local configuration selects it, `browser_structured`, which adds the live
+ * browser tools. The `developer` and `coordinate_fallback` profiles from the
+ * plan are not mapped and deny.
  */
 export const SURFACE_PROFILES: Readonly<Record<ToolSurfaceProfile, readonly string[]>> = {
   core: REMOTE_TOOL_NAMES,
-  desktop_structured: Object.keys(TOOL_CONTRACT)
+  desktop_structured: DESKTOP_STRUCTURED_TOOLS,
+  browser_structured: Object.freeze([...DESKTOP_STRUCTURED_TOOLS, ...LIVE_BROWSER_TOOLS])
 };
+
+/** The environment variable a local MCP client configuration sets. */
+export const TOOL_SURFACE_PROFILE_ENV = "QDRAL_TOOL_SURFACE_PROFILE";
+
+/** The profiles a local transport may serve. */
+export const LOCAL_TOOL_SURFACE_PROFILES: readonly ToolSurfaceProfile[] = Object.freeze([
+  "desktop_structured",
+  "browser_structured"
+] as const);
+
+/**
+ * The local transport's profile, from its local configuration only (the
+ * MCP client's server launch environment, which the user writes; never a
+ * tool argument or a remote value). Unset selects `desktop_structured`;
+ * anything that is not a local profile fails startup.
+ */
+export function localProfileFromConfig(value: string | undefined): ToolSurfaceProfile {
+  if (value === undefined || value === "") {
+    return "desktop_structured";
+  }
+  if ((LOCAL_TOOL_SURFACE_PROFILES as readonly string[]).includes(value)) {
+    return value as ToolSurfaceProfile;
+  }
+  throw new Error(`TOOL_SURFACE_DENIED: ${TOOL_SURFACE_PROFILE_ENV} names no local tool surface profile`);
+}
 
 export function profileTools(profile: string): ReadonlySet<string> {
   if (!Object.hasOwn(SURFACE_PROFILES, profile)) {

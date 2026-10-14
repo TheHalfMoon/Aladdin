@@ -3,7 +3,7 @@ import { KernelClient } from "../kernel.js";
 import {
   buildQdralServer,
   closeAllServerKernels,
-  defaultTransportContext
+  localTransportContext
 } from "../server.js";
 
 const DEFAULT_WORKSPACE = process.env.QDRAL_DEFAULT_WORKSPACE ?? "default";
@@ -17,11 +17,12 @@ const DEFAULT_WORKSPACE = process.env.QDRAL_DEFAULT_WORKSPACE ?? "default";
  */
 export function startStdioTransport() {
   const tracked = new Set<KernelClient>();
+  const context = localTransportContext();
 
   function createServer() {
-    const kernel = new KernelClient();
+    const kernel = new KernelClient(undefined, null, context.toolSurfaceProfile);
     tracked.add(kernel);
-    const server = buildQdralServer(kernel, DEFAULT_WORKSPACE, defaultTransportContext());
+    const server = buildQdralServer(kernel, DEFAULT_WORKSPACE, context);
     const previousOnClose = server.server.onclose;
     server.server.onclose = () => {
       tracked.delete(kernel);

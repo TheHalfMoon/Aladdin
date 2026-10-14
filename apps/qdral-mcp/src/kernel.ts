@@ -31,6 +31,12 @@ export interface KernelRequest {
   target?: string;
   arguments: Record<string, unknown>;
   remote?: RemoteDispatchContext;
+  /**
+   * SG-000108 decision 6: the local transport's tool surface profile, from
+   * local configuration. It grants nothing by itself: `qdrald` requires
+   * `browser_structured` for a live browser shape and ignores it otherwise.
+   */
+  profile?: string;
 }
 
 export interface KernelResponse {
@@ -133,6 +139,17 @@ export function attachRemoteContext(
   return request;
 }
 
+/**
+ * Stamp the local transport's tool surface profile on a kernel request.
+ * Remote requests carry their profile in the remote context instead.
+ */
+export function attachProfile(request: KernelRequest, profile: string | null): KernelRequest {
+  if (profile !== null) {
+    request.profile = profile;
+  }
+  return request;
+}
+
 export class KernelClient {
   readonly sessionId = randomUUID();
   readonly child: ChildProcessWithoutNullStreams;
@@ -140,11 +157,16 @@ export class KernelClient {
 
   readonly remote: RemoteDispatchContext | null;
 
+  /** The local transport's tool surface profile, stamped on every request. */
+  readonly profile: string | null;
+
   constructor(
     command = process.env.QDRAL_DAEMON ?? "qdrald",
-    remote: RemoteDispatchContext | null = null
+    remote: RemoteDispatchContext | null = null,
+    profile: string | null = null
   ) {
     this.remote = remote === null ? null : Object.freeze({ ...remote, scopes: [...remote.scopes] });
+    this.profile = profile;
     this.child = spawn(command, [], {
       stdio: ["pipe", "pipe", "pipe"],
       windowsHide: true,
@@ -191,6 +213,7 @@ export class KernelClient {
       arguments: input.arguments
     });
     attachRemoteContext(request, this.remote);
+    attachProfile(request, this.profile);
 
     const timeoutMs = input.timeoutMs ?? 30_000;
     const response = new Promise<KernelResponse>((resolve, reject) => {

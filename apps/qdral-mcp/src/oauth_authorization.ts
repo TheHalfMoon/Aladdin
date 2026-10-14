@@ -1604,6 +1604,7 @@ export const OAUTH_PROFILE_TOOL_CEILINGS: Readonly<Record<string, readonly strin
 export const UNMAPPED_REMOTE_PROFILES = [
   "developer",
   "desktop_structured",
+  "browser_structured",
   "coordinate_fallback"
 ] as const;
 
