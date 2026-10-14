@@ -23,20 +23,33 @@ import {
 
 const repo = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
 
-function rustStrings(path: string, constant: string): string[] {
+/**
+ * Read a Rust constant that must be written as a plain literal table: its
+ * declared type is exactly `type`, it is defined exactly once, and its value
+ * holds only string literals (or pairs of them). Anything else (named
+ * constants, comments, cfg'd duplicates, another type) fails the test
+ * instead of reading as an empty table.
+ */
+function rustStrings(path: string, constant: string, type: string): string[] {
   const text = readFileSync(join(repo, path), "utf8");
-  const start = text.indexOf(`pub const ${constant}:`);
-  assert.ok(start >= 0, `${constant} in ${path}`);
-  const end = text.indexOf(";", start);
-  const body = text.slice(text.indexOf("=", start) + 1, end);
-  return [...body.matchAll(/"([^"]*)"/g)].map((match) => match[1] ?? "");
+  const definitions = [...text.matchAll(new RegExp(`\\bconst ${constant}\\b`, "g"))];
+  assert.equal(definitions.length, 1, `${constant} is defined exactly once in ${path}`);
+  const escaped = type.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const declaration = new RegExp(`pub const ${constant}: ${escaped} = (&\\[[^\\]]*\\]);`);
+  const match = declaration.exec(text);
+  assert.ok(match !== null, `${constant} in ${path} is a literal table of type ${type}`);
+  const body = match[1] ?? "";
+  const item = String.raw`(?:"[^"\\]*"|\(\s*"[^"\\]*"\s*,\s*"[^"\\]*"\s*,?\s*\))`;
+  const literal = new RegExp(String.raw`^&\[\s*(?:${item}\s*(?:,\s*${item}\s*)*,?\s*)?\]$`);
+  assert.match(body, literal, `${constant} holds only string literals`);
+  return [...body.matchAll(/"([^"]*)"/g)].map((found) => found[1] ?? "");
 }
 
 test("the live browser tools agree across the contract, qdrald's gate and the host", () => {
-  const host = rustStrings("crates/qdral-browser-host/src/exposure.rs", "LIVE_BROWSER_MCP_TOOLS");
+  const host = rustStrings("crates/qdral-browser-host/src/exposure.rs", "LIVE_BROWSER_MCP_TOOLS", "&[&str]");
   assert.deepEqual([...host].sort(), [...LIVE_BROWSER_TOOLS].sort());
   // qdrald lists shapes as (capability, operation) pairs.
-  const flat = rustStrings("crates/qdrald/src/profile_gate.rs", "LIVE_BROWSER_SHAPES");
+  const flat = rustStrings("crates/qdrald/src/profile_gate.rs", "LIVE_BROWSER_SHAPES", "&[(&str, &str)]");
   assert.equal(flat.length % 2, 0);
   const shapes: string[] = [];
   for (let index = 0; index < flat.length; index += 2) {
@@ -64,6 +77,10 @@ test("desktop_structured is an explicit list that adding a contract tool cannot 
   assert.deepEqual([...desktop].sort(), nonLive.sort());
   for (const tool of LIVE_BROWSER_TOOLS) {
     assert.ok(!desktop.has(tool), tool);
+  }
+  // A browser tool left out of LIVE_BROWSER_TOOLS must not land here instead.
+  for (const tool of DESKTOP_STRUCTURED_TOOLS) {
+    assert.ok(!(TOOL_CONTRACT[tool]?.capability ?? "").startsWith("browser."), tool);
   }
   for (const tool of SURFACE_PROFILES.core) {
     assert.ok(desktop.has(tool), `core ${tool} is in desktop_structured`);

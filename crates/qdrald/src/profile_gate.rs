@@ -1,8 +1,13 @@
 //! SG-000108 decision 6: `qdrald`'s profile gate. A live browser shape is
 //! dispatched only for a local request whose envelope names the
-//! `browser_structured` profile. This closes the path where anything that
-//! writes envelopes to `qdrald`'s stdin reaches a live browser without the
-//! profile the user selected by local configuration.
+//! `browser_structured` profile, and never for a remote one.
+//!
+//! The profile is the sender's own claim, not proof: anything that can
+//! write `qdrald`'s stdin can also write `"profile":"browser_structured"`.
+//! What the gate guarantees is that the MCP edge, which sends that profile
+//! only when local configuration selected it, cannot reach a live shape
+//! otherwise, and that no remote request reaches one at all. Every
+//! consequential live action still needs a broker approval from the user.
 //!
 //! The live shapes are listed here, in the MCP tool contract
 //! (`LIVE_BROWSER_TOOLS` in `apps/qdral-mcp/src/tool_contract.ts`) and in

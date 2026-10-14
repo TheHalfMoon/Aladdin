@@ -119,7 +119,9 @@ For each consequential action, `qdrald` and the host each contribute what only t
 - **`ToolSurfaceProfile`** gains `browser_structured`.
 - **`desktop_structured`** becomes an explicit list without browser tools, instead of every contract key, so adding browser tools cannot widen it.
 - **Profile selection.** A local transport selects `browser_structured` only by explicit local configuration, never by a caller.
-- **`qdrald` gains a profile gate.** It refuses live browser dispatch unless the request's profile is `browser_structured`. This closes the path where anything writing envelopes to `qdrald`'s stdin reaches a live browser.
+- **`qdrald` gains a profile gate.** It refuses live browser dispatch unless the request is local and its profile is `browser_structured`.
+  - The profile is the sender's own claim, not proof: anything that can write `qdrald`'s stdin can write it too.
+  - The gate guarantees that the MCP edge, which sends `browser_structured` only when local configuration selected it, reaches no live shape otherwise, and that no remote request reaches one. Every consequential live action still needs a broker approval (judge, PR #335).
   - **The source of truth for live shapes** is the TypeScript tool contract (`tool_contract.ts`), as for every other profile.
   - `qdrald` receives the profile in the envelope and checks it against a Rust list of the live shapes.
   - A cross-language agreement test fails if the Rust list, the contract's `browser_structured` list and `exposure.rs`'s `LIVE_BROWSER_MCP_TOOLS` differ. The SG-000079 tests already do this between the contract and the documentation.
@@ -462,7 +464,7 @@ So a denied, unavailable or mismatched approval never reaches the host. Host ref
 - Every other shape passes unchanged: the profile grants nothing by itself.
 - `LIVE_BROWSER_SHAPES` is empty until slice 3b, so the gate is wired in but has nothing to refuse yet. Its logic is unit-tested over a test shape list.
 
-**One table, three places.** `browser-exposure.test.ts` fails unless these three agree:
+**One table, three places.** `browser-exposure.test.ts` reads the two Rust tables strictly: each must be defined exactly once, with its exact type, and hold only string literals. A named constant, a comment, a `cfg` duplicate or another type fails the test rather than reading as empty (judge, PR #335). It fails unless these three agree:
 - the contract's `LIVE_BROWSER_TOOLS`, mapped to their capability shapes;
 - `qdrald`'s `LIVE_BROWSER_SHAPES`;
 - the host's `LIVE_BROWSER_MCP_TOOLS`.
@@ -482,4 +484,9 @@ It also requires every live tool to be local-only.
   - the kernel stamping the profile.
 - `qdral-contracts`: the profile parses beside the request and is omitted when absent.
 - `qdrald` `profile_gate`: 3 unit tests. Mutation runs that drop the remote check or the profile check each fail a test.
-- **Not covered until slice 3b:** the gate's wiring in `handle_envelope`. With no live shape, no envelope-level test can reach it.
+- **The gate's wiring in `handle_envelope`:** not covered by a committed test until slice 3b, because no live shape exists for one to reach. The judge probed it by adding a temporary shape, and the probe was reverted:
+  - no profile, or `desktop_structured`: refused;
+  - `browser_structured`: passed on to the workspace check;
+  - remote with `browser_structured`: refused as local-only;
+  - each refusal was audited `PROFILE_DENIED`.
+- `desktop_structured` must hold no tool with a `browser.*` capability, so a browser tool left out of the live list cannot land there instead.
