@@ -318,7 +318,7 @@ For each consequential action, `qdrald` and the host each contribute what only t
 
 So a denied, unavailable or mismatched approval never reaches the host. Host refusals map onto existing `FailureCode`s: binding mismatch → `TargetStale`, replay → `ApprovalDenied`, timeout → `ProcessTimeout`, unavailable → `ProviderUnavailable`.
 
-**No envelope dispatch yet.** The native tests drive the module directly. The live-backed page store and exposure arrive together in slice 3.
+**No envelope dispatch yet.** The native tests drive the module directly. The live-backed page store arrives in slice 2, and exposure in slice 3.
 
 **Deferred to slice 2, together with the page store** (review of this PR):
 - **`qdrald`'s half of the digest** does not yet bind the page id or the store generation that decision 3 lists. There is no store yet. Today it binds the workspace, the policy revision, the lifetime and the action.
