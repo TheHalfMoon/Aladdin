@@ -372,4 +372,68 @@ So a denied, unavailable or mismatched approval never reaches the host. Host ref
 - **Unit tests:** the reconciliation gate (running or unconfirmed: refused and the intent kept), a hostless dispatch recorded Lost, the I/O and platform error mapping, and path safety (streams, trailing dots and spaces, reserved names, an intermediate junction, a junction at the name, the size limit at and past `MAX_TRANSFER_BYTES`). Mutations removing the gate, the size limit, or the hostless record each fail a test.
   - **Not covered:** removing the explicit reparse-attribute check is not caught, because junctions and symlinks are already refused as neither directory nor file. The check remains as defense in depth for reparse points that are not name surrogates (cloud placeholders such as OneDrive's, deduplicated files); the unit test cannot create one portably, so it is uncovered.
   - **Residual (accepted, judge round 2):** intermediate segments are checked by path and the file is then opened by path, so a same-user process swapping an intermediate directory for a junction in between could have an outside file's hash and size reported as present, unverified. That process could equally place the file at the destination itself, and the result is only reported, never adopted. Optional later hardening: compare the opened handle's final path with the canonical folder.
-- **Still deferred to slice 2b:** the page id and store generation in `qdrald`'s half of the digest, the live-backed page store, persisting the intent across a `qdrald` restart, and the MCP-side timeout budget (open question 3).
+- **Deferred from slice 2a to slice 2b** (done below): the page id and store generation in `qdrald`'s half of the digest, the live-backed page store, and persisting the intent across a `qdrald` restart. The MCP-side timeout budget (open question 3) moved on to slice 3.
+
+**Slice 2b: the page store and the intent journal (test builds only).**
+
+**The lifetime's page lives in the page store.** `open` allocates a page in the SG-000022 `PageStore`, bound to the workspace and to the lifetime (profile identity `live-lifetime:{lifetime}`).
+- Every approved navigation applies the committed document to the store: a new origin and a bumped generation.
+- A lost reply or a shutdown closes the page. A closed page is stale for good, including after a reload from disk (`PageStore::close_page`).
+- If the store cannot follow the host (a write fails, or the committed URL does not parse), qdrald ends the lifetime rather than act on a page record that no longer matches.
+
+**The page store's half of the digest.** `qdrald`'s approval digest is now `deskal-sg108-live-approval/2`. It binds the page id, the generation and the origin, as well as the workspace, policy revision, lifetime, action and host binding. An approval prompted for one document cannot be spent on the next.
+
+**Registry writes fail closed.** `PageStore::persist` used to drop write errors silently, so the in-memory registry could claim a state its file did not hold. A failed or unsynced append now fails the transition with `ProviderUnavailable` before the in-memory state changes. This applies to every page-store caller, not only the live browser.
+
+**The intent journal (open question 1 across restarts).**
+- **Durable before the approval is spent.** A download's `pending` line (record id, folder, file name, and the host's pid and creation time) is appended and synced before the approval is consumed. If it cannot be written, the approval is not consumed and nothing is sent.
+- A reply, whether success or refusal, appends `settled`. An approval that failed to consume appends `abandoned`. A report of the destination appends `reconciled`, so each lost download is reported once.
+- **Recovery at start.** `LiveBrowser::start` reconciles every open intent whose host is gone before launching a new host.
+  - `qdrald` holds the host's job, which is set to kill its processes when the job closes. When `qdrald` ends, the kernel ends the host family, so after a restart the recorded host is gone.
+  - "Gone" is checked against the OS, not assumed. The pid either names no running process, or names one with a different creation time (a reused pid).
+  - An intent whose host still runs belongs to a live lifetime, possibly another `qdrald` process's (open question 2), and is left untouched. A query the OS refuses to answer counts as running.
+  - A report that cannot be made yet (the destination is unreadable for now) stays open for the next run.
+- **Torn lines.** A crash mid-append leaves a torn line: a strict prefix of a valid line, written before the approval was consumed.
+  - The next append seals it with a newline first, so a new line never fuses with it.
+  - The reader skips a line only when its JSON ends early (the only way a prefix can fail), wherever it is. This includes a prefix that splits a multi-byte path character, because lines are read as bytes.
+  - A torn `settled` or `reconciled` line leaves its intent open, and it is then reported again: still safe.
+  - Any other unreadable line, unknown event or schema, or a pending line without its destination fails closed.
+  - A zero-filled run (bytes allocated but never written, after a power loss) is not a line and is skipped.
+
+**Open question 3 (the MCP-side timeout budget) moves to slice 3.** No MCP path reaches the live browser until exposure lands there, so the budget is designed together with the `browser_structured` shapes it applies to.
+
+**Evidence: the `qdrald` live pass, 5 tests.**
+- **The journey** now also checks:
+  - the page store: generation 0 with an empty origin at open; after navigation, generation 1 with `https://fixture.test:443` and Active; Closed on disk after shutdown;
+  - an unwritable journal refuses the download with `ProviderUnavailable`, leaves its approval unconsumed in the ledger, and sends no frame;
+  - the download's journal lines are exactly `pending` then `settled`, with nothing left open.
+- **The lost test** also checks that the page is gone (closed on disk) and that the intent stays open until reconciled.
+- **`a_restart_reconciles_the_download_a_lost_host_left_open`:**
+  - the host is killed after the consume, and `qdrald`'s browser ends without reconciling, so only the journal remains;
+  - the next `LiveBrowser::start` reconciles that exact record as absent, and nothing is left open;
+  - a third start reports nothing.
+- **Unit tests:**
+  - the journal fold (settled, abandoned and reconciled close an intent; a torn tail is skipped and is sealed, not fused, by the next append; a torn multi-byte character; five kinds of corruption fail closed);
+  - liveness (running, exited, and a reused pid by creation time);
+  - recovery (gone-present reported with SHA-256 and size; gone-absent; reused pid; a live host untouched; each reported once);
+  - the page store: close is idempotent and survives a reload, a closed page refuses navigation and actuation, and an unwritable registry changes nothing;
+  - the digest covers page id, generation and origin, with a fixed vector computed independently.
+- **Mutation runs,** each failing a test:
+  - recovery that ignores host liveness;
+  - recovery that does not journal its report;
+  - a lost lifetime that leaves its page open;
+  - consuming the approval before the intent is durable;
+  - appending without sealing a torn tail.
+
+**Accepted residuals (judge, PR #334), to handle in slice 3:**
+- A recorded host pid reused by a protected or other-user process answers "unknown", so its intent stays open (safe, but unreported) until that pid is free. Fix: an intent whose host started before the current boot is gone; and expose the intents left open, not only the reconciled ones.
+- Pages of lifetimes ended by a qdrald crash, or whose close failed to write, stay open on disk and count toward the per-workspace page bound. They can never be acted on again, so this affects availability only. Recovery should close them, keeping open question 2 in mind: another qdrald may own a page.
+- In-session `reconcile()` drops its in-memory intent on an error (the journal keeps it for the next start), and journals a non-transient error only at startup.
+- Slice 3 must re-derive the page fields at consume time if prompting and consuming are ever separated.
+
+**Still deferred to slice 3:**
+- the profile gate;
+- `browser_structured` exposure;
+- the MCP timeout budget;
+- routing the SG-000022 page shapes to the live page;
+- the public-PDF journey.
