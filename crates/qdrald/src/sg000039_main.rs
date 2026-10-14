@@ -20,6 +20,7 @@ mod git_mutation;
 mod git_push;
 #[cfg(all(windows, feature = "live-browser-test"))]
 mod live_browser;
+mod profile_gate;
 mod remote_lease;
 mod trust;
 mod uia;
@@ -110,7 +111,17 @@ fn handle_envelope(
     workspace_set: &remote_lease::WorkspaceSet,
     envelope: RemoteRequestEnvelope,
 ) -> ResponseEnvelope {
-    let RemoteRequestEnvelope { request, remote } = envelope;
+    let RemoteRequestEnvelope {
+        request,
+        remote,
+        profile,
+    } = envelope;
+    // SG-000108 decision 6: before any lease, policy or dispatch step.
+    if let Err((code, message)) = profile_gate::gate(&request, profile.as_deref(), remote.as_ref())
+    {
+        let _ = audit.record(&request, POLICY_REVISION, "PROFILE_DENIED");
+        return ResponseEnvelope::failure(request.request_id, code, message);
+    }
     let lease_path = qdral_policy::remote_session::default_lease_store_path();
     let probe = workstation::current;
     let clock = qdral_approval::now_ms;
@@ -1972,6 +1983,7 @@ mod sg000055_envelope_tests {
                 RemoteRequestEnvelope {
                     request: request(capability, operation, "default"),
                     remote: Some(remote()),
+                    profile: None,
                 },
             );
             assert!(!response.ok);
@@ -2001,6 +2013,7 @@ mod sg000055_envelope_tests {
                 RemoteRequestEnvelope {
                     request: request(capability, operation, "default"),
                     remote: Some(remote()),
+                    profile: None,
                 },
             );
             assert_eq!(code(&response), FailureCode::CapabilityDenied);
@@ -2022,6 +2035,7 @@ mod sg000055_envelope_tests {
             RemoteRequestEnvelope {
                 request: request("remote.lease.status", "get", "missing"),
                 remote: None,
+                profile: None,
             },
         );
         assert_eq!(code(&response), FailureCode::WorkspaceDenied);
@@ -2033,6 +2047,7 @@ mod sg000055_envelope_tests {
             RemoteRequestEnvelope {
                 request: request("remote.lease.extend", "extend", "default"),
                 remote: None,
+                profile: None,
             },
         );
         assert_eq!(code(&unknown), FailureCode::CapabilityDenied);
@@ -2080,6 +2095,7 @@ mod sg000058_lease_boundary_tests {
                 arguments: json!({}),
             },
             remote: Some(remote("conn-sg58-a")),
+            profile: None,
         }
     }
 

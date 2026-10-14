@@ -201,9 +201,12 @@ test("the contract's remote scopes equal the qdrald remote-session scope table",
 });
 
 test("profile membership is exact and unmapped profiles fail closed", () => {
-  assert.deepEqual(Object.keys(SURFACE_PROFILES).sort(), ["core", "desktop_structured"]);
+  assert.deepEqual(Object.keys(SURFACE_PROFILES).sort(), ["browser_structured", "core", "desktop_structured"]);
   assert.deepEqual([...profileTools("core")].sort(), CORE);
   assert.deepEqual([...profileTools("desktop_structured")].sort(), [...CORE, ...LOCAL_ONLY].sort());
+  // SG-000108 slice 3a: browser_structured adds the live browser tools,
+  // none until slice 3b.
+  assert.deepEqual([...profileTools("browser_structured")].sort(), [...CORE, ...LOCAL_ONLY].sort());
   for (const profile of ["developer", "coordinate_fallback", "admin", "", "__proto__", "constructor"]) {
     assert.throws(() => profileTools(profile), /not mapped/, profile);
   }

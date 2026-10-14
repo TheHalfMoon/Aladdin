@@ -119,7 +119,9 @@ For each consequential action, `qdrald` and the host each contribute what only t
 - **`ToolSurfaceProfile`** gains `browser_structured`.
 - **`desktop_structured`** becomes an explicit list without browser tools, instead of every contract key, so adding browser tools cannot widen it.
 - **Profile selection.** A local transport selects `browser_structured` only by explicit local configuration, never by a caller.
-- **`qdrald` gains a profile gate.** It refuses live browser dispatch unless the request's profile is `browser_structured`. This closes the path where anything writing envelopes to `qdrald`'s stdin reaches a live browser.
+- **`qdrald` gains a profile gate.** It refuses live browser dispatch unless the request is local and its profile is `browser_structured`.
+  - The profile is the sender's own claim, not proof: anything that can write `qdrald`'s stdin can write it too.
+  - The gate guarantees that the MCP edge, which sends `browser_structured` only when local configuration selected it, reaches no live shape otherwise, and that no remote request reaches one. Every consequential live action still needs a broker approval (judge, PR #335).
   - **The source of truth for live shapes** is the TypeScript tool contract (`tool_contract.ts`), as for every other profile.
   - `qdrald` receives the profile in the envelope and checks it against a Rust list of the live shapes.
   - A cross-language agreement test fails if the Rust list, the contract's `browser_structured` list and `exposure.rs`'s `LIVE_BROWSER_MCP_TOOLS` differ. The SG-000079 tests already do this between the contract and the documentation.
@@ -398,7 +400,7 @@ So a denied, unavailable or mismatched approval never reaches the host. Host ref
   - The reader skips a line only when its JSON ends early (the only way a prefix can fail), wherever it is. This includes a prefix that splits a multi-byte path character, because lines are read as bytes.
   - A torn `settled` or `reconciled` line leaves its intent open, and it is then reported again: still safe.
   - Any other unreadable line, unknown event or schema, or a pending line without its destination fails closed.
-  - A zero-filled run (bytes allocated but never written, after a power loss) is not a line and is skipped.
+  - Zero bytes (allocated but never written, after a power loss) are never part of a written line, since JSON escapes control characters. Trailing zeros are dropped from each line, so a zero-filled run is skipped and a torn prefix followed by zeros still reads as torn (judge, PR #334; fixed in the slice 3a PR). A zero byte inside an otherwise complete line is corruption.
 
 **Open question 3 (the MCP-side timeout budget) moves to slice 3.** No MCP path reaches the live browser until exposure lands there, so the budget is designed together with the `browser_structured` shapes it applies to.
 
@@ -437,3 +439,54 @@ So a denied, unavailable or mismatched approval never reaches the host. Host ref
 - the MCP timeout budget;
 - routing the SG-000022 page shapes to the live page;
 - the public-PDF journey.
+
+**Slice 3a: the profile plumbing (decision 6, no live tool yet).**
+
+**The profiles.** `ToolSurfaceProfile` gains `browser_structured`.
+- `desktop_structured` is now an explicit, frozen list (`DESKTOP_STRUCTURED_TOOLS`) instead of every contract key, so adding a tool to the contract, a browser tool in particular, never widens it. A test requires it to list every non-live contract tool and nothing else.
+- `browser_structured` is `desktop_structured` plus `LIVE_BROWSER_TOOLS`, which is empty until slice 3b.
+
+**Selection by local configuration only.** A local transport (stdio or loopback HTTP) reads `QDRAL_TOOL_SURFACE_PROFILE` once, at transport start, from the MCP client's server launch environment, which the user writes.
+- Unset selects `desktop_structured`. `browser_structured` must be named exactly.
+- Any other value, including `core`, fails startup with `TOOL_SURFACE_DENIED`, and the value is not echoed back.
+- No tool argument and no remote value reaches it. The relay transport ignores it.
+
+**OAuth.** `browser_structured` joins `UNMAPPED_REMOTE_PROFILES`, so remote mapping denies it. Every known remote provider still maps to `core`.
+
+**The profile travels with each request.** `qdrald`'s request line (`RemoteRequestEnvelope`) gains an optional `profile`, beside `remote` and outside the unchanged internal request.
+- The kernel client of a local transport stamps its profile on every request, and the `process_spawn` kernel inherits it.
+- Remote dispatch sends none; its profile is in the remote context.
+- An absent profile is omitted from the line, so existing lines and clients are unchanged.
+
+**`qdrald`'s profile gate (`profile_gate.rs`).** This runs before any lease, policy or dispatch step.
+- A live browser shape is refused, with `CapabilityDenied` and audited `PROFILE_DENIED`, unless the request is local and names `browser_structured`.
+- A remote request is refused whatever profile it names.
+- Every other shape passes unchanged: the profile grants nothing by itself.
+- `LIVE_BROWSER_SHAPES` is empty until slice 3b, so the gate is wired in but has nothing to refuse yet. Its logic is unit-tested over a test shape list.
+
+**One table, three places.** `browser-exposure.test.ts` reads the two Rust tables strictly: each must be defined exactly once, with its exact type, and hold only string literals. A named constant, a comment, a `cfg` duplicate or another type fails the test rather than reading as empty (judge, PR #335). It fails unless these three agree:
+- the contract's `LIVE_BROWSER_TOOLS`, mapped to their capability shapes;
+- `qdrald`'s `LIVE_BROWSER_SHAPES`;
+- the host's `LIVE_BROWSER_MCP_TOOLS`.
+
+It also requires every live tool to be local-only.
+
+**Guards amended, transparently.** The earlier guards forbade the word "browser" in MCP sources and in `server.ts`. They now allow only the governed exposure-table names: `LIVE_BROWSER_TOOLS` in `tool_contract.ts`, and the `browser_structured` profile name. They still forbid any `"browser.` capability string and any browser registration anywhere, and they now also require `LIVE_BROWSER_TOOLS` to be empty until slice 3b.
+
+**Evidence:**
+- `npm run test --workspace @qdral/mcp`: 195 tests, 194 passed, 0 failed, 1 skipped (the pre-existing Go-toolchain test, which CI runs).
+- The 6 new exposure tests cover:
+  - the cross-language agreement;
+  - the explicit `desktop_structured` list;
+  - `browser_structured` membership;
+  - local-only selection (unset, exact, and six refused values);
+  - no remote mapping;
+  - the kernel stamping the profile.
+- `qdral-contracts`: the profile parses beside the request and is omitted when absent.
+- `qdrald` `profile_gate`: 3 unit tests. Mutation runs that drop the remote check or the profile check each fail a test.
+- **The gate's wiring in `handle_envelope`:** not covered by a committed test until slice 3b, because no live shape exists for one to reach. The judge probed it by adding a temporary shape, and the probe was reverted:
+  - no profile, or `desktop_structured`: refused;
+  - `browser_structured`: passed on to the workspace check;
+  - remote with `browser_structured`: refused as local-only;
+  - each refusal was audited `PROFILE_DENIED`.
+- `desktop_structured` must hold no tool with a `browser.*` capability, so a browser tool left out of the live list cannot land there instead.

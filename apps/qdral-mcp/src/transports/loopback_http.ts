@@ -6,7 +6,7 @@ import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/
 import { KernelClient } from "../kernel.js";
 import {
   buildQdralServer,
-  defaultTransportContext
+  localTransportContext
 } from "../server.js";
 
 /**
@@ -219,6 +219,7 @@ export async function startLoopbackTransport(options: LoopbackOptions = {}): Pro
   const token = Buffer.from(tokenText);
   const requestedPort = validatePort(options.port);
   const defaultWorkspace = process.env.QDRAL_DEFAULT_WORKSPACE ?? "default";
+  const context = { ...localTransportContext(), transportKind: "loopback_http" as const };
   const sessions = new Map<string, SessionRecord>();
 
   function sweep(now: number): void {
@@ -340,11 +341,8 @@ export async function startLoopbackTransport(options: LoopbackOptions = {}): Pro
           logLine(method, path, 503);
           return;
         }
-        const kernel = new KernelClient();
-        const server = buildQdralServer(kernel, defaultWorkspace, {
-          ...defaultTransportContext(),
-          transportKind: "loopback_http"
-        });
+        const kernel = new KernelClient(undefined, null, context.toolSurfaceProfile);
+        const server = buildQdralServer(kernel, defaultWorkspace, context);
         const transport = new WebStandardStreamableHTTPServerTransport({
           sessionIdGenerator: () => randomUUID(),
           enableJsonResponse: true,

@@ -9,7 +9,15 @@ import { registerGitPushTools } from "./git_push.js";
 import { KernelClient } from "./kernel.js";
 import { processSpawnInputSchema } from "./process.js";
 import { projectKernelResult } from "./result.js";
-import { TOOL_CONTRACT, profileTools, remoteProfileForProvider, securitySchemesFor, type ToolSurfaceProfile } from "./tool_contract.js";
+import {
+  TOOL_CONTRACT,
+  TOOL_SURFACE_PROFILE_ENV,
+  localProfileFromConfig,
+  profileTools,
+  remoteProfileForProvider,
+  securitySchemesFor,
+  type ToolSurfaceProfile
+} from "./tool_contract.js";
 
 /**
  * Transport identity for the local MCP edge.
@@ -37,6 +45,19 @@ export function defaultTransportContext(): TransportContext {
     transportKind: "stdio",
     providerKind: "generic",
     toolSurfaceProfile: "desktop_structured"
+  };
+}
+
+/**
+ * A local transport's context: `desktop_structured` unless the local
+ * configuration (`QDRAL_TOOL_SURFACE_PROFILE` in the MCP client's server
+ * launch environment) selects `browser_structured`. Read once, at transport
+ * start; an unknown value fails startup.
+ */
+export function localTransportContext(env: NodeJS.ProcessEnv = process.env): TransportContext {
+  return {
+    ...defaultTransportContext(),
+    toolSurfaceProfile: localProfileFromConfig(env[TOOL_SURFACE_PROFILE_ENV])
   };
 }
 
@@ -375,7 +396,7 @@ export function registerQdralTools(
       stdin_policy,
       network_class
     }) => {
-      const processKernel = new KernelClient();
+      const processKernel = new KernelClient(undefined, null, kernel.profile);
       trackKernel(processKernel);
       try {
         return projectKernelResult(

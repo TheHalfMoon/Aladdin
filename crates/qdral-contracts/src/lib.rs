@@ -61,14 +61,21 @@ pub struct RemoteContext {
 }
 
 /// The line-delimited request accepted by `qdrald`: the unchanged internal
-/// request plus an optional remote context. Local transports never send
-/// `remote`; remote dispatch always does.
+/// request plus an optional remote context and the transport's tool
+/// surface profile. Local transports never send `remote`; remote dispatch
+/// always does.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RemoteRequestEnvelope {
     #[serde(flatten)]
     pub request: RequestEnvelope,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub remote: Option<RemoteContext>,
+    /// SG-000108 decision 6: the tool surface profile the MCP transport
+    /// serves, as its local configuration selected it. It grants nothing
+    /// by itself; `qdrald` requires `browser_structured` for a live browser
+    /// shape and ignores it for every other shape.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub profile: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -148,7 +155,20 @@ mod tests {
         let line = r#"{"version":1,"request_id":"r","client_session_id":"s","workspace_id":"w","capability":"fs.read","operation":"read","target":"a","arguments":{}}"#;
         let envelope: RemoteRequestEnvelope = serde_json::from_str(line).unwrap();
         assert!(envelope.remote.is_none());
+        assert!(envelope.profile.is_none());
         assert_eq!(envelope.request.capability, "fs.read");
+    }
+
+    #[test]
+    fn the_profile_travels_beside_the_request_and_is_omitted_when_absent() {
+        let line = r#"{"version":1,"request_id":"r","client_session_id":"s","workspace_id":"w","capability":"fs.read","operation":"read","arguments":{},"profile":"browser_structured"}"#;
+        let envelope: RemoteRequestEnvelope = serde_json::from_str(line).unwrap();
+        assert_eq!(envelope.profile.as_deref(), Some("browser_structured"));
+        assert_eq!(envelope.request.capability, "fs.read");
+        let mut without = envelope;
+        without.profile = None;
+        let text = serde_json::to_string(&without).unwrap();
+        assert!(!text.contains("profile"), "{text}");
     }
 
     #[test]
