@@ -393,7 +393,11 @@ So a denied, unavailable or mismatched approval never reaches the host. Host ref
   - "Gone" is checked against the OS, not assumed. The pid either names no running process, or names one with a different creation time (a reused pid).
   - An intent whose host still runs belongs to a live lifetime, possibly another `qdrald` process's (open question 2), and is left untouched. A query the OS refuses to answer counts as running.
   - A report that cannot be made yet (the destination is unreadable for now) stays open for the next run.
-- **Torn lines.** Only a torn final line, from a crash mid-append before the approval was consumed, is skipped. Any other unreadable line, unknown event, unknown schema, or a pending line without its destination fails closed.
+- **Torn lines.** A crash mid-append leaves a torn line: a strict prefix of a valid line, written before the approval was consumed.
+  - The next append seals it with a newline first, so a new line never fuses with it.
+  - The reader skips a line only when its JSON ends early (the only way a prefix can fail), wherever it is. This includes a prefix that splits a multi-byte path character, because lines are read as bytes.
+  - A torn `settled` or `reconciled` line leaves its intent open, and it is then reported again: still safe.
+  - Any other unreadable line, unknown event or schema, or a pending line without its destination fails closed.
 
 **Open question 3 (the MCP-side timeout budget) moves to slice 3.** No MCP path reaches the live browser until exposure lands there, so the budget is designed together with the `browser_structured` shapes it applies to.
 
@@ -408,7 +412,7 @@ So a denied, unavailable or mismatched approval never reaches the host. Host ref
   - the next `LiveBrowser::start` reconciles that exact record as absent, and nothing is left open;
   - a third start reports nothing.
 - **Unit tests:**
-  - the journal fold (settled, abandoned and reconciled close an intent; a torn tail is skipped; five kinds of corruption fail closed);
+  - the journal fold (settled, abandoned and reconciled close an intent; a torn tail is skipped and is sealed, not fused, by the next append; a torn multi-byte character; five kinds of corruption fail closed);
   - liveness (running, exited, and a reused pid by creation time);
   - recovery (gone-present reported with SHA-256 and size; gone-absent; reused pid; a live host untouched; each reported once);
   - the page store: close is idempotent and survives a reload, a closed page refuses navigation and actuation, and an unwritable registry changes nothing;
@@ -417,7 +421,8 @@ So a denied, unavailable or mismatched approval never reaches the host. Host ref
   - recovery that ignores host liveness;
   - recovery that does not journal its report;
   - a lost lifetime that leaves its page open;
-  - consuming the approval before the intent is durable.
+  - consuming the approval before the intent is durable;
+  - appending without sealing a torn tail.
 
 **Still deferred to slice 3:**
 - the profile gate;

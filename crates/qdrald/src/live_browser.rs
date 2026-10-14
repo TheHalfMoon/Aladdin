@@ -259,6 +259,11 @@ fn journal_append(path: &Path, line: &JournalLine) -> Result<(), ProviderError> 
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).map_err(|_| journal_unavailable())?;
     }
+    // A torn tail (a crash mid-append) is sealed with a newline first, so
+    // this line never fuses with it.
+    if torn_tail(path)? {
+        bytes.insert(0, b'\n');
+    }
     let mut file = std::fs::OpenOptions::new()
         .create(true)
         .append(true)
@@ -268,11 +273,31 @@ fn journal_append(path: &Path, line: &JournalLine) -> Result<(), ProviderError> 
     file.sync_data().map_err(|_| journal_unavailable())
 }
 
-/// The intents still open in the journal, in order. Only a torn final line
-/// (a crash mid-append, before the approval was consumed) is skipped; any
-/// other unreadable line fails closed.
+/// Whether the journal ends without a newline (a torn final line).
+fn torn_tail(path: &Path) -> Result<bool, ProviderError> {
+    use std::io::{Read as _, Seek as _, SeekFrom};
+    let mut file = match std::fs::File::open(path) {
+        Ok(file) => file,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(false),
+        Err(_) => return Err(journal_unavailable()),
+    };
+    let length = file.metadata().map_err(|_| journal_unavailable())?.len();
+    if length == 0 {
+        return Ok(false);
+    }
+    let mut last = [0u8; 1];
+    file.seek(SeekFrom::Start(length - 1))
+        .and_then(|_| file.read_exact(&mut last))
+        .map_err(|_| journal_unavailable())?;
+    Ok(last[0] != b'\n')
+}
+
+/// The intents still open in the journal, in order. A torn line (a crash
+/// mid-append, before the approval was consumed: a strict prefix of a
+/// line, so its JSON ends early) is skipped wherever a later append sealed
+/// it; any other unreadable line fails closed.
 pub fn journal_open_intents(path: &Path) -> Result<Vec<JournaledIntent>, ProviderError> {
-    let text = match std::fs::read_to_string(path) {
+    let text = match std::fs::read(path) {
         Ok(text) => text,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
         Err(_) => {
@@ -282,15 +307,14 @@ pub fn journal_open_intents(path: &Path) -> Result<Vec<JournaledIntent>, Provide
             ))
         }
     };
-    let lines: Vec<&str> = text
-        .lines()
-        .filter(|line| !line.trim().is_empty())
-        .collect();
     let mut open: Vec<JournaledIntent> = Vec::new();
-    for (index, raw) in lines.iter().enumerate() {
-        let line = match serde_json::from_str::<JournalLine>(raw) {
+    for raw in text.split(|byte| *byte == b'\n') {
+        if raw.iter().all(u8::is_ascii_whitespace) {
+            continue;
+        }
+        let line = match serde_json::from_slice::<JournalLine>(raw) {
             Ok(line) if line.schema == INTENT_SCHEMA => line,
-            _ if index + 1 == lines.len() && !text.ends_with('\n') => break,
+            Err(error) if error.is_eof() => continue,
             _ => {
                 return Err(ProviderError::new(
                     FailureCode::ProviderUnavailable,
@@ -1144,6 +1168,19 @@ mod tests {
         let open = journal_open_intents(&journal).unwrap();
         assert_eq!(open.len(), 1);
         assert_eq!(open[0].intent.record_id, "r2");
+        // The next run's append seals it rather than fusing with it, and
+        // the sealed torn line is skipped mid-file too.
+        journal_append(&journal, &JournalLine::event("settled", "r2")).unwrap();
+        assert!(journal_open_intents(&journal).unwrap().is_empty());
+        let sealed = std::fs::read_to_string(&journal).unwrap();
+        assert!(sealed.contains("\"deskal-sg\n{"), "{sealed}");
+        // A torn line that split a multi-byte path character is still torn.
+        let torn = pending("r7", &dir.join("bericht-\u{e4}"), "a.pdf", 1, 2);
+        let cut = torn.find('\u{e4}').unwrap() + 1;
+        let mut bytes = format!("{body}\n").into_bytes();
+        bytes.extend_from_slice(&torn.as_bytes()[..cut]);
+        std::fs::write(&journal, &bytes).unwrap();
+        assert_eq!(journal_open_intents(&journal).unwrap().len(), 1);
         assert_eq!(open[0].intent.relative, "b.pdf");
         assert_eq!((open[0].host_pid, open[0].host_started), (1, 2));
         // Anything else unreadable fails closed: a bad line mid-file, a
