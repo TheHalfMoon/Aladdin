@@ -26,7 +26,7 @@ use qdral_contracts::FailureCode;
 use qdral_policy::{Workspace, POLICY_REVISION};
 use qdral_provider_fs::ProviderError;
 use sha2::{Digest, Sha256};
-use std::path::Path;
+use std::path::{Component, Path, PathBuf};
 
 /// Domain separation for the combined approval digest.
 const LIVE_APPROVAL_DOMAIN: &str = "deskal-sg108-live-approval/1";
@@ -44,10 +44,103 @@ pub struct LiveDownload {
     pub source_url: String,
 }
 
+/// What became of a consumed approval (slice 2: the "consumed, not
+/// dispatched" record of decision 3).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DispatchOutcome {
+    /// The host carried the action out.
+    Executed,
+    /// The host refused the action after the approval was spent (closed code).
+    Refused(String),
+    /// The reply never came (timeout, a dead or broken host): the approval
+    /// was spent and the outcome is unknown until reconciled.
+    Lost,
+}
+
+/// One consumed approval and its outcome.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ApprovalOutcome {
+    pub record_id: String,
+    pub outcome: DispatchOutcome,
+}
+
+/// A download sent to the host whose reply has not arrived.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DownloadIntent {
+    pub record_id: String,
+    pub folder: PathBuf,
+    pub relative: String,
+}
+
+/// What a lost download left at its destination. qdrald cannot tell the
+/// host's committed file from one a same-user process placed at that name,
+/// so a present file is reported, never adopted as a committed download.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Reconciled {
+    PresentUnverified { sha256: String, bytes: u64 },
+    Absent,
+}
+
+/// What is at `relative` inside `folder` now. `relative` must be plain
+/// path segments (no root, no `..`); anything but a regular file there is
+/// refused rather than reported.
+pub fn reconcile_destination(folder: &Path, relative: &str) -> Result<Reconciled, ProviderError> {
+    let relative_path = Path::new(relative);
+    if relative.is_empty()
+        || relative_path.is_absolute()
+        || relative_path
+            .components()
+            .any(|component| !matches!(component, Component::Normal(_)))
+    {
+        return Err(ProviderError::new(
+            FailureCode::InvalidRequest,
+            "the destination name is not a plain relative path",
+        ));
+    }
+    let path = folder.join(relative_path);
+    let metadata = match std::fs::symlink_metadata(&path) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            return Ok(Reconciled::Absent)
+        }
+        Err(_) => {
+            return Err(ProviderError::new(
+                FailureCode::ProviderUnavailable,
+                "the destination could not be inspected",
+            ))
+        }
+    };
+    if !metadata.is_file() {
+        return Err(ProviderError::new(
+            FailureCode::PostconditionFailed,
+            "the destination is not a regular file",
+        ));
+    }
+    let bytes = std::fs::read(&path).map_err(|_| {
+        ProviderError::new(
+            FailureCode::ProviderUnavailable,
+            "the destination could not be read",
+        )
+    })?;
+    Ok(Reconciled::PresentUnverified {
+        sha256: Sha256::digest(&bytes)
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect(),
+        bytes: bytes.len() as u64,
+    })
+}
+
 /// One supervised worker-mode host and at most one lifetime.
 pub struct LiveBrowser {
     supervisor: Supervisor,
     lifetime: Option<String>,
+    outcomes: Vec<ApprovalOutcome>,
+    pending_download: Option<DownloadIntent>,
+    /// Test builds only: runs once, between a consume and its dispatch,
+    /// with the host's pid (to make the host die there).
+    #[cfg(test)]
+    after_consume: Option<Box<dyn FnMut(u32)>>,
 }
 
 /// The failure code for a host refusal (design open question 4), from the
@@ -66,7 +159,15 @@ pub fn failure_for(code: &str) -> FailureCode {
 
 fn host_error(error: qdral_browser_host::HostError) -> ProviderError {
     let code = qdral_browser_host::worker_host::error_code(&error);
-    ProviderError::new(failure_for(&code), format!("browser host: {code}"))
+    // A failed pipe or platform call is the provider being unavailable (a
+    // dead or broken host), not an internal fault.
+    let failure = match error {
+        qdral_browser_host::HostError::Io(_) | qdral_browser_host::HostError::Platform(_) => {
+            FailureCode::ProviderUnavailable
+        }
+        _ => failure_for(&code),
+    };
+    ProviderError::new(failure, format!("browser host: {code}"))
 }
 
 fn refused(code: &str) -> ProviderError {
@@ -103,6 +204,10 @@ impl LiveBrowser {
         Ok(Self {
             supervisor,
             lifetime: None,
+            outcomes: Vec::new(),
+            pending_download: None,
+            #[cfg(test)]
+            after_consume: None,
         })
     }
 
@@ -110,10 +215,68 @@ impl LiveBrowser {
         let host = self.supervisor.worker_host().ok_or_else(|| {
             ProviderError::new(FailureCode::ProviderUnavailable, "no live browser host")
         })?;
-        match host.request(request).map_err(host_error)? {
-            WorkerHostReply::Error { code } => Err(refused(&code)),
-            reply => Ok(reply),
+        match host.request(request) {
+            Ok(WorkerHostReply::Error { code }) => Err(refused(&code)),
+            Ok(reply) => Ok(reply),
+            Err(error) => {
+                // A lost or broken channel: the lifetime is over for qdrald
+                // (decision 3: a dead lifetime makes its page stale).
+                self.lifetime = None;
+                Err(host_error(error))
+            }
         }
+    }
+
+    /// Send a consequential frame whose approval was just consumed, and
+    /// record what became of that approval.
+    fn dispatch(
+        &mut self,
+        record_id: &str,
+        request: &WorkerHostRequest,
+    ) -> Result<WorkerHostReply, ProviderError> {
+        #[cfg(test)]
+        if let Some(mut hook) = self.after_consume.take() {
+            if let Some(pid) = self.supervisor.worker_host().map(|host| host.pid()) {
+                hook(pid);
+            }
+        }
+        let host = self.supervisor.worker_host().ok_or_else(|| {
+            ProviderError::new(FailureCode::ProviderUnavailable, "no live browser host")
+        })?;
+        let (outcome, result) = match host.request(request) {
+            Ok(WorkerHostReply::Error { code }) => {
+                let error = refused(&code);
+                (DispatchOutcome::Refused(code), Err(error))
+            }
+            Ok(reply) => (DispatchOutcome::Executed, Ok(reply)),
+            Err(error) => {
+                self.lifetime = None;
+                (DispatchOutcome::Lost, Err(host_error(error)))
+            }
+        };
+        self.outcomes.push(ApprovalOutcome {
+            record_id: record_id.to_owned(),
+            outcome,
+        });
+        result
+    }
+
+    /// Every consumed approval of this browser and its outcome, in order.
+    pub fn outcomes(&self) -> &[ApprovalOutcome] {
+        &self.outcomes
+    }
+
+    /// Whether a lifetime is live (false after open, before open, or once a
+    /// lost reply ended it).
+    pub fn has_lifetime(&self) -> bool {
+        self.lifetime.is_some()
+    }
+
+    /// Reconcile the download whose reply was lost, if any: report what is
+    /// at its destination now. Never re-downloads.
+    pub fn reconcile(&mut self) -> Option<Result<(DownloadIntent, Reconciled), ProviderError>> {
+        let intent = self.pending_download.take()?;
+        Some(reconcile_destination(&intent.folder, &intent.relative).map(|found| (intent, found)))
     }
 
     /// Open a lifetime for the fixture destination (test builds only).
@@ -209,11 +372,14 @@ impl LiveBrowser {
             BindAction::Navigate { url: url.into() },
             "navigate isolated browser page",
         )?;
-        match self.request(&WorkerHostRequest::Navigate {
-            url: url.into(),
-            record_id,
-            binding,
-        })? {
+        match self.dispatch(
+            &record_id.clone(),
+            &WorkerHostRequest::Navigate {
+                url: url.into(),
+                record_id,
+                binding,
+            },
+        )? {
             WorkerHostReply::Navigated { url, status } => Ok((url, status)),
             _ => Err(ProviderError::new(
                 FailureCode::InternalError,
@@ -266,14 +432,29 @@ impl LiveBrowser {
             },
             "download from isolated browser page",
         )?;
-        match self.request(&WorkerHostRequest::Download {
-            node_id: node_id.into(),
-            role: "link".into(),
-            folder,
+        // Recorded before the frame goes out, so a lost reply can be
+        // reconciled against the destination.
+        self.pending_download = Some(DownloadIntent {
+            record_id: record_id.clone(),
+            folder: PathBuf::from(&folder),
             relative: relative.into(),
-            record_id,
-            binding,
-        })? {
+        });
+        let reply = self.dispatch(
+            &record_id.clone(),
+            &WorkerHostRequest::Download {
+                node_id: node_id.into(),
+                role: "link".into(),
+                folder,
+                relative: relative.into(),
+                record_id,
+                binding,
+            },
+        );
+        // A reply, refusal or success, settles it; only a lost one stays.
+        if !matches!(self.outcomes.last(), Some(o) if o.outcome == DispatchOutcome::Lost) {
+            self.pending_download = None;
+        }
+        match reply? {
             WorkerHostReply::Downloaded {
                 relative,
                 sha256,
@@ -308,6 +489,42 @@ impl LiveBrowser {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn reconciliation_reports_what_is_at_the_destination_and_nothing_else() {
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0);
+        let folder =
+            std::env::temp_dir().join(format!("qdral-reconcile-{}-{nanos}", std::process::id()));
+        std::fs::create_dir_all(folder.join("sub")).unwrap();
+        assert_eq!(
+            reconcile_destination(&folder, "a.pdf").unwrap(),
+            Reconciled::Absent
+        );
+        std::fs::write(folder.join("a.pdf"), b"%PDF-1.4").unwrap();
+        assert_eq!(
+            reconcile_destination(&folder, "a.pdf").unwrap(),
+            Reconciled::PresentUnverified {
+                sha256: sha256_hex("%PDF-1.4"),
+                bytes: 8
+            }
+        );
+        for bad in ["", "../a.pdf", "sub/../../a.pdf", "C:\\a.pdf", "/a.pdf"] {
+            assert_eq!(
+                reconcile_destination(&folder, bad).unwrap_err().code,
+                FailureCode::InvalidRequest,
+                "{bad}"
+            );
+        }
+        // A directory at the name is refused, not reported.
+        assert_eq!(
+            reconcile_destination(&folder, "sub").unwrap_err().code,
+            FailureCode::PostconditionFailed
+        );
+        std::fs::remove_dir_all(&folder).unwrap();
+    }
 
     #[test]
     fn host_refusals_map_onto_closed_failure_codes() {
@@ -367,9 +584,13 @@ mod tests {
 mod native {
     use super::*;
     use qdral_approval::test_support::FixedApprovalBroker;
-    use qdral_approval::{ApprovalDecision, ApprovalError, ApprovedToken};
+    use qdral_approval::{
+        ApprovalDecision, ApprovalError, ApprovedToken, LocalApprovalBroker, NoPresenceVerifier,
+        RecordedDecision,
+    };
     use std::io::BufRead;
     use std::path::PathBuf;
+    use std::sync::Arc;
     use std::time::Duration;
 
     fn env_path(name: &str) -> PathBuf {
@@ -508,7 +729,14 @@ mod native {
             assert!(browser.shutdown());
             return;
         }
-        let approve = FixedApprovalBroker(ApprovalDecision::Approved);
+        // The real broker over its own ledger; only the SOFT consent (the
+        // system dialog) is scripted, as approval.
+        let ledger = scene.root.join("approvals.json");
+        let approve = LocalApprovalBroker::with_path_and_soft_decider(
+            &ledger,
+            Arc::new(NoPresenceVerifier),
+            Arc::new(|_| ApprovalDecision::Approved),
+        );
         let (url, status) = browser
             .navigate(&scene.workspace, &approve, "https://fixture.test/reports")
             .expect("approved navigation");
@@ -537,11 +765,114 @@ mod native {
             committed.source_url,
             "https://fixture.test/reports/2026-09-30.pdf"
         );
+        // The ledger recorded exactly these two approvals, each consumed,
+        // and both were carried out.
+        let records = approve.history(10);
+        assert_eq!(records.len(), 2, "{records:?}");
+        assert!(records
+            .iter()
+            .all(|record| record.decision == RecordedDecision::Approved && record.consumed));
+        let ids: Vec<&str> = browser
+            .outcomes()
+            .iter()
+            .map(|o| o.record_id.as_str())
+            .collect();
+        assert!(records
+            .iter()
+            .all(|record| ids.contains(&record.id.as_str())));
+        assert!(browser
+            .outcomes()
+            .iter()
+            .all(|o| o.outcome == DispatchOutcome::Executed));
+        // Reconciling the committed name reports exactly the committed file.
+        assert_eq!(
+            reconcile_destination(&scene.approved, "latest.pdf").expect("reconcile"),
+            Reconciled::PresentUnverified {
+                sha256: committed.sha256.clone(),
+                bytes: committed.bytes
+            }
+        );
+        assert!(
+            browser.reconcile().is_none(),
+            "no download was left pending"
+        );
         println!(
-            "SG108-EVIDENCE qdrald live journey: broker-approved navigation and download, sha256 {}",
+            "SG108-EVIDENCE qdrald live journey: real-ledger approved navigation and download, sha256 {}",
             committed.sha256
         );
         assert!(browser.shutdown(), "the host family stayed");
+    }
+
+    #[test]
+    #[ignore = "requires the built browser worker and Edge; run by npm run browser-launcher:native"]
+    fn a_host_lost_after_the_consume_is_recorded_reconciled_and_ends_the_lifetime() {
+        let fixture = Fixture::start();
+        let scene = Scene::new("lost");
+        let mut browser = scene.browser();
+        if open(&mut browser, &scene, &fixture).is_none() {
+            assert!(browser.shutdown());
+            return;
+        }
+        let ledger = scene.root.join("approvals.json");
+        let approve = LocalApprovalBroker::with_path_and_soft_decider(
+            &ledger,
+            Arc::new(NoPresenceVerifier),
+            Arc::new(|_| ApprovalDecision::Approved),
+        );
+        browser
+            .navigate(&scene.workspace, &approve, "https://fixture.test/reports")
+            .expect("approved navigation");
+        browser.observe().expect("observe");
+        let latest = browser.select_latest_dated_link().expect("latest report");
+        // The host dies after the broker consumed the download's approval
+        // and before the frame reaches it.
+        browser.after_consume = Some(Box::new(|pid: u32| {
+            let _ = std::process::Command::new("taskkill")
+                .args(["/PID", &pid.to_string(), "/T", "/F"])
+                .output();
+            std::thread::sleep(Duration::from_millis(500));
+        }));
+        let lost = browser
+            .download(
+                &scene.workspace,
+                &approve,
+                &latest,
+                &scene.approved,
+                "lost.pdf",
+            )
+            .expect_err("the host was gone");
+        assert!(
+            matches!(
+                lost.code,
+                FailureCode::ProviderUnavailable | FailureCode::ProcessTimeout
+            ),
+            "{lost:?}"
+        );
+        // The approval was spent, and the outcome says it was lost.
+        let last = browser.outcomes().last().expect("an outcome").clone();
+        assert_eq!(last.outcome, DispatchOutcome::Lost);
+        assert!(approve
+            .history(10)
+            .iter()
+            .any(|record| record.id == last.record_id && record.consumed));
+        // The lifetime is over: the next action is stale, before any prompt.
+        assert!(!browser.has_lifetime());
+        let before = approve.history(10).len();
+        let stale = browser
+            .navigate(&scene.workspace, &approve, "https://fixture.test/reports")
+            .expect_err("stale lifetime");
+        assert_eq!(stale.code, FailureCode::TargetStale);
+        assert_eq!(approve.history(10).len(), before, "a stale action prompted");
+        // Reconciliation: the host died before acting, so nothing is there.
+        let (intent, found) = browser
+            .reconcile()
+            .expect("a pending download")
+            .expect("reconciled");
+        assert_eq!(intent.record_id, last.record_id);
+        assert_eq!(found, Reconciled::Absent);
+        assert_eq!(files(&scene.approved), 0);
+        println!("SG108-EVIDENCE qdrald live lost: consumed approval recorded lost, lifetime stale, destination reconciled absent");
+        let _ = browser.shutdown();
     }
 
     /// Approves, but presents a token whose digest is not the prompt's: the

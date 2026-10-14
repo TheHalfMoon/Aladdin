@@ -337,3 +337,25 @@ So a denied, unavailable or mismatched approval never reaches the host. Host ref
   - the lifetime stays usable, and the next approved download commits.
 - **Mutation run:** with the broker's consume removed, the mismatched approval's download is committed, and the test fails.
 - **Under a managed policy** (CI), both tests require the typed refusal instead. The launcher requires their evidence lines, or the refusal lines. With `QDRAL_SG108_REQUIRE_JOURNEY=1` it requires the journeys.
+
+**Slice 2a: the real ledger, lost replies and reconciliation (test builds only).**
+
+**The real broker in tests.** `qdral-approval` gains a test-support-only constructor, `LocalApprovalBroker::with_path_and_soft_decider`. It replaces exactly one step, the SOFT consent dialog (a system-modal `MessageBoxW`), with a scripted decision. Everything else is the real broker: the ledger, the nonce, expiry, single use, digest and scope checks, and the records. STRONG approvals still need the presence verifier.
+- `test-support` is enabled only through dev-dependencies, and the workspace uses resolver 2, so release builds never contain it.
+- Unit tests over a real ledger: an approval is consumed once, a second consume is refused, a wrong digest is refused, the record is marked consumed, and a scripted denial issues nothing.
+
+**A lost reply ends the lifetime.** `qdrald`'s `LiveBrowser` dispatches every consequential frame through one path, which records each consumed approval's outcome: Executed, Refused (closed code), or Lost. This is decision 3's "consumed, not dispatched" record.
+- A lost reply (timeout, or a dead or broken host) ends the lifetime. The next action fails with `TargetStale` before any prompt, so no further approval is spent.
+- Transport failures map to `ProviderUnavailable`.
+
+**Reconciliation.** A download's intent (record id, folder, file name) is recorded before its frame is sent. After a lost reply, `reconcile()` reports what is at that destination: present, unverified (with SHA-256 and size), or absent. It never re-downloads and never records the file as committed. A destination that is not a plain relative path, or not a regular file, is refused.
+
+**Evidence: the `qdrald` live pass, 3 tests.**
+- **The journey now runs on the real ledger** (scripted consent). The ledger holds exactly the two approvals, both consumed. Both outcomes are Executed. Reconciling the committed name reports exactly the committed file's SHA-256 and size.
+- **`a_host_lost_after_the_consume_is_recorded_reconciled_and_ends_the_lifetime`:**
+  - A test-only hook kills the host after the broker consumed the download's approval and before the frame reached it.
+  - The approval is consumed in the ledger, and its outcome is Lost.
+  - The lifetime is over: the next navigation is `TargetStale`, and no new prompt is recorded.
+  - Reconciliation reports the destination absent.
+  - **Mutation run:** with the lifetime kept after a lost reply, the test fails.
+- **Still deferred to slice 2b:** the page id and store generation in `qdrald`'s half of the digest, the live-backed page store, persisting the intent across a `qdrald` restart, and the MCP-side timeout budget (open question 3).

@@ -666,7 +666,27 @@ pub trait ApprovalBroker {
 pub struct LocalApprovalBroker {
     ledger: Mutex<ApprovalLedger>,
     presence: Arc<dyn PresenceVerifier>,
+    /// Test builds only: decides the SOFT consent instead of the system
+    /// dialog. Everything else (ledger, nonce, expiry, single use, records)
+    /// is the real broker.
+    #[cfg(any(test, feature = "test-support"))]
+    soft_decider: Option<SoftDeciderHandle>,
 }
+
+#[cfg(any(test, feature = "test-support"))]
+#[derive(Clone)]
+struct SoftDeciderHandle(Arc<SoftDecider>);
+
+#[cfg(any(test, feature = "test-support"))]
+impl std::fmt::Debug for SoftDeciderHandle {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("SoftDecider(test)")
+    }
+}
+
+/// Test builds only: the SOFT consent a scripted test gives.
+#[cfg(any(test, feature = "test-support"))]
+pub type SoftDecider = dyn Fn(&ApprovalPrompt) -> ApprovalDecision + Send + Sync;
 
 impl LocalApprovalBroker {
     pub fn new() -> Self {
@@ -689,7 +709,23 @@ impl LocalApprovalBroker {
         Self {
             ledger: Mutex::new(ledger),
             presence,
+            #[cfg(any(test, feature = "test-support"))]
+            soft_decider: None,
         }
+    }
+
+    /// Test builds only: the real broker over the ledger at `path`, with
+    /// the SOFT consent decided by `decider` instead of the system dialog.
+    /// STRONG approvals still require the presence verifier.
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn with_path_and_soft_decider(
+        path: impl Into<std::path::PathBuf>,
+        presence: Arc<dyn PresenceVerifier>,
+        decider: Arc<SoftDecider>,
+    ) -> Self {
+        let mut broker = Self::with_path_and_verifier(path, presence);
+        broker.soft_decider = Some(SoftDeciderHandle(decider));
+        broker
     }
 
     pub fn presence_method(&self) -> &'static str {
@@ -828,6 +864,12 @@ impl LocalApprovalBroker {
 
     fn request_soft_token(&self, prompt: &ApprovalPrompt) -> Result<ApprovedToken, ApprovalError> {
         let prompt_view = self.preflight()?;
+        #[cfg(any(test, feature = "test-support"))]
+        let decision = match &self.soft_decider {
+            Some(decider) => Ok((decider.0)(prompt)),
+            None => platform_prompt(prompt),
+        };
+        #[cfg(not(any(test, feature = "test-support")))]
         let decision = platform_prompt(prompt);
         let mut ledger = self
             .ledger
@@ -2148,6 +2190,71 @@ fn platform_prompt(prompt: &ApprovalPrompt) -> Result<ApprovalDecision, Approval
     Err(ApprovalError::unavailable(
         "local approval UI is Windows-only in the current Qdral runtime",
     ))
+}
+
+#[cfg(test)]
+mod soft_decider_tests {
+    use super::*;
+
+    fn temp_ledger(label: &str) -> std::path::PathBuf {
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0);
+        std::env::temp_dir().join(format!(
+            "qdral-soft-decider-{label}-{}-{nanos}.json",
+            std::process::id()
+        ))
+    }
+
+    fn prompt(digest: &str) -> ApprovalPrompt {
+        ApprovalPrompt::new("ws", "rev-1", "act", "target", "summary", digest)
+    }
+
+    #[test]
+    fn a_scripted_consent_still_runs_the_real_ledger() {
+        let path = temp_ledger("approve");
+        let broker = LocalApprovalBroker::with_path_and_soft_decider(
+            &path,
+            Arc::new(NoPresenceVerifier),
+            Arc::new(|_| ApprovalDecision::Approved),
+        );
+        let digest = "a".repeat(64);
+        let token = broker.request_token(&prompt(&digest)).expect("approved");
+        let expected = ConsumeExpectation::new(digest.clone(), "ws", "rev-1");
+        broker
+            .consume(&token, &expected, now_ms())
+            .expect("first consume");
+        // Single use, and the digest must match: the ledger's own rules.
+        assert!(broker.consume(&token, &expected, now_ms()).is_err());
+        let other = broker.request_token(&prompt(&digest)).expect("approved");
+        let wrong = ConsumeExpectation::new("b".repeat(64), "ws", "rev-1");
+        assert!(broker.consume(&other, &wrong, now_ms()).is_err());
+        let history = broker.history(10);
+        assert!(history
+            .iter()
+            .any(|record| record.id == token.record_id && record.consumed));
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn a_scripted_denial_is_recorded_and_issues_nothing() {
+        let path = temp_ledger("deny");
+        let broker = LocalApprovalBroker::with_path_and_soft_decider(
+            &path,
+            Arc::new(NoPresenceVerifier),
+            Arc::new(|_| ApprovalDecision::Denied),
+        );
+        let error = broker
+            .request_token(&prompt(&"c".repeat(64)))
+            .expect_err("denied");
+        assert_eq!(error.code, FailureCode::ApprovalDenied);
+        assert!(broker
+            .history(10)
+            .iter()
+            .all(|record| record.decision != RecordedDecision::Approved));
+        let _ = std::fs::remove_file(&path);
+    }
 }
 
 #[cfg(any(test, feature = "test-support"))]
