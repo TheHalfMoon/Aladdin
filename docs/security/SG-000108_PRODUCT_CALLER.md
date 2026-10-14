@@ -138,6 +138,8 @@ For each consequential action, `qdrald` and the host each contribute what only t
 
 - **Never from a caller, and never from a user-writable runtime setting.** `validate_launch` only checks a file name. A same-user config file could otherwise make `qdrald` run any executable inside the worker job.
 - **Until SG-000106: a build-time pin.** A non-default cargo feature, `live-browser-dev`, compiles the Node and worker paths in at build time, together with the SHA-256 of `node.exe` and of the worker's `main.js`, and the host verifies both hashes before every launch.
+  - **Amended in slice 3b: the whole runtime tree, not `main.js`.** `main.js` imports the rest of `dist/` and `playwright-core`, so a hash of the entry point alone would pin nothing it loads. The pin is the SHA-256 of `node.exe` plus a digest of the runtime tree: `package.json`, every non-test file under `dist/`, and every file under `node_modules/playwright-core/`. Each file is hashed through a handle that shares reads only, refusing writes, renames and deletes, and the handles are held for the worker's whole lifetime, because Node loads modules lazily.
+  - **What the pin is not.** In a dev build the host and `qdrald` binaries are themselves files the user can write, so a same-user process able to rewrite them is outside what it defends. It guarantees that local configuration cannot point the worker at other code, and that the exact pinned files run unmodified between the check and their load. SG-000106's signed payload replaces it.
   - Without the feature there is no live browser path; this is how a development build is told apart from a release build.
   - The release build commands never enable it, and release qualification asserts it is absent.
   - A changed Node or worker file is refused, typed, until rebuilt.
@@ -490,3 +492,28 @@ It also requires every live tool to be local-only.
   - remote with `browser_structured`: refused as local-only;
   - each refusal was audited `PROFILE_DENIED`.
 - `desktop_structured` must hold no tool with a `browser.*` capability, so a browser tool left out of the live list cannot land there instead.
+
+**Slice 3b-i: the worker runtime pin (decision 7 as amended).**
+
+- **`runtime_pin.rs`** (host crate):
+  - `runtime_files` walks the runtime tree. A link or any other reparse point anywhere in it, or a missing `package.json`, refuses the whole tree.
+  - `tree_digest` frames each (relative path, file SHA-256) pair under the domain `deskal-worker-runtime-tree/1`. Its fixed vector is computed independently.
+  - `measure_and_hold` opens `node.exe` and every tree file with read-only sharing and without following a reparse point, rechecks each handle, and hashes through it.
+  - `RuntimePin::verify_and_hold` requires an exact match and keeps the handles.
+- **`WorkerLaunch.runtime_pin`.** When it is set, `launch_worker` verifies and holds the runtime after the managed-policy check and before anything is swept or spawned. `BrowserWorker` keeps the held files for the worker's lifetime, and they are released when it ends. Launches without a pin (every caller so far) are unchanged.
+- **Not yet in this slice:** the `live-browser-dev` feature that compiles a pin in, and the destinations it may open. Those arrive with slice 3b-ii, which uses this mechanism.
+
+**Evidence:**
+- **Native** (`a_pinned_runtime_runs_held_and_a_changed_one_never_starts`, Edge 155):
+  - the real runtime measures as 140 files;
+  - a mismatched pin is refused with `UnsupportedRuntime` before the profile is touched;
+  - the matching pin launches, the worker answers, and all 140 files stay held;
+  - while the worker runs, `main.js` and `node.exe` cannot be opened for writing, and both are released after shutdown.
+- **Unit tests:**
+  - the tree is the loadable runtime only (tests and other packages are excluded);
+  - held files cannot be written, renamed or deleted;
+  - a changed file, an added runtime file or a changed `node.exe` is each refused;
+  - changes to tests or to other packages do not affect the pin;
+  - junctions inside the tree and unexpected entry points are refused;
+  - the digest's framing has a fixed vector.
+- The native launcher now expects 27 lib native tests.
