@@ -26,7 +26,7 @@ use qdral_contracts::FailureCode;
 use qdral_policy::{Workspace, POLICY_REVISION};
 use qdral_provider_fs::ProviderError;
 use sha2::{Digest, Sha256};
-use std::path::{Component, Path, PathBuf};
+use std::path::{Path, PathBuf};
 
 /// Domain separation for the combined approval digest.
 const LIVE_APPROVAL_DOMAIN: &str = "deskal-sg108-live-approval/1";
@@ -81,54 +81,107 @@ pub enum Reconciled {
     Absent,
 }
 
-/// What is at `relative` inside `folder` now. `relative` must be plain
-/// path segments (no root, no `..`); anything but a regular file there is
-/// refused rather than reported.
+/// What is at `relative` inside `folder` now. `relative` must pass the
+/// host's own destination rules (no root, traversal, streams, trailing
+/// dots or spaces, reserved names); no segment below `folder` may be a
+/// reparse point, and anything but a regular file at the name is refused
+/// rather than reported. The file is hashed through the handle that was
+/// checked, and never beyond the transfer limit.
 pub fn reconcile_destination(folder: &Path, relative: &str) -> Result<Reconciled, ProviderError> {
-    let relative_path = Path::new(relative);
-    if relative.is_empty()
-        || relative_path.is_absolute()
-        || relative_path
-            .components()
-            .any(|component| !matches!(component, Component::Normal(_)))
-    {
-        return Err(ProviderError::new(
+    let relative = qdral_browser_host::validate_relative_destination(relative).map_err(|_| {
+        ProviderError::new(
             FailureCode::InvalidRequest,
             "the destination name is not a plain relative path",
-        ));
-    }
-    let path = folder.join(relative_path);
-    let metadata = match std::fs::symlink_metadata(&path) {
-        Ok(metadata) => metadata,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-            return Ok(Reconciled::Absent)
-        }
-        Err(_) => {
-            return Err(ProviderError::new(
-                FailureCode::ProviderUnavailable,
-                "the destination could not be inspected",
-            ))
-        }
-    };
-    if !metadata.is_file() {
-        return Err(ProviderError::new(
-            FailureCode::PostconditionFailed,
-            "the destination is not a regular file",
-        ));
-    }
-    let bytes = std::fs::read(&path).map_err(|_| {
-        ProviderError::new(
-            FailureCode::ProviderUnavailable,
-            "the destination could not be read",
         )
     })?;
+    let segments: Vec<&str> = relative.split(['/', '\\']).collect();
+    let mut path = folder.to_path_buf();
+    for (index, segment) in segments.iter().enumerate() {
+        path.push(segment);
+        let metadata = match std::fs::symlink_metadata(&path) {
+            Ok(metadata) => metadata,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                return Ok(Reconciled::Absent)
+            }
+            Err(_) => return Err(uninspectable()),
+        };
+        let last = index + 1 == segments.len();
+        if is_reparse_point(&metadata)
+            || (last && !metadata.is_file())
+            || (!last && !metadata.is_dir())
+        {
+            return Err(not_a_regular_file());
+        }
+    }
+    let file = open_no_reparse(&path).map_err(|_| uninspectable())?;
+    // The handle's own metadata: what was opened is still a plain file.
+    let metadata = file.metadata().map_err(|_| uninspectable())?;
+    if is_reparse_point(&metadata) || !metadata.is_file() {
+        return Err(not_a_regular_file());
+    }
+    let limit = qdral_browser_host::MAX_TRANSFER_BYTES;
+    let mut hasher = Sha256::new();
+    let mut bytes = 0u64;
+    let mut reader = std::io::Read::take(file, limit + 1);
+    let mut buffer = [0u8; 64 * 1024];
+    loop {
+        let read = std::io::Read::read(&mut reader, &mut buffer).map_err(|_| {
+            ProviderError::new(
+                FailureCode::ProviderUnavailable,
+                "the destination could not be read",
+            )
+        })?;
+        if read == 0 {
+            break;
+        }
+        bytes += read as u64;
+        hasher.update(&buffer[..read]);
+    }
+    if bytes > limit {
+        return Err(ProviderError::new(
+            FailureCode::PostconditionFailed,
+            "the destination is larger than any transfer",
+        ));
+    }
     Ok(Reconciled::PresentUnverified {
-        sha256: Sha256::digest(&bytes)
+        sha256: hasher
+            .finalize()
             .iter()
             .map(|byte| format!("{byte:02x}"))
             .collect(),
-        bytes: bytes.len() as u64,
+        bytes,
     })
+}
+
+fn uninspectable() -> ProviderError {
+    ProviderError::new(
+        FailureCode::ProviderUnavailable,
+        "the destination could not be inspected",
+    )
+}
+
+fn not_a_regular_file() -> ProviderError {
+    ProviderError::new(
+        FailureCode::PostconditionFailed,
+        "the destination is not a regular file",
+    )
+}
+
+fn is_reparse_point(metadata: &std::fs::Metadata) -> bool {
+    use std::os::windows::fs::MetadataExt;
+    const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x400;
+    metadata.file_type().is_symlink()
+        || metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0
+}
+
+/// Open for reading without following a reparse point at the final name.
+fn open_no_reparse(path: &Path) -> std::io::Result<std::fs::File> {
+    use std::os::windows::fs::OpenOptionsExt;
+    const FILE_FLAG_OPEN_REPARSE_POINT: u32 = 0x0020_0000;
+    std::fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(FILE_FLAG_OPEN_REPARSE_POINT)
+        .open(path)
 }
 
 /// One supervised worker-mode host and at most one lifetime.
@@ -137,6 +190,13 @@ pub struct LiveBrowser {
     lifetime: Option<String>,
     outcomes: Vec<ApprovalOutcome>,
     pending_download: Option<DownloadIntent>,
+    /// None while the host is (or may be) running; once ended, whether the
+    /// whole family was confirmed gone. Set once, never revised: a later
+    /// shutdown finds no host and would report a vacuous success.
+    host_ended: Option<bool>,
+    /// Test builds only: a shorter reply budget for dispatched frames.
+    #[cfg(test)]
+    reply_timeout: Option<std::time::Duration>,
     /// Test builds only: runs once, between a consume and its dispatch,
     /// with the host's pid (to make the host die there).
     #[cfg(test)]
@@ -206,6 +266,9 @@ impl LiveBrowser {
             lifetime: None,
             outcomes: Vec::new(),
             pending_download: None,
+            host_ended: None,
+            #[cfg(test)]
+            reply_timeout: None,
             #[cfg(test)]
             after_consume: None,
         })
@@ -221,9 +284,19 @@ impl LiveBrowser {
             Err(error) => {
                 // A lost or broken channel: the lifetime is over for qdrald
                 // (decision 3: a dead lifetime makes its page stale).
-                self.lifetime = None;
+                self.end_host();
                 Err(host_error(error))
             }
+        }
+    }
+
+    /// End the lifetime and the whole host family, once. A host whose
+    /// reply is lost may still be acting (suspended, or slow): only a
+    /// confirmed-gone family makes the destination safe to reconcile.
+    fn end_host(&mut self) {
+        self.lifetime = None;
+        if self.host_ended.is_none() {
+            self.host_ended = Some(self.supervisor.shutdown_worker_host().unwrap_or(false));
         }
     }
 
@@ -240,18 +313,31 @@ impl LiveBrowser {
                 hook(pid);
             }
         }
-        let host = self.supervisor.worker_host().ok_or_else(|| {
-            ProviderError::new(FailureCode::ProviderUnavailable, "no live browser host")
-        })?;
-        let (outcome, result) = match host.request(request) {
+        #[cfg(test)]
+        let reply_timeout = self.reply_timeout;
+        let reply = match self.supervisor.worker_host() {
+            None => Err(ProviderError::new(
+                FailureCode::ProviderUnavailable,
+                "no live browser host",
+            )),
+            #[cfg(test)]
+            Some(host) if reply_timeout.is_some() => host
+                .request_within(request, reply_timeout.unwrap_or_default())
+                .map_err(host_error),
+            Some(host) => host.request(request).map_err(host_error),
+        };
+        let (outcome, result) = match reply {
             Ok(WorkerHostReply::Error { code }) => {
                 let error = refused(&code);
                 (DispatchOutcome::Refused(code), Err(error))
             }
             Ok(reply) => (DispatchOutcome::Executed, Ok(reply)),
+            // Every other path leaves the consumed approval's outcome
+            // unknown: record it lost, and end the host before anything
+            // reads the destination.
             Err(error) => {
-                self.lifetime = None;
-                (DispatchOutcome::Lost, Err(host_error(error)))
+                self.end_host();
+                (DispatchOutcome::Lost, Err(error))
             }
         };
         self.outcomes.push(ApprovalOutcome {
@@ -272,9 +358,24 @@ impl LiveBrowser {
         self.lifetime.is_some()
     }
 
+    /// Whether the host family was ended and confirmed gone (None while
+    /// it may still be running).
+    pub fn host_ended(&self) -> Option<bool> {
+        self.host_ended
+    }
+
     /// Reconcile the download whose reply was lost, if any: report what is
-    /// at its destination now. Never re-downloads.
+    /// at its destination now. Never re-downloads. Refused, keeping the
+    /// intent, unless the host family is confirmed gone: a host still
+    /// running could commit after the report.
     pub fn reconcile(&mut self) -> Option<Result<(DownloadIntent, Reconciled), ProviderError>> {
+        self.pending_download.as_ref()?;
+        if self.host_ended != Some(true) {
+            return Some(Err(ProviderError::new(
+                FailureCode::ProviderUnavailable,
+                "the browser host is not confirmed gone; the destination cannot be reconciled",
+            )));
+        }
         let intent = self.pending_download.take()?;
         Some(reconcile_destination(&intent.folder, &intent.relative).map(|found| (intent, found)))
     }
@@ -373,10 +474,10 @@ impl LiveBrowser {
             "navigate isolated browser page",
         )?;
         match self.dispatch(
-            &record_id.clone(),
+            &record_id,
             &WorkerHostRequest::Navigate {
                 url: url.into(),
-                record_id,
+                record_id: record_id.clone(),
                 binding,
             },
         )? {
@@ -440,13 +541,13 @@ impl LiveBrowser {
             relative: relative.into(),
         });
         let reply = self.dispatch(
-            &record_id.clone(),
+            &record_id,
             &WorkerHostRequest::Download {
                 node_id: node_id.into(),
                 role: "link".into(),
                 folder,
                 relative: relative.into(),
-                record_id,
+                record_id: record_id.clone(),
                 binding,
             },
         );
@@ -511,7 +612,19 @@ mod tests {
                 bytes: 8
             }
         );
-        for bad in ["", "../a.pdf", "sub/../../a.pdf", "C:\\a.pdf", "/a.pdf"] {
+        for bad in [
+            "",
+            "../a.pdf",
+            "sub/../../a.pdf",
+            "C:\\a.pdf",
+            "/a.pdf",
+            "a.pdf:stream",
+            "a.pdf.",
+            "a.pdf ",
+            "NUL",
+            "nul.pdf",
+            "sub//a.pdf",
+        ] {
             assert_eq!(
                 reconcile_destination(&folder, bad).unwrap_err().code,
                 FailureCode::InvalidRequest,
@@ -523,7 +636,106 @@ mod tests {
             reconcile_destination(&folder, "sub").unwrap_err().code,
             FailureCode::PostconditionFailed
         );
+        // A junction on the way is not followed, even to a real file.
+        std::fs::write(folder.join("sub").join("b.pdf"), b"%PDF-1.4").unwrap();
+        let made = std::process::Command::new("cmd")
+            .args(["/C", "mklink", "/J"])
+            .arg(folder.join("via"))
+            .arg(folder.join("sub"))
+            .output()
+            .expect("mklink");
+        assert!(made.status.success(), "{made:?}");
+        assert!(folder.join("via").join("b.pdf").is_file());
+        assert_eq!(
+            reconcile_destination(&folder, "via/b.pdf")
+                .unwrap_err()
+                .code,
+            FailureCode::PostconditionFailed
+        );
+        assert_eq!(
+            reconcile_destination(&folder, "via").unwrap_err().code,
+            FailureCode::PostconditionFailed
+        );
+        // Nothing larger than a transfer is hashed or reported.
+        let limit = qdral_browser_host::MAX_TRANSFER_BYTES;
+        std::fs::write(folder.join("big.pdf"), vec![b' '; limit as usize + 1]).unwrap();
+        assert_eq!(
+            reconcile_destination(&folder, "big.pdf").unwrap_err().code,
+            FailureCode::PostconditionFailed
+        );
+        std::fs::write(folder.join("big.pdf"), vec![b' '; limit as usize]).unwrap();
+        assert!(matches!(
+            reconcile_destination(&folder, "big.pdf").unwrap(),
+            Reconciled::PresentUnverified { bytes, .. } if bytes == limit
+        ));
+        std::fs::remove_dir(folder.join("via")).unwrap();
         std::fs::remove_dir_all(&folder).unwrap();
+    }
+
+    fn hostless(pending: bool, host_ended: Option<bool>, folder: &Path) -> LiveBrowser {
+        LiveBrowser {
+            supervisor: Supervisor::new(),
+            lifetime: None,
+            outcomes: Vec::new(),
+            pending_download: pending.then(|| DownloadIntent {
+                record_id: "r1".into(),
+                folder: folder.to_path_buf(),
+                relative: "a.pdf".into(),
+            }),
+            host_ended,
+            reply_timeout: None,
+            after_consume: None,
+        }
+    }
+
+    #[test]
+    fn reconciliation_waits_for_a_confirmed_end_of_the_host() {
+        let folder =
+            std::env::temp_dir().join(format!("qdral-reconcile-gate-{}", std::process::id()));
+        assert!(hostless(false, Some(true), &folder).reconcile().is_none());
+        // Running, or ended without confirmation: refused, and the intent
+        // is kept (never silently dropped).
+        for ended in [None, Some(false)] {
+            let mut browser = hostless(true, ended, &folder);
+            let refused = browser.reconcile().expect("pending").unwrap_err();
+            assert_eq!(refused.code, FailureCode::ProviderUnavailable);
+            assert!(browser.pending_download.is_some(), "{ended:?}");
+        }
+        let mut browser = hostless(true, Some(true), &folder);
+        let (intent, found) = browser.reconcile().expect("pending").expect("reconciled");
+        assert_eq!(intent.record_id, "r1");
+        assert_eq!(found, Reconciled::Absent);
+        assert!(browser.reconcile().is_none());
+    }
+
+    #[test]
+    fn a_dispatch_without_a_host_is_recorded_lost() {
+        let folder = std::env::temp_dir();
+        let mut browser = hostless(false, None, &folder);
+        let error = browser
+            .dispatch("r9", &WorkerHostRequest::Observe {})
+            .unwrap_err();
+        assert_eq!(error.code, FailureCode::ProviderUnavailable);
+        assert_eq!(
+            browser.outcomes(),
+            &[ApprovalOutcome {
+                record_id: "r9".into(),
+                outcome: DispatchOutcome::Lost
+            }]
+        );
+        // No host existed, so its end is (trivially) confirmed.
+        assert_eq!(browser.host_ended(), Some(true));
+    }
+
+    #[test]
+    fn broken_pipes_and_platform_faults_are_the_provider_unavailable() {
+        use qdral_browser_host::HostError;
+        let io = HostError::Io(std::io::Error::from(std::io::ErrorKind::BrokenPipe));
+        assert_eq!(host_error(io).code, FailureCode::ProviderUnavailable);
+        let platform = HostError::Platform("job".into());
+        assert_eq!(host_error(platform).code, FailureCode::ProviderUnavailable);
+        let invalid = HostError::Invalid("x".into());
+        assert_eq!(host_error(invalid).code, FailureCode::InvalidRequest);
     }
 
     #[test]
@@ -827,10 +1039,24 @@ mod native {
         // The host dies after the broker consumed the download's approval
         // and before the frame reaches it.
         browser.after_consume = Some(Box::new(|pid: u32| {
+            use windows_sys::Win32::Foundation::{CloseHandle, WAIT_OBJECT_0};
+            use windows_sys::Win32::System::Threading::{
+                OpenProcess, WaitForSingleObject, PROCESS_SYNCHRONIZE,
+            };
+            // SAFETY: a plain Win32 open of this test's host pid; the handle
+            // pins the process object so the wait below observes this host.
+            let process = unsafe { OpenProcess(PROCESS_SYNCHRONIZE, 0, pid) };
+            assert_ne!(process, 0, "open the host process");
+            // The tree kill may race children that exit on their own (its
+            // exit status then reports them); what matters is the host died.
             let _ = std::process::Command::new("taskkill")
                 .args(["/PID", &pid.to_string(), "/T", "/F"])
-                .output();
-            std::thread::sleep(Duration::from_millis(500));
+                .output()
+                .expect("taskkill");
+            // SAFETY: the handle opened above, then closed once.
+            let waited = unsafe { WaitForSingleObject(process, 10_000) };
+            unsafe { CloseHandle(process) };
+            assert_eq!(waited, WAIT_OBJECT_0, "the host did not die");
         }));
         let lost = browser
             .download(
@@ -863,6 +1089,9 @@ mod native {
             .expect_err("stale lifetime");
         assert_eq!(stale.code, FailureCode::TargetStale);
         assert_eq!(approve.history(10).len(), before, "a stale action prompted");
+        // The family was ended and confirmed gone before anything reads
+        // the destination.
+        assert_eq!(browser.host_ended(), Some(true));
         // Reconciliation: the host died before acting, so nothing is there.
         let (intent, found) = browser
             .reconcile()
@@ -872,6 +1101,86 @@ mod native {
         assert_eq!(found, Reconciled::Absent);
         assert_eq!(files(&scene.approved), 0);
         println!("SG108-EVIDENCE qdrald live lost: consumed approval recorded lost, lifetime stale, destination reconciled absent");
+        let _ = browser.shutdown();
+    }
+
+    #[link(name = "ntdll")]
+    extern "system" {
+        fn NtSuspendProcess(process: windows_sys::Win32::Foundation::HANDLE) -> i32;
+    }
+
+    #[test]
+    #[ignore = "requires the built browser worker and Edge; run by npm run browser-launcher:native"]
+    fn a_suspended_host_is_ended_before_its_lost_download_is_reconciled() {
+        use std::sync::atomic::{AtomicIsize, Ordering};
+        use windows_sys::Win32::Foundation::{CloseHandle, WAIT_OBJECT_0};
+        use windows_sys::Win32::System::Threading::{
+            OpenProcess, WaitForSingleObject, PROCESS_SUSPEND_RESUME, PROCESS_SYNCHRONIZE,
+        };
+        let fixture = Fixture::start();
+        let scene = Scene::new("suspended");
+        let mut browser = scene.browser();
+        if open(&mut browser, &scene, &fixture).is_none() {
+            assert!(browser.shutdown());
+            return;
+        }
+        let approve = LocalApprovalBroker::with_path_and_soft_decider(
+            scene.root.join("approvals.json"),
+            Arc::new(NoPresenceVerifier),
+            Arc::new(|_| ApprovalDecision::Approved),
+        );
+        browser
+            .navigate(&scene.workspace, &approve, "https://fixture.test/reports")
+            .expect("approved navigation");
+        browser.observe().expect("observe");
+        let latest = browser.select_latest_dated_link().expect("latest report");
+        // The host is alive but silent (suspended, not dead) when the
+        // consumed download goes out: the reply is lost, yet the host could
+        // still act once it resumed.
+        let handle = Arc::new(AtomicIsize::new(0));
+        let held = Arc::clone(&handle);
+        browser.reply_timeout = Some(Duration::from_secs(5));
+        browser.after_consume = Some(Box::new(move |pid: u32| {
+            // SAFETY: plain Win32 calls on a pid this test's host owns; the
+            // handle is kept (so the pid cannot be reused under it) and
+            // closed below.
+            let process =
+                unsafe { OpenProcess(PROCESS_SUSPEND_RESUME | PROCESS_SYNCHRONIZE, 0, pid) };
+            assert_ne!(process, 0, "open the host process");
+            // SAFETY: a valid process handle with PROCESS_SUSPEND_RESUME.
+            assert_eq!(unsafe { NtSuspendProcess(process) }, 0, "suspend the host");
+            held.store(process, Ordering::SeqCst);
+        }));
+        let lost = browser
+            .download(
+                &scene.workspace,
+                &approve,
+                &latest,
+                &scene.approved,
+                "lost.pdf",
+            )
+            .expect_err("the reply never came");
+        assert_eq!(lost.code, FailureCode::ProcessTimeout, "{lost:?}");
+        let last = browser.outcomes().last().expect("an outcome").clone();
+        assert_eq!(last.outcome, DispatchOutcome::Lost);
+        // The host was ended and confirmed gone before reconciliation: the
+        // suspended process itself has exited.
+        assert_eq!(browser.host_ended(), Some(true));
+        let process = handle.load(Ordering::SeqCst);
+        // SAFETY: the handle opened above, still open.
+        assert_eq!(unsafe { WaitForSingleObject(process, 0) }, WAIT_OBJECT_0);
+        // SAFETY: closing the handle opened above, once.
+        unsafe { CloseHandle(process) };
+        let (intent, found) = browser
+            .reconcile()
+            .expect("a pending download")
+            .expect("reconciled");
+        assert_eq!(intent.record_id, last.record_id);
+        assert_eq!(found, Reconciled::Absent);
+        // And it stays absent: nothing is left that could commit later.
+        std::thread::sleep(Duration::from_secs(3));
+        assert_eq!(files(&scene.approved), 0);
+        println!("SG108-EVIDENCE qdrald live suspended: silent host ended and confirmed gone, lost download reconciled absent and stayed absent");
         let _ = browser.shutdown();
     }
 
