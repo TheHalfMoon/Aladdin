@@ -132,7 +132,7 @@ if (hostBuild.error || hostBuild.status !== 0) {
   process.stderr.write("browser-launcher:native: could not build the worker-mode host binary\n");
   process.exit(1);
 }
-const targetDir = process.env.CARGO_TARGET_DIR ? resolve(process.env.CARGO_TARGET_DIR) : join(repo, "target");
+const targetDir = process.env.CARGO_TARGET_DIR ? resolve(repo, process.env.CARGO_TARGET_DIR) : join(repo, "target");
 const hostBinary = join(targetDir, "debug", "qdral-browser-host.exe");
 const qdraldLive = spawnSync(
   "cargo",

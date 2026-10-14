@@ -320,6 +320,14 @@ So a denied, unavailable or mismatched approval never reaches the host. Host ref
 
 **No envelope dispatch yet.** The native tests drive the module directly. The live-backed page store and exposure arrive together in slice 3.
 
+**Deferred to slice 2, together with the page store** (review of this PR):
+- **`qdrald`'s half of the digest** does not yet bind the page id or the store generation that decision 3 lists. There is no store yet. Today it binds the workspace, the policy revision, the lifetime and the action.
+- **The "consumed, not dispatched" record and reconciliation** (open question 1) are not implemented.
+  - **What already fails closed:** a lost reply poisons the host connection, so later actions fail at `bind`, before any prompt, and no further approval is spent.
+  - **What is still open:** a download the host committed whose reply was lost leaves a file with no evidence record.
+
+**The download prompt names the destination.** Its summary carries the source URL, the approved folder and the file name, which are also bound into the digest.
+
 **Evidence: a fourth native pass, `qdrald` live tests, 2 tests.** The launcher first builds the host binary with the feature, then hands its path to the tests through a test-only variable, `QDRAL_SG108_HOST_BINARY`.
 - **`the_journey_runs_under_the_broker_and_commits_the_verified_report`:** broker-approved navigation, observation, the host's selection, and a broker-approved, create-only download. An independent checker verifies the bytes and the SHA-256, `5523ba2d…994a`.
 - **`a_denied_or_mismatched_approval_never_reaches_the_host`:**

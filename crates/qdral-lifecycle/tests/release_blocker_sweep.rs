@@ -398,10 +398,15 @@ fn the_live_browser_test_feature_never_reaches_a_release_build() {
         ["live-browser-test = [\"dep:qdral-browser-host\", \"qdral-browser-host/live-browser-test\"]"],
         "qdrald may only define live-browser-test, never enable it by default"
     );
-    assert!(
-        qdrald.lines().any(|line| line.trim()
-            == "qdral-browser-host = { path = \"../qdral-browser-host\", optional = true }"),
-        "qdrald's dependency on the browser host must stay optional"
+    let host_dependencies: Vec<&str> = qdrald
+        .lines()
+        .map(str::trim)
+        .filter(|line| line.starts_with("qdral-browser-host"))
+        .collect();
+    assert_eq!(
+        host_dependencies,
+        ["qdral-browser-host = { path = \"../qdral-browser-host\", optional = true }"],
+        "qdrald depends on the browser host exactly once, and only optionally"
     );
 }
 

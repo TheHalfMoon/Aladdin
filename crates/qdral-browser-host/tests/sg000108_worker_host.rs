@@ -524,6 +524,12 @@ fn nodes_a_trimmed_observation_dropped_cannot_be_acted_on() {
         ),
         other => panic!("{other:?}"),
     };
+    // The whole page fit the host's snapshot cap, so the dated link (last)
+    // was observed by the host and then dropped from the reply.
+    assert!(
+        node_count < 512,
+        "the page reached the snapshot cap ({node_count}): the dated link may never have been observed"
+    );
     // The page is built so that the reply cannot carry every node.
     assert!(
         truncated,

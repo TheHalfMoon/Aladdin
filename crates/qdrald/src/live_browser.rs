@@ -87,7 +87,7 @@ pub(crate) fn approval_digest(
     action: &BindAction,
     host_binding: &str,
 ) -> String {
-    let action = serde_json::to_string(action).unwrap_or_default();
+    let action = serde_json::to_string(action).expect("a bind action always serializes");
     sha256_hex(&format!(
         "{LIVE_APPROVAL_DOMAIN}\n{workspace_id}\n{POLICY_REVISION}\n{lifetime}\n{action}\n{host_binding}"
     ))
@@ -150,6 +150,8 @@ impl LiveBrowser {
         action: BindAction,
         title: &str,
     ) -> Result<(String, String, BindAction), ProviderError> {
+        // What the prompt shows: where the action goes, and for a download
+        // also where the file lands (all of it bound into the digest).
         let lifetime = self.lifetime.clone().ok_or_else(|| {
             ProviderError::new(FailureCode::TargetStale, "no live browser lifetime")
         })?;
@@ -165,12 +167,20 @@ impl LiveBrowser {
             }
         };
         let digest = approval_digest(&workspace.id, &lifetime, &action, &binding);
+        let summary = match &action {
+            BindAction::Download {
+                folder, relative, ..
+            } => {
+                format!("lifetime={lifetime} source={target} destination={folder} file={relative}")
+            }
+            _ => format!("lifetime={lifetime} target={target}"),
+        };
         let prompt = ApprovalPrompt::new(
             workspace.id.clone(),
             POLICY_REVISION,
             title,
             target.clone(),
-            format!("lifetime={lifetime} target={target}"),
+            summary,
             digest.clone(),
         );
         let token = approval
@@ -340,6 +350,12 @@ mod tests {
             assert_ne!(base, other);
         }
         assert_eq!(base.len(), 64);
+        // Fixed vector, computed independently (Python sha256) over the
+        // documented framing, with the live policy revision sg-000040-v1.
+        assert_eq!(
+            base,
+            "8a8dd6cfaae484615bac5f162609033ebae154c15484ad9eda9b38a67a0ba72a"
+        );
     }
 }
 
@@ -581,7 +597,13 @@ mod native {
         let tampered = browser
             .download(&scene.workspace, &tamper, &latest, &scene.approved, "b.pdf")
             .expect_err("mismatched approval");
-        assert_ne!(tampered.code, FailureCode::InternalError, "{tampered:?}");
+        // The broker refused the consume (not the host): its own code and
+        // message.
+        assert_eq!(tampered.code, FailureCode::TargetStale, "{tampered:?}");
+        assert!(
+            tampered.message.contains("digest changed after approval"),
+            "{tampered:?}"
+        );
         assert_eq!(files(&scene.approved), 0, "a refused approval wrote a file");
         // The lifetime is still live and in step: an approved download runs.
         assert!(browser.is_usable());
