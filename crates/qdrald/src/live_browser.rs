@@ -19,17 +19,31 @@
 //! the live-backed page store arrive together in slice 3.
 #![cfg_attr(not(test), allow(dead_code))]
 
-use qdral_approval::{now_ms, ApprovalBroker, ApprovalPrompt, ConsumeExpectation};
+use qdral_approval::{now_ms, ApprovalBroker, ApprovalPrompt, ApprovedToken, ConsumeExpectation};
 use qdral_browser_host::worker_host::{BindAction, WireNode, WorkerHostReply, WorkerHostRequest};
 use qdral_browser_host::{Supervisor, WorkerHostLaunch};
 use qdral_contracts::FailureCode;
 use qdral_policy::{Workspace, POLICY_REVISION};
+use qdral_provider_browser::{PageRecord, PageState, PageStore};
 use qdral_provider_fs::ProviderError;
 use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
 
-/// Domain separation for the combined approval digest.
-const LIVE_APPROVAL_DOMAIN: &str = "deskal-sg108-live-approval/1";
+/// Domain separation for the combined approval digest. Version 2 binds
+/// the page store's page id, generation and origin (slice 2b).
+const LIVE_APPROVAL_DOMAIN: &str = "deskal-sg108-live-approval/2";
+
+/// Schema of one intent journal line.
+const INTENT_SCHEMA: &str = "deskal-sg108-intent/1";
+
+/// Where a live browser keeps its durable state: the page registry and the
+/// download intent journal (both under qdrald's protected local state in
+/// a product build; a test scene's own directory in tests).
+#[derive(Debug, Clone)]
+pub struct LiveState {
+    pub pages: PathBuf,
+    pub intents: PathBuf,
+}
 
 /// The host lifetime's numeric policy revision. qdrald's own revision (a
 /// string) is bound into qdrald's half of every digest.
@@ -80,6 +94,9 @@ pub enum Reconciled {
     PresentUnverified { sha256: String, bytes: u64 },
     Absent,
 }
+
+/// One intent recovered from an earlier run and what reconciling it found.
+pub type Recovered = (DownloadIntent, Result<Reconciled, ProviderError>);
 
 /// What is at `relative` inside `folder` now. `relative` must pass the
 /// host's own destination rules (no root, traversal, streams, trailing
@@ -184,10 +201,238 @@ fn open_no_reparse(path: &Path) -> std::io::Result<std::fs::File> {
         .open(path)
 }
 
+/// One line of the intent journal. A download's `pending` line is written
+/// and synced before its approval is consumed; `settled` follows a reply
+/// (success or refusal), `abandoned` an approval that was never consumed,
+/// and `reconciled` a report of the destination after a lost reply.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+struct JournalLine {
+    schema: String,
+    event: String,
+    record_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    folder: Option<PathBuf>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    relative: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    host_pid: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    host_started: Option<u64>,
+}
+
+impl JournalLine {
+    fn event(event: &str, record_id: &str) -> Self {
+        Self {
+            schema: INTENT_SCHEMA.into(),
+            event: event.into(),
+            record_id: record_id.into(),
+            folder: None,
+            relative: None,
+            host_pid: None,
+            host_started: None,
+        }
+    }
+}
+
+/// A download intent the journal still holds open, with the host that
+/// was asked to carry it out (pid and creation time, so a reused pid is
+/// never mistaken for it).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct JournaledIntent {
+    pub intent: DownloadIntent,
+    pub host_pid: u32,
+    pub host_started: u64,
+}
+
+fn journal_unavailable() -> ProviderError {
+    ProviderError::new(
+        FailureCode::ProviderUnavailable,
+        "the download intent journal could not be written",
+    )
+}
+
+/// Append one line and sync it to disk before returning.
+fn journal_append(path: &Path, line: &JournalLine) -> Result<(), ProviderError> {
+    use std::io::Write as _;
+    let mut bytes = serde_json::to_vec(line).map_err(|_| journal_unavailable())?;
+    bytes.push(b'\n');
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).map_err(|_| journal_unavailable())?;
+    }
+    let mut file = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)
+        .map_err(|_| journal_unavailable())?;
+    file.write_all(&bytes).map_err(|_| journal_unavailable())?;
+    file.sync_data().map_err(|_| journal_unavailable())
+}
+
+/// The intents still open in the journal, in order. Only a torn final line
+/// (a crash mid-append, before the approval was consumed) is skipped; any
+/// other unreadable line fails closed.
+pub fn journal_open_intents(path: &Path) -> Result<Vec<JournaledIntent>, ProviderError> {
+    let text = match std::fs::read_to_string(path) {
+        Ok(text) => text,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(_) => {
+            return Err(ProviderError::new(
+                FailureCode::ProviderUnavailable,
+                "the download intent journal could not be read",
+            ))
+        }
+    };
+    let lines: Vec<&str> = text
+        .lines()
+        .filter(|line| !line.trim().is_empty())
+        .collect();
+    let mut open: Vec<JournaledIntent> = Vec::new();
+    for (index, raw) in lines.iter().enumerate() {
+        let line = match serde_json::from_str::<JournalLine>(raw) {
+            Ok(line) if line.schema == INTENT_SCHEMA => line,
+            _ if index + 1 == lines.len() && !text.ends_with('\n') => break,
+            _ => {
+                return Err(ProviderError::new(
+                    FailureCode::ProviderUnavailable,
+                    "the download intent journal is unreadable",
+                ))
+            }
+        };
+        match line.event.as_str() {
+            "pending" => match (line.folder, line.relative, line.host_pid, line.host_started) {
+                (Some(folder), Some(relative), Some(host_pid), Some(host_started)) => {
+                    open.push(JournaledIntent {
+                        intent: DownloadIntent {
+                            record_id: line.record_id,
+                            folder,
+                            relative,
+                        },
+                        host_pid,
+                        host_started,
+                    })
+                }
+                _ => {
+                    return Err(ProviderError::new(
+                        FailureCode::ProviderUnavailable,
+                        "the download intent journal is unreadable",
+                    ))
+                }
+            },
+            "settled" | "abandoned" | "reconciled" => {
+                open.retain(|entry| entry.intent.record_id != line.record_id)
+            }
+            _ => {
+                return Err(ProviderError::new(
+                    FailureCode::ProviderUnavailable,
+                    "the download intent journal is unreadable",
+                ))
+            }
+        }
+    }
+    Ok(open)
+}
+
+/// What the OS says about a process id.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Liveness {
+    /// Running, with this creation time.
+    Running(u64),
+    /// No such process (or it has exited).
+    Gone,
+    /// The OS would not say (access refused): never taken as gone.
+    Unknown,
+}
+
+fn liveness(pid: u32) -> Liveness {
+    use windows_sys::Win32::Foundation::{
+        CloseHandle, GetLastError, ERROR_INVALID_PARAMETER, FILETIME, STILL_ACTIVE,
+    };
+    use windows_sys::Win32::System::Threading::{
+        GetExitCodeProcess, GetProcessTimes, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION,
+    };
+    // SAFETY: a plain query-only open of a pid; the handle is closed below.
+    let process = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid) };
+    if process == 0 {
+        // SAFETY: reads the calling thread's last error.
+        return match unsafe { GetLastError() } {
+            ERROR_INVALID_PARAMETER => Liveness::Gone,
+            _ => Liveness::Unknown,
+        };
+    }
+    let zero = FILETIME {
+        dwLowDateTime: 0,
+        dwHighDateTime: 0,
+    };
+    let (mut created, mut exited, mut kernel, mut user) = (zero, zero, zero, zero);
+    let mut code: u32 = 0;
+    // SAFETY: a valid handle and out-pointers to locals.
+    let state = unsafe {
+        if GetExitCodeProcess(process, &mut code) == 0
+            || GetProcessTimes(process, &mut created, &mut exited, &mut kernel, &mut user) == 0
+        {
+            Liveness::Unknown
+        } else if code != STILL_ACTIVE as u32 {
+            Liveness::Gone
+        } else {
+            Liveness::Running(
+                (u64::from(created.dwHighDateTime) << 32) | u64::from(created.dwLowDateTime),
+            )
+        }
+    };
+    // SAFETY: closing the handle opened above, once.
+    unsafe { CloseHandle(process) };
+    state
+}
+
+/// Whether the host an intent named may still be running. A reused pid
+/// (another creation time) means that host is gone; an unanswerable query
+/// counts as running, so nothing it could still commit is reported.
+fn host_may_run(host_pid: u32, host_started: u64) -> bool {
+    match liveness(host_pid) {
+        Liveness::Running(started) => started == host_started,
+        Liveness::Gone => false,
+        Liveness::Unknown => true,
+    }
+}
+
+/// Reconcile, once, every open intent whose host is gone: after a qdrald
+/// restart (qdrald's job kills the host family when qdrald ends) or a host
+/// that died. An intent whose host may still run belongs to a live lifetime
+/// (possibly another qdrald's) and is left untouched. A report that could
+/// not be made (the destination unreadable for now) stays open.
+pub fn recover_intents(journal: &Path) -> Result<Vec<Recovered>, ProviderError> {
+    let mut recovered = Vec::new();
+    for open in journal_open_intents(journal)? {
+        if host_may_run(open.host_pid, open.host_started) {
+            continue;
+        }
+        let found = reconcile_destination(&open.intent.folder, &open.intent.relative);
+        let settled =
+            !matches!(&found, Err(error) if error.code == FailureCode::ProviderUnavailable);
+        if settled {
+            journal_append(
+                journal,
+                &JournalLine::event("reconciled", &open.intent.record_id),
+            )?;
+        }
+        recovered.push((open.intent, found));
+    }
+    Ok(recovered)
+}
+
 /// One supervised worker-mode host and at most one lifetime.
 pub struct LiveBrowser {
     supervisor: Supervisor,
     lifetime: Option<String>,
+    /// The page-store record of the lifetime's page (slice 2b).
+    page: Option<PageRecord>,
+    pages: PageStore,
+    intents: PathBuf,
+    /// The host's pid and creation time, written into every intent.
+    host_pid: u32,
+    host_started: u64,
+    /// What `start` reconciled from earlier runs.
+    recovered: Vec<Recovered>,
     outcomes: Vec<ApprovalOutcome>,
     pending_download: Option<DownloadIntent>,
     /// None while the host is (or may be) running; once ended, whether the
@@ -230,6 +475,11 @@ fn host_error(error: qdral_browser_host::HostError) -> ProviderError {
     ProviderError::new(failure, format!("browser host: {code}"))
 }
 
+/// The page store's errors, as qdrald's (same code and message).
+fn from_page(error: qdral_provider_browser::ProviderError) -> ProviderError {
+    ProviderError::new(error.code, error.message)
+}
+
 fn refused(code: &str) -> ProviderError {
     ProviderError::new(failure_for(code), format!("browser host refused: {code}"))
 }
@@ -241,29 +491,58 @@ fn sha256_hex(text: &str) -> String {
         .collect()
 }
 
-/// The combined approval digest: qdrald's material and the host binding.
+/// The combined approval digest: qdrald's material (workspace, policy
+/// revision, lifetime, the page store's page id, generation and origin,
+/// the action) and the host binding.
 pub(crate) fn approval_digest(
     workspace_id: &str,
     lifetime: &str,
+    page: &PageRecord,
     action: &BindAction,
     host_binding: &str,
 ) -> String {
     let action = serde_json::to_string(action).expect("a bind action always serializes");
     sha256_hex(&format!(
-        "{LIVE_APPROVAL_DOMAIN}\n{workspace_id}\n{POLICY_REVISION}\n{lifetime}\n{action}\n{host_binding}"
+        "{LIVE_APPROVAL_DOMAIN}\n{workspace_id}\n{POLICY_REVISION}\n{lifetime}\n{}\n{}\n{}\n{action}\n{host_binding}",
+        page.page_id, page.generation, page.current_origin
     ))
 }
 
 impl LiveBrowser {
-    /// Supervise one worker-mode host.
-    pub fn start(host_binary: &Path, launch: &WorkerHostLaunch) -> Result<Self, ProviderError> {
+    /// Reconcile what earlier runs left open, then supervise one
+    /// worker-mode host.
+    pub fn start(
+        host_binary: &Path,
+        launch: &WorkerHostLaunch,
+        state: &LiveState,
+    ) -> Result<Self, ProviderError> {
+        let recovered = recover_intents(&state.intents)?;
         let mut supervisor = Supervisor::new();
         supervisor
             .launch_worker_host(host_binary, launch)
             .map_err(host_error)?;
+        let host_pid = supervisor.worker_host().map(|host| host.pid()).unwrap_or(0);
+        // The supervisor holds the host's process handle, so its pid cannot
+        // be reused while this reads the creation time.
+        let host_started = match liveness(host_pid) {
+            Liveness::Running(started) => started,
+            _ => {
+                let _ = supervisor.shutdown_worker_host();
+                return Err(ProviderError::new(
+                    FailureCode::ProviderUnavailable,
+                    "the browser host's identity could not be read",
+                ));
+            }
+        };
         Ok(Self {
             supervisor,
             lifetime: None,
+            page: None,
+            pages: PageStore::load_or_create(state.pages.clone()),
+            intents: state.intents.clone(),
+            host_pid,
+            host_started,
+            recovered,
             outcomes: Vec::new(),
             pending_download: None,
             host_ended: None,
@@ -295,6 +574,7 @@ impl LiveBrowser {
     /// confirmed-gone family makes the destination safe to reconcile.
     fn end_host(&mut self) {
         self.lifetime = None;
+        self.close_page();
         if self.host_ended.is_none() {
             self.host_ended = Some(self.supervisor.shutdown_worker_host().unwrap_or(false));
         }
@@ -347,6 +627,25 @@ impl LiveBrowser {
         result
     }
 
+    /// A dead lifetime makes its page stale for good (decision 3). If the
+    /// registry cannot record it, the page is still dropped here, so this
+    /// browser never acts on it again.
+    fn close_page(&mut self) {
+        if let Some(page) = self.page.take() {
+            let _ = self.pages.close_page(&page.page_id);
+        }
+    }
+
+    /// The page-store record of the lifetime's page, if a lifetime is open.
+    pub fn page(&self) -> Option<&PageRecord> {
+        self.page.as_ref()
+    }
+
+    /// What `start` reconciled from earlier runs (each reported once).
+    pub fn recovered(&self) -> &[Recovered] {
+        &self.recovered
+    }
+
     /// Every consumed approval of this browser and its outcome, in order.
     pub fn outcomes(&self) -> &[ApprovalOutcome] {
         &self.outcomes
@@ -377,7 +676,17 @@ impl LiveBrowser {
             )));
         }
         let intent = self.pending_download.take()?;
-        Some(reconcile_destination(&intent.folder, &intent.relative).map(|found| (intent, found)))
+        let found = match reconcile_destination(&intent.folder, &intent.relative) {
+            Ok(found) => found,
+            Err(error) => return Some(Err(error)),
+        };
+        if let Err(error) = journal_append(
+            &self.intents,
+            &JournalLine::event("reconciled", &intent.record_id),
+        ) {
+            return Some(Err(error));
+        }
+        Some(Ok((intent, found)))
     }
 
     /// Open a lifetime for the fixture destination (test builds only).
@@ -394,6 +703,19 @@ impl LiveBrowser {
             fixture_spki: fixture_spki.into(),
         })? {
             WorkerHostReply::Opened { lifetime, .. } => {
+                // The lifetime's page, server-allocated in the page store
+                // and bound to the workspace and this lifetime.
+                match self.pages.open_page(
+                    &workspace.id,
+                    &format!("live-lifetime:{lifetime}"),
+                    POLICY_REVISION,
+                ) {
+                    Ok(page) => self.page = Some(page),
+                    Err(error) => {
+                        self.end_host();
+                        return Err(from_page(error));
+                    }
+                }
                 self.lifetime = Some(lifetime.clone());
                 Ok(lifetime)
             }
@@ -406,19 +728,25 @@ impl LiveBrowser {
 
     /// The two-part approval for `action`: the host's binding, then the
     /// broker's approval over qdrald's material and that binding. Returns
-    /// the consumed record id and the host binding to present.
-    fn approve(
+    /// the approved, not yet consumed token, its digest and the host
+    /// binding to present.
+    fn ask(
         &mut self,
         workspace: &Workspace,
         approval: &impl ApprovalBroker,
-        action: BindAction,
+        action: &BindAction,
         title: &str,
-    ) -> Result<(String, String, BindAction), ProviderError> {
+    ) -> Result<(ApprovedToken, String, String), ProviderError> {
         // What the prompt shows: where the action goes, and for a download
         // also where the file lands (all of it bound into the digest).
         let lifetime = self.lifetime.clone().ok_or_else(|| {
             ProviderError::new(FailureCode::TargetStale, "no live browser lifetime")
         })?;
+        let page = self
+            .page
+            .clone()
+            .filter(|page| page.state != PageState::Closed)
+            .ok_or_else(|| ProviderError::new(FailureCode::TargetStale, "no live browser page"))?;
         let (binding, target) = match self.request(&WorkerHostRequest::Bind {
             action: action.clone(),
         })? {
@@ -430,8 +758,8 @@ impl LiveBrowser {
                 ))
             }
         };
-        let digest = approval_digest(&workspace.id, &lifetime, &action, &binding);
-        let summary = match &action {
+        let digest = approval_digest(&workspace.id, &lifetime, &page, action, &binding);
+        let summary = match action {
             BindAction::Download {
                 folder, relative, ..
             } => {
@@ -450,14 +778,23 @@ impl LiveBrowser {
         let token = approval
             .request_token(&prompt)
             .map_err(|error| ProviderError::new(error.code, error.message))?;
+        Ok((token, digest, binding))
+    }
+
+    /// Spend the approval: exact digest, workspace and policy revision.
+    fn consume(
+        workspace: &Workspace,
+        approval: &impl ApprovalBroker,
+        token: &ApprovedToken,
+        digest: String,
+    ) -> Result<(), ProviderError> {
         approval
             .consume(
-                &token,
+                token,
                 &ConsumeExpectation::new(digest, workspace.id.clone(), POLICY_REVISION),
                 now_ms(),
             )
-            .map_err(|error| ProviderError::new(error.code, error.message))?;
-        Ok((token.record_id, binding, action))
+            .map_err(|error| ProviderError::new(error.code, error.message))
     }
 
     /// An approved navigation of the lifetime's page.
@@ -467,12 +804,14 @@ impl LiveBrowser {
         approval: &impl ApprovalBroker,
         url: &str,
     ) -> Result<(String, u16), ProviderError> {
-        let (record_id, binding, _) = self.approve(
+        let (token, digest, binding) = self.ask(
             workspace,
             approval,
-            BindAction::Navigate { url: url.into() },
+            &BindAction::Navigate { url: url.into() },
             "navigate isolated browser page",
         )?;
+        Self::consume(workspace, approval, &token, digest)?;
+        let record_id = token.record_id;
         match self.dispatch(
             &record_id,
             &WorkerHostRequest::Navigate {
@@ -481,7 +820,37 @@ impl LiveBrowser {
                 binding,
             },
         )? {
-            WorkerHostReply::Navigated { url, status } => Ok((url, status)),
+            WorkerHostReply::Navigated { url, status } => {
+                // The page store follows the committed document: a new
+                // origin and generation, so every earlier approval and
+                // observation of this page goes stale.
+                let moved = qdral_provider_browser::parse_destination_url(&url)
+                    .map_err(from_page)
+                    .and_then(|origin| {
+                        let page = self.page.clone().ok_or_else(|| {
+                            ProviderError::new(FailureCode::TargetStale, "no live browser page")
+                        })?;
+                        self.pages
+                            .apply_navigation(
+                                &page.page_id,
+                                &page.current_origin,
+                                page.generation,
+                                &origin.origin,
+                            )
+                            .map(|(next, _, _)| next)
+                            .map_err(from_page)
+                    });
+                match moved {
+                    Ok(next) => self.page = Some(next),
+                    // qdrald's record no longer matches the host's page:
+                    // end the lifetime rather than act on either.
+                    Err(error) => {
+                        self.end_host();
+                        return Err(error);
+                    }
+                }
+                Ok((url, status))
+            }
             _ => Err(ProviderError::new(
                 FailureCode::InternalError,
                 "unexpected browser host reply",
@@ -522,10 +891,10 @@ impl LiveBrowser {
         relative: &str,
     ) -> Result<LiveDownload, ProviderError> {
         let folder = folder.to_string_lossy().into_owned();
-        let (record_id, binding, _) = self.approve(
+        let (token, digest, binding) = self.ask(
             workspace,
             approval,
-            BindAction::Download {
+            &BindAction::Download {
                 node_id: node_id.into(),
                 role: "link".into(),
                 folder: folder.clone(),
@@ -533,8 +902,26 @@ impl LiveBrowser {
             },
             "download from isolated browser page",
         )?;
-        // Recorded before the frame goes out, so a lost reply can be
-        // reconciled against the destination.
+        let record_id = token.record_id.clone();
+        // The intent is durable before the approval is spent: if qdrald
+        // dies anywhere after this, a restart finds it and reconciles the
+        // destination. If it cannot be written, nothing is spent or sent.
+        journal_append(
+            &self.intents,
+            &JournalLine {
+                folder: Some(PathBuf::from(&folder)),
+                relative: Some(relative.into()),
+                host_pid: Some(self.host_pid),
+                host_started: Some(self.host_started),
+                ..JournalLine::event("pending", &record_id)
+            },
+        )?;
+        if let Err(error) = Self::consume(workspace, approval, &token, digest) {
+            // Never spent, never sent. If even this line is lost, a restart
+            // reports the (untouched) destination, which is still safe.
+            let _ = journal_append(&self.intents, &JournalLine::event("abandoned", &record_id));
+            return Err(error);
+        }
         self.pending_download = Some(DownloadIntent {
             record_id: record_id.clone(),
             folder: PathBuf::from(&folder),
@@ -552,8 +939,11 @@ impl LiveBrowser {
             },
         );
         // A reply, refusal or success, settles it; only a lost one stays.
+        // If the settled line cannot be written, a restart reports the
+        // destination as present, unverified: never adopted, so still safe.
         if !matches!(self.outcomes.last(), Some(o) if o.outcome == DispatchOutcome::Lost) {
             self.pending_download = None;
+            let _ = journal_append(&self.intents, &JournalLine::event("settled", &record_id));
         }
         match reply? {
             WorkerHostReply::Downloaded {
@@ -581,8 +971,11 @@ impl LiveBrowser {
             .is_some_and(|host| host.is_usable())
     }
 
-    /// Shut the host family down; true when confirmed empty.
+    /// Shut the host family down; true when confirmed empty. The page is
+    /// closed with the lifetime.
     pub fn shutdown(mut self) -> bool {
+        self.lifetime = None;
+        self.close_page();
         self.supervisor.shutdown().unwrap_or(false)
     }
 }
@@ -676,6 +1069,12 @@ mod tests {
         LiveBrowser {
             supervisor: Supervisor::new(),
             lifetime: None,
+            page: None,
+            pages: PageStore::load_or_create(folder.join("pages.jsonl")),
+            intents: folder.join("intents.jsonl"),
+            host_pid: 0,
+            host_started: 0,
+            recovered: Vec::new(),
             outcomes: Vec::new(),
             pending_download: pending.then(|| DownloadIntent {
                 record_id: "r1".into(),
@@ -686,6 +1085,167 @@ mod tests {
             reply_timeout: None,
             after_consume: None,
         }
+    }
+
+    fn scratch(label: &str) -> PathBuf {
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0);
+        let dir = std::env::temp_dir().join(format!(
+            "qdral-intents-{label}-{}-{nanos}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    fn pending(record_id: &str, folder: &Path, relative: &str, pid: u32, started: u64) -> String {
+        serde_json::to_string(&JournalLine {
+            folder: Some(folder.to_path_buf()),
+            relative: Some(relative.into()),
+            host_pid: Some(pid),
+            host_started: Some(started),
+            ..JournalLine::event("pending", record_id)
+        })
+        .unwrap()
+    }
+
+    fn event(event: &str, record_id: &str) -> String {
+        serde_json::to_string(&JournalLine::event(event, record_id)).unwrap()
+    }
+
+    /// The creation time of a process that runs now.
+    fn running(pid: u32) -> u64 {
+        match liveness(pid) {
+            Liveness::Running(started) => Some(started),
+            _ => None,
+        }
+        .expect("a running process")
+    }
+
+    #[test]
+    fn the_journal_keeps_open_only_unsettled_intents_and_fails_closed() {
+        let dir = scratch("fold");
+        let journal = dir.join("intents.jsonl");
+        assert!(journal_open_intents(&journal).unwrap().is_empty());
+        let body = [
+            pending("r1", &dir, "a.pdf", 1, 2),
+            pending("r2", &dir, "b.pdf", 1, 2),
+            pending("r3", &dir, "c.pdf", 1, 2),
+            pending("r4", &dir, "d.pdf", 1, 2),
+            event("settled", "r1"),
+            event("abandoned", "r3"),
+            event("reconciled", "r4"),
+        ]
+        .join("\n");
+        // A torn final line (a crash mid-append) is skipped.
+        std::fs::write(&journal, format!("{body}\n{{\"schema\":\"deskal-sg")).unwrap();
+        let open = journal_open_intents(&journal).unwrap();
+        assert_eq!(open.len(), 1);
+        assert_eq!(open[0].intent.record_id, "r2");
+        assert_eq!(open[0].intent.relative, "b.pdf");
+        assert_eq!((open[0].host_pid, open[0].host_started), (1, 2));
+        // Anything else unreadable fails closed: a bad line mid-file, a
+        // complete bad final line, a pending without its destination, an
+        // unknown event or schema.
+        let no_destination = event("pending", "r5");
+        let other_schema = pending("r6", &dir, "e.pdf", 1, 2).replace(INTENT_SCHEMA, "other/1");
+        for bad in [
+            format!("garbage\n{body}\n"),
+            format!("{body}\ngarbage\n"),
+            format!("{body}\n{no_destination}\n"),
+            format!("{body}\n{}\n", event("forgotten", "r2")),
+            format!("{body}\n{other_schema}\n"),
+        ] {
+            std::fs::write(&journal, bad).unwrap();
+            assert_eq!(
+                journal_open_intents(&journal).unwrap_err().code,
+                FailureCode::ProviderUnavailable
+            );
+        }
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn liveness_tells_a_running_process_from_an_exited_one() {
+        let mut child = std::process::Command::new("cmd")
+            .args(["/C", "pause"])
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::null())
+            .spawn()
+            .unwrap();
+        let started = running(child.id());
+        assert!(host_may_run(child.id(), started));
+        // Another creation time at the same pid is another process.
+        assert!(!host_may_run(child.id(), started + 1));
+        child.kill().unwrap();
+        child.wait().unwrap();
+        assert_eq!(liveness(child.id()), Liveness::Gone);
+        assert!(!host_may_run(child.id(), started));
+        let own = running(std::process::id());
+        assert!(host_may_run(std::process::id(), own));
+    }
+
+    #[test]
+    fn recovery_reconciles_once_and_only_intents_whose_host_is_gone() {
+        let dir = scratch("recover");
+        let folder = dir.join("approved");
+        std::fs::create_dir_all(&folder).unwrap();
+        std::fs::write(folder.join("left.pdf"), b"%PDF-1.4").unwrap();
+        let journal = dir.join("intents.jsonl");
+        let mut child = std::process::Command::new("cmd")
+            .args(["/C", "pause"])
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::null())
+            .spawn()
+            .unwrap();
+        let dead_started = running(child.id());
+        let dead = child.id();
+        child.kill().unwrap();
+        child.wait().unwrap();
+        let own = running(std::process::id());
+        let me = std::process::id();
+        std::fs::write(
+            &journal,
+            [
+                // Its host died after committing: present, unverified.
+                pending("gone-present", &folder, "left.pdf", dead, dead_started),
+                // Its host died before acting: absent.
+                pending("gone-absent", &folder, "none.pdf", dead, dead_started),
+                // Its pid now names another process: that host is gone.
+                pending("reused", &folder, "none.pdf", me, own + 1),
+                // Its host runs (another qdrald's lifetime): untouched.
+                pending("live", &folder, "left.pdf", me, own),
+            ]
+            .join("\n")
+                + "\n",
+        )
+        .unwrap();
+        let recovered = recover_intents(&journal).unwrap();
+        let found: Vec<(&str, &Result<Reconciled, ProviderError>)> = recovered
+            .iter()
+            .map(|(intent, found)| (intent.record_id.as_str(), found))
+            .collect();
+        assert_eq!(found.len(), 3, "{found:?}");
+        assert_eq!(found[0].0, "gone-present");
+        assert_eq!(
+            found[0].1.as_ref().unwrap(),
+            &Reconciled::PresentUnverified {
+                sha256: sha256_hex("%PDF-1.4"),
+                bytes: 8
+            }
+        );
+        assert_eq!(found[1].0, "gone-absent");
+        assert_eq!(found[1].1.as_ref().ok(), Some(&Reconciled::Absent));
+        assert_eq!(found[2].0, "reused");
+        assert_eq!(found[2].1.as_ref().ok(), Some(&Reconciled::Absent));
+        // Each is reported once; the live one stays open.
+        let open = journal_open_intents(&journal).unwrap();
+        assert_eq!(open.len(), 1);
+        assert_eq!(open[0].intent.record_id, "live");
+        assert!(recover_intents(&journal).unwrap().is_empty());
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]
@@ -706,6 +1266,10 @@ mod tests {
         assert_eq!(intent.record_id, "r1");
         assert_eq!(found, Reconciled::Absent);
         assert!(browser.reconcile().is_none());
+        // The report is journaled, so a restart does not repeat it.
+        let journal = std::fs::read_to_string(folder.join("intents.jsonl")).unwrap();
+        assert!(journal.contains("\"reconciled\""), "{journal}");
+        let _ = std::fs::remove_dir_all(&folder);
     }
 
     #[test]
@@ -757,19 +1321,43 @@ mod tests {
         }
     }
 
+    fn page(page_id: &str, generation: u64, origin: &str) -> PageRecord {
+        PageRecord {
+            page_id: page_id.into(),
+            workspace_id: "w".into(),
+            profile_identity: "live-lifetime:l1".into(),
+            current_origin: origin.into(),
+            generation,
+            state: PageState::Open,
+            policy_revision: POLICY_REVISION.into(),
+        }
+    }
+
     #[test]
     fn the_approval_digest_covers_both_halves() {
         let action = BindAction::Navigate {
             url: "https://fixture.test/".into(),
         };
-        let base = approval_digest("w", "l1", &action, "h1");
+        let fresh = page("page-1", 0, "");
+        let base = approval_digest("w", "l1", &fresh, &action, "h1");
         for other in [
-            approval_digest("v", "l1", &action, "h1"),
-            approval_digest("w", "l2", &action, "h1"),
-            approval_digest("w", "l1", &action, "h2"),
+            approval_digest("v", "l1", &fresh, &action, "h1"),
+            approval_digest("w", "l2", &fresh, &action, "h1"),
+            approval_digest("w", "l1", &fresh, &action, "h2"),
+            // The page store's half: another page, generation or origin.
+            approval_digest("w", "l1", &page("page-2", 0, ""), &action, "h1"),
+            approval_digest("w", "l1", &page("page-1", 1, ""), &action, "h1"),
             approval_digest(
                 "w",
                 "l1",
+                &page("page-1", 0, "https://fixture.test:443"),
+                &action,
+                "h1",
+            ),
+            approval_digest(
+                "w",
+                "l1",
+                &fresh,
                 &BindAction::Navigate {
                     url: "https://fixture.test/x".into(),
                 },
@@ -783,7 +1371,7 @@ mod tests {
         // documented framing, with the live policy revision sg-000040-v1.
         assert_eq!(
             base,
-            "8a8dd6cfaae484615bac5f162609033ebae154c15484ad9eda9b38a67a0ba72a"
+            "1a665c0c67139a674c19c41f7ab4282dee34706533c68bb185b690ce39672d9a"
         );
     }
 }
@@ -894,8 +1482,16 @@ mod native {
                     temp_dir: self.root.join("staging"),
                     state_root: self.root.join("state"),
                 },
+                &self.state(),
             )
             .expect("supervise the worker-mode host")
+        }
+
+        fn state(&self) -> LiveState {
+            LiveState {
+                pages: self.root.join("state").join("pages.jsonl"),
+                intents: self.root.join("state").join("intents.jsonl"),
+            }
         }
     }
 
@@ -927,6 +1523,32 @@ mod native {
         .into_bytes()
     }
 
+    /// A hook that kills the host (and its tree) and confirms the host
+    /// process itself exited.
+    fn kill_host() -> Box<dyn FnMut(u32)> {
+        Box::new(|pid: u32| {
+            use windows_sys::Win32::Foundation::{CloseHandle, WAIT_OBJECT_0};
+            use windows_sys::Win32::System::Threading::{
+                OpenProcess, WaitForSingleObject, PROCESS_SYNCHRONIZE,
+            };
+            // SAFETY: a plain Win32 open of this test's host pid; the handle
+            // pins the process object so the wait below observes this host.
+            let process = unsafe { OpenProcess(PROCESS_SYNCHRONIZE, 0, pid) };
+            assert_ne!(process, 0, "open the host process");
+            // The tree kill may race children that exit on their own (its
+            // exit status then reports them); what matters is the host died.
+            let _ = std::process::Command::new("taskkill")
+                .args(["/PID", &pid.to_string(), "/T", "/F"])
+                .output()
+                .expect("taskkill");
+            // SAFETY: the handle opened above, still open.
+            let waited = unsafe { WaitForSingleObject(process, 10_000) };
+            // SAFETY: closing the handle opened above, once.
+            unsafe { CloseHandle(process) };
+            assert_eq!(waited, WAIT_OBJECT_0, "the host did not die");
+        })
+    }
+
     fn files(dir: &Path) -> usize {
         std::fs::read_dir(dir).map(|read| read.count()).unwrap_or(0)
     }
@@ -949,6 +1571,8 @@ mod native {
             Arc::new(NoPresenceVerifier),
             Arc::new(|_| ApprovalDecision::Approved),
         );
+        let opened = browser.page().expect("the lifetime's page").clone();
+        assert_eq!((opened.generation, opened.current_origin.as_str()), (0, ""));
         let (url, status) = browser
             .navigate(&scene.workspace, &approve, "https://fixture.test/reports")
             .expect("approved navigation");
@@ -956,8 +1580,34 @@ mod native {
             (url.as_str(), status),
             ("https://fixture.test/reports", 200)
         );
+        // The page store followed the committed document.
+        let page = browser.page().expect("page").clone();
+        assert_eq!(page.page_id, opened.page_id);
+        assert_eq!(page.generation, 1);
+        assert_eq!(page.current_origin, "https://fixture.test:443");
+        assert_eq!(page.state, PageState::Active);
         assert!(!browser.observe().expect("observe").is_empty());
         let latest = browser.select_latest_dated_link().expect("latest report");
+        // An intent that cannot be journaled spends nothing and sends
+        // nothing: the approval is left unconsumed.
+        let journal = browser.intents.clone();
+        browser.intents = scene.root.join("state");
+        let unjournaled = browser
+            .download(
+                &scene.workspace,
+                &approve,
+                &latest,
+                &scene.approved,
+                "latest.pdf",
+            )
+            .expect_err("no journal");
+        assert_eq!(unjournaled.code, FailureCode::ProviderUnavailable);
+        assert_eq!(browser.outcomes().len(), 1, "a frame was sent");
+        assert_eq!(files(&scene.approved), 0);
+        let unspent = approve.history(10);
+        assert_eq!(unspent.len(), 2, "{unspent:?}");
+        assert_eq!(unspent.iter().filter(|record| !record.consumed).count(), 1);
+        browser.intents = journal;
         let committed = browser
             .download(
                 &scene.workspace,
@@ -977,13 +1627,17 @@ mod native {
             committed.source_url,
             "https://fixture.test/reports/2026-09-30.pdf"
         );
-        // The ledger recorded exactly these two approvals, each consumed,
-        // and both were carried out.
-        let records = approve.history(10);
+        // The ledger recorded these approvals: the two carried out, each
+        // consumed, and the one the journal refused, never consumed.
+        let records: Vec<_> = approve
+            .history(10)
+            .into_iter()
+            .filter(|record| record.consumed)
+            .collect();
         assert_eq!(records.len(), 2, "{records:?}");
         assert!(records
             .iter()
-            .all(|record| record.decision == RecordedDecision::Approved && record.consumed));
+            .all(|record| record.decision == RecordedDecision::Approved));
         let ids: Vec<&str> = browser
             .outcomes()
             .iter()
@@ -1008,11 +1662,33 @@ mod native {
             browser.reconcile().is_none(),
             "no download was left pending"
         );
+        // The journal holds the download's intent, settled, and nothing open.
+        let download_record = &browser.outcomes().last().expect("outcome").record_id;
+        let lines = std::fs::read_to_string(&scene.state().intents).expect("journal");
+        let events: Vec<JournalLine> = lines
+            .lines()
+            .map(|line| serde_json::from_str(line).expect("line"))
+            .collect();
+        let mine: Vec<&str> = events
+            .iter()
+            .filter(|line| &line.record_id == download_record)
+            .map(|line| line.event.as_str())
+            .collect();
+        assert_eq!(mine, ["pending", "settled"]);
+        assert!(journal_open_intents(&scene.state().intents)
+            .expect("journal")
+            .is_empty());
         println!(
-            "SG108-EVIDENCE qdrald live journey: real-ledger approved navigation and download, sha256 {}",
+            "SG108-EVIDENCE qdrald live journey: real-ledger approved navigation and download, page store bound, intent journaled and settled, sha256 {}",
             committed.sha256
         );
         assert!(browser.shutdown(), "the host family stayed");
+        // The lifetime's page is closed with it, on disk.
+        let stored = PageStore::load_or_create(scene.state().pages);
+        assert_eq!(
+            stored.get(&page.page_id).map(|page| page.state),
+            Some(PageState::Closed)
+        );
     }
 
     #[test]
@@ -1038,27 +1714,7 @@ mod native {
         let latest = browser.select_latest_dated_link().expect("latest report");
         // The host dies after the broker consumed the download's approval
         // and before the frame reaches it.
-        browser.after_consume = Some(Box::new(|pid: u32| {
-            use windows_sys::Win32::Foundation::{CloseHandle, WAIT_OBJECT_0};
-            use windows_sys::Win32::System::Threading::{
-                OpenProcess, WaitForSingleObject, PROCESS_SYNCHRONIZE,
-            };
-            // SAFETY: a plain Win32 open of this test's host pid; the handle
-            // pins the process object so the wait below observes this host.
-            let process = unsafe { OpenProcess(PROCESS_SYNCHRONIZE, 0, pid) };
-            assert_ne!(process, 0, "open the host process");
-            // The tree kill may race children that exit on their own (its
-            // exit status then reports them); what matters is the host died.
-            let _ = std::process::Command::new("taskkill")
-                .args(["/PID", &pid.to_string(), "/T", "/F"])
-                .output()
-                .expect("taskkill");
-            // SAFETY: the handle opened above, still open.
-            let waited = unsafe { WaitForSingleObject(process, 10_000) };
-            // SAFETY: closing the handle opened above, once.
-            unsafe { CloseHandle(process) };
-            assert_eq!(waited, WAIT_OBJECT_0, "the host did not die");
-        }));
+        browser.after_consume = Some(kill_host());
         let lost = browser
             .download(
                 &scene.workspace,
@@ -1093,6 +1749,13 @@ mod native {
         // The family was ended and confirmed gone before anything reads
         // the destination.
         assert_eq!(browser.host_ended(), Some(true));
+        // The page is stale for good, on disk; the intent is still open.
+        assert!(browser.page().is_none());
+        let stored = PageStore::load_or_create(scene.state().pages);
+        assert!(stored.count_for_workspace(&scene.workspace.id) == 0);
+        let open = journal_open_intents(&scene.state().intents).expect("journal");
+        assert_eq!(open.len(), 1);
+        assert_eq!(open[0].intent.record_id, last.record_id);
         // Reconciliation: the host died before acting, so nothing is there.
         let (intent, found) = browser
             .reconcile()
@@ -1103,6 +1766,61 @@ mod native {
         assert_eq!(files(&scene.approved), 0);
         println!("SG108-EVIDENCE qdrald live lost: consumed approval recorded lost, lifetime stale, destination reconciled absent");
         let _ = browser.shutdown();
+    }
+
+    #[test]
+    #[ignore = "requires the built browser worker and Edge; run by npm run browser-launcher:native"]
+    fn a_restart_reconciles_the_download_a_lost_host_left_open() {
+        let fixture = Fixture::start();
+        let scene = Scene::new("restart");
+        let mut browser = scene.browser();
+        if open(&mut browser, &scene, &fixture).is_none() {
+            assert!(browser.shutdown());
+            return;
+        }
+        let approve = LocalApprovalBroker::with_path_and_soft_decider(
+            scene.root.join("approvals.json"),
+            Arc::new(NoPresenceVerifier),
+            Arc::new(|_| ApprovalDecision::Approved),
+        );
+        browser
+            .navigate(&scene.workspace, &approve, "https://fixture.test/reports")
+            .expect("approved navigation");
+        browser.observe().expect("observe");
+        let latest = browser.select_latest_dated_link().expect("latest report");
+        browser.after_consume = Some(kill_host());
+        browser
+            .download(
+                &scene.workspace,
+                &approve,
+                &latest,
+                &scene.approved,
+                "lost.pdf",
+            )
+            .expect_err("the host was gone");
+        let lost = browser.outcomes().last().expect("an outcome").clone();
+        assert_eq!(lost.outcome, DispatchOutcome::Lost);
+        // qdrald ends without reconciling: everything in memory is gone,
+        // only the journal remains.
+        let _ = browser.shutdown();
+        let open = journal_open_intents(&scene.state().intents).expect("journal");
+        assert_eq!(open.len(), 1);
+        assert_eq!(open[0].intent.record_id, lost.record_id);
+        // The next run reconciles it before anything else, exactly once.
+        let next = scene.browser();
+        let recovered = next.recovered();
+        assert_eq!(recovered.len(), 1, "{recovered:?}");
+        assert_eq!(recovered[0].0.record_id, lost.record_id);
+        assert_eq!(recovered[0].0.relative, "lost.pdf");
+        assert_eq!(recovered[0].1.as_ref().ok(), Some(&Reconciled::Absent));
+        assert!(journal_open_intents(&scene.state().intents)
+            .expect("journal")
+            .is_empty());
+        assert!(next.shutdown());
+        let again = scene.browser();
+        assert!(again.recovered().is_empty(), "reported twice");
+        assert!(again.shutdown());
+        println!("SG108-EVIDENCE qdrald live restart: a lost download's journaled intent was reconciled absent by the next run, once");
     }
 
     #[link(name = "ntdll")]

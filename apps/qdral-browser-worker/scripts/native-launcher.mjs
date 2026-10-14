@@ -15,7 +15,7 @@ import { fileURLToPath } from "node:url";
 // after a module rename) exits 0 and would otherwise pass vacuously.
 const EXPECTED_TESTS = 26;
 const EXPECTED_WORKER_HOST_TESTS = 8;
-const EXPECTED_QDRALD_LIVE_TESTS = 4;
+const EXPECTED_QDRALD_LIVE_TESTS = 5;
 
 const app = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const repo = resolve(app, "..", "..");
@@ -161,7 +161,7 @@ if (!qdraldSummary || Number(qdraldSummary[1]) !== EXPECTED_QDRALD_LIVE_TESTS) {
   );
   process.exit(1);
 }
-const qdraldJourneys = ["SG108-EVIDENCE qdrald live journey", "SG108-EVIDENCE qdrald live denial", "SG108-EVIDENCE qdrald live lost", "SG108-EVIDENCE qdrald live suspended"];
+const qdraldJourneys = ["SG108-EVIDENCE qdrald live journey", "SG108-EVIDENCE qdrald live denial", "SG108-EVIDENCE qdrald live lost", "SG108-EVIDENCE qdrald live suspended", "SG108-EVIDENCE qdrald live restart"];
 const qdraldJourneysSeen = qdraldJourneys.every((line) => qdraldOut.includes(line));
 const qdraldRefusals = qdraldOut.split("SG108-EVIDENCE qdrald live: managed policy present").length - 1;
 if (!qdraldJourneysSeen && qdraldRefusals < qdraldJourneys.length) {

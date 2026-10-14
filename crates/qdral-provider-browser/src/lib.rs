@@ -1103,7 +1103,7 @@ impl PageStore {
             state: PageState::Open,
             policy_revision: policy_revision.to_owned(),
         };
-        self.persist(&page);
+        self.persist(&page)?;
         self.pages.insert(page_id, page.clone());
         Ok(page)
     }
@@ -1149,7 +1149,7 @@ impl PageStore {
         next.current_origin = final_origin.to_owned();
         next.generation = next.generation.saturating_add(1);
         next.state = PageState::Active;
-        self.persist(&next);
+        self.persist(&next)?;
         self.pages.insert(page_id.to_owned(), next.clone());
         Ok((next, prior_origin, prior_generation))
     }
@@ -1193,12 +1193,36 @@ impl PageStore {
         let prior_generation = current.generation;
         let mut next = current;
         next.generation = next.generation.saturating_add(1);
-        self.persist(&next);
+        self.persist(&next)?;
         self.pages.insert(page_id.to_owned(), next.clone());
         Ok((next, prior_generation))
     }
 
-    fn persist(&self, page: &PageRecord) {
+    /// Close a page: it can no longer be navigated, observed or actuated,
+    /// and every later use of its handle fails closed as stale. Closing an
+    /// already-closed page is a no-op; an unknown handle is stale.
+    pub fn close_page(&mut self, page_id: &str) -> Result<PageRecord, ProviderError> {
+        let current = self.pages.get(page_id).cloned().ok_or_else(|| {
+            ProviderError::new(
+                FailureCode::TargetStale,
+                "browser page handle is unknown; stale page handles fail closed",
+            )
+        })?;
+        if current.state == PageState::Closed {
+            return Ok(current);
+        }
+        let mut next = current;
+        next.state = PageState::Closed;
+        next.generation = next.generation.saturating_add(1);
+        self.persist(&next)?;
+        self.pages.insert(page_id.to_owned(), next.clone());
+        Ok(next)
+    }
+
+    /// Append the page's new state durably. A failed write fails the
+    /// transition before the in-memory state changes, so the registry never
+    /// claims a state its file does not hold.
+    fn persist(&self, page: &PageRecord) -> Result<(), ProviderError> {
         use std::io::Write as _;
         let stored = StoredPage {
             schema: PAGE_REGISTRY_SCHEMA.to_owned(),
@@ -1210,18 +1234,29 @@ impl PageStore {
             state: page.state.as_str().to_owned(),
             policy_revision: page.policy_revision.clone(),
         };
+        let unavailable = |_| {
+            ProviderError::new(
+                FailureCode::ProviderUnavailable,
+                "browser page registry could not be written",
+            )
+        };
         if let Some(parent) = self.path.parent() {
-            let _ = std::fs::create_dir_all(parent);
+            std::fs::create_dir_all(parent).map_err(unavailable)?;
         }
-        if let Ok(mut file) = std::fs::OpenOptions::new()
+        let mut line = serde_json::to_vec(&stored).map_err(|_| {
+            ProviderError::new(
+                FailureCode::InternalError,
+                "browser page record could not be serialized",
+            )
+        })?;
+        line.push(b'\n');
+        let mut file = std::fs::OpenOptions::new()
             .create(true)
             .append(true)
             .open(&self.path)
-        {
-            let _ = serde_json::to_writer(&mut file, &stored);
-            let _ = file.write_all(b"\n");
-            let _ = file.flush();
-        }
+            .map_err(unavailable)?;
+        file.write_all(&line).map_err(unavailable)?;
+        file.sync_data().map_err(unavailable)
     }
 }
 
@@ -4473,6 +4508,58 @@ mod tests {
         store
             .open_page("default", "profile-identity-test", "sg-000023-v1")
             .expect("open observation page")
+    }
+
+    #[test]
+    fn a_closed_page_is_stale_for_good_and_survives_a_reload() {
+        let path = temp_page_registry("close");
+        let mut store = PageStore::load_or_create(path.clone());
+        let page = open_test_page(&mut store);
+        let (active, _, _) = store
+            .apply_navigation(&page.page_id, "", 0, "https://example.test")
+            .expect("navigate");
+        let closed = store.close_page(&page.page_id).expect("close");
+        assert_eq!(closed.state, PageState::Closed);
+        assert_eq!(closed.generation, active.generation + 1);
+        // Idempotent, and an unknown handle is stale.
+        assert_eq!(store.close_page(&page.page_id).expect("again"), closed);
+        assert_eq!(
+            store.close_page("page-unknown").unwrap_err().code,
+            FailureCode::TargetStale
+        );
+        let reloaded = PageStore::load_or_create(path.clone());
+        assert_eq!(reloaded.get(&page.page_id), Some(&closed));
+        let mut reloaded = reloaded;
+        for error in [
+            reloaded
+                .apply_navigation(
+                    &page.page_id,
+                    "https://example.test",
+                    closed.generation,
+                    "https://example.test",
+                )
+                .unwrap_err(),
+            reloaded
+                .apply_actuation(&page.page_id, "https://example.test", closed.generation)
+                .unwrap_err(),
+        ] {
+            assert_eq!(error.code, FailureCode::TargetStale);
+        }
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn a_failed_registry_write_changes_nothing() {
+        // The registry path is a directory: every append fails.
+        let path = temp_page_registry("unwritable");
+        std::fs::create_dir_all(&path).expect("dir");
+        let mut store = PageStore::load_or_create(path.clone());
+        let refused = store
+            .open_page("default", "profile-identity-test", "sg-000022-v1")
+            .unwrap_err();
+        assert_eq!(refused.code, FailureCode::ProviderUnavailable);
+        assert_eq!(store.count_for_workspace("default"), 0);
+        let _ = std::fs::remove_dir_all(path);
     }
 
     #[test]
