@@ -18,6 +18,8 @@ mod fs_mutation;
 mod git_fetch;
 mod git_mutation;
 mod git_push;
+#[cfg(all(windows, feature = "live-browser-test"))]
+mod live_browser;
 mod remote_lease;
 mod trust;
 mod uia;

@@ -11,8 +11,15 @@ autobins = false
 name = "qdrald"
 path = "src/sg000039_main.rs"
 
+[features]
+# SG-000108 product caller slice 1b: qdrald drives the live browser host in
+# worker mode under the approval broker. Test builds only; the release
+# build never enables it.
+live-browser-test = ["dep:qdral-browser-host", "qdral-browser-host/live-browser-test"]
+
 [dependencies]
 qdral-approval = { path = "../qdral-approval" }
+qdral-browser-host = { path = "../qdral-browser-host", optional = true }
 qdral-audit = { path = "../qdral-audit" }
 qdral-contracts = { path = "../qdral-contracts" }
 qdral-policy = { path = "../qdral-policy" }

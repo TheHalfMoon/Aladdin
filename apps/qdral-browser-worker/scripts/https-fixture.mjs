@@ -250,6 +250,19 @@ const server = createServer({ key, cert }, (request, response) => {
     response.setHeader("location", location);
     response.end();
   };
+  // SG-000108 product caller: a page whose observation fits the host's
+  // 512-node snapshot cap but not one reply frame. Its only dated link comes
+  // last: observed by the host, then dropped from the trimmed reply, so the
+  // host must neither select nor bind it.
+  if (path === "/crowded") {
+    const items = [];
+    for (let i = 0; i < 250; i++) {
+      items.push(`<li><a href="/site/a">Catalogue entry number ${i} with a long descriptive accessible name</a></li>`);
+    }
+    items.push('<li><a href="/reports/2026-09-30.pdf">Quarterly report 2026-09-30</a></li>');
+    response.setHeader("content-type", "text/html");
+    return response.end(`<!doctype html><title>crowded</title><ul>${items.join("")}</ul>`);
+  }
   // #324: a page that tries every way a page reaches a LAN address: WebRTC
   // ICE (STUN over UDP and TCP), fetch, WebSocket and sendBeacon. The test
   // listens on that address; nothing may arrive.

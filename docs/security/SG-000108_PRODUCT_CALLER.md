@@ -299,9 +299,41 @@ For each consequential action, `qdrald` and the host each contribute what only t
 - **The size limit is bound.** Download bindings include the size limit, `MAX_TRANSFER_BYTES`, as decision 3 lists.
 - **The digest is a pure function.** `binding_digest`'s unit test calls it directly. With the workspace dropped inside `binding_digest`, the test fails. If `host_binding` passed an empty workspace instead, no test would notice yet, because every lifetime under test uses one workspace and the nonce already separates lifetimes.
 - **Replies are also poisoned on a failed or partial write.**
-- **Follow-ups for the next slice:**
-  - a test that varies the workspace across `host_binding` calls;
-  - a test that forces observation truncation, so `retain_host_nodes` runs. The fixture page (about 2 KB) never truncates.
+- **Follow-ups, closed in the qdrald-side PR:**
+  - **The workspace at the call site.** The binding test recomputes the host binding independently from the documented formula (nonce, workspace, revision, action) and requires an exact match. With the workspace replaced by an empty string where `host_binding` is called, the test fails (mutation run).
+  - **A trimmed observation.** The fixture's `/crowded` page does not fit one reply frame. The host now trims depth-first, dropping the last leaf first, so a reply keeps the largest prefix of the tree: 483 of 512 nodes. Dropping whole top-level subtrees, the earlier behaviour, could empty a page whose content sits under one root. `nodes_a_trimmed_observation_dropped_cannot_be_acted_on` requires every node the host observed but did not send to be unbindable. Without `retain_host_nodes`, the dropped node `d1-e486` was bindable, and the test fails (mutation run).
 - **Click path.** `a_bound_click_follows_the_approved_link_once`: a bound activation opens exactly the approved link. Its replay is refused, and the old binding with a fresh record is refused.
 - **Exact codes.** The other-origin navigation and the create-only refusal both assert the exact code `invalid`: the binding matched, and the policy or the commit refused.
 - **Launcher.** Under a managed policy, every lifetime-opening test must report the refusal itself: four journeys plus the shutdown test.
+
+**Slice 1b, qdrald side: the approval broker in front of the host (test builds only).**
+
+**The feature.** `qdrald` gains a test-only `live-browser-test` feature, which enables the host crate's feature, and an optional dependency on the host crate. A default or release `qdrald` build has neither. The release-blocker sweep allows exactly that feature definition and that optional dependency in `qdrald`'s manifest.
+
+**`qdrald/src/live_browser.rs` runs decision 3's two-part approval for each consequential action:**
+1. The host binds the action (`bind`).
+2. `qdrald` builds the approval digest: SHA-256 over a domain tag, the workspace, `qdrald`'s policy revision, the lifetime nonce, the action, and the host binding.
+3. It prompts. The broker mints the approval, then consumes it against that exact digest, workspace and revision.
+4. Only then does it send the frame, with the broker's record id and the host binding.
+
+So a denied, unavailable or mismatched approval never reaches the host. Host refusals map onto existing `FailureCode`s: binding mismatch → `TargetStale`, replay → `ApprovalDenied`, timeout → `ProcessTimeout`, unavailable → `ProviderUnavailable`.
+
+**No envelope dispatch yet.** The native tests drive the module directly. The live-backed page store arrives in slice 2, and exposure in slice 3.
+
+**Deferred to slice 2, together with the page store** (review of this PR):
+- **`qdrald`'s half of the digest** does not yet bind the page id or the store generation that decision 3 lists. There is no store yet. Today it binds the workspace, the policy revision, the lifetime and the action.
+- **The "consumed, not dispatched" record and reconciliation** (open question 1) are not implemented.
+  - **What already fails closed:** a lost reply poisons the host connection, so later actions fail at `bind`, before any prompt, and no further approval is spent.
+  - **What is still open:** a download the host committed whose reply was lost leaves a file with no evidence record.
+
+**The download prompt names the destination.** Its summary carries the source URL, the approved folder and the file name, which are also bound into the digest.
+
+**Evidence: a fourth native pass, `qdrald` live tests, 2 tests.** The launcher first builds the host binary with the feature, then hands its path to the tests through a test-only variable, `QDRAL_SG108_HOST_BINARY`.
+- **`the_journey_runs_under_the_broker_and_commits_the_verified_report`:** broker-approved navigation, observation, the host's selection, and a broker-approved, create-only download. An independent checker verifies the bytes and the SHA-256, `5523ba2d…994a`.
+- **`a_denied_or_mismatched_approval_never_reaches_the_host`:**
+  - a denied navigation and a denied download fail with `ApprovalDenied`;
+  - an approval whose consume fails, because the token's digest was changed, is refused;
+  - nothing was written;
+  - the lifetime stays usable, and the next approved download commits.
+- **Mutation run:** with the broker's consume removed, the mismatched approval's download is committed, and the test fails.
+- **Under a managed policy** (CI), both tests require the typed refusal instead. The launcher requires their evidence lines, or the refusal lines. With `QDRAL_SG108_REQUIRE_JOURNEY=1` it requires the journeys.
