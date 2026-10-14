@@ -398,7 +398,7 @@ So a denied, unavailable or mismatched approval never reaches the host. Host ref
   - The reader skips a line only when its JSON ends early (the only way a prefix can fail), wherever it is. This includes a prefix that splits a multi-byte path character, because lines are read as bytes.
   - A torn `settled` or `reconciled` line leaves its intent open, and it is then reported again: still safe.
   - Any other unreadable line, unknown event or schema, or a pending line without its destination fails closed.
-  - A zero-filled run (bytes allocated but never written, after a power loss) is not a line and is skipped.
+  - Zero bytes (allocated but never written, after a power loss) are never part of a written line, since JSON escapes control characters. Trailing zeros are dropped from each line, so a zero-filled run is skipped and a torn prefix followed by zeros still reads as torn (judge, PR #334; fixed in the slice 3a PR). A zero byte inside an otherwise complete line is corruption.
 
 **Open question 3 (the MCP-side timeout budget) moves to slice 3.** No MCP path reaches the live browser until exposure lands there, so the budget is designed together with the `browser_structured` shapes it applies to.
 

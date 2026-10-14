@@ -309,12 +309,16 @@ pub fn journal_open_intents(path: &Path) -> Result<Vec<JournaledIntent>, Provide
     };
     let mut open: Vec<JournaledIntent> = Vec::new();
     for raw in text.split(|byte| *byte == b'\n') {
-        // Blank, or zero-filled (a power loss can leave allocated but
-        // unwritten bytes): no line was written there.
-        if raw
+        // Zero bytes are never part of a written line (JSON escapes control
+        // characters): a power loss can leave allocated but unwritten bytes,
+        // alone or after a torn prefix. Drop them, so a torn prefix still
+        // reads as torn and a zero-filled run as nothing.
+        let end = raw
             .iter()
-            .all(|byte| byte.is_ascii_whitespace() || *byte == 0)
-        {
+            .rposition(|byte| *byte != 0)
+            .map_or(0, |last| last + 1);
+        let raw = &raw[..end];
+        if raw.iter().all(u8::is_ascii_whitespace) {
             continue;
         }
         let line = match serde_json::from_slice::<JournalLine>(raw) {
@@ -1186,6 +1190,22 @@ mod tests {
         assert_eq!(journal_open_intents(&journal).unwrap().len(), 1);
         journal_append(&journal, &JournalLine::event("settled", "r2")).unwrap();
         assert!(journal_open_intents(&journal).unwrap().is_empty());
+        // A torn prefix followed by zeros on the same line is still torn,
+        // and the next append seals it.
+        let mut torn_zeroed = format!("{body}\n{{\"schema\":\"deskal-sg").into_bytes();
+        torn_zeroed.extend_from_slice(&[0u8; 16]);
+        std::fs::write(&journal, &torn_zeroed).unwrap();
+        assert_eq!(journal_open_intents(&journal).unwrap().len(), 1);
+        journal_append(&journal, &JournalLine::event("settled", "r2")).unwrap();
+        assert!(journal_open_intents(&journal).unwrap().is_empty());
+        // A zero byte inside an otherwise complete line is corruption.
+        let mut inner_zero = format!("{body}\n").into_bytes();
+        inner_zero.extend_from_slice(b"{\"schema\":\0}\n");
+        std::fs::write(&journal, &inner_zero).unwrap();
+        assert_eq!(
+            journal_open_intents(&journal).unwrap_err().code,
+            FailureCode::ProviderUnavailable
+        );
         // A torn line that split a multi-byte path character is still torn.
         let torn = pending("r7", &dir.join("bericht-\u{e4}"), "a.pdf", 1, 2);
         let cut = torn.find('\u{e4}').unwrap() + 1;
