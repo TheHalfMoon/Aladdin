@@ -249,3 +249,59 @@ For each consequential action, `qdrald` and the host each contribute what only t
   - **L1, the blocking hello and shutdown reads.** `Supervisor`'s hello and shutdown reads block without a deadline, as the classic handshake already does. They need a reader thread with `recv_timeout`, as `BrowserWorker` has. Slice 1b.
   - **L3, the committed URL.** `Navigated.url` is the committed URL, which a same-origin redirect chooses. Slice 1b decides whether `qdrald` receives it or only the requested URL and a digest.
 - **sg000085:** its certificate-flag rule accepts the feature gate, `cfg(any(test, feature = "live-browser-test"))`, besides `cfg(test)`.
+
+**Slice 1b, host side: two-part binding and the bound actions (test builds only).** The worker-mode vocabulary moves to generation 3; generations 1 and 2 are refused at hello.
+
+**`open` takes `policy_revision`.** It is bound into every host binding, together with the lifetime nonce and the workspace.
+
+**New frames:**
+- **`bind`** returns the host binding and the action's target, for the prompt. The binding is SHA-256 over a domain tag, the lifetime nonce, the workspace, the policy revision, and the action's material as the host sees it now:
+  - **navigate:** the URL and the host's pin;
+  - **click:** page, origin, document generation, node, role, and the link's resolved destination;
+  - **download:** the same, plus the host's `download_binding` (the link, the approved folder's real path, the normalized file name).
+- **`select_latest_dated_link`** is the host's typed selection. Raw names never leave the host. It replaces any caller-supplied selector.
+- **`navigate`, `activate` and `download`** each carry the broker record id and the binding. The host refuses:
+  - a record id already presented in this lifetime: `approval_replay`;
+  - a binding it can no longer derive, or that differs: `binding_mismatch`. That covers another URL, node, file name or lifetime, and a page that moved on.
+
+  A record id is spent once presented. Only then does the host build its own SG-000077 target and run its existing activation or download path: create-only commit, origin, type and size checks.
+- **`downloaded`** returns the relative name, the SHA-256, the size and the source URL.
+
+**`navigated` keeps returning the committed URL.** It is always on the lifetime's single origin, because the policy refuses anything else, and `qdrald`'s page store records it. *Decision on 1a follow-up L3.*
+
+**Supervision has deadlines.** `LiveWorkerHost` reads replies on a reader thread. Hello and shutdown wait at most 30 s, and each request at most `WORKER_HOST_REPLY_TIMEOUT` (150 s, above the worker's longest bound). A silent host is a typed timeout. *1a follow-up L1.*
+
+**Evidence,** worker-host pass with 6 tests:
+- **`the_journey_downloads_the_latest_report_through_bound_approvals_and_verifies_it`:**
+  - the latest dated report, selected by the host, is committed create-only through a bound download;
+  - an independent checker compares the bytes with the fixture's report and its SHA-256, `5523ba2d…994a`;
+  - the same record is then refused as a replay;
+  - a fresh record with the old binding is refused as a mismatch;
+  - a second download to the same name is refused, and the file is unchanged.
+- **`a_binding_names_one_lifetime_node_and_file_and_nothing_else`:**
+  - a navigation binding presented for another URL is refused;
+  - a download binding presented for another file name or another node is refused;
+  - a binding from a previous lifetime is refused;
+  - nothing was written.
+- **Mutation runs:**
+  - with the binding comparison removed, the binding test fails: another URL was navigated;
+  - with record ids never remembered, the journey's replay check fails.
+- **The launcher accepts the pass only with each lifetime test's evidence line,** or with the managed-policy refusal line. With `QDRAL_SG108_REQUIRE_JOURNEY=1`, set per run on the evidence host, the journeys themselves are required. *1a follow-up.*
+
+**What remains for slice 1b:** `qdrald`'s dispatch over these frames, behind the feature, with the broker's record ids.
+
+**Slice 1b host side, review fixes (round 1).**
+- **Replies stay in step.** Replies carry no request id, so a reply that missed its deadline would have been read as the answer to the next request.
+  - `LiveWorkerHost` reads through a `ReplyChannel` that is poisoned after any timeout or channel failure. Every later request on that host is refused, and only shutdown remains (`is_usable` reports it).
+  - Unit tests cover the late reply and a failed frame. The mutation that leaves the channel unpoisoned fails both.
+- **Only sent nodes can be acted on.** When an observation reply drops nodes to fit one frame, the host forgets every node it did not send (`retain_host_nodes`). `bind`, `activate`, `download` and selection can therefore only target nodes Deskal received.
+- **What runs is what was verified.** Dispatch builds the host's SG-000077 target from the state verified against the binding: the link's destination, or the host's `download_binding`. It never re-derives that state. The actuation path then checks the verified state against its current state, so a folder junction swapped between verification and dispatch is refused.
+- **The size limit is bound.** Download bindings include the size limit, `MAX_TRANSFER_BYTES`, as decision 3 lists.
+- **The digest is a pure function.** `binding_digest`'s unit test calls it directly. With the workspace dropped inside `binding_digest`, the test fails. If `host_binding` passed an empty workspace instead, no test would notice yet, because every lifetime under test uses one workspace and the nonce already separates lifetimes.
+- **Replies are also poisoned on a failed or partial write.**
+- **Follow-ups for the next slice:**
+  - a test that varies the workspace across `host_binding` calls;
+  - a test that forces observation truncation, so `retain_host_nodes` runs. The fixture page (about 2 KB) never truncates.
+- **Click path.** `a_bound_click_follows_the_approved_link_once`: a bound activation opens exactly the approved link. Its replay is refused, and the old binding with a fresh record is refused.
+- **Exact codes.** The other-origin navigation and the create-only refusal both assert the exact code `invalid`: the binding matched, and the policy or the commit refused.
+- **Launcher.** Under a managed policy, every lifetime-opening test must report the refusal itself: four journeys plus the shutdown test.

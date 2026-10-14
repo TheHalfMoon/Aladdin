@@ -1,32 +1,65 @@
-//! SG-000108 product caller, slice 1a: the host binary's worker mode.
+//! SG-000108 product caller, slices 1a–1b: the host binary's worker mode.
 //!
 //! `qdral-browser-host --worker` never spawns the engine itself: it serves
 //! a closed capability vocabulary over one `launch_worker` lifetime at a
 //! time, for exactly one admitted destination. Deskal supervision is the
-//! only peer (the pipe's other end). Test builds only in this slice: the
-//! whole module exists under the `live-browser-test` feature, which admits
-//! only the loopback fixture origin, and release qualification asserts the
-//! feature is absent (docs/security/SG-000108_PRODUCT_CALLER.md).
+//! only peer (the pipe's other end). Test builds only: the whole module
+//! exists under the `live-browser-test` feature, which admits only the
+//! loopback fixture origin; the release-blocker sweep keeps the feature out
+//! of release builds (docs/security/SG-000108_PRODUCT_CALLER.md).
 //!
-//! Approval binding for consequential frames (the `bind` frame and the
-//! two-part digest) arrives in slice 1b; navigation here is reachable only
-//! in test builds.
+//! Every consequential frame (navigate, activate, download) carries a
+//! broker record id and the host binding the host itself computed for that
+//! action (`bind`). The host re-derives the binding from its current state
+//! and refuses a changed one (another lifetime, document, node, target,
+//! folder or file name) or a record id already used in this lifetime. The
+//! host never mints an approval: Deskal consumed it with the broker before
+//! sending the frame (decision 3 of the design).
 
+use crate::actuation::{target_digest, ActuationTarget, ApprovalToken, SupportedAction};
 use crate::confinement::AdmittedDestination;
 use crate::discovery::{discover_engine, SearchConfig};
 use crate::error::HostError;
-use crate::observation::{ObservationScope, ObservedNode};
+use crate::observation::{DocumentIdentity, ObservationScope, ObservedNode, PageIdentity};
 use crate::proto::{decode_frame, write_frame};
 use crate::worker_launch::{launch_worker, BrowserWorker, WorkerLaunch};
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
+use std::collections::HashSet;
 use std::io::{BufRead, Write};
 use std::net::{IpAddr, Ipv4Addr};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
-/// Worker-mode protocol generation, distinct from SG-000074's generation 1
-/// (hello/ping/shutdown), so a classic peer and a worker-mode peer refuse
-/// each other at hello.
-pub const WORKER_HOST_GENERATION: u32 = 2;
+/// Worker-mode protocol generation. 1 is SG-000074's hello/ping/shutdown;
+/// 2 was slice 1a; 3 adds binding (`bind`), the typed selector, activation
+/// and download, and binds navigation.
+pub const WORKER_HOST_GENERATION: u32 = 3;
+
+/// Domain separation for host bindings.
+const BINDING_DOMAIN: &str = "deskal-sg108-host-binding/1";
+
+/// What an approval is for, as Deskal describes it to `bind` and the host
+/// re-derives at dispatch.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+pub enum BindAction {
+    Navigate {
+        url: String,
+    },
+    /// Click one observed link (the only live click in slices 1–3).
+    Click {
+        node_id: String,
+        role: String,
+    },
+    /// Download the document behind one observed link, create-only, to
+    /// `relative` inside `folder`.
+    Download {
+        node_id: String,
+        role: String,
+        folder: String,
+        relative: String,
+    },
+}
 
 /// Closed worker-mode request vocabulary.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -39,13 +72,38 @@ pub enum WorkerHostRequest {
     /// loopback fixture, trusting exactly its certificate.
     Open {
         workspace: String,
+        policy_revision: u64,
         host: String,
         fixture_spki: String,
     },
+    /// The host's half of an approval for `action`, computed from its own
+    /// state. Nothing is done.
+    Bind {
+        action: BindAction,
+    },
     Navigate {
         url: String,
+        record_id: String,
+        binding: String,
     },
     Observe {},
+    /// The host's typed selection: the observed link whose accessible name
+    /// carries the latest ISO date. Raw names never leave the host.
+    SelectLatestDatedLink {},
+    Activate {
+        node_id: String,
+        role: String,
+        record_id: String,
+        binding: String,
+    },
+    Download {
+        node_id: String,
+        role: String,
+        folder: String,
+        relative: String,
+        record_id: String,
+        binding: String,
+    },
     /// End the current lifetime (profile removed); the host keeps serving.
     Close {},
     Shutdown {},
@@ -85,12 +143,21 @@ pub enum WorkerHostReply {
         generation: u32,
         host: String,
     },
-    /// A lifetime started: its nonce (bound into every later approval
-    /// binding) and the address the host pinned.
+    /// A lifetime started: its nonce (bound into every host binding) and
+    /// the address the host pinned.
     Opened {
         lifetime: String,
         pinned: String,
     },
+    /// The host binding for the action, and where it goes (the URL a
+    /// navigation or click opens, or the link a download reads), for the
+    /// approval prompt.
+    Bound {
+        binding: String,
+        target: String,
+    },
+    /// The committed URL: on the lifetime's single origin (the policy
+    /// refuses anything else), which Deskal's page store records.
     Navigated {
         url: String,
         status: u16,
@@ -103,6 +170,20 @@ pub enum WorkerHostReply {
         nodes: Vec<WireNode>,
         node_count: usize,
         truncated: bool,
+    },
+    Selected {
+        node_id: String,
+    },
+    Activated {
+        url: String,
+        status: u16,
+    },
+    /// A committed download: where inside the approved folder, and what.
+    Downloaded {
+        relative: String,
+        sha256: String,
+        bytes: u64,
+        source_url: String,
     },
     Closed {
         job_empty: bool,
@@ -141,7 +222,15 @@ pub fn error_code(error: &HostError) -> String {
 struct Lifetime {
     worker: BrowserWorker,
     workspace: String,
+    policy_revision: u64,
     profile_identity: String,
+    nonce: String,
+    pin: String,
+    /// The page and document of the latest observation; node ids belong to
+    /// it. Cleared whenever the page moves.
+    observed: Option<(PageIdentity, DocumentIdentity)>,
+    /// Broker record ids already presented in this lifetime.
+    used_records: HashSet<String>,
 }
 
 /// Serve the worker-mode vocabulary until shutdown, end of input or a
@@ -175,39 +264,29 @@ pub fn serve_worker_mode(
             }
             WorkerHostRequest::Open {
                 workspace,
+                policy_revision,
                 host,
                 fixture_spki,
             } => {
                 if lifetime.is_some() {
                     error("lifetime_open")
                 } else {
-                    match open(args, &workspace, &host, &fixture_spki) {
+                    match open(args, &workspace, policy_revision, &host, &fixture_spki) {
                         Ok((opened, reply)) => {
                             lifetime = Some(opened);
                             reply
                         }
-                        Err(err) => WorkerHostReply::Error {
-                            code: error_code(&err),
-                        },
+                        Err(err) => refusal(&err),
                     }
                 }
             }
-            WorkerHostRequest::Navigate { url } => match lifetime.as_mut() {
-                None => error("no_lifetime"),
-                Some(live) => match live.worker.navigate(&url) {
-                    Ok(outcome) => WorkerHostReply::Navigated {
-                        url: outcome.url,
-                        status: outcome.status,
-                    },
-                    Err(err) => WorkerHostReply::Error {
-                        code: error_code(&err),
-                    },
-                },
-            },
-            WorkerHostRequest::Observe {} => match lifetime.as_mut() {
-                None => error("no_lifetime"),
-                Some(live) => observe(live),
-            },
+            WorkerHostRequest::Shutdown {} => {
+                if let Some(live) = lifetime.take() {
+                    let _ = live.worker.shutdown();
+                }
+                let _ = send(output, &WorkerHostReply::Bye {});
+                break Ok(());
+            }
             WorkerHostRequest::Close {} => match lifetime.take() {
                 None => error("no_lifetime"),
                 Some(live) => {
@@ -218,13 +297,10 @@ pub fn serve_worker_mode(
                     }
                 }
             },
-            WorkerHostRequest::Shutdown {} => {
-                if let Some(live) = lifetime.take() {
-                    let _ = live.worker.shutdown();
-                }
-                let _ = send(output, &WorkerHostReply::Bye {});
-                break Ok(());
-            }
+            other => match lifetime.as_mut() {
+                None => error("no_lifetime"),
+                Some(live) => in_lifetime(live, other),
+            },
         };
         if send(output, &reply).is_err() {
             break Err("reply failed".to_string());
@@ -236,13 +312,302 @@ pub fn serve_worker_mode(
     result
 }
 
+/// Frames that need a live lifetime.
+fn in_lifetime(live: &mut Lifetime, request: WorkerHostRequest) -> WorkerHostReply {
+    match request {
+        WorkerHostRequest::Bind { action } => match host_binding(live, &action) {
+            Ok(derived) => WorkerHostReply::Bound {
+                binding: derived.binding,
+                target: derived.target,
+            },
+            Err(err) => refusal(&err),
+        },
+        WorkerHostRequest::Observe {} => observe(live),
+        WorkerHostRequest::SelectLatestDatedLink {} => {
+            if live.observed.is_none() {
+                return error("no_observation");
+            }
+            match live.worker.select_latest_dated_link() {
+                Ok(node_id) => WorkerHostReply::Selected { node_id },
+                Err(err) => refusal(&err),
+            }
+        }
+        WorkerHostRequest::Navigate {
+            url,
+            record_id,
+            binding,
+        } => {
+            let action = BindAction::Navigate { url: url.clone() };
+            if let Err(refused) = verify(live, &action, &record_id, &binding) {
+                return refused;
+            }
+            live.observed = None;
+            match live.worker.navigate(&url) {
+                Ok(outcome) => WorkerHostReply::Navigated {
+                    url: outcome.url,
+                    status: outcome.status,
+                },
+                Err(err) => refusal(&err),
+            }
+        }
+        WorkerHostRequest::Activate {
+            node_id,
+            role,
+            record_id,
+            binding,
+        } => {
+            let action = BindAction::Click {
+                node_id: node_id.clone(),
+                role: role.clone(),
+            };
+            let state = match verify(live, &action, &record_id, &binding) {
+                Ok(state) => state,
+                Err(refused) => return refused,
+            };
+            let (target, mut approval) = match approved_target(live, &action, &record_id, state) {
+                Ok(pair) => pair,
+                Err(err) => return refusal(&err),
+            };
+            live.observed = None;
+            let (revision, workspace) = (live.policy_revision, live.workspace.clone());
+            match live
+                .worker
+                .activate(&target, &mut approval, revision, &workspace)
+            {
+                Ok(outcome) => WorkerHostReply::Activated {
+                    url: outcome.url,
+                    status: outcome.status,
+                },
+                Err(err) => refusal(&err),
+            }
+        }
+        WorkerHostRequest::Download {
+            node_id,
+            role,
+            folder,
+            relative,
+            record_id,
+            binding,
+        } => {
+            let action = BindAction::Download {
+                node_id: node_id.clone(),
+                role: role.clone(),
+                folder: folder.clone(),
+                relative: relative.clone(),
+            };
+            let state = match verify(live, &action, &record_id, &binding) {
+                Ok(state) => state,
+                Err(refused) => return refused,
+            };
+            let (target, mut approval) = match approved_target(live, &action, &record_id, state) {
+                Ok(pair) => pair,
+                Err(err) => return refusal(&err),
+            };
+            live.observed = None;
+            let (revision, workspace) = (live.policy_revision, live.workspace.clone());
+            match live.worker.download(
+                &target,
+                &mut approval,
+                revision,
+                &workspace,
+                Path::new(&folder),
+                &relative,
+            ) {
+                Ok(committed) => WorkerHostReply::Downloaded {
+                    relative,
+                    sha256: committed.sha256,
+                    bytes: committed.bytes,
+                    source_url: committed.source_url,
+                },
+                Err(err) => refusal(&err),
+            }
+        }
+        // Handled by the caller; unreachable here by construction.
+        WorkerHostRequest::Hello { .. }
+        | WorkerHostRequest::Open { .. }
+        | WorkerHostRequest::Close {}
+        | WorkerHostRequest::Shutdown {} => error("invalid"),
+    }
+}
+
 fn error(code: &str) -> WorkerHostReply {
     WorkerHostReply::Error { code: code.into() }
+}
+
+fn refusal(err: &HostError) -> WorkerHostReply {
+    WorkerHostReply::Error {
+        code: error_code(err),
+    }
 }
 
 fn send(output: &mut impl Write, value: &WorkerHostReply) -> Result<(), HostError> {
     write_frame(output, value)?;
     output.flush().map_err(HostError::from)
+}
+
+fn sha256_hex(text: &str) -> String {
+    Sha256::digest(text.as_bytes())
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect()
+}
+
+/// The binding digest: SHA-256 over the domain tag, the lifetime nonce,
+/// the workspace and policy revision of the lifetime, and the action's
+/// material. Pure, so every part it binds is tested directly.
+pub(crate) fn binding_digest(
+    nonce: &str,
+    workspace: &str,
+    policy_revision: u64,
+    material: &str,
+) -> String {
+    sha256_hex(&format!(
+        "{BINDING_DOMAIN}\n{nonce}\n{workspace}\n{policy_revision}\n{material}"
+    ))
+}
+
+/// What a binding was derived from: the digest, the action's target (for
+/// the prompt) and the state the host's own actuation path is bound to
+/// (the link's destination for a click, the host's `download_binding` for a
+/// download, the URL for a navigation). Dispatch uses the state verified
+/// here, never a fresh derivation, so what runs is what was approved.
+struct Derived {
+    binding: String,
+    target: String,
+    state: String,
+}
+
+/// The host's half of an approval, from its own state now.
+fn host_binding(live: &Lifetime, action: &BindAction) -> Result<Derived, HostError> {
+    let (material, target, state) = match action {
+        BindAction::Navigate { url } => {
+            crate::navigation::parse_navigation_url(url)?;
+            (
+                format!("navigate\n{url}\n{}", live.pin),
+                url.clone(),
+                url.clone(),
+            )
+        }
+        BindAction::Click { node_id, role } => {
+            let (page, document) = observed(live)?;
+            let destination = live.worker.link_destination(node_id)?;
+            (
+                format!(
+                    "click\n{}\n{}\n{}\n{node_id}\n{role}\n{destination}",
+                    page.page_id, page.origin, document.document_generation
+                ),
+                destination.clone(),
+                destination,
+            )
+        }
+        BindAction::Download {
+            node_id,
+            role,
+            folder,
+            relative,
+        } => {
+            let (page, document) = observed(live)?;
+            let destination = live.worker.link_destination(node_id)?;
+            let download = live
+                .worker
+                .download_binding(node_id, Path::new(folder), relative)?;
+            (
+                format!(
+                    "download\n{}\n{}\n{}\n{node_id}\n{role}\n{download}\n{}",
+                    page.page_id,
+                    page.origin,
+                    document.document_generation,
+                    crate::transfers::MAX_TRANSFER_BYTES
+                ),
+                destination,
+                download,
+            )
+        }
+    };
+    Ok(Derived {
+        binding: binding_digest(
+            &live.nonce,
+            &live.workspace,
+            live.policy_revision,
+            &material,
+        ),
+        target,
+        state,
+    })
+}
+
+fn observed(live: &Lifetime) -> Result<(&PageIdentity, &DocumentIdentity), HostError> {
+    live.observed
+        .as_ref()
+        .map(|(page, document)| (page, document))
+        .ok_or_else(|| HostError::Invalid("no current observation".into()))
+}
+
+/// Check a consequential frame: a well-formed record id not used before in
+/// this lifetime, and a binding equal to the one the host derives now. A
+/// record id is spent once presented, whatever happens next (the broker
+/// already consumed the approval). Returns the verified state.
+fn verify(
+    live: &mut Lifetime,
+    action: &BindAction,
+    record_id: &str,
+    binding: &str,
+) -> Result<String, WorkerHostReply> {
+    if crate::observation::validate_identity_field(record_id).is_err() {
+        return Err(error("invalid"));
+    }
+    if !live.used_records.insert(record_id.to_owned()) {
+        return Err(error("approval_replay"));
+    }
+    match host_binding(live, action) {
+        Ok(derived) if derived.binding == binding => Ok(derived.state),
+        Ok(_) => Err(error("binding_mismatch")),
+        // The material cannot be derived any more (the page moved, the node
+        // is gone): the approved action no longer exists.
+        Err(_) => Err(error("binding_mismatch")),
+    }
+}
+
+/// The SG-000077 target and one-shot token the host's own actuation path
+/// takes, built from the verified `state`. The token is the host's internal
+/// mechanism, not an approval of its own; the actuation path then checks
+/// the target against its current state, so anything that changed between
+/// verification and dispatch (a folder junction swapped) is refused.
+fn approved_target(
+    live: &Lifetime,
+    action: &BindAction,
+    record_id: &str,
+    state: String,
+) -> Result<(ActuationTarget, ApprovalToken), HostError> {
+    let (page, document) = observed(live)?;
+    let (node_id, role, kind) = match action {
+        BindAction::Click { node_id, role } => (node_id, role, SupportedAction::Click),
+        BindAction::Download { node_id, role, .. } => (node_id, role, SupportedAction::Download),
+        BindAction::Navigate { .. } => {
+            return Err(HostError::Invalid(
+                "navigation takes no actuation target".into(),
+            ))
+        }
+    };
+    let target = ActuationTarget {
+        page_id: page.page_id.clone(),
+        origin: page.origin.clone(),
+        document_generation: document.document_generation,
+        node_id: node_id.clone(),
+        role: role.clone(),
+        state,
+        action: kind,
+        workspace: live.workspace.clone(),
+        policy_revision: live.policy_revision,
+    };
+    let approval = ApprovalToken {
+        approval_id: record_id.to_owned(),
+        target_digest: target_digest(&target),
+        workspace: live.workspace.clone(),
+        policy_revision: live.policy_revision,
+        consumed: false,
+    };
+    Ok((target, approval))
 }
 
 /// Start a lifetime: the host's own engine discovery (A10 re-verifies it at
@@ -251,6 +616,7 @@ fn send(output: &mut impl Write, value: &WorkerHostReply) -> Result<(), HostErro
 fn open(
     args: &WorkerHostArgs,
     workspace: &str,
+    policy_revision: u64,
     host: &str,
     fixture_spki: &str,
 ) -> Result<(Lifetime, WorkerHostReply), HostError> {
@@ -286,7 +652,7 @@ fn open(
             return Err(err);
         }
     };
-    let lifetime = nonce[..16]
+    let nonce = nonce[..16]
         .iter()
         .map(|byte| format!("{byte:02x}"))
         .collect::<String>();
@@ -294,10 +660,15 @@ fn open(
         Lifetime {
             worker,
             workspace: workspace.to_owned(),
+            policy_revision,
             profile_identity,
+            nonce: nonce.clone(),
+            pin: pin.to_string(),
+            observed: None,
+            used_records: HashSet::new(),
         },
         WorkerHostReply::Opened {
-            lifetime,
+            lifetime: nonce,
             pinned: pin.to_string(),
         },
     ))
@@ -307,7 +678,7 @@ fn open(
 /// then launch the worker in it.
 fn launch_in(
     args: &WorkerHostArgs,
-    profile_dir: &std::path::Path,
+    profile_dir: &Path,
     engine: crate::discovery::Engine,
     destination: AdmittedDestination,
     fixture_spki: &str,
@@ -338,11 +709,11 @@ fn observe(live: &mut Lifetime) -> WorkerHostReply {
     let observed = match live.worker.observe(&scope) {
         Ok(observed) => observed,
         Err(err) => {
-            return WorkerHostReply::Error {
-                code: error_code(&err),
-            }
+            live.observed = None;
+            return refusal(&err);
         }
     };
+    live.observed = Some((observed.page.clone(), observed.document.clone()));
     let mut nodes: Vec<WireNode> = observed
         .observation
         .nodes
@@ -361,10 +732,23 @@ fn observe(live: &mut Lifetime) -> WorkerHostReply {
             truncated,
         };
         if crate::proto::encode_frame(&reply).is_ok() || nodes.is_empty() {
+            if truncated {
+                // Only nodes Deskal actually received can be acted on.
+                let mut sent = HashSet::new();
+                collect_ids(&nodes, &mut sent);
+                live.worker.retain_host_nodes(&sent);
+            }
             return reply;
         }
         nodes.pop();
         truncated = true;
+    }
+}
+
+fn collect_ids(nodes: &[WireNode], into: &mut HashSet<String>) {
+    for node in nodes {
+        into.insert(node.node_id.clone());
+        collect_ids(&node.children, into);
     }
 }
 
@@ -377,24 +761,39 @@ mod tests {
     fn the_vocabulary_is_closed_and_round_trips() {
         for frame in [
             r#"{"frame":"navigate","url":"https://fixture.test/","extra":1}"#,
+            r#"{"frame":"navigate","url":"https://fixture.test/"}"#,
             r#"{"frame":"evaluate","script":"1"}"#,
             r#"{"frame":"shutdown","now":true}"#,
+            r#"{"frame":"bind","action":{"kind":"fill","node_id":"d1-e2","role":"textbox"}}"#,
+            r#"{"frame":"bind","action":{"kind":"click","node_id":"d1-e2","role":"link","selector":"a"}}"#,
         ] {
             assert!(
                 serde_json::from_str::<WorkerHostRequest>(frame).is_err(),
                 "{frame}"
             );
         }
-        let open = WorkerHostRequest::Open {
-            workspace: "w".into(),
-            host: "fixture.test".into(),
-            fixture_spki: "A".repeat(43) + "=",
-        };
-        let text = serde_json::to_string(&open).unwrap();
-        assert_eq!(
-            serde_json::from_str::<WorkerHostRequest>(&text).unwrap(),
-            open
-        );
+        for request in [
+            WorkerHostRequest::Open {
+                workspace: "w".into(),
+                policy_revision: 7,
+                host: "fixture.test".into(),
+                fixture_spki: "A".repeat(43) + "=",
+            },
+            WorkerHostRequest::Bind {
+                action: BindAction::Download {
+                    node_id: "d1-e2".into(),
+                    role: "link".into(),
+                    folder: "C:\\approved".into(),
+                    relative: "r.pdf".into(),
+                },
+            },
+        ] {
+            let text = serde_json::to_string(&request).unwrap();
+            assert_eq!(
+                serde_json::from_str::<WorkerHostRequest>(&text).unwrap(),
+                request
+            );
+        }
     }
 
     #[test]
@@ -430,8 +829,10 @@ mod tests {
         let mut out = Vec::new();
         let early = frames(&[WorkerHostRequest::Observe {}]);
         assert!(serve_worker_mode(&args, &mut early.as_slice(), &mut out).is_err());
-        let wrong = frames(&[WorkerHostRequest::Hello { generation: 1 }]);
-        assert!(serve_worker_mode(&args, &mut wrong.as_slice(), &mut out).is_err());
+        for old in [1, 2] {
+            let wrong = frames(&[WorkerHostRequest::Hello { generation: old }]);
+            assert!(serve_worker_mode(&args, &mut wrong.as_slice(), &mut out).is_err());
+        }
         // Before a lifetime: typed refusals, then a clean shutdown.
         let mut out = Vec::new();
         let ok = frames(&[
@@ -440,6 +841,13 @@ mod tests {
             },
             WorkerHostRequest::Navigate {
                 url: "https://fixture.test/".into(),
+                record_id: "r1".into(),
+                binding: "b".into(),
+            },
+            WorkerHostRequest::Bind {
+                action: BindAction::Navigate {
+                    url: "https://fixture.test/".into(),
+                },
             },
             WorkerHostRequest::Shutdown {},
         ]);
@@ -452,15 +860,51 @@ mod tests {
                 ..
             }
         ));
-        assert_eq!(
-            decode_frame::<WorkerHostReply, _>(&mut replies).unwrap(),
-            WorkerHostReply::Error {
-                code: "no_lifetime".into()
-            }
-        );
+        for _ in 0..2 {
+            assert_eq!(
+                decode_frame::<WorkerHostReply, _>(&mut replies).unwrap(),
+                WorkerHostReply::Error {
+                    code: "no_lifetime".into()
+                }
+            );
+        }
         assert_eq!(
             decode_frame::<WorkerHostReply, _>(&mut replies).unwrap(),
             WorkerHostReply::Bye {}
         );
+    }
+
+    #[test]
+    fn a_binding_changes_with_every_part_it_binds() {
+        let material = "navigate\nhttps://fixture.test/\n127.0.0.1";
+        let reference = binding_digest("n1", "w", 1, material);
+        for other in [
+            binding_digest("n2", "w", 1, material),
+            binding_digest("n1", "v", 1, material),
+            binding_digest("n1", "w", 2, material),
+            binding_digest("n1", "w", 1, "navigate\nhttps://fixture.test/x\n127.0.0.1"),
+        ] {
+            assert_ne!(reference, other);
+        }
+        assert_eq!(reference, binding_digest("n1", "w", 1, material));
+        assert_eq!(reference.len(), 64);
+    }
+
+    #[test]
+    fn only_sent_node_ids_are_collected() {
+        let leaf = |id: &str| WireNode {
+            node_id: id.into(),
+            role: "link".into(),
+            name_digest: String::new(),
+            value_digest: String::new(),
+            redacted: false,
+            children: Vec::new(),
+        };
+        let mut parent = leaf("a");
+        parent.children.push(leaf("b"));
+        let mut ids = HashSet::new();
+        collect_ids(&[parent, leaf("c")], &mut ids);
+        assert_eq!(ids.len(), 3);
+        assert!(ids.contains("b"));
     }
 }
