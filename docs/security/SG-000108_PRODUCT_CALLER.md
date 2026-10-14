@@ -299,9 +299,9 @@ For each consequential action, `qdrald` and the host each contribute what only t
 - **The size limit is bound.** Download bindings include the size limit, `MAX_TRANSFER_BYTES`, as decision 3 lists.
 - **The digest is a pure function.** `binding_digest`'s unit test calls it directly. With the workspace dropped inside `binding_digest`, the test fails. If `host_binding` passed an empty workspace instead, no test would notice yet, because every lifetime under test uses one workspace and the nonce already separates lifetimes.
 - **Replies are also poisoned on a failed or partial write.**
-- **Follow-ups for the next slice:**
-  - a test that varies the workspace across `host_binding` calls;
-  - a test that forces observation truncation, so `retain_host_nodes` runs. The fixture page (about 2 KB) never truncates.
+- **Follow-ups, closed in the qdrald-side PR:**
+  - **The workspace at the call site.** The binding test recomputes the host binding independently from the documented formula (nonce, workspace, revision, action) and requires an exact match. With the workspace replaced by an empty string where `host_binding` is called, the test fails (mutation run).
+  - **A trimmed observation.** The fixture's `/crowded` page does not fit one reply frame. The host now trims depth-first, dropping the last leaf first, so a reply keeps the largest prefix of the tree: 483 of 512 nodes. Dropping whole top-level subtrees, the earlier behaviour, could empty a page whose content sits under one root. `nodes_a_trimmed_observation_dropped_cannot_be_acted_on` requires every node the host observed but did not send to be unbindable. Without `retain_host_nodes`, the dropped node `d1-e486` was bindable, and the test fails (mutation run).
 - **Click path.** `a_bound_click_follows_the_approved_link_once`: a bound activation opens exactly the approved link. Its replay is refused, and the old binding with a fresh record is refused.
 - **Exact codes.** The other-origin navigation and the create-only refusal both assert the exact code `invalid`: the binding matched, and the policy or the commit refused.
 - **Launcher.** Under a managed policy, every lifetime-opening test must report the refusal itself: four journeys plus the shutdown test.

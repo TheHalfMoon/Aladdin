@@ -253,6 +253,18 @@ const server = createServer({ key, cert }, (request, response) => {
   // #324: a page that tries every way a page reaches a LAN address: WebRTC
   // ICE (STUN over UDP and TCP), fetch, WebSocket and sendBeacon. The test
   // listens on that address; nothing may arrive.
+  // SG-000108 product caller: a page whose observation does not fit one
+  // reply frame. Its only dated link comes last, so it is among the nodes a
+  // trimmed reply drops; the host must not act on a node it never sent.
+  if (path === "/crowded") {
+    const items = [];
+    for (let i = 0; i < 700; i++) {
+      items.push(`<li><a href="/site/a">Catalogue entry number ${i} with a long descriptive accessible name</a></li>`);
+    }
+    items.push('<li><a href="/reports/2026-09-30.pdf">Quarterly report 2026-09-30</a></li>');
+    response.setHeader("content-type", "text/html");
+    return response.end(`<!doctype html><title>crowded</title><ul>${items.join("")}</ul>`);
+  }
   if (path.startsWith("/rtc?")) {
     const query = new URL(path, "https://fixture.test").searchParams;
     const ip = (query.get("ip") ?? "").replace(/[^0-9a-f.:]/gi, "");

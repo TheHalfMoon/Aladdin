@@ -740,8 +740,21 @@ fn observe(live: &mut Lifetime) -> WorkerHostReply {
             }
             return reply;
         }
-        nodes.pop();
+        pop_last_leaf(&mut nodes);
         truncated = true;
+    }
+}
+
+/// Drop the last node in depth-first order that has no children, so a
+/// trimmed reply keeps the largest prefix of the tree (dropping a whole
+/// top-level subtree could empty a page whose content sits under one root).
+fn pop_last_leaf(nodes: &mut Vec<WireNode>) {
+    if let Some(last) = nodes.last_mut() {
+        if last.children.is_empty() {
+            nodes.pop();
+        } else {
+            pop_last_leaf(&mut last.children);
+        }
     }
 }
 
@@ -888,6 +901,29 @@ mod tests {
         }
         assert_eq!(reference, binding_digest("n1", "w", 1, material));
         assert_eq!(reference.len(), 64);
+    }
+
+    #[test]
+    fn trimming_drops_the_last_leaf_first() {
+        let node = |id: &str, children: Vec<WireNode>| WireNode {
+            node_id: id.into(),
+            role: "list".into(),
+            name_digest: String::new(),
+            value_digest: String::new(),
+            redacted: false,
+            children,
+        };
+        let mut nodes = vec![node(
+            "root",
+            vec![node("a", Vec::new()), node("b", Vec::new())],
+        )];
+        pop_last_leaf(&mut nodes);
+        let mut ids = HashSet::new();
+        collect_ids(&nodes, &mut ids);
+        assert_eq!(ids, HashSet::from(["root".to_string(), "a".to_string()]));
+        pop_last_leaf(&mut nodes);
+        pop_last_leaf(&mut nodes);
+        assert!(nodes.is_empty());
     }
 
     #[test]

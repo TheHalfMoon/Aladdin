@@ -495,6 +495,104 @@ fn a_bound_click_follows_the_approved_link_once() {
 
 #[test]
 #[ignore = "requires the built browser worker and Edge; run by npm run browser-launcher:native"]
+fn nodes_a_trimmed_observation_dropped_cannot_be_acted_on() {
+    let fixture = Fixture::start();
+    let (mut supervisor, launch, root) = launch("crowded");
+    let host = supervisor.worker_host().expect("live worker host");
+    if open(host, &fixture, &launch.profile_root).is_none() {
+        assert!(supervisor.shutdown().expect("shutdown"));
+        let _ = std::fs::remove_dir_all(&root);
+        return;
+    }
+    assert!(matches!(
+        navigate(host, "https://fixture.test/crowded", "rec-1"),
+        WorkerHostReply::Navigated { status: 200, .. }
+    ));
+    let (sent, truncated, node_count) = match observe(host) {
+        WorkerHostReply::Observed {
+            nodes,
+            truncated,
+            node_count,
+            ..
+        } => (
+            all_nodes(&nodes)
+                .into_iter()
+                .map(|node| node.node_id.clone())
+                .collect::<std::collections::HashSet<_>>(),
+            truncated,
+            node_count,
+        ),
+        other => panic!("{other:?}"),
+    };
+    // The page is built so that the reply cannot carry every node.
+    assert!(
+        truncated,
+        "the crowded page fit one frame: the test proves nothing"
+    );
+    assert!(
+        sent.len() < node_count,
+        "sent {} of {node_count}",
+        sent.len()
+    );
+    // A trimmed reply still carries most of the page (the largest prefix).
+    assert!(
+        sent.len() * 2 > node_count,
+        "sent {} of {node_count}",
+        sent.len()
+    );
+    // The ids the host observed but did not send continue the sent ones'
+    // numbering (d<generation>-e<n>): none of them may be bound.
+    let highest = sent
+        .iter()
+        .filter_map(|id| {
+            id.rsplit_once("-e")
+                .and_then(|(_, n)| n.parse::<u32>().ok())
+        })
+        .max()
+        .expect("numbered node ids");
+    let prefix = sent
+        .iter()
+        .next()
+        .and_then(|id| id.rsplit_once("-e").map(|(head, _)| head.to_owned()))
+        .expect("an id prefix");
+    for n in highest + 1..=highest + 60 {
+        let reply = host
+            .request(&WorkerHostRequest::Bind {
+                action: BindAction::Click {
+                    node_id: format!("{prefix}-e{n}"),
+                    role: "link".into(),
+                },
+            })
+            .expect("bind");
+        assert!(
+            matches!(reply, WorkerHostReply::Error { .. }),
+            "a node the host never sent was bindable: {prefix}-e{n} -> {reply:?}"
+        );
+    }
+    // Nor may the host select a node it did not send.
+    match host
+        .request(&WorkerHostRequest::SelectLatestDatedLink {})
+        .expect("select")
+    {
+        WorkerHostReply::Selected { node_id } => {
+            assert!(
+                sent.contains(&node_id),
+                "the host selected a node it never sent: {node_id}"
+            )
+        }
+        WorkerHostReply::Error { code } => assert_eq!(code, "invalid"),
+        other => panic!("{other:?}"),
+    }
+    println!(
+        "SG108-EVIDENCE worker host trimmed observation: {} of {node_count} nodes sent; dropped nodes not actionable",
+        sent.len()
+    );
+    assert!(supervisor.shutdown().expect("shutdown"));
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+#[ignore = "requires the built browser worker and Edge; run by npm run browser-launcher:native"]
 fn a_binding_names_one_lifetime_node_and_file_and_nothing_else() {
     let fixture = Fixture::start();
     let (mut supervisor, launch, root) = launch("binding");
@@ -502,11 +600,33 @@ fn a_binding_names_one_lifetime_node_and_file_and_nothing_else() {
     std::fs::create_dir_all(&approved).expect("approved folder");
     let folder = approved.to_string_lossy().into_owned();
     let host = supervisor.worker_host().expect("live worker host");
-    if open(host, &fixture, &launch.profile_root).is_none() {
+    let Some(lifetime) = open(host, &fixture, &launch.profile_root) else {
         assert!(supervisor.shutdown().expect("shutdown"));
         let _ = std::fs::remove_dir_all(&root);
         return;
-    }
+    };
+    // The binding is exactly the documented digest over the lifetime nonce,
+    // the workspace, the policy revision and the action: recomputed here
+    // independently, so a host that dropped or replaced any part (the
+    // workspace included) fails.
+    let url = "https://fixture.test/reports";
+    let (binding, _) = bind(host, BindAction::Navigate { url: url.into() });
+    let expected = sha256_hex(
+        format!(
+            "deskal-sg108-host-binding/1
+{lifetime}
+ws-sg108
+1
+navigate
+{url}
+127.0.0.1"
+        )
+        .as_bytes(),
+    );
+    assert_eq!(
+        binding, expected,
+        "the host binding is not the documented digest"
+    );
     // A navigation binding names its URL: presented for another URL, refused.
     let (nav_binding, _) = bind(
         host,
