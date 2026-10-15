@@ -274,7 +274,7 @@ test("SG-000096 donor freeze is attributable, local-only and not executable at a
     source_issue: number;
     donor: { repository: string; commit: string; license: string; license_blob_sha: string };
     selected: Array<{ source: string; blob: string; reuse: string; destination: string }>;
-    reused_orcel: string[];
+    reused_deskal: string[];
     excluded_features: string[];
     authority_profile: { safe: string; full_user: string; full_admin: boolean; persistent_admin: boolean; remote_full_control: boolean; delegated_mcp_self_grant: boolean };
     activation_state: { donor_runtime_imported: boolean; local_shell_executor_implemented: boolean; full_user_shell_authority_enabled: boolean; mcp_tools_added: string[]; new_dependencies: string[]; new_listeners: string[]; release_payload_changed: boolean };
@@ -299,8 +299,8 @@ test("SG-000096 donor freeze is attributable, local-only and not executable at a
     ]
   );
   assert.ok(manifest.selected.every(entry => /^(COPY_ADAPT|PORT|REFERENCE)$/.test(entry.reuse)));
-  assert.ok(manifest.reused_orcel.includes("crates/orcel-provider-process/src/lib.rs"));
-  assert.ok(manifest.reused_orcel.includes("crates/orcel-policy/src/full_control_store.rs"));
+  assert.ok(manifest.reused_deskal.includes("crates/qdral-provider-process/src/lib.rs"));
+  assert.ok(manifest.reused_deskal.includes("crates/qdral-policy/src/full_control_store.rs"));
   assert.ok(manifest.excluded_features.some(entry => entry.includes("node:local")));
   assert.ok(manifest.excluded_features.some(entry => entry.includes("remote")));
   assert.match(manifest.authority_profile.safe, /no widening/);
@@ -478,9 +478,9 @@ test("SG-000095 donor selection is exact, reuse-first, and rejects recording/pri
   assert.equal(manifest.implementation_state.implementation_base, "941dfd504e75b578c091e8819ef949bcce8029ad");
   assert.equal(manifest.implementation_state.donor_runtime_imported, true);
   assert.deepEqual(manifest.implementation_state.imported_runtime_files, [
-    "apps/orcel-computer-host/native_actions_windows.go",
-    "apps/orcel-computer-host/native_input_windows.go",
-    "apps/orcel-computer-host/native_window_actions_windows.go"
+    "apps/deskal-computer-host/native_actions_windows.go",
+    "apps/deskal-computer-host/native_input_windows.go",
+    "apps/deskal-computer-host/native_window_actions_windows.go"
   ]);
   assert.deepEqual(manifest.implementation_state.host_operations_added, [
     "cursor_position",
