@@ -1,6 +1,6 @@
-# Qdral OpenAI Plugin Package (SG-000067)
+# Orcel OpenAI Plugin Package (SG-000067)
 
-Status: SOFTWARE PACKAGE FOR QDRAL-P17. Provider-controlled states are recorded only in
+Status: SOFTWARE PACKAGE FOR ORCEL-P17. Provider-controlled states are recorded only in
 `distribution/openai/review/distribution-state.json` from directly observed provider evidence.
 
 ## What the package is
@@ -9,8 +9,8 @@ A portable Agent Plugins package for the current OpenAI Plugins Directory:
 
 - `plugin.json` with the `https://agent-plugins.org/schemas/1.0.0/plugin.schema.json` schema, product metadata, and
   OpenAI display metadata confined to `extensions["com.openai"].interface`;
-- `mcp.json` declaring exactly one `streamable-http` server: the owner's Qdral relay `/mcp` endpoint;
-- `assets/logo.svg` (original Qdral mark);
+- `mcp.json` declaring exactly one `streamable-http` server: the owner's Orcel relay `/mcp` endpoint;
+- `assets/logo.svg` (original Orcel mark);
 - `review/`: five positive and three negative review cases, release notes, the demo-recording evidence slot, the
   distribution state record, and `tool-scan.json` produced by in-process discovery through the authoritative MCP builder
   on the relay transport;
@@ -19,7 +19,7 @@ A portable Agent Plugins package for the current OpenAI Plugins Directory:
 ## Build
 
 ```sh
-npm run build -w @qdral/mcp
+npm run build -w @orcel/mcp
 node scripts/build-openai-plugin.mjs --mcp-url https://<your-relay-host>/mcp --out dist/openai-plugin
 ```
 

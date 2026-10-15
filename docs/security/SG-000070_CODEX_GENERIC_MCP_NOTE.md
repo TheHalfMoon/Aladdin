@@ -1,16 +1,16 @@
 # SG-000070 Codex and Generic MCP Distribution Security Note
 
-Status: IMPLEMENTATION FOR QDRAL-P17
+Status: IMPLEMENTATION FOR ORCEL-P17
 SpecGrain: SG-000070
 Base: `dc32bbf81527f5008c4b5cb9608b13cc9a9c7676`
 Date: 2026-10-04
 
 ## Changes
 
-- `distribution/codex/qdral/` Codex plugin package and `.agents/plugins/marketplace.json`: one local `stdio` server,
-  `qdral mcp stdio`; no endpoint, environment, header, or secret. Tests pin the server exactly, the version to the release
+- `distribution/codex/orcel/` Codex plugin package and `.agents/plugins/marketplace.json`: one local `stdio` server,
+  `orcel mcp stdio`; no endpoint, environment, header, or secret. Tests pin the server exactly, the version to the release
   version, assets to packaged `./assets/` paths, and scan every file for secret patterns.
-- `crates/qdral-lifecycle/src/doctor.rs`: `mcp_stdio_entrypoint` resolves the same verified launch `qdral mcp stdio` uses;
+- `crates/orcel-lifecycle/src/doctor.rs`: `mcp_stdio_entrypoint` resolves the same verified launch `orcel mcp stdio` uses;
   `remote_integration` reads only `relayOrigin` (accepted only as `https://` or exact loopback, otherwise reported as
   unrecognized) and whether any connection is paired from the uplink record. The record also holds the device private key;
   tests prove it never appears in the output. Doctor still changes nothing.

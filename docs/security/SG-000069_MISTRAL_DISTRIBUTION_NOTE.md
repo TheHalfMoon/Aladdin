@@ -1,6 +1,6 @@
 # SG-000069 Mistral Distribution Security Note
 
-Status: IMPLEMENTATION FOR QDRAL-P17
+Status: IMPLEMENTATION FOR ORCEL-P17
 SpecGrain: SG-000069
 Base: `ff2c174090755f19e94f0cd323fe618ad89a569a`
 Date: 2026-10-04

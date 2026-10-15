@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import type { CSSProperties, ReactNode } from "react";
 import "./globals.css";
 
-const siteUrl = "https://thehalfmoon.github.io/Deskal/";
-const title = "Deskal — Your computer, your terms";
+const siteUrl = "https://thehalfmoon.github.io/Orcel/";
+const title = "Orcel — Your computer, your terms";
 const description =
   "Local-first, policy-checked computer access for MCP-compatible AI agents.";
 const socialDescription =
@@ -13,7 +13,7 @@ export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
   title,
   description,
-  applicationName: "Deskal",
+  applicationName: "Orcel",
   alternates: {
     canonical: siteUrl
   },
@@ -22,7 +22,7 @@ export const metadata: Metadata = {
     description: socialDescription,
     type: "website",
     url: siteUrl,
-    siteName: "Deskal"
+    siteName: "Orcel"
   },
   twitter: {
     card: "summary",
@@ -32,9 +32,9 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
-  const basePath = process.env.DESKAL_WEB_BASE_PATH ?? "";
+  const basePath = process.env.ORCEL_WEB_BASE_PATH ?? "";
   const style = {
-    "--deskal-mark-mask": `url("${basePath}/brand/deskal-mark-mask.svg")`
+    "--orcel-mark-mask": `url("${basePath}/brand/orcel-mark-mask.svg")`
   } as CSSProperties;
 
   return (

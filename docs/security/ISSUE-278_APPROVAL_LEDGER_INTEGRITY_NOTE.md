@@ -43,7 +43,7 @@ that does not verify end to end grants nothing.
 
 ## Concurrency
 
-The MCP edge, the CLI and `qdral full-control` each create brokers in
+The MCP edge, the CLI and `orcel full-control` each create brokers in
 separate processes over one ledger. Each transaction (issue, revoke,
 consume) takes an exclusive OS lock on the sidecar
 `approval-history.jsonl.lock`, verifies and applies every byte other
@@ -61,7 +61,7 @@ lock and otherwise report the last verified view.
   length) under a live broker poisons it. That broker stays fail-closed until
   its process restarts (unless the replacement is a recovery chain, which it
   adopts); a restart accepts whatever verifiable ledger is then on disk,
-  which is the tail-rollback residual risk below. `qdral approvals recover`
+  which is the tail-rollback residual risk below. `orcel approvals recover`
   is only for a ledger that fails verification.
 - Lock contention past 5 seconds, and I/O errors such as a sharing
   violation from backup or antivirus software, report a transient error.
@@ -81,8 +81,8 @@ reset the tip to that record, so any v0.1.0 history that consumed an
 approval and contains another record after that issuance does not verify.
 In practice nearly every v0.1.0 user who approved anything is affected
 once. After upgrade such a broker fails closed and its error names the
-v0.1.0 upgrade as the expected cause. `qdral doctor` reports the failure
-and `qdral approvals recover`:
+v0.1.0 upgrade as the expected cause. `orcel doctor` reports the failure
+and `orcel approvals recover`:
 
 1. refuses a missing ledger without creating anything, then takes the writer
    lock and refuses a ledger that verifies, is busy, or is merely unreadable
@@ -103,7 +103,7 @@ and `qdral approvals recover`:
 The ledger path is never absent. A failure or crash before step 4 leaves the
 original ledger in place (with at most a staged file and a quarantine copy,
 which uninstall keeps by default and removes on purge; with a
-`QDRAL_APPROVAL_HISTORY_PATH` override outside the install root, uninstall
+`ORCEL_APPROVAL_HISTORY_PATH` override outside the install root, uninstall
 does not touch them), and the staged file
 is removed on ordinary failures. No earlier approval carries over, so every
 operation needs a fresh approval. Running
@@ -123,7 +123,7 @@ whose chain is valid (no record after a consumption) keep loading unchanged.
 The SHA-256 chain is self-contained. A fresh broker cannot tell a complete
 ledger from one whose valid tail (for example a consumption marker) was
 removed at a record boundary, or that was deleted outright. A live broker
-detects both. Exploiting a rollback needs write access to the protected Qdral
+detects both. Exploiting a rollback needs write access to the protected Orcel
 state directory plus a still-unexpired approval (five-minute window) held by
 a caller; that same-user, write-capable attacker is outside the current
 threat model. Full anti-rollback protection requires an external trust anchor
@@ -141,7 +141,7 @@ ever cross a process or network boundary.
 
 ## Evidence
 
-Unit and process tests in `crates/qdral-approval/src/lib.rs`:
+Unit and process tests in `crates/orcel-approval/src/lib.rs`:
 `issue_a_and_b_consume_a_then_restart_replay_denied`,
 `two_brokers_on_one_ledger_see_each_others_transitions`,
 `concurrent_processes_consume_one_token_exactly_once`,

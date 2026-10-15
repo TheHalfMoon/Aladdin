@@ -1,7 +1,7 @@
 # SG-000016 — Bounded Git HTTPS fetch security note
 
 Status: IMPLEMENTATION CANDIDATE
-Program: QDRAL-P06
+Program: ORCEL-P06
 Grain: SG-000016
 
 ## Purpose
@@ -15,7 +15,7 @@ The only newly reachable network capabilities are:
   no DNS resolution, no network request, no approval request, and no mutation;
 - `git.fetch` — fetch of exactly one validated `refs/heads/<branch>` source
   from one workspace-bound canonical HTTPS destination into the deterministic
-  Qdral-owned `refs/remotes/qdral/<policy-id>/<branch>` ref after fresh local
+  Orcel-owned `refs/remotes/orcel/<policy-id>/<branch>` ref after fresh local
   approval, public-address pinning, and post-approval revalidation.
 
 `git.push` and force push remain hard-denied. No credential authority is added.
@@ -47,7 +47,7 @@ enabled, inherits no proxy, cookies, extra headers, authorization material,
 credential helpers, askpass, or interactive prompts, and rejects
 repository-local URL rewrites or equivalent transport configuration. It fetches
 without tags, prune, submodule recursion, or `FETCH_HEAD` mutation where
-supported, and writes only the deterministic Qdral-owned destination ref.
+supported, and writes only the deterministic Orcel-owned destination ref.
 
 ## Approval and postconditions
 

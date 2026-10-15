@@ -1,20 +1,20 @@
 # SG-000074 Live Isolated Browser Host
 
-Status: SG-000074 DESIGN RECORD (QDRAL-P18)
+Status: SG-000074 DESIGN RECORD (ORCEL-P18)
 Date: 2026-10-04
-Authority delta: one Deskal-supervised low-authority host family with no
+Authority delta: one Orcel-supervised low-authority host family with no
 reachable capability. No MCP tool, no navigation, no observation, no
 actuation, no transfer, no capture, and no remote authority.
 
 ## 1. Shape
 
-`crates/qdral-browser-host` owns engine discovery (`discovery.rs`),
+`crates/orcel-browser-host` owns engine discovery (`discovery.rs`),
 dedicated ephemeral profiles (`profile.rs`), the frozen engine command
 line (`argv.rs`), the private framed channel vocabulary (`proto.rs`),
 supervised launch and deterministic cleanup (`supervise.rs`), single-host
-supervision (`host.rs`), and the `qdral-browser-host` binary (`main.rs`).
+supervision (`host.rs`), and the `orcel-browser-host` binary (`main.rs`).
 
-Deskal supervision spawns the host binary with piped stdio and assigns it
+Orcel supervision spawns the host binary with piped stdio and assigns it
 to a kill-on-close job. The host binary re-verifies engine and profile,
 spawns the engine suspended into a nested kill-on-close job with a bounded
 process count, and serves only hello, ping, and shutdown frames. Pipe
@@ -34,7 +34,7 @@ end-of-input stops a host whose parent died, independent of job timing.
   prints nothing there and hands the command to a running browser session,
   so discovery had always failed on Windows and the live-host test passed
   as typed unavailable.
-- Command line: exactly the frozen flags with the Deskal-owned profile
+- Command line: exactly the frozen flags with the Orcel-owned profile
   directory and a blank initial page. Sandbox-weakening flags, debugging
   listeners, extension loading, and web-security relaxations fail closed.
 - Profile: fresh ephemeral directory per launch with an engine-bound
@@ -42,7 +42,7 @@ end-of-input stops a host whose parent died, independent of job timing.
   deleted on clean shutdown.
 - Environment: SystemRoot, SystemDrive, minimal system PATH, and temp
   only. USERPROFILE, APPDATA, and LOCALAPPDATA are deliberately absent so
-  the engine can never resolve the personal profile, and no Deskal secret
+  the engine can never resolve the personal profile, and no Orcel secret
   variable is inherited.
 - Channel: anonymous pipes only. No TCP listener, no HTTP surface, no
   debugging port, no MCP endpoint. Unknown frames are rejected without

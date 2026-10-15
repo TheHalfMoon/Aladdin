@@ -1,10 +1,10 @@
-# Qdral Privacy Policy
+# Orcel Privacy Policy
 
-Status: DRAFT FOR OWNER LEGAL REVIEW. This text describes what the Qdral software does, as implemented in this repository. It must be reviewed and published by the owner before it is used for a provider directory listing.
+Status: DRAFT FOR OWNER LEGAL REVIEW. This text describes what the Orcel software does, as implemented in this repository. It must be reviewed and published by the owner before it is used for a provider directory listing.
 
 ## Who operates what
 
-Qdral is software that you run. The Qdral daemon and its local MCP server run on your own computer. A Qdral relay, which remote AI clients such as ChatGPT reach, runs on a host that you or your organization operate (self-hosting). The Qdral project does not operate a hosted relay and does not receive your data.
+Orcel is software that you run. The Orcel daemon and its local MCP server run on your own computer. A Orcel relay, which remote AI clients such as ChatGPT reach, runs on a host that you or your organization operate (self-hosting). The Orcel project does not operate a hosted relay and does not receive your data.
 
 ## Data the software processes
 
@@ -12,8 +12,8 @@ On your computer (the daemon and local server):
 
 - the requests an AI client sends: tool name, workspace identifier, target path, and arguments;
 - the content those tools read or write inside workspaces you trusted, returned to the AI client that asked;
-- a local audit log of each request (time, request and session identifiers, workspace, capability, operation, target path, policy revision, and outcome), stored in your local Qdral data folder;
-- local approval history, workspace trust records, executable registrations, and device keys, stored in protected local Qdral state.
+- a local audit log of each request (time, request and session identifiers, workspace, capability, operation, target path, policy revision, and outcome), stored in your local Orcel data folder;
+- local approval history, workspace trust records, executable registrations, and device keys, stored in protected local Orcel state.
 
 On a relay you operate:
 
@@ -32,18 +32,18 @@ Data is processed only to carry out the requests you or your AI client make, to 
 
 - The AI provider you connected (for example OpenAI for ChatGPT) receives the tool results it requested, under that provider's own privacy terms.
 - The operator of the relay host receives the relay data listed above. When you self-host, that is you.
-- The Qdral project receives nothing. Qdral sends no telemetry and no analytics.
+- The Orcel project receives nothing. Orcel sends no telemetry and no analytics.
 
 ## Retention
 
-- Local audit and approval records stay on your computer until you delete them or uninstall Qdral with `qdral uninstall --purge-data`.
+- Local audit and approval records stay on your computer until you delete them or uninstall Orcel with `orcel uninstall --purge-data`.
 - Relay records stay in the relay state directory until the client, device, or connection is revoked or the relay operator deletes the state; revoked token identifiers are kept until the token would have expired.
 - Content returned to an AI provider is retained according to that provider's policy.
 
 ## Your controls
 
-You choose which workspaces are trusted, approve every change on your computer, can end any remote session, can revoke a paired device or connection, and can stop or uninstall Qdral at any time.
+You choose which workspaces are trusted, approve every change on your computer, can end any remote session, can revoke a paired device or connection, and can stop or uninstall Orcel at any time.
 
 ## Contact
 
-Questions: https://github.com/TheHalfMoon/Qdral/issues. Security reports: see `SECURITY.md`.
+Questions: https://github.com/TheHalfMoon/Orcel/issues. Security reports: see `SECURITY.md`.

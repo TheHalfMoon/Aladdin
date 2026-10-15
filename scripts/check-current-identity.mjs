@@ -8,8 +8,9 @@ const supersededUnqualified = /Quntal|QUNTAL|quntal/;
 
 const historicalContentAllowed = (path) =>
   path === "docs/identity/QUNTAL_RENAME.md" ||
-  path === "docs/identity/QDRAL_RENAME.md" ||
-  path === "docs/identity/DESKAL_RENAME.md" ||
+  path === "docs/identity/ORCEL_RENAME.md" ||
+  path === "docs/identity/ORCEL_HISTORY_DESKAL.md" ||
+  path === "docs/identity/ORCEL_HISTORY_QDRAL.md" ||
   path === "docs/canonical/CURRENT.md" ||
   path === "docs/p16/sg000066_exit_evidence.json" ||
   path === ".specgrain/canonical-evidence.json" ||
@@ -21,7 +22,7 @@ const isBinary = (bytes) => bytes.subarray(0, Math.min(bytes.length, 8192)).incl
 
 const historicalTokensAllowed = new Map([
   [
-    "apps/qdral-mcp/src/p16-exit.test.ts",
+    "apps/orcel-mcp/src/p16-exit.test.ts",
     [
       '"quntal-p16-exit-evidence/2"',
       "/^apps\\/quntal-mcp\\//",
@@ -59,15 +60,16 @@ if (contentResidue.length) {
 }
 
 for (const required of [
-  "apps/qdral-mcp/package.json",
-  "apps/qdral-relay/package.json",
-  "crates/qdrald/Cargo.toml",
-  "crates/qdral-lifecycle/Cargo.toml",
-  "docs/identity/DESKAL_RENAME.md",
-  "docs/identity/QDRAL_RENAME.md",
+  "apps/orcel-mcp/package.json",
+  "apps/orcel-relay/package.json",
+  "crates/orceld/Cargo.toml",
+  "crates/orcel-lifecycle/Cargo.toml",
+  "docs/identity/ORCEL_RENAME.md",
+  "docs/identity/ORCEL_HISTORY_DESKAL.md",
+  "docs/identity/ORCEL_HISTORY_QDRAL.md",
   ".specgrain/specs/SG-000067.json"
 ]) {
-  if (!existsSync(required)) throw new Error(`missing required Deskal or compatibility path: ${required}`);
+  if (!existsSync(required)) throw new Error(`missing required Orcel or compatibility path: ${required}`);
 }
 
 for (const forbidden of [
@@ -80,19 +82,19 @@ for (const forbidden of [
 }
 
 const rootPackage = JSON.parse(readFileSync("package.json", "utf8"));
-if (rootPackage.name !== "deskal") {
-  throw new Error(`root npm package is ${rootPackage.name}, expected deskal`);
+if (rootPackage.name !== "orcel") {
+  throw new Error(`root npm package is ${rootPackage.name}, expected orcel`);
 }
 
 const workspaces = [...(rootPackage.workspaces ?? [])].sort();
-const expectedWorkspaces = ["apps/qdral-mcp", "apps/qdral-relay"].sort();
+const expectedWorkspaces = ["apps/orcel-mcp", "apps/orcel-relay"].sort();
 if (JSON.stringify(workspaces) !== JSON.stringify(expectedWorkspaces)) {
   throw new Error(`unexpected compatibility npm workspaces: ${JSON.stringify(workspaces)}`);
 }
 
 for (const [path, expected] of [
-  ["apps/qdral-mcp/package.json", "@qdral/mcp"],
-  ["apps/qdral-relay/package.json", "@qdral/relay"]
+  ["apps/orcel-mcp/package.json", "@orcel/mcp"],
+  ["apps/orcel-relay/package.json", "@orcel/relay"]
 ]) {
   const manifest = JSON.parse(readFileSync(path, "utf8"));
   if (manifest.name !== expected) {
@@ -101,49 +103,49 @@ for (const [path, expected] of [
 }
 
 const cargoRoot = readFileSync("Cargo.toml", "utf8");
-if (!cargoRoot.includes('repository = "https://github.com/TheHalfMoon/Deskal"')) {
-  throw new Error("Cargo workspace repository is not TheHalfMoon/Deskal");
+if (!cargoRoot.includes('repository = "https://github.com/TheHalfMoon/Orcel"')) {
+  throw new Error("Cargo workspace repository is not TheHalfMoon/Orcel");
 }
 
 if (supersededUnqualified.test(readFileSync(".specgrain/specs/SG-000067.json", "utf8"))) {
   throw new Error("active SG-000067 still contains the superseded Quntal identity");
 }
 
-const identity = readFileSync("docs/identity/DESKAL_RENAME.md", "utf8");
+const identity = readFileSync("docs/identity/ORCEL_RENAME.md", "utf8");
 for (const expected of [
   "Status: ACTIVE PRODUCT IDENTITY",
-  "Product: `Deskal`",
-  "Root package: `deskal`",
-  "Public plugin name: `deskal`",
-  "CLI command: `qdral`",
-  "Local daemon: `qdrald`",
-  "MCP package: `@qdral/mcp`",
-  "Relay package: `@qdral/relay`",
-  "Environment-variable prefix: `QDRAL_`",
-  "OAuth scope prefix: `qdral.`",
-  "Repository identity: `TheHalfMoon/Deskal`"
+  "Product: `Orcel`",
+  "Root package: `orcel`",
+  "Public plugin name: `orcel`",
+  "CLI command: `orcel`",
+  "Local daemon: `orceld`",
+  "MCP package: `@orcel/mcp`",
+  "Relay package: `@orcel/relay`",
+  "Environment-variable prefix: `ORCEL_`",
+  "OAuth scope prefix: `orcel.`",
+  "Repository identity: `TheHalfMoon/Orcel`"
 ]) {
-  if (!identity.includes(expected)) throw new Error(`Deskal identity record is missing: ${expected}`);
+  if (!identity.includes(expected)) throw new Error(`Orcel identity record is missing: ${expected}`);
 }
 
 const readme = readFileSync("README.md", "utf8");
-if (!readme.startsWith("# Deskal\n")) {
-  throw new Error("README does not present Deskal as the current product name");
+if (!readme.startsWith("# Orcel\n")) {
+  throw new Error("README does not present Orcel as the current product name");
 }
 
 const marketplace = JSON.parse(readFileSync(".agents/plugins/marketplace.json", "utf8"));
-if (marketplace.name !== "deskal" || marketplace.interface?.displayName !== "Deskal") {
-  throw new Error("plugin marketplace does not present Deskal as the current product identity");
+if (marketplace.name !== "orcel" || marketplace.interface?.displayName !== "Orcel") {
+  throw new Error("plugin marketplace does not present Orcel as the current product identity");
 }
 
-const codexPlugin = JSON.parse(readFileSync("distribution/codex/qdral/plugin.json", "utf8"));
-if (codexPlugin.name !== "deskal" || codexPlugin.extensions?.["com.openai"]?.interface?.displayName !== "Deskal") {
-  throw new Error("Codex plugin does not present Deskal as the current product identity");
+const codexPlugin = JSON.parse(readFileSync("distribution/codex/orcel/plugin.json", "utf8"));
+if (codexPlugin.name !== "orcel" || codexPlugin.extensions?.["com.openai"]?.interface?.displayName !== "Orcel") {
+  throw new Error("Codex plugin does not present Orcel as the current product identity");
 }
 
 const openaiPlugin = JSON.parse(readFileSync("distribution/openai/plugin.config.json", "utf8"));
-if (openaiPlugin.name !== "deskal" || openaiPlugin.displayName !== "Deskal") {
-  throw new Error("OpenAI plugin does not present Deskal as the current product identity");
+if (openaiPlugin.name !== "orcel" || openaiPlugin.displayName !== "Orcel") {
+  throw new Error("OpenAI plugin does not present Orcel as the current product identity");
 }
 
-console.log(`Deskal identity validated across ${tracked.length} tracked files with qdral compatibility identifiers preserved.`);
+console.log(`Orcel identity validated across ${tracked.length} tracked files with orcel compatibility identifiers preserved.`);

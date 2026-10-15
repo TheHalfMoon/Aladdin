@@ -4,7 +4,7 @@ Status: implementation candidate only; not T02 exit or executable Full User shel
 
 ## Implementation boundary
 
-- Reuses Deskal's existing `qdral-provider-process` Windows `CreateProcessW`, suspended `ChildProcess`, `OwnedHandle`, and Job Object machinery without importing donor source or adding dependencies.
+- Reuses Orcel's existing `orcel-provider-process` Windows `CreateProcessW`, suspended `ChildProcess`, `OwnedHandle`, and Job Object machinery without importing donor source or adding dependencies.
 - Adds `JobObject::assign_or_terminate`: if native Job assignment fails or fails membership verification, the suspended child must be terminated and its process handle signaled before the original failure is returned. Unverified termination returns its own failure.
 - Corrects `ChildProcess::terminate_best_effort` so it never marks a child completed after an unverified `TerminateProcess`/`WaitForSingleObject` attempt.
 - Reuses verified assignment cleanup in existing AppContainer single-child, piped execution and the SG-000096 ordinary-current-user disposable fixture.
@@ -12,9 +12,9 @@ Status: implementation candidate only; not T02 exit or executable Full User shel
 
 ## Native Windows evidence
 
-- `cargo test -p qdral-provider-process --lib sg000096 -- --test-threads=1`: 3/3 PASS.
-- `cargo test -p qdral-provider-process -- --test-threads=1`: 35/35 PASS (27 library, 2 protected-state, 4 PowerShell, 2 workspace).
-- `cargo clippy -p qdral-provider-process --all-targets -- -D warnings`: PASS.
+- `cargo test -p orcel-provider-process --lib sg000096 -- --test-threads=1`: 3/3 PASS.
+- `cargo test -p orcel-provider-process -- --test-threads=1`: 35/35 PASS (27 library, 2 protected-state, 4 PowerShell, 2 workspace).
+- `cargo clippy -p orcel-provider-process --all-targets -- -D warnings`: PASS.
 - `cargo fmt --all --check` and `git diff --check`: PASS.
 
 ## Exclusions and residual gates
@@ -25,4 +25,4 @@ Status: implementation candidate only; not T02 exit or executable Full User shel
 - Expected executable handle digest/file ID, cwd junction/reparse race proof, bounded new Full User output/timeout, independent approval consumption, lease revoke/expiry and full process-tree lifecycle under future T02 implementation remain open.
 - Exact-head CI, genuine TypeSafe Jev, Alibaba OCR Delegation plus manual exclusions, zero unresolved PR threads, normal signed+DCO merge, and post-merge CI remain required. Do not activate T03, T04 or T05 solely because of this proof.
 
-Provenance: native Rust code already owned by Deskal. No new donor source imported.
+Provenance: native Rust code already owned by Orcel. No new donor source imported.

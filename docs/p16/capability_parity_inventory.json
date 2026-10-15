@@ -1,5 +1,5 @@
 {
-  "schema": "qdral-parity-inventory/1",
+  "schema": "orcel-parity-inventory/1",
   "grain": "SG-000059",
   "statuses": [
     "implemented_exposed",
@@ -559,7 +559,7 @@
       "via": [
         "process_spawn"
       ],
-      "note": "native executables registered locally with STRONG presence (qdral exec add), hash-pinned, argv grammar, contained, no network; interpreters denied (SG-000060)"
+      "note": "native executables registered locally with STRONG presence (orcel exec add), hash-pinned, argv grammar, contained, no network; interpreters denied (SG-000060)"
     },
     {
       "id": "git_read",
@@ -675,7 +675,7 @@
     {
       "id": "kill_arbitrary_process",
       "status": "intentionally_denied",
-      "reason": "terminating processes Qdral did not start would affect the user's own programs"
+      "reason": "terminating processes Orcel did not start would affect the user's own programs"
     },
     {
       "id": "elevation_or_admin",
@@ -685,7 +685,7 @@
     {
       "id": "read_outside_workspaces",
       "status": "intentionally_denied",
-      "reason": "the workspace ceiling bounds every filesystem operation; home, credentials, and Qdral protected state stay unreachable"
+      "reason": "the workspace ceiling bounds every filesystem operation; home, credentials, and Orcel protected state stay unreachable"
     },
     {
       "id": "arbitrary_network_sockets",

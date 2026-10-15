@@ -1,0 +1,13 @@
+{
+  "name": "orcel-sg108-testerarmy-e2e",
+  "private": true,
+  "description": "SG-000108 A8: TesterArmy E2E against the controlled HTTPS fixture only (no model, no telemetry, no browser download).",
+  "type": "module",
+  "scripts": {
+    "e2e": "node run.mjs"
+  },
+  "devDependencies": {
+    "@e2e-dev/web": "0.14.0",
+    "e2e": "0.20.0"
+  }
+}

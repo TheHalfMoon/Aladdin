@@ -1,28 +1,28 @@
 [workspace]
 resolver = "2"
 members = [
-  "crates/qdral-contracts",
-  "crates/qdral-policy",
-  "crates/qdral-audit",
-  "crates/qdral-approval",
-  "crates/qdral-provider-fs",
-  "crates/qdral-provider-git",
-  "crates/qdral-provider-process",
-  "crates/qdral-provider-browser",
-  "crates/qdral-provider-uia",
-  "crates/qdral-provider-clipboard",
-  "crates/qdral-provider-network",
-  "crates/qdral-tunnel",
-  "crates/qdral-browser-host",
-  "crates/qdral-lifecycle",
-  "crates/qdrald",
+  "crates/orcel-contracts",
+  "crates/orcel-policy",
+  "crates/orcel-audit",
+  "crates/orcel-approval",
+  "crates/orcel-provider-fs",
+  "crates/orcel-provider-git",
+  "crates/orcel-provider-process",
+  "crates/orcel-provider-browser",
+  "crates/orcel-provider-uia",
+  "crates/orcel-provider-clipboard",
+  "crates/orcel-provider-network",
+  "crates/orcel-tunnel",
+  "crates/orcel-browser-host",
+  "crates/orcel-lifecycle",
+  "crates/orceld",
 ]
 
 [workspace.package]
 version = "0.2.0"
 edition = "2021"
 license = "Apache-2.0"
-repository = "https://github.com/TheHalfMoon/Deskal"
+repository = "https://github.com/TheHalfMoon/Orcel"
 rust-version = "1.82"
 
 [workspace.dependencies]

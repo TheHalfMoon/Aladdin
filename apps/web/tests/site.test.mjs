@@ -25,15 +25,15 @@ test("web dependencies are exact-pinned and telemetry is disabled in every Next 
   }
 });
 
-test("public copy uses Deskal identity and keeps compatibility naming bounded", async () => {
+test("public copy uses Orcel identity and keeps compatibility naming bounded", async () => {
   const page = await read(join(root, "app", "page.tsx"));
-  assert.match(page, /Deskal/);
+  assert.match(page, /Orcel/);
   for (const staleName of ["Cotra", "Qun" + "tal"]) {
     assert.equal(page.includes(staleName), false, `stale product identity: ${staleName}`);
   }
-  const qdralMentions = page.match(/qdral/g) ?? [];
-  assert.equal(qdralMentions.length, 2, "qdral may appear only in the explicit compatibility example and note");
-  assert.match(page, /Compatibility note/);
+  const orcelMentions = page.match(/orcel/g) ?? [];
+  assert.ok(orcelMentions.length >= 2, "the Orcel CLI example and identity note must be explicit");
+  assert.match(page, /Identity note/);
 });
 
 test("website source contains no analytics, tracking, dynamic service, auth, payment, or form dependency", async () => {
@@ -72,33 +72,33 @@ test("website source contains no analytics, tracking, dynamic service, auth, pay
 test("Next output is a static export with a bounded explicit project base path", async () => {
   const config = await read(join(root, "next.config.ts"));
   assert.match(config, /output:\s*"export"/);
-  assert.match(config, /DESKAL_WEB_BASE_PATH/);
+  assert.match(config, /ORCEL_WEB_BASE_PATH/);
   assert.match(config, /basePath,/);
   assert.match(config, /one absolute path segment/);
   assert.doesNotMatch(config, /rewrites|redirects|headers\s*\(|serverRuntimeConfig/);
 
   const layout = await read(join(root, "app", "layout.tsx"));
   const css = await read(join(root, "app", "globals.css"));
-  assert.match(layout, /--deskal-mark-mask/);
-  assert.match(layout, /brand\/deskal-mark-mask\.svg/);
-  assert.equal(css.includes('url("/brand/deskal-mark-mask.svg")'), false);
-  assert.equal((css.match(/var\(--deskal-mark-mask\)/g) ?? []).length, 2);
+  assert.match(layout, /--orcel-mark-mask/);
+  assert.match(layout, /brand\/orcel-mark-mask\.svg/);
+  assert.equal(css.includes('url("/brand/orcel-mark-mask.svg")'), false);
+  assert.equal((css.match(/var\(--orcel-mark-mask\)/g) ?? []).length, 2);
 });
 
-test("approved Deskal brand geometry is byte-pinned and shared by both variants", async () => {
+test("approved Orcel brand geometry is byte-pinned and shared by both variants", async () => {
   assert.equal(
-    await sha256(join(root, "public", "brand", "deskal-mark-mask.svg")),
-    "150ae5ccd9fdb6b25a8f0421a64acc2d0bf1615a32c2b33aea92e77700706fce"
+    await sha256(join(root, "public", "brand", "orcel-mark-mask.svg")),
+    "56bd8af1c84680e45ff579a130e16949a472e81c6846e475adf6f06f16e92daf"
   );
   const css = await read(join(root, "app", "globals.css"));
-  assert.equal((css.match(/var\(--deskal-mark-mask\)/g) ?? []).length, 2, "both mask declarations must use the one canonical geometry variable");
+  assert.equal((css.match(/var\(--orcel-mark-mask\)/g) ?? []).length, 2, "both mask declarations must use the one canonical geometry variable");
   assert.match(css, /\.brand-mark-white[\s\S]*color:\s*#fff/);
   assert.match(css, /\.brand-mark-color[\s\S]*linear-gradient/);
 });
 
 test("web dependency graph is isolated from runtime workspaces and lockfile", async () => {
   const pkg = JSON.parse(await read(join(repo, "package.json")));
-  assert.deepEqual([...pkg.workspaces].sort(), ["apps/qdral-mcp", "apps/qdral-relay"].sort());
+  assert.deepEqual([...pkg.workspaces].sort(), ["apps/orcel-mcp", "apps/orcel-relay"].sort());
   assert.equal(pkg.scripts["web:typecheck"], "npm --prefix apps/web run typecheck");
   assert.equal(pkg.scripts["web:test"], "npm --prefix apps/web run test");
   assert.equal(pkg.scripts["web:build"], "npm --prefix apps/web run build");
@@ -107,24 +107,24 @@ test("web dependency graph is isolated from runtime workspaces and lockfile", as
   assert.equal(runtimeLock.packages?.["apps/web"], undefined, "runtime lockfile must not contain the web app");
 
   const webLock = JSON.parse(await read(join(root, "package-lock.json")));
-  assert.equal(webLock.packages?.[""]?.name, "@deskal/web");
+  assert.equal(webLock.packages?.[""]?.name, "@orcel/web");
   assert.equal(webLock.packages?.[""]?.dependencies?.next, "16.3.8");
   assert.equal(webLock.packages?.[""]?.dependencies?.react, "19.3.0");
   assert.equal(webLock.packages?.[""]?.dependencies?.["react-dom"], "19.3.0");
 });
 
-test("public launch links stay on canonical Deskal repository, docs, and Releases surfaces", async () => {
+test("public launch links stay on canonical Orcel repository, docs, and Releases surfaces", async () => {
   const page = await read(join(root, "app", "page.tsx"));
   const readme = await read(join(repo, "README.md"));
 
-  assert.match(page, /const github = "https:\/\/github\.com\/TheHalfMoon\/Deskal"/);
+  assert.match(page, /const github = "https:\/\/github\.com\/TheHalfMoon\/Orcel"/);
   assert.match(page, /const releases = `\$\{github\}\/releases`/);
   assert.match(page, /View verified releases/);
   assert.equal(page.includes("/releases/download/"), false, "website must not link directly to release artifacts");
   assert.equal(page.includes(".zip"), false, "website must not hard-code downloadable archives");
 
-  assert.match(readme, /https:\/\/thehalfmoon\.github\.io\/Deskal\//);
-  assert.match(readme, /https:\/\/github\.com\/TheHalfMoon\/Deskal\/releases/);
+  assert.match(readme, /https:\/\/thehalfmoon\.github\.io\/Orcel\//);
+  assert.match(readme, /https:\/\/github\.com\/TheHalfMoon\/Orcel\/releases/);
 });
 
 test("Pages workflow is zero-cost, pinned, secret-free, and least-privilege", async () => {
@@ -155,14 +155,14 @@ test("Pages workflow is zero-cost, pinned, secret-free, and least-privilege", as
 test("Pages workflow builds the canonical project path and verifies the deployed HTTPS site", async () => {
   const workflow = await read(join(repo, ".github", "workflows", "pages.yml"));
 
-  assert.match(workflow, /DESKAL_WEB_BASE_PATH/);
+  assert.match(workflow, /ORCEL_WEB_BASE_PATH/);
   assert.match(workflow, /base_path/);
-  assert.match(workflow, /test "\$\{\{ steps\.pages\.outputs\.base_path \}\}" = "\/Deskal"/);
-  assert.match(workflow, /\/Deskal\/_next\//);
-  assert.match(workflow, /\/Deskal\/brand\/deskal-mark-mask\.svg/);
-  assert.match(workflow, /https:\/\/thehalfmoon\.github\.io\/Deskal/);
+  assert.match(workflow, /test "\$\{\{ steps\.pages\.outputs\.base_path \}\}" = "\/Orcel"/);
+  assert.match(workflow, /\/Orcel\/_next\//);
+  assert.match(workflow, /\/Orcel\/brand\/orcel-mark-mask\.svg/);
+  assert.match(workflow, /https:\/\/thehalfmoon\.github\.io\/Orcel/);
   assert.match(workflow, /curl --fail --location/);
-  assert.match(workflow, /https:\/\/github\.com\/TheHalfMoon\/Deskal\/releases/);
+  assert.match(workflow, /https:\/\/github\.com\/TheHalfMoon\/Orcel\/releases/);
 });
 
 test("canonical repository metadata is exact, bounded, and aligned with public entrypoints", async () => {
@@ -171,12 +171,12 @@ test("canonical repository metadata is exact, bounded, and aligned with public e
   const readme = await read(join(repo, "README.md"));
 
   assert.deepEqual(Object.keys(metadata).sort(), ["description", "homepage", "repository", "topics"]);
-  assert.equal(metadata.repository, "TheHalfMoon/Deskal");
+  assert.equal(metadata.repository, "TheHalfMoon/Orcel");
   assert.equal(
     metadata.description,
     "Local-first MCP authority layer for safe, bounded computer use and developer workflows."
   );
-  assert.equal(metadata.homepage, "https://thehalfmoon.github.io/Deskal/");
+  assert.equal(metadata.homepage, "https://thehalfmoon.github.io/Orcel/");
   assert.deepEqual(metadata.topics, [
     "ai-agents",
     "computer-use",
@@ -189,7 +189,7 @@ test("canonical repository metadata is exact, bounded, and aligned with public e
   assert.equal(new Set(metadata.topics).size, metadata.topics.length, "topics must be unique");
 
   assert.equal(readme.includes(`**Website:** ${metadata.homepage}`), true);
-  assert.equal(page.includes("https://github.com/TheHalfMoon/Deskal"), true);
+  assert.equal(page.includes("https://github.com/TheHalfMoon/Orcel"), true);
   assert.equal(page.includes("/releases/download/"), false);
 });
 
@@ -197,12 +197,12 @@ test("canonical repository metadata is exact, bounded, and aligned with public e
 test("canonical and social metadata stay exact, static, and bounded to the Pages identity", async () => {
   const layout = await read(join(root, "app", "layout.tsx"));
 
-  assert.match(layout, /const siteUrl = "https:\/\/thehalfmoon\.github\.io\/Deskal\/"/);
+  assert.match(layout, /const siteUrl = "https:\/\/thehalfmoon\.github\.io\/Orcel\/"/);
   assert.match(layout, /metadataBase:\s*new URL\(siteUrl\)/);
   assert.match(layout, /alternates:\s*\{[\s\S]*canonical:\s*siteUrl[\s\S]*\}/);
-  assert.match(layout, /openGraph:\s*\{[\s\S]*url:\s*siteUrl[\s\S]*siteName:\s*"Deskal"/);
+  assert.match(layout, /openGraph:\s*\{[\s\S]*url:\s*siteUrl[\s\S]*siteName:\s*"Orcel"/);
   assert.match(layout, /twitter:\s*\{[\s\S]*card:\s*"summary"[\s\S]*title[\s\S]*description/);
-  assert.equal((layout.match(/https:\/\/thehalfmoon\.github\.io\/Deskal\//g) ?? []).length, 1);
+  assert.equal((layout.match(/https:\/\/thehalfmoon\.github\.io\/Orcel\//g) ?? []).length, 1);
   assert.doesNotMatch(layout, /images:\s*\[/);
 });
 

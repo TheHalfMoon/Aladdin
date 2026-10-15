@@ -1,16 +1,16 @@
-# Qdral with Codex and Generic MCP Clients (SG-000070)
+# Orcel with Codex and Generic MCP Clients (SG-000070)
 
-Status: SOFTWARE QUALIFICATION FOR QDRAL-P17. Marketplace and account availability are external states and are not
+Status: SOFTWARE QUALIFICATION FOR ORCEL-P17. Marketplace and account availability are external states and are not
 claimed here.
 
 ## Codex plugin (local)
 
-`distribution/codex/qdral/` is a portable Agent Plugins package: `plugin.json` (OpenAI/Codex presentation only under
-`extensions["com.openai"]`), `mcp.json` with exactly one `stdio` server `qdral mcp stdio`, and `assets/logo.svg`. The
+`distribution/codex/orcel/` is a portable Agent Plugins package: `plugin.json` (OpenAI/Codex presentation only under
+`extensions["com.openai"]`), `mcp.json` with exactly one `stdio` server `orcel mcp stdio`, and `assets/logo.svg`. The
 repository marketplace `.agents/plugins/marketplace.json` lists it from this repository:
 
 ```sh
-codex plugin marketplace add TheHalfMoon/Qdral
+codex plugin marketplace add TheHalfMoon/Orcel
 ```
 
 The official plugin page reviewed shows `mcp.json` with `streamable-http` servers only; the `stdio` server shape and the
@@ -20,14 +20,14 @@ are UNVERIFIED against an official example until re-checked before any marketpla
 ## Codex configuration
 
 `examples/mcp-clients/codex-config.toml` covers stdio and the loopback listener (`bearer_token_env_var =
-"QDRAL_LOOPBACK_TOKEN"`). For a remote Qdral relay:
+"ORCEL_LOOPBACK_TOKEN"`). For a remote Orcel relay:
 
 ```toml
-[mcp_servers.qdral_remote]
+[mcp_servers.orcel_remote]
 url = "https://<relay-host>/mcp"
 ```
 
-then `codex mcp login qdral_remote`. Codex registers through dynamic client registration with a loopback redirect, which
+then `codex mcp login orcel_remote`. Codex registers through dynamic client registration with a loopback redirect, which
 the relay matches per RFC 8252 (port may differ; scheme, host, path, and query exact). The connection receives exactly the
 `core` profile.
 
@@ -39,7 +39,7 @@ shared tool's metadata (title, description, input schema, annotations, security 
 
 ## Diagnostics
 
-`qdral doctor` now reports `mcp_stdio_entrypoint` (the verified MCP server and qdrald behind `qdral mcp stdio`) and
+`orcel doctor` now reports `mcp_stdio_entrypoint` (the verified MCP server and orceld behind `orcel mcp stdio`) and
 `remote_integration` (not enabled, enabled but unpaired, or paired, naming only the relay origin). Neither check reads or
 prints the device key or any token, and neither changes configuration or authority.
 

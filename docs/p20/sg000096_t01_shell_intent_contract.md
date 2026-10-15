@@ -7,7 +7,7 @@ registered-executable, sanitized-environment and AppContainer boundaries.
 
 ## Owned Rust API
 
-- `qdral_policy::shell_session::ShellSessionIntent` is versioned and rejects
+- `orcel_policy::shell_session::ShellSessionIntent` is versioned and rejects
   unknown JSON fields, extraneous caller-controlled authority, malformed
   opaque handles, NUL/control characters, ambiguous path previews, unbounded
   argv/script input, invalid environment-value digests, and invalid quotas.
@@ -45,7 +45,7 @@ filter. Privileged and remote shells remain separate successor gates.
 
 ## Provenance
 
-This T01 contract is Deskal-owned source written for the current Rust
+This T01 contract is Orcel-owned source written for the current Rust
 policy/lease model; **no Desktop Commander source code was imported**.
 Approved candidate donor pins, reuse decisions and MIT obligations remain
 recorded in `docs/p20/sg000096_shell_session_import.json`, tied to issue

@@ -1,6 +1,6 @@
 {
   "url": "http://127.0.0.1:PORT/mcp",
   "headers": {
-    "Authorization": "Bearer ${QDRAL_LOOPBACK_TOKEN}"
+    "Authorization": "Bearer ${ORCEL_LOOPBACK_TOKEN}"
   }
 }

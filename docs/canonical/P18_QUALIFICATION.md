@@ -1,20 +1,20 @@
-# Deskal P18 Adversarial Qualification Matrix
+# Orcel P18 Adversarial Qualification Matrix
 
-Product: Deskal. QDRAL-P18 is a retained compatibility and program
-identifier within the Deskal product; it is not the current product
+Product: Orcel. ORCEL-P18 is a retained compatibility and program
+identifier within the Orcel product; it is not the current product
 brand. This matrix traces every P18 capability from requirement to
 implementation to tests to review to evidence. Qualification adds no
 authority: every row is PROVEN by tests and review, or NOT_EXPOSED by
 runtime and tool discovery. No row is both exposed and unverified.
 
-Specifier: SG-000085, the sole active QDRAL-P18 grain. Base:
+Specifier: SG-000085, the sole active ORCEL-P18 grain. Base:
 `b6fd6a0125d92d3d46eeea692756b2f9e2679757`.
 
 ## Capability rows
 
 | Capability | Requirement | Implementation | Tests | Status |
 |---|---|---|---|---|
-| Browser host supervision | SG-000074 | `crates/qdral-browser-host/src/supervise.rs`, `host.rs` | `tests/sg000074_host.rs`, ceiling locks (`JOB_ACTIVE_PROCESS_LIMIT`, `LAUNCH_GRACE`, `SHUTDOWN_TIMEOUT`, `HANDSHAKE_TIMEOUT`) in `tests/sg000085_qualification.rs` | PROVEN |
+| Browser host supervision | SG-000074 | `crates/orcel-browser-host/src/supervise.rs`, `host.rs` | `tests/sg000074_host.rs`, ceiling locks (`JOB_ACTIVE_PROCESS_LIMIT`, `LAUNCH_GRACE`, `SHUTDOWN_TIMEOUT`, `HANDSHAKE_TIMEOUT`) in `tests/sg000085_qualification.rs` | PROVEN |
 | Browser networking | SG-000075 | `src/navigation.rs` | 9 inline mediation tests; hop, byte, and widening bounds plus bypass-transport denial in `sg000085_qualification.rs` | PROVEN |
 | DOM and accessibility observation | SG-000076 | `src/observation.rs` | 7 inline tests (512 nodes, depth 16, 64 KiB, concurrency 4); redaction, freshness, and error-leak tests in `sg000085_qualification.rs` | PROVEN |
 | Structured browser actuation | SG-000077 | `src/actuation.rs` | 5 inline tests; dispatch classification, digest binding, and no-retry proof in `sg000085_qualification.rs` | PROVEN |

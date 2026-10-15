@@ -1,28 +1,28 @@
-# Deskal Canonical Planning Index
+# Orcel Canonical Planning Index
 
 Status: ACTIVE NORMATIVE
 Date: 2026-10-07
 
 This index fixes planning precedence so no implementation agent can treat an
-obsolete Cotra-era or Qdral-era architectural statement as current authority.
+obsolete Cotra-era or Orcel-era architectural statement as current authority.
 Historical evidence is preserved verbatim; preservation is not authorization.
 
 ## 1. Product identity rule
 
-The maintained product identity is Deskal. Qdral and Cotra are
+The maintained product identity is Orcel. Orcel and Cotra are
 superseded product identities and must not be presented as the current product
 (the rename records in `docs/identity/` govern the full earlier history).
-The compatibility boundary (CLI `qdral`, daemon `qdrald`, npm packages
-`@qdral/mcp` and `@qdral/relay`, `QDRAL_*` environment variables, `qdral.*`
-OAuth scopes, `qdral-*` source paths, install/storage paths containing
-`Qdral`/`qdral`, and the `qdral` MCP compatibility name) is governed by
-`docs/identity/DESKAL_RENAME.md` and is never renamed blindly.
+The compatibility boundary (CLI `orcel`, daemon `orceld`, npm packages
+`@orcel/mcp` and `@orcel/relay`, `ORCEL_*` environment variables, `orcel.*`
+OAuth scopes, `orcel-*` source paths, install/storage paths containing
+`Orcel`/`orcel`, and the `orcel` MCP compatibility name) is governed by
+`docs/identity/ORCEL_RENAME.md` and is never renamed blindly.
 
-"QDRAL-P18 is a retained compatibility/program identifier within the Deskal
+"ORCEL-P18 is a retained compatibility/program identifier within the Orcel
 product; it is not the current product brand."
 
-COTRA-P16, COTRA-P17, and QDRAL-P18 name governed programs, not the product.
-The word "Qdral" surviving inside `QDRAL_*` document titles and program text
+COTRA-P16, COTRA-P17, and ORCEL-P18 name governed programs, not the product.
+The word "Orcel" surviving inside `ORCEL_*` document titles and program text
 names that retained program/compatibility namespace, not the product brand.
 
 ## 2. Planning precedence
@@ -31,7 +31,7 @@ Conflicts resolve in this order; lower levels never override higher levels:
 
 1. `docs/canonical/CURRENT.md` (as corrected by the identity notice at its top)
 2. the single active SpecGrain (exactly one `GRAIN`-state spec at a time)
-3. the active program plan (`QDRAL_COMPUTER_USE_PLAN.md` once P18 activates)
+3. the active program plan (`ORCEL_COMPUTER_USE_PLAN.md` once P18 activates)
 4. the current architecture baseline (closed-grain design records)
 5. supporting normative matrices, contracts, and qualification records
 6. historical and superseded plans (evidence only, never authority)
@@ -57,26 +57,26 @@ canonically.
 | --- | --- |
 | `docs/canonical/CURRENT.md` | Canonical frontier record. Only the corrected identity notice at its top and the precedence in this index speak for the present; dated ledger entries below the historical marker are evidence. |
 | `docs/canonical/PLANNING_INDEX.md` | This precedence and classification index. |
-| `docs/identity/DESKAL_RENAME.md` | Product identity and compatibility boundary. |
+| `docs/identity/ORCEL_RENAME.md` | Product identity and compatibility boundary. |
 | `docs/governance/DIFFCIPLINE.md` | Exact-diff execution discipline. |
-| `.specgrain/specs/SG-000095.json` | Closed canonical: DESKAL-P20 local Full User desktop control. |
-| `.specgrain/specs/SG-000096.json` | Sole active DESKAL-P20 grain: local shell and process session qualification; this packet grants no executable authority itself. |
-| `docs/canonical/DESKAL_P20_UNIVERSAL_AGENT_RUNTIME_PLAN.md` | Active DESKAL-P20 reuse-first architecture, authority, implementation-order, and qualification plan. |
-| `docs/canonical/DESKAL_P20_DONOR_LEDGER.md` | Active pinned donor/provenance and reuse-boundary ledger for DESKAL-P20. |
+| `.specgrain/specs/SG-000095.json` | Closed canonical: ORCEL-P20 local Full User desktop control. |
+| `.specgrain/specs/SG-000096.json` | Sole active ORCEL-P20 grain: local shell and process session qualification; this packet grants no executable authority itself. |
+| `docs/canonical/ORCEL_P20_UNIVERSAL_AGENT_RUNTIME_PLAN.md` | Active ORCEL-P20 reuse-first architecture, authority, implementation-order, and qualification plan. |
+| `docs/canonical/ORCEL_P20_DONOR_LEDGER.md` | Active pinned donor/provenance and reuse-boundary ledger for ORCEL-P20. |
 
 ### ACTIVE_SUPPORTING
 
 | Document | Role |
 | --- | --- |
 | `docs/p20/sg000095_desktop_input_import.json` | Closed SG-000095 exact donor/source/reuse/rejection/private-protocol manifest and implementation record; the activation snapshot is historical, and the implementation state records the qualified imported runtime. |
-| `docs/p20/sg000096_shell_session_import.json` | Active SG-000096 frozen donor source/blob/MIT/reuse plan, existing Deskal executor ownership, and zero-code-import activation record. |
+| `docs/p20/sg000096_shell_session_import.json` | Active SG-000096 frozen donor source/blob/MIT/reuse plan, existing Orcel executor ownership, and zero-code-import activation record. |
 | `docs/p20/sg000094_windows_host_import.json` | Closed SG-000094 donor/provenance/private-protocol record for the qualified Windows observation/capture host. |
-| `docs/canonical/DESKAL_POST_P18_LAUNCH_PLAN.md` | Exited DESKAL-P19 launch-program record; it authorizes no P20 runtime work. |
+| `docs/canonical/ORCEL_POST_P18_LAUNCH_PLAN.md` | Exited ORCEL-P19 launch-program record; it authorizes no P20 runtime work. |
 | `docs/p19/sg000091_exit_matrix.json` | Canonical P19 launch-completeness exit matrix: 18 rows, zero UNVERIFIED rows. |
-| `docs/canonical/QDRAL_COMPUTER_USE_PLAN.md` | Closed-program design record for QDRAL-P18. It remains supporting evidence for the delivered computer-use authority boundary but authorizes no new implementation. |
-| `docs/canonical/QDRAL_COMPUTER_USE_STATUS.md`, `..._ACTIVATION_GATE.md`, `..._IMPLEMENTATION_ORDER.md`, `..._GOVERNANCE_NOTE.md`, `..._SCOPE.md`, `..._README.md` | Program sequencing and activation state. |
-| `docs/canonical/QDRAL_COMPUTER_USE_DECISIONS.md`, `..._AUTHORITY_MODEL.md`, `..._EXECUTION_RULE.md`, `..._NO_FALLBACK.md`, `..._LOCAL_FIRST.md`, `..._ZERO_COST.md`, `..._SECURITY_DENIALS.md` | Planned authority boundaries; normative for P18 grains once activated. |
-| `docs/canonical/QDRAL_COMPUTER_USE_ACCEPTANCE_MATRIX.md`, `..._TEST_MATRIX.md`, `..._FAILURE_SEMANTICS.md`, `..._RESOURCE_BOUNDS.md`, `..._PROFILE_MODEL.md`, `..._LICENSE_POLICY.md`, `..._DONOR_MATRIX.md`, `..._REVIEW_GATE.md` | Planned qualification contracts; normative for P18 grains once activated. |
+| `docs/canonical/ORCEL_COMPUTER_USE_PLAN.md` | Closed-program design record for ORCEL-P18. It remains supporting evidence for the delivered computer-use authority boundary but authorizes no new implementation. |
+| `docs/canonical/ORCEL_COMPUTER_USE_STATUS.md`, `..._ACTIVATION_GATE.md`, `..._IMPLEMENTATION_ORDER.md`, `..._GOVERNANCE_NOTE.md`, `..._SCOPE.md`, `..._README.md` | Program sequencing and activation state. |
+| `docs/canonical/ORCEL_COMPUTER_USE_DECISIONS.md`, `..._AUTHORITY_MODEL.md`, `..._EXECUTION_RULE.md`, `..._NO_FALLBACK.md`, `..._LOCAL_FIRST.md`, `..._ZERO_COST.md`, `..._SECURITY_DENIALS.md` | Planned authority boundaries; normative for P18 grains once activated. |
+| `docs/canonical/ORCEL_COMPUTER_USE_ACCEPTANCE_MATRIX.md`, `..._TEST_MATRIX.md`, `..._FAILURE_SEMANTICS.md`, `..._RESOURCE_BOUNDS.md`, `..._PROFILE_MODEL.md`, `..._LICENSE_POLICY.md`, `..._DONOR_MATRIX.md`, `..._REVIEW_GATE.md` | Planned qualification contracts; normative for P18 grains once activated. |
 | `docs/canonical/P12_INSTALLER_LIFECYCLE_DESIGN.md` | Delivered COTRA-P12 design basis for the shipped installer/lifecycle. `COTRA-P12` naming is retained program history. |
 | `docs/security/THREAT_MODEL.md`, `docs/security/THREAT_MODEL_REGRESSION_V02.md` | Living threat baseline and the live v0.2 regression. |
 | `docs/security/UNIVERSAL_CONNECTIVITY_THREAT_MODEL.md` | Connectivity threat analysis supporting P17 distribution work. |
@@ -92,7 +92,7 @@ canonically.
 | Document | Contract |
 | --- | --- |
 | `docs/security/RELAY_PROTOCOL_CONTRACT.md` | Frozen relay protocol vocabulary. |
-| Code surfaces listed in `docs/identity/DESKAL_RENAME.md` | CLI, daemon, npm, env, scope, path, and MCP-name compatibility identifiers. |
+| Code surfaces listed in `docs/identity/ORCEL_RENAME.md` | CLI, daemon, npm, env, scope, path, and MCP-name compatibility identifiers. |
 
 ### HISTORICAL
 
@@ -100,8 +100,8 @@ canonically.
 | --- | --- |
 | `docs/canonical/ARCHITECTURE_AND_DELIVERY_PLAN.md` | Delivered through COTRA-P13. Its Cotra-era product statements are superseded; the current state is recorded in `CURRENT.md`. |
 | `docs/canonical/UNIVERSAL_AI_ACCESS_PLAN.md` | Proposal whose provider-neutral decisions were absorbed by the closed P17 grains; its `Cotra v0.2.x` product naming is superseded. |
-| `docs/identity/` rename records (`DESKAL_RENAME.md`, `QDRAL_RENAME.md`, and the earlier record beside them) | Historical rename records; immutable provenance. |
-| `docs/security/THREAT_MODEL_REGRESSION.md` | Point-in-time QDRAL-P13 regression evidence with P13-era counts; superseded for v0.2 by `THREAT_MODEL_REGRESSION_V02.md`. |
+| `docs/identity/` rename records (`ORCEL_RENAME.md`, `ORCEL_RENAME.md`, and the earlier record beside them) | Historical rename records; immutable provenance. |
+| `docs/security/THREAT_MODEL_REGRESSION.md` | Point-in-time ORCEL-P13 regression evidence with P13-era counts; superseded for v0.2 by `THREAT_MODEL_REGRESSION_V02.md`. |
 | `docs/security/RELEASE_SECURITY_REVIEW.md` | SG-000046 program-level review for the P13 release line; superseded for v0.2 by the SG-000072 exit record. |
 | `docs/p16/sg000066_exit_evidence.json` | Closed P16 exit evidence. |
 | `.specgrain/specs/SG-000001.json` through `SG-000071.json` and `.specgrain/canonical-evidence.json` | Closed-grain provenance; machine-readable evidence ledger. |
@@ -109,12 +109,12 @@ canonically.
 
 ### SUPERSEDED
 
-No SUPERSEDED document remains. A document that presents Qdral or Cotra as the current product, or that contradicts the precedence above, must
+No SUPERSEDED document remains. A document that presents Orcel or Cotra as the current product, or that contradicts the precedence above, must
 be reclassified here or corrected before it is followed.
 
 ## 4. Rules for implementation agents
 
-1. Never treat a HISTORICAL plan statement (notably any `Cotra is` / `Qdral is`
+1. Never treat a HISTORICAL plan statement (notably any `Cotra is` / `Orcel is`
    product sentence in the documents above) as permission to build, expose, or
    widen authority.
 2. Never rename a compatibility identifier on the basis of this index; rename

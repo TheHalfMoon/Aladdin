@@ -1,13 +1,13 @@
 # SG-000093 Full-Control Authority and Profile Model
 
 Status: IMPLEMENTATION QUALIFICATION
-Program: DESKAL-P20
+Program: ORCEL-P20
 Grain: SG-000093
 Canonical activation base: `c930bf57651e83654a42a46d88c5ddbff895cab2`
 
 ## Purpose
 
-SG-000093 introduces the Deskal-owned authority model required before any P20 donor executor can be exposed.
+SG-000093 introduces the Orcel-owned authority model required before any P20 donor executor can be exposed.
 
 This grain does **not** add desktop control, shell/process widening, expanded filesystem access, browser/web execution, a privileged broker, persistent administrator execution, or remote full-control execution. It defines only the local authority profiles and lease checks that future grains must consume.
 
@@ -40,7 +40,7 @@ A `FullControlLease` is bound to all of the following:
 - exact Windows user SID;
 - exact interactive logon session;
 - exact device identity;
-- exact Deskal session identity;
+- exact Orcel session identity;
 - exact authority profile;
 - exact policy revision;
 - exact authority epoch;
@@ -48,7 +48,7 @@ A `FullControlLease` is bound to all of the following:
 
 Any mismatch fails closed.
 
-Restart or Deskal-session replacement invalidates the old lease because the session identity no longer matches.
+Restart or Orcel-session replacement invalidates the old lease because the session identity no longer matches.
 
 A policy revision change invalidates the old lease.
 
@@ -79,7 +79,7 @@ Explicitly rejected:
 - secure-desktop automation;
 - credential-provider bypass.
 
-The admin lease cannot outlive its parent full-control lease and must match the same user, logon session, device, Deskal session, policy revision, and authority epoch. The serializable AdminLease stores only a SHA-256 digest of the transient Windows elevation-proof identifier; the raw proof identifier is not persisted in the lease.
+The admin lease cannot outlive its parent full-control lease and must match the same user, logon session, device, Orcel session, policy revision, and authority epoch. The serializable AdminLease stores only a SHA-256 digest of the transient Windows elevation-proof identifier; the raw proof identifier is not persisted in the lease.
 
 ## Future executor ceilings
 
@@ -108,7 +108,7 @@ All authority checks are fail closed for:
 - wrong Windows user;
 - wrong logon session;
 - wrong device;
-- wrong Deskal session;
+- wrong Orcel session;
 - policy drift;
 - authority-epoch drift;
 - mismatched elevation proof;
@@ -142,6 +142,6 @@ It does not store the raw Windows SID, raw device/session binding values, elevat
 
 SG-000094 may begin only after SG-000093 closes canonically.
 
-SG-000094 may import or adapt the pinned Open Computer Use Windows host behind private Deskal IPC. Desktop input remains owned by SG-000095.
+SG-000094 may import or adapt the pinned Open Computer Use Windows host behind private Orcel IPC. Desktop input remains owned by SG-000095.
 
 No donor import is authorized by SG-000093. The only added platform binding is the already-present `windows-sys` dependency used for native Windows SID/logon-session qualification.

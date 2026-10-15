@@ -1,10 +1,10 @@
-# Threat Model Regression for the Deskal v0.2 Release Candidate
+# Threat Model Regression for the Orcel v0.2 Release Candidate
 
 Status: SG-000072 RELEASE REGRESSION
 Date: 2026-10-04
 Baseline: `docs/security/THREAT_MODEL.md` (T01-T28),
 `docs/security/UNIVERSAL_CONNECTIVITY_THREAT_MODEL.md` (UC series),
-`docs/security/THREAT_MODEL_REGRESSION.md` (QDRAL-P13 regression evidence,
+`docs/security/THREAT_MODEL_REGRESSION.md` (ORCEL-P13 regression evidence,
 retained as historical record; v0.2-relevant controls are re-proven below
 with current tests).
 
@@ -24,10 +24,10 @@ exact-head CI (Windows-native tests on `windows-latest`, relay/container and
 supply-chain jobs on `ubuntu-latest`). A claim with no named test is marked
 UNVERIFIED. This regression never weakens a control to pass.
 
-Product identity note: the current product is Deskal. `qdrald`,
-`%LOCALAPPDATA%\Qdral` paths, `QDRAL_*` variables, `qdral.*` scopes, and the
-`qdral` MCP compatibility name below are retained compatibility identifiers
-governed by `docs/identity/DESKAL_RENAME.md`.
+Product identity note: the current product is Orcel. `orceld`,
+`%LOCALAPPDATA%\Orcel` paths, `ORCEL_*` variables, `orcel.*` scopes, and the
+`orcel` MCP compatibility name below are retained compatibility identifiers
+governed by `docs/identity/ORCEL_RENAME.md`.
 
 ## 1. Local MCP edge (T01, T02)
 
@@ -48,11 +48,11 @@ Regression evidence:
 - `result projection is the single authoritative source`
 - `transport context is server-supplied metadata, never a tool field`
 - `reserved transports fail closed without authority`
-- `authoritative builder registers without spawning qdrald`
+- `authoritative builder registers without spawning orceld`
 - `every canonical tool has exactly one contract entry`
 - `the contract module is metadata only and can reach no kernel`
 - `request builder preserves the declared bounded capability`
-- `daemon environment drops generic and Qdral secret variables`
+- `daemon environment drops generic and Orcel secret variables`
 
 ## 2. Loopback HTTP transport (T01)
 
@@ -227,7 +227,7 @@ Regression evidence:
 
 Controls: exactly two read-only desktop shapes (`desktop_window_list`,
 `desktop_window_tree`) over typed window identity; no actuation, capture,
-input, focus, or termination; Deskal approval/trust/revoke surfaces are
+input, focus, or termination; Orcel approval/trust/revoke surfaces are
 denied; discovery exposes only qualified shapes per profile.
 
 Regression evidence:
@@ -240,7 +240,7 @@ Regression evidence:
 - `no MCP tool claims browser capability`
 - `every structured browser shape is recorded as not exposed and denied in the inventory`
 - `the structured browser layer launches, attaches, and connects to nothing outside tests`
-- `hidden and denied shapes are real qdrald shapes, and hidden ones are not exposed`
+- `hidden and denied shapes are real orceld shapes, and hidden ones are not exposed`
 - `missing and hidden entries name an owning grain; denials name a security reason`
 
 ## 7. Clipboard transfer (T18)
@@ -384,7 +384,7 @@ routes, or revocation.
 
 Regression evidence:
 
-- `the Deskal package builds reproducibly from clean source and validates`
+- `the Orcel package builds reproducibly from clean source and validates`
 - `OpenAI-visible tools are exactly the core profile with contract annotations and schemes`
 - `tampered packages fail validation`
 - `configuration and endpoint validation fail closed`
@@ -393,8 +393,8 @@ Regression evidence:
 - `provider-controlled distribution states are never promoted by software`
 - `authorization metadata advertises only what the relay implements`
 - `exactly one grain is active and no later grain is activated ahead of it`
-- `the Deskal Codex plugin declares exactly the canonical local stdio entrypoint`
-- `the repository marketplace lists exactly the Deskal plugin from this repository`
+- `the Orcel Codex plugin declares exactly the canonical local stdio entrypoint`
+- `the repository marketplace lists exactly the Orcel plugin from this repository`
 - `shared tools carry identical metadata on local and remote transports`
 - `SG-000068: Claude directory and account states are never promoted by software`
 - `SG-000068: Claude web and Claude Code connector flows reach the device with the core profile only`
@@ -475,7 +475,7 @@ candidate on `windows-latest` in exact-head CI.
 ## 16. Residual risks and UNVERIFIED states
 
 - T27 (same-user compromise): same-user malicious code can read the user's own
-  files and stop Deskal; ACLs, AppContainer children, and STRONG presence
+  files and stop Orcel; ACLs, AppContainer children, and STRONG presence
   reduce but cannot remove this. No new claim is made.
 - Provider-controlled states (directory submission/listing, account
   verification, published/approved store states) remain NOT_OBSERVED in every

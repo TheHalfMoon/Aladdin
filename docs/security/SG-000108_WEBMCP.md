@@ -1,6 +1,6 @@
 # SG-000108 WebMCP: slice 4, read-only discovery
 
-Status: implementation record for slice 4 of SG-000108, following the founder decision of 2026-10-11 (`docs/aladdin/WEB_CAPABILITIES_DECISION.md`). This slice grants no execution: discovered tools are data. Execution is slice 5, with its own approval policy.
+Status: implementation record for slice 4 of SG-000108, following the founder decision of 2026-10-11 (`docs/orcel/WEB_CAPABILITIES_DECISION.md`). This slice grants no execution: discovered tools are data. Execution is slice 5, with its own approval policy.
 
 ## What a caller gets
 
@@ -16,7 +16,7 @@ A page with no declarations yields an empty list, and the caller falls back to o
 ## How it reads the page without running page code
 
 - The worker takes a CDP `DOMSnapshot.captureSnapshot` of the main document. The engine serialises its own DOM tree, so no script runs in the page: page-defined getters, patched prototypes and polyfills are never invoked, and nothing in the page changes. Open, closed and declarative shadow trees are part of the snapshot, flattened: Edge reports no shadow-root node, only a `shadowRootType` mark on every node inside a shadow tree. The model puts a shadow-root boundary where a marked node sits under an unmarked one. A shadow tree nested in another one cannot be told apart from its parent tree, so it is modelled as part of it. (Slice 4 as first merged assumed shadow-root nodes. Its synthetic tests did too, so a shadow-tree field could be counted as an outer form's parameter. Corrected in slice 5.)
-- The tool rules are adapted from MCP-B's `declarative-forms.ts` (MIT; see `docs/aladdin/notices/WebMCP-org-npm-packages-MIT.txt` and `docs/aladdin/sg000108_webmcp_provenance.json`). They run in the worker on that attribute-only model.
+- The tool rules are adapted from MCP-B's `declarative-forms.ts` (MIT; see `docs/orcel/notices/WebMCP-org-npm-packages-MIT.txt` and `docs/orcel/sg000108_webmcp_provenance.json`). They run in the worker on that attribute-only model.
 - They read **attributes, not live state**. A value typed into a control is never visible, because the snapshot's input values are ignored. A control's `value` is never emitted. The only values that cross are the author-declared choice values of `option`, `radio` and `checkbox` controls.
 - Text in an editable region (`contenteditable`, `role=textbox`) never contributes to a label or description.
 - Password-like controls (`type=password`, or `autocomplete` set to `current-password`, `new-password` or `one-time-code`) are never parameters. They flag the tool through `has_password` even when disabled. SG-000077 already refuses filling password fields.
@@ -44,7 +44,7 @@ A page with no declarations yields an empty list, and the caller falls back to o
   Text is made well formed (a lone surrogate becomes U+FFFD, so the frame stays valid JSON for the host), has controls and invisible format characters removed, and is cut at whole code points. The invisible characters are bidi controls, zero-width marks, the BOM, the soft hyphen, interlinear annotation marks and Unicode tag characters. Values that must cross unchanged (parameter names, choices, patterns) are refused instead of altered.
 
   Number schemas carry no `pattern`. Bounds that contradict each other (minimum above maximum, including a `range` minimum above its default maximum of 100) are dropped. Any drop is reported as `truncated`.
-- **Shared vectors.** `apps/qdral-browser-worker/src/webmcp/shared-vectors.json` pins the worker's output for awkward markup. The worker's tests require its output to equal the vectors, and the host's tests require `validate_tools` to accept every one, so a disagreement between the two sides fails in CI.
+- **Shared vectors.** `apps/orcel-browser-worker/src/webmcp/shared-vectors.json` pins the worker's output for awkward markup. The worker's tests require its output to equal the vectors, and the host's tests require `validate_tools` to accept every one, so a disagreement between the two sides fails in CI.
 - **Host.** `webmcp::validate_tools` re-checks every bound and shape:
   - exact keys (`deny_unknown_fields`);
   - name syntax and uniqueness;
@@ -100,7 +100,7 @@ Status: implementation record for slice 5 of SG-000108 (worker protocol generati
 ## What executes
 
 `BrowserWorker::execute_tool` runs a tool discovered in slice 4 only when all of these hold. Anything else is refused before the approval is checked, so nothing is spent:
-- the form declares `toolautosubmit`. Without it, WebMCP leaves submission to the user, and Aladdin's isolated browser has no user to submit;
+- the form declares `toolautosubmit`. Without it, WebMCP leaves submission to the user, and Orcel's isolated browser has no user to submit;
 - it carries no password-like field;
 - its `action` crossed exactly;
 - its method is GET or POST;
@@ -149,7 +149,7 @@ Status: implementation record for slice 5 of SG-000108 (worker protocol generati
 
 ## Page code
 
-Aladdin evaluates no page-, model- or caller-supplied script. It calls no page-registered function (`executeTool`, `getTools`) and no `respondWith`. The page's own submit handlers do run when the form is submitted, exactly as they run for any SG-000077 click; that is how the page does what its tool declares. The SG-000108 invariant therefore holds as written, and declarative execution needs no amendment. Executing imperative tools (`document.modelContext.executeTool`) would invoke a page-registered handler directly. It stays out of scope until that amendment is made.
+Orcel evaluates no page-, model- or caller-supplied script. It calls no page-registered function (`executeTool`, `getTools`) and no `respondWith`. The page's own submit handlers do run when the form is submitted, exactly as they run for any SG-000077 click; that is how the page does what its tool declares. The SG-000108 invariant therefore holds as written, and declarative execution needs no amendment. Executing imperative tools (`document.modelContext.executeTool`) would invoke a page-registered handler directly. It stays out of scope until that amendment is made.
 
 ## Known limits
 

@@ -1,19 +1,19 @@
 {
-  "name": "deskal",
+  "name": "orcel",
   "version": "0.2.0",
   "private": true,
   "workspaces": [
-    "apps/qdral-mcp",
-    "apps/qdral-relay"
+    "apps/orcel-mcp",
+    "apps/orcel-relay"
   ],
   "scripts": {
-    "build": "npm run build --workspace @qdral/mcp && npm run build --workspace @qdral/relay",
-    "typecheck": "npm run typecheck --workspace @qdral/mcp && npm run build --workspace @qdral/mcp && npm run typecheck --workspace @qdral/relay",
-    "test": "npm run test --workspace @qdral/mcp && npm run test --workspace @qdral/relay && npm run browser-worker:test && npm run browser-launcher:native",
+    "build": "npm run build --workspace @orcel/mcp && npm run build --workspace @orcel/relay",
+    "typecheck": "npm run typecheck --workspace @orcel/mcp && npm run build --workspace @orcel/mcp && npm run typecheck --workspace @orcel/relay",
+    "test": "npm run test --workspace @orcel/mcp && npm run test --workspace @orcel/relay && npm run browser-worker:test && npm run browser-launcher:native",
     "web:typecheck": "npm --prefix apps/web run typecheck",
     "web:test": "npm --prefix apps/web run test",
     "web:build": "npm --prefix apps/web run build",
-    "browser-worker:test": "npm ci --prefix apps/qdral-browser-worker --ignore-scripts && npm --prefix apps/qdral-browser-worker run typecheck && npm --prefix apps/qdral-browser-worker test",
-    "browser-launcher:native": "node apps/qdral-browser-worker/scripts/native-launcher.mjs"
+    "browser-worker:test": "npm ci --prefix apps/orcel-browser-worker --ignore-scripts && npm --prefix apps/orcel-browser-worker run typecheck && npm --prefix apps/orcel-browser-worker test",
+    "browser-launcher:native": "node apps/orcel-browser-worker/scripts/native-launcher.mjs"
   }
 }

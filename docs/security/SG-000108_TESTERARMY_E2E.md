@@ -4,7 +4,7 @@ Acceptance A8 asks for TesterArmy E2E evidence, run against the fixture origin o
 
 ## What runs
 
-`apps/qdral-browser-worker/testerarmy/` is a self-contained, test-only suite. It is never packaged, not part of any workspace, and its pinned lockfile is not installed by CI.
+`apps/orcel-browser-worker/testerarmy/` is a self-contained, test-only suite. It is never packaged, not part of any workspace, and its pinned lockfile is not installed by CI.
 
 **Versions, installed with `npm ci --ignore-scripts`; every integrity value is in the lockfile:**
 - `e2e` 0.20.0 (tester-army/e2e, Apache-2.0);
@@ -72,11 +72,11 @@ The engine environment is only the allowlisted keys (`ENGINE_ENV_ALLOWLIST`). Ev
    - **This test only makes the attempts.** A failed navigation proves nothing by itself: the listener closes every connection, and its certificate is not trusted.
    - **Whether they were denied is decided by `run.mjs`:** nothing at the listeners, nothing beyond loopback in the OS tables.
 
-**What this is evidence of.** TesterArmy drives its own browser. It cannot drive Aladdin's isolated browser, which has no DevTools port by design (SG-000074), and giving it one would break confinement. So this is an independent, black-box check of the first journey on the controlled fixture: the site, the selection by declared date and the exact document. It runs in a browser launched as production launches it, apart from the attachment, and enforcement is checked at the OS level. **It does not test the production worker.** The confinement, policies, approvals and create-only commit of Aladdin's own browser are proven by the native suite (`npm run browser-launcher:native`), whose OS-level checks are the same kind (#324).
+**What this is evidence of.** TesterArmy drives its own browser. It cannot drive Orcel's isolated browser, which has no DevTools port by design (SG-000074), and giving it one would break confinement. So this is an independent, black-box check of the first journey on the controlled fixture: the site, the selection by declared date and the exact document. It runs in a browser launched as production launches it, apart from the attachment, and enforcement is checked at the OS level. **It does not test the production worker.** The confinement, policies, approvals and create-only commit of Orcel's own browser are proven by the native suite (`npm run browser-launcher:native`), whose OS-level checks are the same kind (#324).
 
 ## Evidence (Windows, Edge 155, 2026-10-13)
 
-`npm ci --ignore-scripts && npm run e2e` in `apps/qdral-browser-worker/testerarmy/`, with the worker built first: `A8: PASSED`.
+`npm ci --ignore-scripts && npm run e2e` in `apps/orcel-browser-worker/testerarmy/`, with the worker built first: `A8: PASSED`.
 - **Production launch contract:** accepted by `launchRefusal`.
 - **Tests:** 3 of 3 passed.
 - **The report:** `https://fixture.test/reports/2026-09-30.pdf` with SHA-256 `5523ba2d22b98403ba0f7d9166a9a8cc48ef8330656637f28d8cbf125381994a`, equal to the fixture's report.

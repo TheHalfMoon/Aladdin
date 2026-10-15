@@ -60,8 +60,8 @@ test("SG-000091 is closed with exact P19 exit evidence", () => {
 
 test("brand, static export, and zero-client-runtime locks remain exact", () => {
   assert.equal(
-    sha256("apps/web/public/brand/deskal-mark-mask.svg"),
-    "150ae5ccd9fdb6b25a8f0421a64acc2d0bf1615a32c2b33aea92e77700706fce"
+    sha256("apps/web/public/brand/orcel-mark-mask.svg"),
+    "56bd8af1c84680e45ff579a130e16949a472e81c6846e475adf6f06f16e92daf"
   );
 
   const config = read("apps/web/next.config.ts");
@@ -107,7 +107,7 @@ test("Pages deployment contract stays workflow-built, HTTPS-oriented, secret-fre
   assert.doesNotMatch(workflow, /secrets\./);
   assert.doesNotMatch(workflow, /cname:\s*[^\s]/i);
   assert.match(workflow, /test ! -e apps\/web\/public\/CNAME/);
-  assert.match(workflow, /https:\/\/thehalfmoon\.github\.io\/Deskal/);
+  assert.match(workflow, /https:\/\/thehalfmoon\.github\.io\/Orcel/);
 
   assert.equal(matrix.live_snapshot.website.url, "https://thehalfmoon.github.io/Deskal/");
   assert.equal(matrix.live_snapshot.website.http_status, 200);
@@ -120,13 +120,14 @@ test("Pages deployment contract stays workflow-built, HTTPS-oriented, secret-fre
 test("canonical repository metadata matches the live exit snapshot exactly", () => {
   const metadata = json("docs/canonical/REPOSITORY_METADATA.json");
   assert.equal(metadata.description, matrix.live_snapshot.repository.description);
-  assert.equal(metadata.homepage, matrix.live_snapshot.repository.homepage);
+  assert.equal(metadata.homepage, "https://thehalfmoon.github.io/Orcel/");
+  assert.equal(matrix.live_snapshot.repository.homepage, "https://thehalfmoon.github.io/Deskal/");
   assert.deepEqual(metadata.topics, matrix.live_snapshot.repository.topics);
 });
 
 test("P19 exits remain immutable and P20 activates SG-000096 only after SG-000095 closeout", () => {
-  const p19 = read("docs/canonical/DESKAL_POST_P18_LAUNCH_PLAN.md");
-  const p20 = read("docs/canonical/DESKAL_P20_UNIVERSAL_AGENT_RUNTIME_PLAN.md");
+  const p19 = read("docs/canonical/ORCEL_POST_P18_LAUNCH_PLAN.md");
+  const p20 = read("docs/canonical/ORCEL_P20_UNIVERSAL_AGENT_RUNTIME_PLAN.md");
   const sg91 = json(".specgrain/specs/SG-000091.json");
   const sg92 = json(".specgrain/specs/SG-000092.json");
   const sg93 = json(".specgrain/specs/SG-000093.json");

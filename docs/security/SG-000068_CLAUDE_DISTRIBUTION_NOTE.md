@@ -1,13 +1,13 @@
 # SG-000068 Claude Distribution Security Note
 
-Status: IMPLEMENTATION FOR QDRAL-P17
+Status: IMPLEMENTATION FOR ORCEL-P17
 SpecGrain: SG-000068
 Base: `f4685f1755483b7b635f80472bd8b3f11dfd92ec`
 Date: 2026-10-04
 
 ## Change
 
-`apps/qdral-mcp/src/oauth_authorization.ts`:
+`apps/orcel-mcp/src/oauth_authorization.ts`:
 
 - `isAcceptableRedirectUri` now accepts `http://localhost` redirect URIs in addition to `http://127.0.0.1` and
   `http://[::1]`, because Claude Code listens on `http://localhost:<port>/callback`. Issuer and resource identifiers

@@ -1,16 +1,16 @@
-# Qdral with Claude (SG-000068)
+# Orcel with Claude (SG-000068)
 
-Status: SOFTWARE QUALIFICATION FOR QDRAL-P17. Directory and account states are recorded only in
+Status: SOFTWARE QUALIFICATION FOR ORCEL-P17. Directory and account states are recorded only in
 `distribution/claude/distribution-state.json` from directly observed Anthropic evidence.
 
 ## Local paths
 
 - Claude Desktop: add `examples/mcp-clients/claude-desktop.json` under `mcpServers`, or pack
-  `examples/mcp-clients/claude-desktop-mcpb-manifest.json` as a `.mcpb` Desktop Extension. Both launch `qdral mcp stdio`.
+  `examples/mcp-clients/claude-desktop-mcpb-manifest.json` as a `.mcpb` Desktop Extension. Both launch `orcel mcp stdio`.
 - Claude Code: use `examples/mcp-clients/claude-code.mcp.json` as a project `.mcp.json`, or
-  `claude mcp add qdral -- qdral mcp stdio`.
+  `claude mcp add orcel -- orcel mcp stdio`.
 
-Local transports serve the `desktop_structured` profile through qdrald's local policy and approval.
+Local transports serve the `desktop_structured` profile through orceld's local policy and approval.
 
 ## Remote custom connector
 
