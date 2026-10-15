@@ -24,3 +24,12 @@ This package revises the Opus proposal; the founder adopted it as planning direc
 | Decision rationale and scope | OPUS_TO_SOL_CHANGELOG.md |
 
 Original PR283 exact-head checks passed 11/11; Jev reviewed 15/15 hunks; Alibaba reviewed one eligible script and excluded 14 Markdown files. The original-head result does not qualify this amendment head. At review time, genuine reviews, manual exclusions, exact-head CI, resolved threads and founder adoption were required before an approved normal merge; the founder has since adopted the direction, and #278 has been repaired by PR #286 and closed. Native visible product E2E, complete installer/RAM/startup, model inference and remote journeys remain unmeasured.
+
+## Native Basic/Pro and minimum-cost Hala research (2026-10-13)
+
+Start with [AI_PRODUCT_MASTER_PLAN.md](AI_PRODUCT_MASTER_PLAN.md) for the
+founder's $3 Basic and native founder-hosted Pro requirements, exact live-code
+inventory, compact-model comparison, executable economics and first experiment.
+Its linked package is research and a proposed amendment, not new runtime
+authority, a trained model, adopted pricing or a deployed AI product. Existing
+canonical/governance precedence and adopted plans remain in force.
