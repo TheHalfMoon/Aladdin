@@ -151,13 +151,14 @@ pub fn sanitized_execution_env(source: &BTreeMap<String, String>) -> BTreeMap<St
 }
 
 fn allowed_execution_env(name: &str) -> bool {
+    // Windows environment names are case-insensitive, but the provider only
+    // receives the exact allowlisted vocabulary, regardless of letter case.
     matches!(
-        name,
+        name.to_ascii_uppercase().as_str(),
         "PATH"
-            | "Path"
             | "PATHEXT"
-            | "ComSpec"
-            | "SystemRoot"
+            | "COMSPEC"
+            | "SYSTEMROOT"
             | "WINDIR"
             | "TEMP"
             | "TMP"
@@ -166,8 +167,8 @@ fn allowed_execution_env(name: &str) -> bool {
             | "LOCALAPPDATA"
             | "APPDATA"
             | "PROGRAMDATA"
-            | "ProgramFiles"
-            | "ProgramFiles(x86)"
+            | "PROGRAMFILES"
+            | "PROGRAMFILES(X86)"
             | "LANG"
             | "LC_ALL"
     )
@@ -241,6 +242,31 @@ mod tests {
         assert!(!plan.env.contains_key("OPENAI_API_KEY"));
         assert!(!plan.env.contains_key("ORCEL_TUNNEL_KEY_FILE"));
         let _ = fs::remove_dir_all(workspace);
+    }
+
+    #[test]
+    fn case_insensitive_system_environment_keeps_secrets_denied() {
+        let source = BTreeMap::from([
+            ("SYSTEMROOT".to_owned(), "C:\\Windows".to_owned()),
+            ("comspec".to_owned(), "cmd.exe".to_owned()),
+            (
+                "programfiles(x86)".to_owned(),
+                "Program Files (x86)".to_owned(),
+            ),
+            ("SYSTEMROOT_API_KEY".to_owned(), "secret".to_owned()),
+            ("orcel_tunnel_key_file".to_owned(), "secret".to_owned()),
+            ("malicious".to_owned(), "no".to_owned()),
+        ]);
+        let cleaned = sanitized_execution_env(&source);
+        assert_eq!(
+            cleaned.get("SYSTEMROOT").map(String::as_str),
+            Some("C:\\Windows")
+        );
+        assert_eq!(cleaned.get("comspec").map(String::as_str), Some("cmd.exe"));
+        assert!(cleaned.contains_key("programfiles(x86)"));
+        assert!(!cleaned.contains_key("SYSTEMROOT_API_KEY"));
+        assert!(!cleaned.contains_key("orcel_tunnel_key_file"));
+        assert!(!cleaned.contains_key("malicious"));
     }
 
     #[test]
