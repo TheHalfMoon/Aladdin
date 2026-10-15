@@ -16,9 +16,9 @@ const sha256 = (path) => createHash("sha256").update(readFileSync(join(repo, pat
 const matrix = json("docs/p19/sg000091_exit_matrix.json");
 
 test("SG-000091 exit matrix is complete and authority-neutral", () => {
-  assert.equal(matrix.schema, "orcel-p19-exit-matrix/1");
+  assert.equal(matrix.schema, "deskal-p19-exit-matrix/1");
   assert.equal(matrix.grain, "SG-000091");
-  assert.equal(matrix.program, "ORCEL-P19");
+  assert.equal(matrix.program, "DESKAL-P19");
   assert.equal(matrix.activation_merge, "064124ce64650de29e69f04d42dbd4ec0a89dbfa");
   assert.equal(matrix.activation_post_merge_ci, "37538199470");
   assert.equal(matrix.authority_delta, "none");
@@ -49,19 +49,19 @@ test("P19 predecessor grains stay CLOSED with exact canonical evidence", () => {
 test("SG-000091 is closed with exact P19 exit evidence", () => {
   const spec = json(".specgrain/specs/SG-000091.json");
   assert.equal(spec.state, "CLOSED");
-  assert.equal(spec.program, "ORCEL-P19");
+  assert.equal(spec.program, "DESKAL-P19");
   assert.equal(spec.qualified_head, "eab70d3a14f4fbfcf01ca4f87c69c1df8f6cd733");
   assert.equal(spec.implementation_merge, "e674d4740ab15f39ec524248f8e512e64cb70d06");
   assert.equal(spec.post_merge_ci, "37541526231");
   assert.equal(spec.canonical_evidence.implementation_pr, 238);
   assert.equal(spec.canonical_evidence.unresolved_review_threads, 0);
-  assert.equal(spec.canonical_evidence.program_exit, "ORCEL-P19 EXITED");
+  assert.equal(spec.canonical_evidence.program_exit, "DESKAL-P19 EXITED");
 });
 
 test("brand, static export, and zero-client-runtime locks remain exact", () => {
   assert.equal(
     sha256("apps/web/public/brand/orcel-mark-mask.svg"),
-    "150ae5ccd9fdb6b25a8f0421a64acc2d0bf1615a32c2b33aea92e77700706fce"
+    "56bd8af1c84680e45ff579a130e16949a472e81c6846e475adf6f06f16e92daf"
   );
 
   const config = read("apps/web/next.config.ts");
@@ -109,7 +109,7 @@ test("Pages deployment contract stays workflow-built, HTTPS-oriented, secret-fre
   assert.match(workflow, /test ! -e apps\/web\/public\/CNAME/);
   assert.match(workflow, /https:\/\/thehalfmoon\.github\.io\/Orcel/);
 
-  assert.equal(matrix.live_snapshot.website.url, "https://thehalfmoon.github.io/Orcel/");
+  assert.equal(matrix.live_snapshot.website.url, "https://thehalfmoon.github.io/Deskal/");
   assert.equal(matrix.live_snapshot.website.http_status, 200);
   assert.equal(matrix.live_snapshot.pages.build_type, "workflow");
   assert.equal(matrix.live_snapshot.pages.https_enforced, true);
@@ -120,7 +120,8 @@ test("Pages deployment contract stays workflow-built, HTTPS-oriented, secret-fre
 test("canonical repository metadata matches the live exit snapshot exactly", () => {
   const metadata = json("docs/canonical/REPOSITORY_METADATA.json");
   assert.equal(metadata.description, matrix.live_snapshot.repository.description);
-  assert.equal(metadata.homepage, matrix.live_snapshot.repository.homepage);
+  assert.equal(metadata.homepage, "https://thehalfmoon.github.io/Orcel/");
+  assert.equal(matrix.live_snapshot.repository.homepage, "https://thehalfmoon.github.io/Deskal/");
   assert.deepEqual(metadata.topics, matrix.live_snapshot.repository.topics);
 });
 
@@ -142,18 +143,18 @@ test("P19 exits remain immutable and P20 activates SG-000096 only after SG-00009
   assert.equal(sg92.state, "CLOSED");
 
   assert.equal(sg93.id, "SG-000093");
-  assert.equal(sg93.program, "ORCEL-P20");
+  assert.equal(sg93.program, "DESKAL-P20");
   assert.equal(sg93.state, "CLOSED");
 
   assert.equal(sg94.id, "SG-000094");
-  assert.equal(sg94.program, "ORCEL-P20");
+  assert.equal(sg94.program, "DESKAL-P20");
   assert.equal(sg94.state, "CLOSED");
   assert.equal(sg94.qualified_head, "b0459d356c8397e6cf91126bcdc209f11e41ef11");
   assert.equal(sg94.implementation_merge, "5a86440021d70c8abb021c2042adc6ee1108471e");
   assert.equal(sg94.post_merge_ci, "37651396449");
 
   assert.equal(sg95.id, "SG-000095");
-  assert.equal(sg95.program, "ORCEL-P20");
+  assert.equal(sg95.program, "DESKAL-P20");
   assert.equal(sg95.state, "CLOSED");
   assert.equal(sg95.base, "5a86440021d70c8abb021c2042adc6ee1108471e");
   assert.deepEqual(sg95.dependencies, ["SG-000094"]);
@@ -162,7 +163,7 @@ test("P19 exits remain immutable and P20 activates SG-000096 only after SG-00009
   assert.equal(sg95.post_merge_ci, "37700649594");
 
   assert.equal(sg96.id, "SG-000096");
-  assert.equal(sg96.program, "ORCEL-P20");
+  assert.equal(sg96.program, "DESKAL-P20");
   assert.equal(sg96.state, "GRAIN");
   assert.equal(sg96.base, "7e0f93d11e9be27903d539d2f45bb2aba5fc56c0");
   assert.deepEqual(sg96.dependencies, ["SG-000095"]);

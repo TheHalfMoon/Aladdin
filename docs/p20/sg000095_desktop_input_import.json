@@ -1,7 +1,7 @@
 {
-  "schema": "orcel-p20-sg000095-desktop-input-import/1",
+  "schema": "deskal-p20-sg000095-desktop-input-import/1",
   "grain": "SG-000095",
-  "program": "ORCEL-P20",
+  "program": "DESKAL-P20",
   "activation_base": "5a86440021d70c8abb021c2042adc6ee1108471e",
   "donor": {
     "repository": "opensymph/open-computer-use",
@@ -15,26 +15,26 @@
       "source": "apps/OpenComputerUseWindows/native_actions.go",
       "blob": "25c2482d9d0e6b82c890ecf07956643b88bbf97f",
       "reuse": "COPY_ADAPT",
-      "destination": "apps/orcel-computer-host/native_actions_windows.go",
+      "destination": "apps/deskal-computer-host/native_actions_windows.go",
       "purpose": "semantic UIA/background action mechanics plus bounded target action dispatch",
-      "modification_boundary": "remove donor authority flags/public tool assumptions; bind actions to Orcel typed identities, FullControlLease, approvals, freshness, protected-surface policy, result states, and private-host protocol"
+      "modification_boundary": "remove donor authority flags/public tool assumptions; bind actions to Deskal typed identities, FullControlLease, approvals, freshness, protected-surface policy, result states, and private-host protocol"
     },
     {
       "source": "apps/OpenComputerUseWindows/native_win32.go",
       "blob": "e94ce44c7e76ce45035dfe584c883cab16babdf0",
       "reuse": "COPY_ADAPT",
-      "destination": "apps/orcel-computer-host/native_input_windows.go",
+      "destination": "apps/deskal-computer-host/native_input_windows.go",
       "purpose": "SendInput event packing, virtual-screen normalization, mouse move/click/drag/scroll, Unicode typing, and bounded key/hotkey resolution",
       "modification_boundary": "copy only the input primitives needed by the private host; preserve Windows/Meta denial; reject background PostMessage mutation, launch, unrelated capture, and other public-runtime helpers",
       "additional_destinations": [
-        "apps/orcel-computer-host/native_window_actions_windows.go"
+        "apps/deskal-computer-host/native_window_actions_windows.go"
       ]
     },
     {
       "source": "apps/OpenComputerUseWindows/desktop_windows.go",
       "blob": "59466d669c1bfea13a15dfc371d9eceb471f21bd",
       "reuse": "COPY_ADAPT",
-      "destination": "apps/orcel-computer-host/native_input_windows.go",
+      "destination": "apps/deskal-computer-host/native_input_windows.go",
       "purpose": "cursor position and generalized mouse-drag helper only",
       "modification_boundary": "copy only cursor and input primitives; reject whole-desktop capture, recorder/ffmpeg, detached-process, and hard-termination sections"
     },
@@ -42,24 +42,24 @@
       "source": "apps/OpenComputerUseWindows/input_helpers.go",
       "blob": "a41a65cabfda87ced036fe8ad05b25cd17729dc6",
       "reuse": "COPY_ADAPT",
-      "destination": "apps/orcel-computer-host/native_input_windows.go",
+      "destination": "apps/deskal-computer-host/native_input_windows.go",
       "purpose": "modifier, key, Unicode typing, hold, and batching normalization",
-      "modification_boundary": "adapt only bounded key/modifier/text normalization into the Orcel-owned native input file; do not import donor CLI, authority, or unrelated helper surface"
+      "modification_boundary": "adapt only bounded key/modifier/text normalization into the Deskal-owned native input file; do not import donor CLI, authority, or unrelated helper surface"
     },
     {
       "source": "apps/OpenComputerUseWindows/desktop.go",
       "blob": "39512b3d0ca5e18b07e5f1c31c658198b74dfe84",
       "reuse": "REFERENCE",
       "destination": "none",
-      "purpose": "reference action vocabulary/parsing only where Orcel lacks an owned equivalent",
+      "purpose": "reference action vocabulary/parsing only where Deskal lacks an owned equivalent",
       "modification_boundary": "do not copy screenshot, record, pidfile, ffmpeg, or CLI/public command surface"
     }
   ],
-  "reused_orcel_authority": [
-    "crates/orcel-policy/src/full_control.rs",
-    "crates/orcel-provider-uia/src/lib.rs",
-    "crates/orcel-provider-uia/src/computer_host.rs",
-    "apps/orcel-computer-host"
+  "reused_deskal_authority": [
+    "crates/qdral-policy/src/full_control.rs",
+    "crates/qdral-provider-uia/src/lib.rs",
+    "crates/qdral-provider-uia/src/computer_host.rs",
+    "apps/deskal-computer-host"
   ],
   "private_protocol": {
     "base_operations": [
@@ -128,9 +128,9 @@
     "implementation_base": "941dfd504e75b578c091e8819ef949bcce8029ad",
     "donor_runtime_imported": true,
     "imported_runtime_files": [
-      "apps/orcel-computer-host/native_actions_windows.go",
-      "apps/orcel-computer-host/native_input_windows.go",
-      "apps/orcel-computer-host/native_window_actions_windows.go"
+      "apps/deskal-computer-host/native_actions_windows.go",
+      "apps/deskal-computer-host/native_input_windows.go",
+      "apps/deskal-computer-host/native_window_actions_windows.go"
     ],
     "host_operations_added": [
       "cursor_position",

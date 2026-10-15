@@ -53,8 +53,8 @@ const CodePanel = () => (
   }
 }`}</code></pre>
     <div className="compat-note">
-      <span>Compatibility note</span>
-      <p><code>orcel</code> remains the retained CLI identifier. Orcel is the product.</p>
+      <span>Identity note</span>
+      <p><code>orcel</code> is the current CLI identifier. Prior installations and trusted state are not silently migrated.</p>
     </div>
   </div>
 );

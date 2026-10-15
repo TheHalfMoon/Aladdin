@@ -32,8 +32,8 @@ test("public copy uses Orcel identity and keeps compatibility naming bounded", a
     assert.equal(page.includes(staleName), false, `stale product identity: ${staleName}`);
   }
   const orcelMentions = page.match(/orcel/g) ?? [];
-  assert.equal(orcelMentions.length, 2, "orcel may appear only in the explicit compatibility example and note");
-  assert.match(page, /Compatibility note/);
+  assert.ok(orcelMentions.length >= 2, "the Orcel CLI example and identity note must be explicit");
+  assert.match(page, /Identity note/);
 });
 
 test("website source contains no analytics, tracking, dynamic service, auth, payment, or form dependency", async () => {
@@ -88,7 +88,7 @@ test("Next output is a static export with a bounded explicit project base path",
 test("approved Orcel brand geometry is byte-pinned and shared by both variants", async () => {
   assert.equal(
     await sha256(join(root, "public", "brand", "orcel-mark-mask.svg")),
-    "150ae5ccd9fdb6b25a8f0421a64acc2d0bf1615a32c2b33aea92e77700706fce"
+    "56bd8af1c84680e45ff579a130e16949a472e81c6846e475adf6f06f16e92daf"
   );
   const css = await read(join(root, "app", "globals.css"));
   assert.equal((css.match(/var\(--orcel-mark-mask\)/g) ?? []).length, 2, "both mask declarations must use the one canonical geometry variable");

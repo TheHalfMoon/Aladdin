@@ -1,7 +1,7 @@
 {
-  "schema": "orcel-p20-sg000096-shell-session-import/1",
+  "schema": "deskal-p20-sg000096-shell-session-import/1",
   "grain": "SG-000096",
-  "program": "ORCEL-P20",
+  "program": "DESKAL-P20",
   "activation_base": "7e0f93d11e9be27903d539d2f45bb2aba5fc56c0",
   "source_issue": 260,
   "donor": {
@@ -9,16 +9,16 @@
     "commit": "bc1e944e30302e0022d49f418d55563dd74a162c",
     "license": "MIT",
     "license_blob_sha": "cc6ce4fa68f26cd5db3dc1ff83c8163094f28451",
-    "notice_requirement": "Retain original copyright, MIT permission notice, and disclaimer with any COPY_ADAPT; add Orcel source-tree and binary notices before importing code."
+    "notice_requirement": "Retain original copyright, MIT permission notice, and disclaimer with any COPY_ADAPT; add Deskal source-tree and binary notices before importing code."
   },
   "selected": [
     {
       "source": "src/terminal-manager.ts",
       "blob": "528e2872754315751dc1559922bbf9764cdcd702",
       "reuse": "COPY_ADAPT",
-      "destination": "crates/orcel-provider-process/src/session.rs",
+      "destination": "crates/qdral-provider-process/src/session.rs",
       "purpose": "Bounded session registry, stdin framing, separate output-ring semantics and completed-session lifecycle",
-      "boundary": "Port semantics to Orcel-owned typed session identity, existing execution limits and Windows job supervision; remove donor shell:false fallback, telemetry, uncontrolled buffer and environment assumptions."
+      "boundary": "Port semantics to Deskal-owned typed session identity, existing execution limits and Windows job supervision; remove donor shell:false fallback, telemetry, uncontrolled buffer and environment assumptions."
     },
     {
       "source": "src/handlers/terminal-handlers.ts",
@@ -26,7 +26,7 @@
       "reuse": "REFERENCE",
       "destination": "None at activation",
       "purpose": "Session action vocabulary and request/response shape reference",
-      "boundary": "No donor MCP wrapper, tools/list, public server or permissive tool schema; own MCP tools remain gated by Orcel policy."
+      "boundary": "No donor MCP wrapper, tools/list, public server or permissive tool schema; own MCP tools remain gated by Deskal policy."
     },
     {
       "source": "src/handlers/process-handlers.ts",
@@ -61,13 +61,13 @@
       "boundary": "Output prompt regex is never proof of child exit, session completion, authorization or dispatch success."
     }
   ],
-  "reused_orcel": [
-    "crates/orcel-provider-process/src/lib.rs",
-    "crates/orcel-policy/src/executable_registry.rs",
-    "crates/orcel-policy/src/full_control.rs",
-    "crates/orcel-policy/src/full_control_store.rs",
-    "crates/orcel-lifecycle/src/full_control.rs",
-    "crates/orceld/src"
+  "reused_deskal": [
+    "crates/qdral-provider-process/src/lib.rs",
+    "crates/qdral-policy/src/executable_registry.rs",
+    "crates/qdral-policy/src/full_control.rs",
+    "crates/qdral-policy/src/full_control_store.rs",
+    "crates/qdral-lifecycle/src/full_control.rs",
+    "crates/qdrald/src"
   ],
   "excluded_features": [
     "donor public MCP/catalog/service",

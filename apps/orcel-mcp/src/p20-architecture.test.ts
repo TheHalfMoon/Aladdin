@@ -92,9 +92,9 @@ const EXPECTED_DONORS: Record<string, { repository: string; revision: string; li
 };
 
 test("SG-000092 activation evidence is exact and authority-neutral", () => {
-  assert.equal(freeze.schema, "orcel-p20-architecture-freeze/1");
+  assert.equal(freeze.schema, "deskal-p20-architecture-freeze/1");
   assert.equal(freeze.grain, "SG-000092");
-  assert.equal(freeze.program, "ORCEL-P20");
+  assert.equal(freeze.program, "DESKAL-P20");
   assert.equal(freeze.canonical_base, "ed82cb4c976d4169fd4f81327be62d37dd5ea0a7");
   assert.equal(freeze.activation.pr, 241);
   assert.equal(freeze.activation.base, "835200a90fd47425ff3ad40b5b8815dc8ad7871c");
@@ -188,7 +188,7 @@ test("SG-000094 and SG-000095 are closed and SG-000096 is the only active P20 gr
     }
   }
   // SG-000108 (ORCEL-F3) runs in parallel by founder decision (issue #290)
-  // and is outside ORCEL-P20; no other grain may be open.
+  // and is outside DESKAL-P20; no other grain may be open.
   assert.deepEqual(open.sort(), ["SG-000096", "SG-000108"]);
   const sg108 = readJson<{
     program: string;
@@ -196,7 +196,7 @@ test("SG-000094 and SG-000095 are closed and SG-000096 is the only active P20 gr
     planning_issue: number;
     authority_delta: { activation: string; privileged: string; ui_input: string };
   }>(".specgrain/specs/SG-000108.json");
-  assert.equal(sg108.program, "ORCEL-F3");
+  assert.equal(sg108.program, "ALADDIN-F3");
   assert.equal(sg108.state, "GRAIN");
   assert.equal(sg108.planning_issue, 290);
   // The parallel activation grants nothing by itself.
@@ -234,7 +234,7 @@ test("SG-000094 and SG-000095 are closed and SG-000096 is the only active P20 gr
     canonical_evidence: { signed_dco_commits: number; unresolved_review_threads: number };
   }>(".specgrain/specs/SG-000095.json");
   assert.equal(sg95.id, "SG-000095");
-  assert.equal(sg95.program, "ORCEL-P20");
+  assert.equal(sg95.program, "DESKAL-P20");
   assert.equal(sg95.state, "CLOSED");
   assert.equal(sg95.base, "5a86440021d70c8abb021c2042adc6ee1108471e");
   assert.deepEqual(sg95.dependencies, ["SG-000094"]);
@@ -250,7 +250,7 @@ test("SG-000094 and SG-000095 are closed and SG-000096 is the only active P20 gr
   const sg96 = readJson<{ id: string; title: string; program: string; state: string; base: string; dependencies: string[]; planning_issue: number; authority_delta: { activation: string; safe: string }; scope: { exclude: string[] } }>(".specgrain/specs/SG-000096.json");
   assert.equal(sg96.id, "SG-000096");
   assert.equal(sg96.title, "Shell and process sessions");
-  assert.equal(sg96.program, "ORCEL-P20");
+  assert.equal(sg96.program, "DESKAL-P20");
   assert.equal(sg96.state, "GRAIN");
   assert.equal(sg96.base, "7e0f93d11e9be27903d539d2f45bb2aba5fc56c0");
   assert.deepEqual(sg96.dependencies, ["SG-000095"]);
@@ -279,7 +279,7 @@ test("SG-000096 donor freeze is attributable, local-only and not executable at a
     authority_profile: { safe: string; full_user: string; full_admin: boolean; persistent_admin: boolean; remote_full_control: boolean; delegated_mcp_self_grant: boolean };
     activation_state: { donor_runtime_imported: boolean; local_shell_executor_implemented: boolean; full_user_shell_authority_enabled: boolean; mcp_tools_added: string[]; new_dependencies: string[]; new_listeners: string[]; release_payload_changed: boolean };
   }>("docs/p20/sg000096_shell_session_import.json");
-  assert.equal(manifest.schema, "orcel-p20-sg000096-shell-session-import/1");
+  assert.equal(manifest.schema, "deskal-p20-sg000096-shell-session-import/1");
   assert.equal(manifest.grain, "SG-000096");
   assert.equal(manifest.activation_base, "7e0f93d11e9be27903d539d2f45bb2aba5fc56c0");
   assert.equal(manifest.source_issue, 260);
@@ -329,7 +329,7 @@ test("SG-000094 donor selection is exact and keeps input paths deferred", () => 
     packaging: { included_in_release: boolean; owner_for_unified_packaging: string };
   }>("docs/p20/sg000094_windows_host_import.json");
 
-  assert.equal(manifest.schema, "orcel-p20-sg000094-host-import/1");
+  assert.equal(manifest.schema, "deskal-p20-sg000094-host-import/1");
   assert.equal(manifest.grain, "SG-000094");
   assert.equal(manifest.donor.repository, "opensymph/open-computer-use");
   assert.equal(manifest.donor.commit, "5b433b98019c18201a15d11e8c3cb0010879a3d8");
@@ -425,7 +425,7 @@ test("SG-000095 donor selection is exact, reuse-first, and rejects recording/pri
     };
   }>("docs/p20/sg000095_desktop_input_import.json");
 
-  assert.equal(manifest.schema, "orcel-p20-sg000095-desktop-input-import/1");
+  assert.equal(manifest.schema, "deskal-p20-sg000095-desktop-input-import/1");
   assert.equal(manifest.grain, "SG-000095");
   assert.equal(manifest.activation_base, "5a86440021d70c8abb021c2042adc6ee1108471e");
   assert.equal(manifest.donor.repository, "opensymph/open-computer-use");
