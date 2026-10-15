@@ -34,14 +34,17 @@ impl EngineKind {
 /// every confinement, policy and network-endpoint probe re-runs per
 /// version, because a new engine can change how it honours a flag.
 /// - Edge 155: the evidence host, with the #324 leak control required.
-/// - Chrome 154: CI's windows-latest runner, where the same suite passes
-///   (the leak control is not required there: the runner has no account
-///   or LAN devices to leak to).
+/// - Chrome 154: qualified by earlier CI evidence.
+/// - Chrome 155: updated windows-latest runner; qualification requires this
+///   change's full native suite and endpoint probes to pass before merge.
 ///
 /// A new major is added only by a PR whose own native-suite run passes on
 /// it. Any other kind or major is refused at launch with a typed error.
-pub const QUALIFIED_WORKER_ENGINES: &[(EngineKind, u32)] =
-    &[(EngineKind::Edge, 155), (EngineKind::Chromium, 154)];
+pub const QUALIFIED_WORKER_ENGINES: &[(EngineKind, u32)] = &[
+    (EngineKind::Edge, 155),
+    (EngineKind::Chromium, 154),
+    (EngineKind::Chromium, 155),
+];
 
 /// A verified engine executable.
 #[derive(Debug, Clone)]
@@ -517,6 +520,7 @@ mod tests {
         assert!(engine(EngineKind::Edge, "155.0.4283.45").worker_qualified());
         assert_eq!(engine(EngineKind::Edge, "155.0.4283.45").major(), Some(155));
         assert!(engine(EngineKind::Chromium, "154.0.8037.58").worker_qualified());
+        assert!(engine(EngineKind::Chromium, "155.0.8059.40").worker_qualified());
         for (kind, version) in [
             (EngineKind::Edge, "154.0.1.2"),
             (EngineKind::Edge, "156.0.1.2"),

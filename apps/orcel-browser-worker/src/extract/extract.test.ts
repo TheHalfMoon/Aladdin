@@ -69,22 +69,32 @@ function snapshot(url: string, ...body: Spec[]): LayoutSnapshot {
     };
     styles.push(CONTENT_STYLES.map((name) => id(values[name] ?? "")));
   };
-  const walk = (spec: Spec, parent: number, rendered: boolean, visibility: string): void => {
-    if (spec.kind === "shadow") {
-      const at = add(parent, 11, "#document-fragment", undefined, {});
-      for (const child of spec.children) walk(child, at, rendered, visibility);
-      return;
+  const walk = (root: Spec, initialParent: number, initialRendered: boolean, initialVisibility: string): void => {
+    // Keep fixture construction independent of the engine's recursion limit.
+    const pending: Array<{ spec: Spec; parent: number; rendered: boolean; visibility: string }> =
+      [{ spec: root, parent: initialParent, rendered: initialRendered, visibility: initialVisibility }];
+    while (pending.length > 0) {
+      const { spec, parent, rendered, visibility } = pending.pop()!;
+      if (spec.kind === "shadow") {
+        const at = add(parent, 11, "#document-fragment", undefined, {});
+        for (let i = spec.children.length - 1; i >= 0; i--) {
+          pending.push({ spec: spec.children[i]!, parent: at, rendered, visibility });
+        }
+        continue;
+      }
+      if (spec.kind === "text") {
+        const at = add(parent, 3, "#text", spec.text, {});
+        if (rendered && spec.style.rendered !== false) layout(at, { visibility: spec.style.visibility ?? visibility, opacity: "1" });
+        continue;
+      }
+      const at = add(parent, 1, spec.tag.toUpperCase(), undefined, spec.attrs);
+      const isRendered = rendered && spec.style.rendered !== false;
+      const ownVisibility = spec.style.visibility ?? visibility;
+      if (isRendered) layout(at, { visibility: ownVisibility, opacity: spec.style.opacity ?? "1" });
+      for (let i = spec.children.length - 1; i >= 0; i--) {
+        pending.push({ spec: spec.children[i]!, parent: at, rendered: isRendered, visibility: ownVisibility });
+      }
     }
-    if (spec.kind === "text") {
-      const at = add(parent, 3, "#text", spec.text, {});
-      if (rendered && spec.style.rendered !== false) layout(at, { visibility: spec.style.visibility ?? visibility, opacity: "1" });
-      return;
-    }
-    const at = add(parent, 1, spec.tag.toUpperCase(), undefined, spec.attrs);
-    const isRendered = rendered && spec.style.rendered !== false;
-    const ownVisibility = spec.style.visibility ?? visibility;
-    if (isRendered) layout(at, { visibility: ownVisibility, opacity: spec.style.opacity ?? "1" });
-    for (const child of spec.children) walk(child, at, isRendered, ownVisibility);
   };
   const doc = add(-1, 9, "#document", undefined, {});
   const html = add(doc, 1, "HTML", undefined, {});
