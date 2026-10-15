@@ -529,7 +529,7 @@ mod tests {
             (EngineKind::Edge, ""),
             (EngineKind::Edge, "x155.0"),
             // Each kind has its own qualified majors.
-            (EngineKind::Chromium, "155.0.4283.45"),
+            (EngineKind::Chromium, "156.0.4283.45"),
             (EngineKind::Chromium, "153.0.1.2"),
             (EngineKind::Edge, "154.0.8037.58"),
         ] {
