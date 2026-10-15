@@ -520,10 +520,7 @@ mod tests {
     use super::*;
 
     fn temp(label: &str) -> PathBuf {
-        std::env::temp_dir().join(format!(
-            "orcel-full-control-{label}-{}",
-            std::process::id()
-        ))
+        std::env::temp_dir().join(format!("orcel-full-control-{label}-{}", std::process::id()))
     }
 
     fn key() -> [u8; 32] {

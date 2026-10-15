@@ -79,10 +79,7 @@ fn session_id(pid: u32, creation_time: u64, image: &str) -> String {
     hasher.update(image.as_bytes());
     hasher.update(crate::nonce().as_bytes());
     let digest = lower_hex(&hasher.finalize());
-    format!(
-        "orcel-session-{pid}-{creation_time:016x}-{}",
-        &digest[..32]
-    )
+    format!("orcel-session-{pid}-{creation_time:016x}-{}", &digest[..32])
 }
 
 #[cfg(any(windows, test))]
@@ -386,8 +383,7 @@ mod tests {
     fn grant_digest_changes_on_every_security_binding() {
         let session = RuntimeSessionRecord {
             schema: RUNTIME_SESSION_SCHEMA.into(),
-            session_id: "orcel-session-42-0000000000001234-0123456789abcdef0123456789abcdef"
-                .into(),
+            session_id: "orcel-session-42-0000000000001234-0123456789abcdef0123456789abcdef".into(),
             owner_pid: 42,
             owner_creation_time: 0x1234,
             owner_image: "C:/Orcel/orcel.exe".into(),

@@ -2,6 +2,22 @@
 
 Effective: 2026-10-15
 
+Status: ACTIVE PRODUCT IDENTITY
+
+## Canonical identifiers
+
+- Product: `Orcel`
+- Root package: `orcel`
+- Public plugin name: `orcel`
+- CLI command: `orcel`
+- Local daemon: `orceld`
+- MCP package: `@orcel/mcp`
+- Relay package: `@orcel/relay`
+- Environment-variable prefix: `ORCEL_`
+- OAuth scope prefix: `orcel.`
+- Repository identity: `TheHalfMoon/Orcel`
+
+
 The active product and GitHub repository are named **Orcel**.
 Canonical repository: https://github.com/TheHalfMoon/Orcel
 Default branch: `main`

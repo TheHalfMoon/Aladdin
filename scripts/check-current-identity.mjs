@@ -9,7 +9,8 @@ const supersededUnqualified = /Quntal|QUNTAL|quntal/;
 const historicalContentAllowed = (path) =>
   path === "docs/identity/QUNTAL_RENAME.md" ||
   path === "docs/identity/ORCEL_RENAME.md" ||
-  path === "docs/identity/ORCEL_RENAME.md" ||
+  path === "docs/identity/ORCEL_HISTORY_DESKAL.md" ||
+  path === "docs/identity/ORCEL_HISTORY_QDRAL.md" ||
   path === "docs/canonical/CURRENT.md" ||
   path === "docs/p16/sg000066_exit_evidence.json" ||
   path === ".specgrain/canonical-evidence.json" ||
@@ -64,7 +65,8 @@ for (const required of [
   "crates/orceld/Cargo.toml",
   "crates/orcel-lifecycle/Cargo.toml",
   "docs/identity/ORCEL_RENAME.md",
-  "docs/identity/ORCEL_RENAME.md",
+  "docs/identity/ORCEL_HISTORY_DESKAL.md",
+  "docs/identity/ORCEL_HISTORY_QDRAL.md",
   ".specgrain/specs/SG-000067.json"
 ]) {
   if (!existsSync(required)) throw new Error(`missing required Orcel or compatibility path: ${required}`);
