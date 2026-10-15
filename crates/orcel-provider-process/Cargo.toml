@@ -1,0 +1,16 @@
+[package]
+name = "orcel-provider-process"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+
+[dev-dependencies]
+orcel-policy = { path = "../orcel-policy" }
+orcel-lifecycle = { path = "../orcel-lifecycle" }
+orcel-approval = { path = "../orcel-approval", features = ["test-support"] }
+serde_json.workspace = true
+sha2.workspace = true

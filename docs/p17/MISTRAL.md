@@ -1,23 +1,23 @@
-# Qdral with Mistral Vibe (SG-000069)
+# Orcel with Mistral Vibe (SG-000069)
 
-Status: SOFTWARE QUALIFICATION FOR QDRAL-P17. Directory and account states are recorded only in
+Status: SOFTWARE QUALIFICATION FOR ORCEL-P17. Directory and account states are recorded only in
 `distribution/mistral/distribution-state.json` from directly observed Mistral evidence.
 
 ## Vibe Code CLI (local)
 
 Use `examples/mcp-clients/vibe-code-config.toml` in Vibe Code's `config.toml`:
 
-- `stdio`: `command = "qdral"`, `args = ["mcp", "stdio"]` (preferred: no secret, no port);
-- `streamable-http` to the loopback listener `http://127.0.0.1:<port>/mcp` started by `qdral mcp serve`, with the local
-  bearer supplied through `api_key_env = "QDRAL_LOOPBACK_TOKEN"`, `api_key_header = "Authorization"`, and
+- `stdio`: `command = "orcel"`, `args = ["mcp", "stdio"]` (preferred: no secret, no port);
+- `streamable-http` to the loopback listener `http://127.0.0.1:<port>/mcp` started by `orcel mcp serve`, with the local
+  bearer supplied through `api_key_env = "ORCEL_LOOPBACK_TOKEN"`, `api_key_header = "Authorization"`, and
   `api_key_format = "Bearer {token}"`; the token never appears in the file.
 
-Both serve the local `desktop_structured` profile through qdrald's local policy and approval.
+Both serve the local `desktop_structured` profile through orceld's local policy and approval.
 
 ### Provider limitation
 
-The Vibe Code CLI does not support MCP servers that require OAuth. It therefore has no remote path to a Qdral relay.
-Qdral deliberately does not add a static API key or bearer credential to the public relay: the relay accepts only OAuth
+The Vibe Code CLI does not support MCP servers that require OAuth. It therefore has no remote path to a Orcel relay.
+Orcel deliberately does not add a static API key or bearer credential to the public relay: the relay accepts only OAuth
 access tokens bound to its resource, and tests prove static bearer, loopback-style, and Basic credentials receive 401 with
 an OAuth challenge.
 

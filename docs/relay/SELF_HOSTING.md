@@ -1,8 +1,8 @@
-# Self-Hosting the Deskal Relay
+# Self-Hosting the Orcel Relay
 
 Status: OPERATOR GUIDE (SG-000057)
 
-The Deskal relay is open source (Apache-2.0) and self-hosting is the canonical,
+The Orcel relay is open source (Apache-2.0) and self-hosting is the canonical,
 zero-cost way to give a hosted AI client remote access to your own computer.
 Nothing in this guide requires a paid API, paid cloud, paid database, paid
 identity provider, or paid relay.
@@ -12,12 +12,12 @@ identity provider, or paid relay.
 - It terminates the public MCP endpoint (`/mcp`), runs the OAuth 2.1
   authorization server for device-backed pairing, and holds the outbound-only
   channel that your computer opens to it.
-- Your computer never opens an inbound port. `qdral remote connect` only makes
+- Your computer never opens an inbound port. `orcel remote connect` only makes
   outbound HTTPS requests to the relay.
 - The relay sees MCP requests and results in transit while it forwards them.
   It never stores payloads, and logs carry route and status classes only.
 - The relay cannot grant anything on your computer. Every remote call still
-  needs an active local remote-session lease (`qdral remote allow`, Windows
+  needs an active local remote-session lease (`orcel remote allow`, Windows
   Hello, at most 15 minutes) plus the normal workspace policy and approvals.
 - When a quota is exhausted the relay fails closed with
   `REMOTE_RATE_LIMITED`. It never scales out or spends money.
@@ -34,16 +34,16 @@ identity provider, or paid relay.
 ## Run with Docker
 
 ```sh
-docker build -f apps/qdral-relay/Dockerfile -t qdral-relay .
-mkdir -p /srv/qdral-relay/config /srv/qdral-relay/state
-cp apps/qdral-relay/relay.example.json /srv/qdral-relay/config/relay.json
+docker build -f apps/orcel-relay/Dockerfile -t orcel-relay .
+mkdir -p /srv/orcel-relay/config /srv/orcel-relay/state
+cp apps/orcel-relay/relay.example.json /srv/orcel-relay/config/relay.json
 # edit publicOrigin to your HTTPS origin; keep listenHost 127.0.0.1 behind a proxy,
 # or set it to 0.0.0.0 inside the container and publish only to 127.0.0.1.
-docker run -d --name qdral-relay --restart unless-stopped \
+docker run -d --name orcel-relay --restart unless-stopped \
   -p 127.0.0.1:8787:8787 \
-  -v /srv/qdral-relay/config:/etc/qdral-relay:ro \
-  -v /srv/qdral-relay/state:/var/lib/qdral-relay \
-  qdral-relay
+  -v /srv/orcel-relay/config:/etc/orcel-relay:ro \
+  -v /srv/orcel-relay/state:/var/lib/orcel-relay \
+  orcel-relay
 ```
 
 The image is built from a digest-pinned `node:24.19.0-alpine3.23` base and
@@ -54,7 +54,7 @@ runs as the unprivileged `node` user.
 ```sh
 npm ci --ignore-scripts
 npm run build
-node apps/qdral-relay/dist/main.js --config /etc/qdral-relay/relay.json
+node apps/orcel-relay/dist/main.js --config /etc/orcel-relay/relay.json
 ```
 
 ## TLS termination (example: Caddy)
@@ -102,20 +102,20 @@ incident runbook, and recovery objectives are in
 
 ## Linking a computer and an AI client
 
-1. On the computer: `qdral remote enable --relay https://relay.example.com`
+1. On the computer: `orcel remote enable --relay https://relay.example.com`
    (Windows Hello).
 2. In the AI client, add a custom MCP connector with the URL
    `https://relay.example.com/mcp`. The client discovers the authorization
    server, registers, and opens the authorization page.
-3. On the computer: `qdral remote pair` (Windows Hello). Enter the code it
+3. On the computer: `orcel remote pair` (Windows Hello). Enter the code it
    prints on the authorization page, then type `yes` on the computer after
    checking the client name, return address, and scopes.
-4. On the computer: `qdral remote connect` (keep it running) and
-   `qdral remote allow --connection <rc-...>` whenever you want to allow a
+4. On the computer: `orcel remote connect` (keep it running) and
+   `orcel remote allow --connection <rc-...>` whenever you want to allow a
    finite remote session.
 
-Revoke at any time with `qdral remote revoke`, or everything at once with
-`qdral emergency-revoke`.
+Revoke at any time with `orcel remote revoke`, or everything at once with
+`orcel emergency-revoke`.
 
 ## Health
 

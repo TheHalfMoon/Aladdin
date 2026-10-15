@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // SG-000067: build and validate the OpenAI plugin package from source.
-//   npm run build -w @qdral/mcp
+//   npm run build -w @orcel/mcp
 //   node scripts/build-openai-plugin.mjs --mcp-url https://<your-relay-host>/mcp --out <dir>
 // The relay endpoint is supplied at build time and never committed.
 import { mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
@@ -8,7 +8,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const repo = join(dirname(fileURLToPath(import.meta.url)), "..");
-const dist = (name) => pathToFileURL(join(repo, "apps", "qdral-mcp", "dist", name)).href;
+const dist = (name) => pathToFileURL(join(repo, "apps", "orcel-mcp", "dist", name)).href;
 const { buildOpenAIPluginPackage, validateOpenAIPluginPackage } = await import(dist("openai_plugin.js"));
 const { discoverTools } = await import(dist("discovery.js"));
 
@@ -26,7 +26,7 @@ if (mcpUrl === undefined || out === undefined) {
 
 const source = join(repo, "distribution", "openai");
 const config = JSON.parse(readFileSync(join(source, "plugin.config.json"), "utf8"));
-const version = JSON.parse(readFileSync(join(repo, "apps", "qdral-mcp", "package.json"), "utf8")).version;
+const version = JSON.parse(readFileSync(join(repo, "apps", "orcel-mcp", "package.json"), "utf8")).version;
 const reviewFiles = Object.fromEntries(
   readdirSync(join(source, "review")).map((name) => [name, readFileSync(join(source, "review", name), "utf8")])
 );

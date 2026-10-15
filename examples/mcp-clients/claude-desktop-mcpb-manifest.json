@@ -1,22 +1,22 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-08-26/mcpb.manifest.schema.json",
   "manifest_version": "0.3",
-  "name": "qdral",
-  "display_name": "Deskal",
+  "name": "orcel",
+  "display_name": "Orcel",
   "version": "0.2.0",
   "description": "Local-first MCP gateway with 40 bounded tools and local approval for computer changes.",
-  "long_description": "Deskal exposes 40 bounded tools for trusted workspace files, local Git, registered argv-only processes, structured desktop observation and Full User desktop control, clipboard access, and approved public HTTPS fetches through a local policy kernel. Full User desktop authority is granted only through a local STRONG-presence flow and is never grantable by MCP or remote callers. This extension launches the installed Deskal entrypoint over stdio; no tunnel is required.",
+  "long_description": "Orcel exposes 40 bounded tools for trusted workspace files, local Git, registered argv-only processes, structured desktop observation and Full User desktop control, clipboard access, and approved public HTTPS fetches through a local policy kernel. Full User desktop authority is granted only through a local STRONG-presence flow and is never grantable by MCP or remote callers. This extension launches the installed Orcel entrypoint over stdio; no tunnel is required.",
   "author": {
     "name": "TheHalfMoon",
-    "url": "https://github.com/TheHalfMoon/Deskal"
+    "url": "https://github.com/TheHalfMoon/Orcel"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/TheHalfMoon/Deskal.git"
+    "url": "https://github.com/TheHalfMoon/Orcel.git"
   },
-  "homepage": "https://github.com/TheHalfMoon/Deskal",
-  "documentation": "https://github.com/TheHalfMoon/Deskal#readme",
-  "support": "https://github.com/TheHalfMoon/Deskal/issues",
+  "homepage": "https://github.com/TheHalfMoon/Orcel",
+  "documentation": "https://github.com/TheHalfMoon/Orcel#readme",
+  "support": "https://github.com/TheHalfMoon/Orcel/issues",
   "license": "Apache-2.0",
   "keywords": [
     "files",
@@ -26,9 +26,9 @@
   ],
   "server": {
     "type": "binary",
-    "entry_point": "qdral.exe",
+    "entry_point": "orcel.exe",
     "mcp_config": {
-      "command": "qdral",
+      "command": "orcel",
       "args": [
         "mcp",
         "stdio"
@@ -186,7 +186,7 @@
     },
     {
       "name": "system_status",
-      "description": "Read Deskal daemon status."
+      "description": "Read Orcel daemon status."
     },
     {
       "name": "web_fetch",

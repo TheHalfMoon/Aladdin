@@ -1,6 +1,6 @@
 # SG-000071 Cross-Provider Isolation Note
 
-Status: QUALIFICATION FOR QDRAL-P17
+Status: QUALIFICATION FOR ORCEL-P17
 SpecGrain: SG-000071
 Base: `27d03f13f937ec976c98192a6a0e93bfa4d3da8d`
 Date: 2026-10-04
@@ -9,11 +9,11 @@ Date: 2026-10-04
 
 ChatGPT-style and Claude-style OAuth clients register separately on one relay and pair the same computer, producing two
 remote connections on one device served by one outbound uplink. The P15 two-tenant suite
-(`apps/qdral-relay/src/adversarial.test.ts`) continues to cover separate devices and principals.
+(`apps/orcel-relay/src/adversarial.test.ts`) continues to cover separate devices and principals.
 
 ## Proven negative cases
 
-Relay, real uplink (`apps/qdral-relay/src/self-host.test.ts`):
+Relay, real uplink (`apps/orcel-relay/src/self-host.test.ts`):
 
 - each provider's calls reach the device carrying only its own remote connection;
 - a provider's access token on the other provider's MCP session is unknown (404);
@@ -22,7 +22,7 @@ Relay, real uplink (`apps/qdral-relay/src/self-host.test.ts`):
 - revoking one provider's connection stops that provider without dispatching anything to the device, while the other
   provider keeps working; only an explicit device revoke ends every provider on that computer.
 
-qdrald lease gate (`crates/qdral-policy/src/remote_session.rs`, `cross_provider_contexts_never_share_a_lease`):
+orceld lease gate (`crates/orcel-policy/src/remote_session.rs`, `cross_provider_contexts_never_share_a_lease`):
 
 - with leases for two providers on one device, a context presenting one provider's connection with any other provider
   field (provider kind, client profile and revision, principal, device, device epoch, tool surface) is

@@ -3,7 +3,7 @@
 Status: PROPOSED; security review passed on PR #291. This record resolves
 the first two `open_questions` of `.specgrain/specs/SG-000108.json`. The
 record itself granted no authority and admitted no dependency. The frozen
-SG-000074 command line in `crates/qdral-browser-host/src/argv.rs` stays
+SG-000074 command line in `crates/orcel-browser-host/src/argv.rs` stays
 unchanged. Implementation progress is tracked at the end of this record.
 
 ## Evidence
@@ -261,7 +261,7 @@ absent from the shipped binaries. No runtime configuration may enable it.
 
 ## Implementation progress
 
-**Slice 1: host-side confinement contract** (`crates/qdral-browser-host/src/confinement.rs`).
+**Slice 1: host-side confinement contract** (`crates/orcel-browser-host/src/confinement.rs`).
 - `AdmittedDestination::admit(url, resolver)` is the only public
   constructor. It runs the existing `validate_navigation`, which resolves the
   name and pins its lowest public address with `select_public_address`. So
@@ -285,7 +285,7 @@ absent from the shipped binaries. No runtime configuration may enable it.
 bracketed IPv6 pin (`MAP six.example [::1]:<port>`) each reached only their
 fixture. Unmapped names failed with `ERR_PROXY_CONNECTION_FAILED`.
 
-**Slice 2a: private worker package** (`apps/qdral-browser-worker`). It is standalone, like `apps/web`, so the identity-pinned npm workspaces stay unchanged.
+**Slice 2a: private worker package** (`apps/orcel-browser-worker`). It is standalone, like `apps/web`, so the identity-pinned npm workspaces stay unchanged.
 - **Dependency.** `playwright-core` is exactly 1.63.0, with the admitted integrity. It is the only production package in the lockfile, has no install script and no runtime dependencies. All of this is checked mechanically against `dependency_admission`.
 - **Protocol.** SG-000074 framing (u32 LE length + JSON, 64 KiB) with a closed generation-1 vocabulary:
   - host → worker: `hello`, `launch {engine, profile_dir, argv, env}`, `ping`, `shutdown`;
@@ -312,7 +312,7 @@ fixture. Unmapped names failed with `ERR_PROXY_CONNECTION_FAILED`.
 - Worker environment allowlist: also exclude the OpenSSL start-up variables (`OPENSSL_CONF`, `OPENSSL_MODULES`, `OPENSSL_ENGINES`, `SSL_CERT_FILE`, `SSL_CERT_DIR`). The worker refuses them as a second line.
 - Release packaging (A2): the `playwright-core` NOTICE, the SBOM entry and provenance enter the release with the packaged worker. Packaging strips the `node_modules/.bin` link to the Playwright CLI, which is never exposed.
 
-**Slice 2b-i: native confinement probes in CI** (`apps/qdral-browser-worker/src/native.test.ts`). These run against the installed Edge through the root `npm test`, so the **Node / windows-latest** job produces real-engine evidence. On Windows a missing engine fails the suite. On other platforms the suite is skipped, because only Windows results count. The probes use owned loopback fixtures on port 443 and an argv the worker contract accepts.
+**Slice 2b-i: native confinement probes in CI** (`apps/orcel-browser-worker/src/native.test.ts`). These run against the installed Edge through the root `npm test`, so the **Node / windows-latest** job produces real-engine evidence. On Windows a missing engine fails the suite. On other platforms the suite is skipped, because only Windows results count. The probes use owned loopback fixtures on port 443 and an argv the worker contract accepts.
 
 1. **Lifecycle.** The worker drives the engine through `hello` → `launch` → `ping` → `shutdown`.
    - Exactly one browser process exists. Its OS command line, split with `CommandLineToArgvW` rules, equals `[engine, ...argv]`.
@@ -351,7 +351,7 @@ fixture. Unmapped names failed with `ERR_PROXY_CONNECTION_FAILED`.
 
 **Local result (Windows 11, Edge 155):** all 25 worker tests pass, 5 of them native, and the run exits cleanly in about 45 s.
 
-**Slice 2b-ii-a: host launcher** (`crates/qdral-browser-host/src/worker_launch.rs`, `worker_process.rs`). The launch sequence:
+**Slice 2b-ii-a: host launcher** (`crates/orcel-browser-host/src/worker_launch.rs`, `worker_process.rs`). The launch sequence:
 
 1. Validate the request. A missing Node or worker is typed `UnsupportedRuntime`; a missing engine is `NoEngine`.
 2. Apply the managed-policy precondition. Any policy, or an unreadable key, is typed `ManagedPolicy` and refuses before anything starts.
@@ -369,7 +369,7 @@ fixture. Unmapped names failed with `ERR_PROXY_CONNECTION_FAILED`.
    - that process's OS command line, read with `NtQueryInformationProcess` and split with `CommandLineToArgvW`, equals `[engine, …host argv]`;
    - a member that cannot be inspected is accepted only if it has left the job in the meantime.
 
-The engine in a launch request is a `discovery::Engine`, so only an engine that discovery verified (kind, version, publisher) can be launched. `node` and the worker entry point must come from Deskal's install records.
+The engine in a launch request is a `discovery::Engine`, so only an engine that discovery verified (kind, version, publisher) can be launched. `node` and the worker entry point must come from Orcel's install records.
 
 Verification runs once, when the launch completes. Afterwards, only the job limit and kill-on-close constrain the worker. The product caller must call `verify` again before any authority is granted for a navigation.
 
@@ -389,7 +389,7 @@ Shutdown asks for `bye` and waits for exit 0. It then terminates the job regardl
 | Silent worker | It is typed `LaunchFailed` after the handshake timeout, and its process is dead. |
 | Refused runtime | It is typed `UnsupportedRuntime`. |
 | Managed policy | `Populated` and `Unreadable` are typed `ManagedPolicy`, and nothing starts. |
-| Registry reader | A real test key under `HKCU\Software\QdralTest` is read as absent, then empty, then populated (by a value, and by a subkey alone), then absent. |
+| Registry reader | A real test key under `HKCU\Software\OrcelTest` is read as absent, then empty, then populated (by a value, and by a subkey alone), then absent. |
 
 **Findings:**
 - **Discovery defect (fixed here; SG-000074 path).** The engine version was probed by running `msedge.exe --version`. On Windows, Chromium prints no version for that, and instead hands the command to an already running browser session ("Opening in existing browser session."), so it can touch the user's personal profile. Discovery therefore always failed on Windows, which made SG-000074's `live_host_or_typed_unavailable_with_lifecycle` pass as "unavailable" without exercising the live host. The version is now read from the executable's version resource, without executing anything. On this host, discovery verifies Edge 155.0.4283.45 (publisher verified) and the SG-000074 live host launches.
@@ -402,7 +402,7 @@ Shutdown asks for `bye` and waits for exit 0. It then terminates the job regardl
 - **Unit variants in serde.** With `deny_unknown_fields`, serde still accepts unknown fields on unit variants of an internally tagged enum. The worker replies use empty struct variants instead. The SG-000074 host protocol (`proto.rs`: `Shutdown`, `Bye`) has the same looseness; it is tracked in #296.
 - **No crash-report uploads from a crash.** An abrupt worker kill leaves only Crashpad metadata (no report or dump), so a crash produces no upload candidate.
 
-**Slice 2b-ii-b, part 1: HTTPS-fixture probes** (`apps/qdral-browser-worker/src/native.test.ts`).
+**Slice 2b-ii-b, part 1: HTTPS-fixture probes** (`apps/orcel-browser-worker/src/native.test.ts`).
 
 The fixture origin is served over TLS on 127.0.0.1:443, advertising `alt-svc: h3`. Its certificate is a throwaway one, generated at test time with Git for Windows' OpenSSL, and only the direct test launches trust it (`--ignore-certificate-errors-spki-list`). The production argv carries no certificate flag. UDP listeners on 127.0.0.1:443 (the admitted name's pin) and 127.0.0.1:4433 (an IP literal) count datagrams.
 
@@ -506,7 +506,7 @@ A fresh-context judge's first round on these slices was BLOCK. The byte-safe dat
   - the content sniffs as PDF;
   - the size is within `MAX_TRANSFER_BYTES`.
 
-  The worker's suggested name (from Content-Disposition or the URL) is advisory and never decides the check, so a PDF-headed polyglot cannot be committed as `.cmd` or `.html`. Every other destination name goes through the general `validate_download_type` allowlist. "Inert" describes how Aladdin treats the bytes: the engine never renders them, and the host never opens or executes them; it only stores them.
+  The worker's suggested name (from Content-Disposition or the URL) is advisory and never decides the check, so a PDF-headed polyglot cannot be committed as `.cmd` or `.html`. Every other destination name goes through the general `validate_download_type` allowlist. "Inert" describes how Orcel treats the bytes: the engine never renders them, and the host never opens or executes them; it only stores them.
 - **Destination names.** `validate_relative_destination` additionally refuses:
   - a curated set of Unicode format characters (bidi controls, zero-width marks, the BOM, tag characters; not every Cf character), which could make a name display with another extension;
   - device names with trailing spaces before the extension (`con .pdf`), `COM0`–`COM9`/`LPT0`–`LPT9` including the superscript digits, and `CONIN$`, `CONOUT$` and `CLOCK$`;
@@ -538,7 +538,7 @@ A fresh-context judge's first round on these slices was BLOCK. The byte-safe dat
 - The host cannot see the HTTP method, the same limit as for activation.
 - A link whose server redirects, even within the same origin, cannot be downloaded. It fails closed, and the approval is spent.
 - A link with a fragment (`#...`) cannot be downloaded. It is refused before the approval is consumed.
-- A PDF can still contain active content. Aladdin does not render or open it, but a user who opens the stored file later is outside this boundary.
+- A PDF can still contain active content. Orcel does not render or open it, but a user who opens the stored file later is outside this boundary.
 - The junction check now has native tests (#307): junctions are created with `DeviceIoControl` and `FSCTL_SET_REPARSE_POINT`, with no shell.
 
 **Evidence (local, Edge 155), from the native journey E2E test on the HTTPS fixture** (`the_journey_downloads_the_latest_report_create_only_and_verified`):
@@ -577,7 +577,7 @@ A fresh-context judge's first round on this slice was BLOCK. The destination-nam
   - **Crash:** in a second lifetime, the worker is killed mid-download. The outcome is `WorkerExited`, the approval is spent, nothing is committed or staged, and every member dies. A later `navigate` reports `WorkerExited`, and `kill` cleans up as above.
 - **Known limits (follow-ups in #309).**
   - A worker that writes the staged `.part` file and then dies before replying: now tested natively (#309, below).
-  - A host crash is outside A6, which is about the worker and its operations. Since #307 it can no longer leave a partial file under the approved name, and since #309 the next launch sweeps the staging folder. The content is written to a hidden temporary file marked for deletion, which the system removes when the host's handles close. Two short windows remain, listed in the #307 section below, where a `.qdral-dl-*.part` file can be left behind. A host crash also leaves its staging folder in `temp_dir`, which the next launch removes (#309).
+  - A host crash is outside A6, which is about the worker and its operations. Since #307 it can no longer leave a partial file under the approved name, and since #309 the next launch sweeps the staging folder. The content is written to a hidden temporary file marked for deletion, which the system removes when the host's handles close. Two short windows remain, listed in the #307 section below, where a `.orcel-dl-*.part` file can be left behind. A host crash also leaves its staging folder in `temp_dir`, which the next launch removes (#309).
 
 **#307: download commits through held handles, and typed download failures.**
 
@@ -597,7 +597,7 @@ A fresh-context judge's first round on this slice was BLOCK. The destination-nam
     - between creating the temporary file and marking it, which leaves an empty, hidden temporary file;
     - between clearing the mark and the rename, which leaves the full content in a visible temporary file.
 
-    The temporary name is `.qdral-dl-<16 hex>.part`, one per destination since #309.
+    The temporary name is `.orcel-dl-<16 hex>.part`, one per destination since #309.
 
     Neither leaves a file under the approved name, and since #309 the next commit to the same destination removes the leftover (below). After the rename the commit only checks the result, so a crash there leaves the complete, ordinary file under its approved name.
 - **Typed download failures.** A download that commits nothing reports a `HostError::Download` reason:
@@ -639,18 +639,18 @@ A fresh-context judge's first round on this slice was BLOCK. The destination-nam
     - after the content is written, while marked for deletion: nothing is left;
     - after the mark is cleared, before the rename: the full content is left in a visible temporary file.
   - **The approved name:** in every case nothing stands under it.
-  - **The next commit:** a commit to the same destination succeeds and leaves only the committed file. The temporary name is now the same for every attempt at a destination (`.qdral-dl-<first 16 hex of SHA-256 of the lower-cased file name>.part`), so a leftover is found and removed.
+  - **The next commit:** a commit to the same destination succeeds and leaves only the committed file. The temporary name is now the same for every attempt at a destination (`.orcel-dl-<first 16 hex of SHA-256 of the lower-cased file name>.part`), so a leftover is found and removed.
   - **Removing a leftover:** it is opened exclusively, without following a reparse point. A commit still in progress holds its temporary file exclusively, so a second commit to the same destination is refused ("in progress") rather than removing it (tested). A hard link to a user file loses only its name; the user file keeps its content.
   - **A leftover that cannot be removed refuses that destination:** a read-only file, a reparse point, or a file another reader holds open (an indexer, antivirus) gives a typed "cannot be removed" or "in use" refusal until it is released or removed. The commit code never creates such a leftover itself.
   - The crash points exist only in test builds.
 - **Staging folders of a host that died.**
-  - **The sweep:** at launch, the host removes every `qdral-sg108-staging-<pid>-<hex>` folder in its temp directory whose owning process is no longer running. A process that cannot be queried for any other reason counts as running, so only certainly-dead owners lose their folder.
+  - **The sweep:** at launch, the host removes every `orcel-sg108-staging-<pid>-<hex>` folder in its temp directory whose owning process is no longer running. A process that cannot be queried for any other reason counts as running, so only certainly-dead owners lose their folder.
   - **What it never touches:** its own folder, and a reparse point named like a staging folder (or its target).
   - **Bounds:** 4,096 staging-named entries looked at and 64 folders removed per launch. `BrowserWorker::swept_staging()` reports the count.
-  - **Enumeration:** only names matching `qdral-sg108-staging-*` are listed (`FindFirstFileW` with that pattern), so a crowded temp directory cannot use up the bound before them.
+  - **Enumeration:** only names matching `orcel-sg108-staging-*` are listed (`FindFirstFileW` with that pattern), so a crowded temp directory cannot use up the bound before them.
   - **Tested:** with a pid no process can have (`0xFFFF_FFFC`; spawning a process is reserved to `worker_launch_tests.rs`), plus a live host's folder, an unrelated folder, such a junction, and more than 4,096 entries sorting before the prefix. The judge verified separately that a really exited pid, with or without its handle still held, counts as not running.
 - **Known limits.**
-  - A leftover temporary file for a destination that is never committed again stays until the user removes it; it is in Deskal's own hidden `.qdral-dl-*.part` namespace.
+  - A leftover temporary file for a destination that is never committed again stays until the user removes it; it is in Orcel's own hidden `.orcel-dl-*.part` namespace.
   - A dead host's pid reused by an unrelated live process keeps that host's staging folder until the pid is free again.
   - Ephemeral browser profiles left by a host crash are handled by #298 (section below).
   - The temporary name folds case with Rust's Unicode lowercasing, not NTFS's upcase table. Two names NTFS keeps distinct but that fold together (the Kelvin sign and `k`) share a temporary name. One commit is then refused while the other runs, and the approved names stay protected by the no-replace rename.
@@ -671,7 +671,7 @@ A fresh-context judge's first round on this slice was BLOCK. The destination-nam
 - **Evidence (Windows, Edge 155), from two native tests that read the OS's TCP and UDP tables** (`GetExtendedTcpTable` / `GetExtendedUdpTable`, IPv4 and IPv6, by owning process):
   - **`a_confined_lifetime_holds_no_network_endpoint_but_loopback`:** a real lifetime, with every process in the worker's job (browser, every helper, `identity_helper` included), navigates to the loopback fixture and is polled every 500 ms for 90 s. It found no endpoint that is not loopback, and the fixture stayed reachable through the admitted path. The test fails on any such endpoint.
   - **`a_page_cannot_reach_the_lan_through_webrtc_fetch_or_sockets`:** an admitted fixture page tries, every 5 s for 60 s, WebRTC ICE (STUN over UDP, TURN over TCP), `fetch`, WebSocket and `sendBeacon` toward this host's own LAN address. The last three use `https://` and `wss://`, because the secure page's mixed-content blocking would stop `http` and `ws` in the renderer before any network layer is tested. The test listens there on UDP and TCP, and first proves the listeners reachable at that address by sending a datagram and opening a connection to them itself, so a firewall drop cannot make the result vacuous. This is enforcement evidence on the receiving side, not a browser log: nothing arrived. The OS tables, read with ports, showed no TCP connection, no listener and no UDP 5353 endpoint of the job beyond loopback. WebRTC still binds ephemeral UDP sockets on the LAN interface for ICE gathering. The test counts them (each address and port once), and requires at least one, which shows the page's WebRTC code ran. The listener shows they send nothing to the address the page targeted. A judge run with listeners on the LAN address, `127.0.0.1` and `::1` saw nothing either, while a raw Edge on the same page sent to all of them. Sends to arbitrary internet addresses would need packet capture, which needs administrator rights and is not done here. On a host with no non-loopback interface, the test reports that it skipped.
-  - **`the_endpoint_scan_detects_an_unconfined_engine`, the negative control:** the same scan over an Edge started with the production argv minus the disabled features found the leak. It saw the LAN Cast connection, the Microsoft 365 connection and the UDP endpoints. With `QDRAL_SG108_EXPECT_LEAK=1`, it must see a UDP endpoint and an outbound TCP connection to port 443 or 8009 whose remote address is none of this host's own addresses in either family. The variable is set per run by whoever runs the suite on a host known to leak; the host and the suite never set it.
+  - **`the_endpoint_scan_detects_an_unconfined_engine`, the negative control:** the same scan over an Edge started with the production argv minus the disabled features found the leak. It saw the LAN Cast connection, the Microsoft 365 connection and the UDP endpoints. With `ORCEL_SG108_EXPECT_LEAK=1`, it must see a UDP endpoint and an outbound TCP connection to port 443 or 8009 whose remote address is none of this host's own addresses in either family. The variable is set per run by whoever runs the suite on a host known to leak; the host and the suite never set it.
   - **The tests catch what they claim (mutation runs):**
     - with `WebRtcHideLocalIpsWithMdns` removed from the flag, the page test fails, naming `0.0.0.0:5353` and `[::]:5353`;
     - with the scanner reading the local address fields as the remote ones, the control fails, because the "leak" it sees is only this host's own addresses.
@@ -686,7 +686,7 @@ A fresh-context judge's first round on this slice was BLOCK. The destination-nam
 
 **#298: ephemeral profiles of a host that died.**
 
-- **Ownership is provable from the name.** `ephemeral_profile_dir(root)` names a new profile `qdral-sg108-profile-<owning host pid>-<16 random hex>` under `root`, a directory the caller owns. The random part comes from the system RNG. The helper creates the directory new: an existing one of that name is an error, never reused.
+- **Ownership is provable from the name.** `ephemeral_profile_dir(root)` names a new profile `orcel-sg108-profile-<owning host pid>-<16 random hex>` under `root`, a directory the caller owns. The random part comes from the system RNG. The helper creates the directory new: an existing one of that name is an error, never reused.
 - **Sweep at launch.** A launch with `ephemeral_profile: true` whose profile carries this host's own pid in such a name sweeps that profile's root first. The sweep is #309's (`leftovers.rs`), now generalized over a name prefix:
   - it lists only names with the profile prefix (`FindFirstFileW`), at most 4,096;
   - it removes a profile only when the owning pid is certainly gone, and a process that cannot be queried counts as running;
@@ -744,6 +744,6 @@ A fresh-context judge's first round on this slice was BLOCK. The destination-nam
 - **Discovery does not prefer a qualified engine.** It returns the first verified candidate. On a host with an unqualified Edge and a qualified Chrome, launch refuses Edge rather than falling back. This is safe, at a cost to availability.
 - **Qualifying a new version.**
   1. Open a PR that adds the major to `QUALIFIED_WORKER_ENGINES`.
-  2. Its own native-suite run on that engine is the evidence: CI's run for the runner's engine, and a run on the evidence host for Edge, with `QDRAL_SG108_EXPECT_LEAK=1` on a host with something to leak to.
+  2. Its own native-suite run on that engine is the evidence: CI's run for the runner's engine, and a run on the evidence host for Edge, with `ORCEL_SG108_EXPECT_LEAK=1` on a host with something to leak to.
   3. Until that PR merges, the worker is unavailable on that engine, with a typed reason, and never runs unqualified.
 - **Known cost.** Edge and Chrome update themselves about every four weeks, and so does CI's runner image. When the runner's Chrome moves to a new major, CI's native suite fails with `UnsupportedEngine` until a qualifying PR merges. This is intended: a typed refusal, never an unproven launch. On an updated user host, the worker becomes unavailable until requalification; there is no product caller yet. The release process must schedule requalification.

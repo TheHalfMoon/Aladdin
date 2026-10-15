@@ -1,10 +1,10 @@
 # SG-000108 slice 6: native page extraction
 
-Slice 6 of `docs/aladdin/WEB_CAPABILITIES_DECISION.md` reads the committed page's rendered content as Markdown. It wires the extraction library ported from browser-use (`apps/qdral-browser-worker/src/extract/`, recorded in `docs/aladdin/BROWSER_AGENT_DONORS_DECISION.md`) into the worker protocol and the host.
+Slice 6 of `docs/orcel/WEB_CAPABILITIES_DECISION.md` reads the committed page's rendered content as Markdown. It wires the extraction library ported from browser-use (`apps/orcel-browser-worker/src/extract/`, recorded in `docs/orcel/BROWSER_AGENT_DONORS_DECISION.md`) into the worker protocol and the host.
 
 ## Decision
 
-- **No extraction dependency is admitted.** The library is Aladdin's own port: pure TypeScript with no packages. The "extraction dependency is admitted separately" step in the slice plan is therefore not needed. HTML and structured output stay out of this slice:
+- **No extraction dependency is admitted.** The library is Orcel's own port: pure TypeScript with no packages. The "extraction dependency is admitted separately" step in the slice plan is therefore not needed. HTML and structured output stay out of this slice:
   - HTML would hand page markup to a caller, which observation and Markdown deliberately avoid;
   - structured data already crosses as JSON-LD blocks on execution results (slice 5).
 - **No page script runs, and nothing on the page is touched.** The worker takes one `DOMSnapshot.captureSnapshot` with seventeen computed styles and layout boxes. The engine serialises its own DOM; nothing is scrolled, clicked, focused or rendered first.
@@ -36,7 +36,7 @@ Slice 6 of `docs/aladdin/WEB_CAPABILITIES_DECISION.md` reads the committed page'
 
 ## Markdown safety
 
-The library escapes page text wherever a character could form syntax. Only the structure Aladdin emits is live, so a page cannot form a link, image, HTML, a heading, list, quote, rule, table or strikethrough.
+The library escapes page text wherever a character could form syntax. Only the structure Orcel emits is live, so a page cannot form a link, image, HTML, a heading, list, quote, rule, table or strikethrough.
 
 Links and images are opt-in and kept only as resolved http(s) URLs without credentials. The library's records list the remaining exception: GFM autolinks of bare http(s), `www.` and e-mail text.
 

@@ -1,7 +1,7 @@
 {
   "mcpServers": {
-    "qdral": {
-      "command": "qdral",
+    "orcel": {
+      "command": "orcel",
       "args": ["mcp", "stdio"]
     }
   }

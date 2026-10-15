@@ -1,4 +1,4 @@
-# Qdral External Provider Prerequisites
+# Orcel External Provider Prerequisites
 
 Status: IMPLEMENTATION-READY EXTERNAL-DEPENDENCY REGISTER
 Date: 2026-10-01
@@ -6,15 +6,15 @@ Planning base: `5feff3f15cc7e20464cafffd7b87d713b65a012f`
 
 ## 1. Purpose
 
-Qdral can make its software provider-neutral, self-hostable, and free/open source, but it cannot control third-party product policy, directory review, account eligibility, publisher verification, domain requirements, plan limits, or provider service pricing.
+Orcel can make its software provider-neutral, self-hostable, and free/open source, but it cannot control third-party product policy, directory review, account eligibility, publisher verification, domain requirements, plan limits, or provider service pricing.
 
 This register prevents those external dependencies from being hidden inside a software completion claim.
 
 ## 2. Completion states
 
-Qdral tracks provider integration using separate states:
+Orcel tracks provider integration using separate states:
 
-- `SOFTWARE_READY` — Qdral implementation and security qualification are complete.
+- `SOFTWARE_READY` — Orcel implementation and security qualification are complete.
 - `SUBMISSION_READY` — provider package, production endpoint, legal/support URLs, publisher material, and review evidence are prepared.
 - `SUBMITTED` — external provider acknowledges a real submission.
 - `APPROVED` — provider approval is actually observed.
@@ -44,13 +44,13 @@ External prerequisites may include, according to current OpenAI requirements at 
 
 ### Cost honesty
 
-Qdral's software and reference deployment must not require a paid compute subscription.
+Orcel's software and reference deployment must not require a paid compute subscription.
 
-However, if OpenAI requires an independently owned/verified custom domain or another external prerequisite that has unavoidable monetary cost and the project does not already possess a suitable donated/owned resource, Qdral must report that as an **external publication blocker** rather than violate the zero-founder-cost rule or pretend it is free.
+However, if OpenAI requires an independently owned/verified custom domain or another external prerequisite that has unavoidable monetary cost and the project does not already possess a suitable donated/owned resource, Orcel must report that as an **external publication blocker** rather than violate the zero-founder-cost rule or pretend it is free.
 
 A free provider subdomain such as a reference hosting domain may be used for development only if OpenAI accepts it for the relevant verification/publication requirement. Acceptance must be verified, not assumed.
 
-The project may use an existing user-owned/donated domain without treating its historic acquisition cost as a Qdral software dependency, but it must not silently purchase one.
+The project may use an existing user-owned/donated domain without treating its historic acquisition cost as a Orcel software dependency, but it must not silently purchase one.
 
 ## 4. Claude
 
@@ -65,7 +65,7 @@ External prerequisites for remote custom-connector availability include:
 
 Local Claude Desktop/Code integration does not depend on a public relay when local MCP support is available.
 
-Anthropic service usage limits or subscription/API charges are not Qdral charges and cannot be made free by Qdral.
+Anthropic service usage limits or subscription/API charges are not Orcel charges and cannot be made free by Orcel.
 
 ## 5. Mistral
 
@@ -76,13 +76,13 @@ External prerequisites for Vibe Work remote mode include:
 - supported authentication method;
 - current provider limits and account/region eligibility.
 
-Vibe Code local stdio mode can avoid a Qdral-hosted relay, but Mistral model/service pricing or quotas remain external. A local model path can avoid provider inference charges where technically supported.
+Vibe Code local stdio mode can avoid a Orcel-hosted relay, but Mistral model/service pricing or quotas remain external. A local model path can avoid provider inference charges where technically supported.
 
 ## 6. Codex / local ChatGPT-capable surfaces
 
 Local MCP availability depends on the installed client/product surface exposing local MCP/plugin configuration to the user.
 
-Qdral must not claim that every ChatGPT interface can launch local MCP merely because another OpenAI surface can.
+Orcel must not claim that every ChatGPT interface can launch local MCP merely because another OpenAI surface can.
 
 If the target surface lacks local MCP, remote/public-plugin mode is required.
 
@@ -104,7 +104,7 @@ Rules:
 - no automatic paid upgrade/overflow;
 - hard fail-closed quota behavior;
 - self-host remains supported;
-- local Qdral remains usable when the community relay is down;
+- local Orcel remains usable when the community relay is down;
 - no promise of unlimited free relay capacity.
 
 ## 8. DNS and domain lifecycle
@@ -118,13 +118,13 @@ Design requirements:
 - OAuth issuer/resource metadata changes are versioned/migrated safely;
 - domain loss or TLS failure fails remote mode closed and does not affect local mode;
 - no client automatically trusts a replacement domain solely because the old endpoint is unavailable;
-- DNS ownership and certificate renewal are operational prerequisites, not local Qdral authority.
+- DNS ownership and certificate renewal are operational prerequisites, not local Orcel authority.
 
 ## 9. Legal/support pages
 
 Privacy, terms, support, and security-reporting pages can be hosted using free static hosting when accepted by the provider.
 
-Their content must match actual Qdral behavior, especially:
+Their content must match actual Orcel behavior, especially:
 
 - transient plaintext processing by a shared relay;
 - retained device/account metadata;
@@ -136,7 +136,7 @@ Their content must match actual Qdral behavior, especially:
 
 ## 10. Code signing and Windows reputation
 
-Qdral's zero-cost rule currently means release binaries may remain unsigned unless a trusted signing capability is available at no founder cost.
+Orcel's zero-cost rule currently means release binaries may remain unsigned unless a trusted signing capability is available at no founder cost.
 
 External consequences can include Windows SmartScreen warnings and reputation friction.
 
@@ -146,17 +146,17 @@ A future donated/free signing path may be evaluated through a new governed grain
 
 ## 11. Provider inference/service cost
 
-`Qdral is free` means Qdral software does not charge the user and local/self-hosted operation has no mandatory Qdral SaaS fee.
+`Orcel is free` means Orcel software does not charge the user and local/self-hosted operation has no mandatory Orcel SaaS fee.
 
 It does **not** mean every connected AI provider offers unlimited inference or account access for free.
 
-Qdral documentation must distinguish:
+Orcel documentation must distinguish:
 
-- Qdral software cost;
-- Qdral relay cost/limits;
+- Orcel software cost;
+- Orcel relay cost/limits;
 - third-party AI provider subscription/API/inference cost.
 
-Local-model integrations are the only path Qdral can offer without depending on third-party inference billing.
+Local-model integrations are the only path Orcel can offer without depending on third-party inference billing.
 
 ## 12. Provider policy drift
 
@@ -170,7 +170,7 @@ Before each provider-specific implementation/submission and before release claim
 
 ## 13. External blocker reporting
 
-If a provider requirement cannot be met without violating Qdral's security or zero-cost constraints:
+If a provider requirement cannot be met without violating Orcel's security or zero-cost constraints:
 
 - complete all independent software work;
 - record the exact requirement and current evidence;
@@ -181,12 +181,12 @@ If a provider requirement cannot be met without violating Qdral's security or ze
 
 ## 14. Definition of success for the user's goal
 
-The user's goal of using Qdral "here in ChatGPT web" is achieved only when all of the following are observed:
+The user's goal of using Orcel "here in ChatGPT web" is achieved only when all of the following are observed:
 
-1. Qdral remote software is `SOFTWARE_READY`;
+1. Orcel remote software is `SOFTWARE_READY`;
 2. the public OpenAI plugin is actually `PUBLISHED`;
 3. the user's actual ChatGPT account/region/surface is `ACCOUNT_VERIFIED` for the plugin;
-4. the user's Qdral device is paired;
+4. the user's Orcel device is paired;
 5. a local remote-session lease is active for the intended workspace/profile;
 6. a real tool call from that ChatGPT conversation reaches the paired device and is governed by the expected local policy/approval path.
 

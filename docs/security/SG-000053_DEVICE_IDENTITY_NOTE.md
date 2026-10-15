@@ -1,6 +1,6 @@
 # SG-000053 Device Identity, Pairing, and Revocation Note
 
-Status: IMPLEMENTATION FOR QDRAL-P15
+Status: IMPLEMENTATION FOR ORCEL-P15
 SpecGrain: SG-000053
 Base: `1aa23642ff877bc8cb2243673c34142950c1f120`
 Date: 2026-10-02
@@ -9,8 +9,8 @@ Companions:
 - `docs/security/REMOTE_SESSION_AUTHORIZATION.md`
 - `docs/security/REMOTE_PRINCIPAL_AUTH_MODEL.md`
 - `docs/security/UNIVERSAL_CONNECTIVITY_THREAT_MODEL.md`
-- `apps/qdral-mcp/src/device_identity.ts`
-- `apps/qdral-mcp/src/device-identity.test.ts`
+- `apps/orcel-mcp/src/device_identity.ts`
+- `apps/orcel-mcp/src/device-identity.test.ts`
 
 ## 1. Purpose
 
@@ -34,7 +34,7 @@ widening, and no approval change is introduced here.
   never transmitted. `publicDeviceIdentity` and `redactedDeviceSummary`
   provably exclude it.
 - The protected store location is `device/device_key.json` relative to
-  the Qdral state root under the existing SG-000041 protected-state
+  the Orcel state root under the existing SG-000041 protected-state
   boundary. The store file requires owner-only permissions. Workspace
   admission continues to refuse any workspace overlapping protected
   state, so workspace-scoped providers cannot reach the key.

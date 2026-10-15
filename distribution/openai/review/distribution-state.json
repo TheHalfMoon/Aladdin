@@ -1,5 +1,5 @@
 {
-  "schema": "qdral-openai-distribution-state/1",
+  "schema": "orcel-openai-distribution-state/1",
   "states": ["SOFTWARE_READY", "SUBMISSION_READY", "SUBMITTED", "APPROVED", "PUBLISHED", "ACCOUNT_VERIFIED"],
   "provider_controlled": ["SUBMITTED", "APPROVED", "PUBLISHED", "ACCOUNT_VERIFIED"],
   "status": {

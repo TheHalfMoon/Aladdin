@@ -1,23 +1,23 @@
-# Deskal Relay and Recovery Operations
+# Orcel Relay and Recovery Operations
 
 Status: OPERATOR GUIDE (SG-000072)
 Date: 2026-10-04
 
 This guide covers relay-state backup and restore, signing-key compromise
-response, incident response, and recovery objectives for a self-hosted Deskal
+response, incident response, and recovery objectives for a self-hosted Orcel
 relay and the paired computer. It creates no new authority: every procedure
 below uses only mechanisms closed by earlier grains (pairing, revocation,
 emergency revoke, checksum-guarded state, lifecycle install/update/rollback).
 
-`qdral` below is the retained compatibility command. The product is Deskal.
+`orcel` below is the retained compatibility command. The product is Orcel.
 
 ## 1. Relay-state backup (canonical procedure)
 
-1. Stop the relay (`docker stop qdral-relay`, or stop the Node.js process).
+1. Stop the relay (`docker stop orcel-relay`, or stop the Node.js process).
    Stopping first makes the copy deterministic; live copies are atomic files
    but stopping removes all doubt about which write won.
 2. Copy the single state file. With the Docker layout from `SELF_HOSTING.md`:
-   `cp /srv/qdral-relay/state/relay-state.json /srv/qdral-relay/backup/relay-state-$(date -u +%Y%m%dT%H%M%SZ).json`.
+   `cp /srv/orcel-relay/state/relay-state.json /srv/orcel-relay/backup/relay-state-$(date -u +%Y%m%dT%H%M%SZ).json`.
    There is exactly one file to copy; configuration (`relay.json`) is separate
    and should be backed up alongside it.
 3. Set owner-only permissions on the copy (`chmod 600`). The file contains
@@ -48,7 +48,7 @@ emergency revoke, checksum-guarded state, lifecycle install/update/rollback).
    the lost state are not part of the restored file. Treat post-backup
    revocations as outstanding work, not as preserved state.
 
-Regression evidence (exact-head CI, `apps/qdral-relay/src/self-host.test.ts`):
+Regression evidence (exact-head CI, `apps/orcel-relay/src/self-host.test.ts`):
 
 - `relay backup restores device identities, client registrations, and revocations into a clean instance`
 - `a tampered backup fails closed and a fresh state mints a new signing key`
@@ -64,7 +64,7 @@ an explicit operator act:
 2. Delete `stateDir/relay-state.json` (keep a sealed forensic copy offline if
    investigation requires it, under the same owner-only handling).
 3. Start the relay. It mints a fresh signing key on first start.
-4. Re-pair every device (`qdral remote enable`, `qdral remote pair`) and
+4. Re-pair every device (`orcel remote enable`, `orcel remote pair`) and
    re-register every client. Re-authorize routes with fresh local leases.
 
 What becomes invalid at rotation, by mechanism rather than by promise:
@@ -80,7 +80,7 @@ the relay re-accepts the compromised key.
 
 ## 4. Incident-response runbook
 
-Detect with `qdral doctor`, relay logs (classes only, never secrets), and the
+Detect with `orcel doctor`, relay logs (classes only, never secrets), and the
 client authorization pages. Contain first, then recover, then verify. Every
 step below names the mechanism; none invents one.
 
@@ -96,9 +96,9 @@ step below names the mechanism; none invents one.
 3. Signing-key compromise (suspected or confirmed). Same as theft: section 3
    in full. There is no partial rotation.
 4. Device private-key compromise (one computer's key suspected). Contain:
-   revoke that device (`qdral remote revoke` for its route, or relay-side
+   revoke that device (`orcel remote revoke` for its route, or relay-side
    device revocation) so its families die and its tokens stop verifying.
-   Recover: generate a new device key on the computer (`qdral remote enable`
+   Recover: generate a new device key on the computer (`orcel remote enable`
    again), re-pair, and authorize a fresh route. Other devices are
    unaffected: revocation is per-device. Verify: the old device's tokens
    fail; the new pairing works; no other device needed re-enrollment.
@@ -107,10 +107,10 @@ step below names the mechanism; none invents one.
    exposed credential at its source (new tunnel key file, new loopback
    token, expire the pairing flow, revoke the client registration) and stop
    the affected runtime. Recover: reconfigure with the new credential and
-   restart. Verify: `qdral doctor` healthy, old credential rejected, logs
+   restart. Verify: `orcel doctor` healthy, old credential rejected, logs
    contain no secret material.
 6. Malicious remote principal (abusive paired client or hijacked provider
-   account). Contain: revoke the route (`qdral remote revoke`) and, if the
+   account). Contain: revoke the route (`orcel remote revoke`) and, if the
    principal itself is hostile, revoke the principal/family so refresh and
    renewal stop. Recover: only after the account is clean, pair again under
    a new client registration with least scopes. Verify: revoked tokens and
@@ -121,22 +121,22 @@ step below names the mechanism; none invents one.
    rather than accepting forged state. Recover: restore the protected state
    from the operator's own backup, or purge and re-establish trust
    explicitly (re-add workspaces, re-grant trust with Windows Hello).
-   Verify: `qdral doctor` healthy; forged history rejected; emergency revoke
+   Verify: `orcel doctor` healthy; forged history rejected; emergency revoke
    available.
 8. Emergency revoke (suspected active abuse, no time for diagnosis).
-   Execute `qdral emergency-revoke` (Windows Hello): it advances the epoch
+   Execute `orcel emergency-revoke` (Windows Hello): it advances the epoch
    and invalidates pending approvals and pre-revoke tokens. Then work the
    matching scenario above. Verify: pre-revoke tokens fail; post-revoke
    approvals use the new epoch.
 9. Recovery verification (every scenario ends here). Confirm: relay healthy,
-   `qdral doctor` healthy on the computer, revocations re-applied and
+   `orcel doctor` healthy on the computer, revocations re-applied and
    enforced, only intended devices paired, only intended routes authorized
    with finite leases, logs secret-free, and a fresh backup taken of the
    recovered state.
 
 ## 5. Recovery objectives
 
-Deskal is self-hosted and local-first; there is no operated service behind
+Orcel is self-hosted and local-first; there is no operated service behind
 these numbers and no SLA is claimed. Objectives are operator targets backed
 by the evidence named, or marked UNVERIFIED where unmeasured.
 

@@ -16,9 +16,9 @@ T02-B PR #270 normally merged as `525bb081106cb46ba6852d14a6f977e27ab823e3`. Pos
 
 ## Evidence from authorized Windows host
 
-- `cargo test -p qdral-provider-process --lib sg000096 -- --test-threads=1`: **4/4 PASS** (including the new test).
-- `cargo test -p qdral-provider-process -- --test-threads=1`: **36/36 PASS** (28 unit, 2 protected-state, 4 PowerShell, 2 workspace).
-- `cargo clippy -p qdral-provider-process --all-targets -- -D warnings`: PASS.
+- `cargo test -p orcel-provider-process --lib sg000096 -- --test-threads=1`: **4/4 PASS** (including the new test).
+- `cargo test -p orcel-provider-process -- --test-threads=1`: **36/36 PASS** (28 unit, 2 protected-state, 4 PowerShell, 2 workspace).
+- `cargo clippy -p orcel-provider-process --all-targets -- -D warnings`: PASS.
 - `cargo fmt --all --check` and `git diff --check`: PASS.
 - Five initial full-suite tests reported missing qualification environment variables on the authorized interactive PC, not test assertion failures. A rerun supplied only process-scoped `TMP=$TEMP` and `ComSpec=$SystemRoot\\System32\\cmd.exe`, without changing OS settings or repository code; the full rerun passed.
 
@@ -29,4 +29,4 @@ T02-B PR #270 normally merged as `525bb081106cb46ba6852d14a6f977e27ab823e3`. Pos
 - Windows Job lifecycle supervision is not filesystem or network isolation. Any future Full User shell has ambient OS user capabilities.
 - Do not close issue #271 or activate T03/T04 until all relevant successor gates, local qualified review, signed+DCO merge, exact-head CI 9/9, zero unresolved threads, and post-merge main CI have passed.
 
-Provenance: native Deskal-owned Rust code only. No new donor source or dependency imported.
+Provenance: native Orcel-owned Rust code only. No new donor source or dependency imported.

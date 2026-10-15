@@ -3,17 +3,17 @@
 Copy-paste configuration for independent MCP clients. Every example uses
 only the supported installed entrypoints:
 
-- stdio: command `qdral` with arguments `["mcp", "stdio"]`
+- stdio: command `orcel` with arguments `["mcp", "stdio"]`
 - loopback HTTP: `http://127.0.0.1:<port>/mcp` from a running
-  `qdral mcp serve` listener with a bearer credential
+  `orcel mcp serve` listener with a bearer credential
 
 No example requires the OpenAI tunnel. No example contains a secret.
 Replace `PORT` with the printed listener port and export a token of at
 least 32 characters before serving:
 
 ```powershell
-$env:QDRAL_LOOPBACK_TOKEN = "<choose-at-least-32-characters>"
-qdral mcp serve
+$env:ORCEL_LOOPBACK_TOKEN = "<choose-at-least-32-characters>"
+orcel mcp serve
 ```
 
 ## Files
@@ -25,10 +25,10 @@ qdral mcp serve
   bundle root). Directory listing and review by Anthropic are separate
   external steps and are not claimed here.
 - `claude-code.mcp.json`: project-scoped `.mcp.json` for Claude Code (or
-  `claude mcp add qdral -- qdral mcp stdio`). Claude Code reaches a remote
-  Qdral relay as a custom connector through OAuth with a
+  `claude mcp add orcel -- orcel mcp stdio`). Claude Code reaches a remote
+  Orcel relay as a custom connector through OAuth with a
   `http://localhost:<port>/callback` redirect; see `docs/p17/CLAUDE.md`.
-- `codex-config.toml`: `[mcp_servers.qdral]` for `~/.codex/config.toml`.
+- `codex-config.toml`: `[mcp_servers.orcel]` for `~/.codex/config.toml`.
   Uncomment the HTTP block to use loopback instead of stdio.
 - `vibe-code-config.toml`: `[[mcp_servers]]` for Vibe Code `config.toml`,
   stdio plus a commented loopback block using the documented
@@ -46,6 +46,6 @@ sh examples/mcp-clients/inspector.sh
 
 The script drives `tools/list` through three independent client paths and
 checks the 20-tool catalog on each. It needs Node.js, the repository
-checkout (for `node apps/qdral-mcp/dist`), and a `qdrald` binary for
-`QDRAL_DAEMON`. stdio and HTTP paths that skip the inspector also work;
+checkout (for `node apps/orcel-mcp/dist`), and a `orceld` binary for
+`ORCEL_DAEMON`. stdio and HTTP paths that skip the inspector also work;
 see the contract tests for the static guarantees.

@@ -1,7 +1,7 @@
 {
-  "schema": "deskal-p20-architecture-freeze/1",
+  "schema": "orcel-p20-architecture-freeze/1",
   "grain": "SG-000092",
-  "program": "DESKAL-P20",
+  "program": "ORCEL-P20",
   "canonical_base": "ed82cb4c976d4169fd4f81327be62d37dd5ea0a7",
   "activation": {
     "pr": 241,
@@ -27,12 +27,12 @@
     "unresolved_review_threads": 0
   },
   "authority_delta": "none",
-  "caller_facing_authority": "Deskal only",
+  "caller_facing_authority": "Orcel only",
   "authority_modes": [
     {
       "id": "safe",
       "default": true,
-      "grantor": "existing Deskal policy",
+      "grantor": "existing Orcel policy",
       "privilege": "current bounded authority",
       "self_grant": false
     },
@@ -293,7 +293,7 @@
     "releases_or_tags_mutated": false
   },
   "invariants": [
-    "Deskal is the sole caller-facing authority surface.",
+    "Orcel is the sole caller-facing authority surface.",
     "No donor code is imported by SG-000092.",
     "No runtime dependency or MCP tool is added by SG-000092.",
     "Only SG-000092 is active; SG-000093 through SG-000107 remain absent until sequential activation.",

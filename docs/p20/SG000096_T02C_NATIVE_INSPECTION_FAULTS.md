@@ -22,9 +22,9 @@ No donor code, new external dependencies, or production capability is introduced
 
 ## Native Windows qualification
 
-- `cargo test -p qdral-provider-process --lib sg000096 -- --test-threads=1`: 6/6 PASS (five preceding native tests plus new failure matrix).
-- `cargo test -p qdral-provider-process -- --test-threads=1`: 38/38 PASS (30 unit, 2 protected-state, 4 PowerShell, 2 workspace).
-- `cargo test -p qdral-lifecycle --test release_blocker_sweep -- --test-threads=1`: 5/5 PASS.
-- `cargo clippy -p qdral-provider-process --all-targets -- -D warnings`, `cargo fmt --all --check`, and whitespace: PASS.
+- `cargo test -p orcel-provider-process --lib sg000096 -- --test-threads=1`: 6/6 PASS (five preceding native tests plus new failure matrix).
+- `cargo test -p orcel-provider-process -- --test-threads=1`: 38/38 PASS (30 unit, 2 protected-state, 4 PowerShell, 2 workspace).
+- `cargo test -p orcel-lifecycle --test release_blocker_sweep -- --test-threads=1`: 5/5 PASS.
+- `cargo clippy -p orcel-provider-process --all-targets -- -D warnings`, `cargo fmt --all --check`, and whitespace: PASS.
 
 This local qualification does not replace genuine Jev and Alibaba OCR (with manual excluded-file inspection), 9/9 exact-head CI, signed+DCO, zero unresolved threads, normal merge, or 9/9 post-main. Those are pending independent GitHub evidence.

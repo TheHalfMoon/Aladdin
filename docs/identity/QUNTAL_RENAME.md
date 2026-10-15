@@ -25,4 +25,4 @@ The rename changes product identity only. It does not grant new filesystem, proc
 
 ## Supersession
 
-Superseded by the Qdral identity migration on 2026-10-03. This file is retained verbatim apart from this status note so the Quntal-era identity and migration evidence remain attributable to the name used at the time. Current naming is defined by `QDRAL_RENAME.md`.
+Superseded by the Orcel identity migration on 2026-10-03. This file is retained verbatim apart from this status note so the Quntal-era identity and migration evidence remain attributable to the name used at the time. Current naming is defined by `ORCEL_RENAME.md`.

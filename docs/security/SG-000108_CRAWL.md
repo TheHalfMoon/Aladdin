@@ -1,10 +1,10 @@
 # SG-000108 slice 7: map and crawl
 
-Slice 7 of `docs/aladdin/WEB_CAPABILITIES_DECISION.md` adds a host-side crawl queue: `crate::crawl::crawl` (pure) and `BrowserWorker::crawl_site(spec, scope, cancelled)`.
+Slice 7 of `docs/orcel/WEB_CAPABILITIES_DECISION.md` adds a host-side crawl queue: `crate::crawl::crawl` (pure) and `BrowserWorker::crawl_site(spec, scope, cancelled)`.
 
 ## Decision
 
-- **Aladdin-native, no Firecrawl code.** The founder chose a native rebuild on 2026-10-11. Firecrawl's crawl behaviour (`apps/api/native/src/crawler.rs` at `f84845c`) is the behavioural reference: a path-prefix scope, a depth bound, internal links only, fragments dropped, files and non-web schemes skipped, and include and exclude filters. No line is copied, so this slice needs no grant in `docs/aladdin/grants/`, and `SOURCE_PERMISSIONS.md`'s AGPL condition does not apply. Include and exclude filters are path prefixes, not Firecrawl's regular expressions, so they are linear and cannot be used for ReDoS.
+- **Orcel-native, no Firecrawl code.** The founder chose a native rebuild on 2026-10-11. Firecrawl's crawl behaviour (`apps/api/native/src/crawler.rs` at `f84845c`) is the behavioural reference: a path-prefix scope, a depth bound, internal links only, fragments dropped, files and non-web schemes skipped, and include and exclude filters. No line is copied, so this slice needs no grant in `docs/orcel/grants/`, and `SOURCE_PERMISSIONS.md`'s AGPL condition does not apply. Include and exclude filters are path prefixes, not Firecrawl's regular expressions, so they are linear and cannot be used for ReDoS.
 - **One destination, the existing gates.** A crawl runs inside one browser lifetime, which admits exactly one destination. Each page is opened by the governed navigation (SG-000075): public HTTPS on the admitted name only, the DNS pin and rebinding denial, redirect revalidation and limits, and downgrade, loopback, private, link-local and metadata denial.
 
   The crawl adds its own scope on top and never widens anything. Links come from the host's observation (the link URL as written), and page content from the slice 6 extraction, as untrusted `PageText`. No new worker frame, no new route and no new request path are added.
@@ -42,7 +42,7 @@ Slice 7 of `docs/aladdin/WEB_CAPABILITIES_DECISION.md` adds a host-side crawl qu
   - The worker removes control and invisible characters and cuts the text to fit one frame (`truncated`). The host refuses anything else in the reply.
   - No new request path is added. Playwright's API request context is not used, because it would bypass the page routes.
 - **robots.txt (RFC 9309).**
-  - **Groups:** the groups naming Deskal's product token `deskal` (case-insensitive, exact) apply; otherwise the `*` groups.
+  - **Groups:** the groups naming Orcel's product token `orcel` (case-insensitive, exact) apply; otherwise the `*` groups.
   - **Matching:** the longest matching rule wins, an allow wins a tie, and no match allows. `*` and a final `$` are supported, matched without backtracking. `/robots.txt` itself is always allowed.
   - **Bounds:** 512 rules of at most 512 bytes each, and 8 `Sitemap:` lines (https only).
   - **Answers:** a 2xx is parsed, and a 4xx means no rules. A 5xx, or no answer (including a navigation the policy refuses), means the site is unreachable. RFC 9309 then treats everything as disallowed, so the crawl stops as `RobotsUnreachable` before opening any page.
@@ -68,7 +68,7 @@ Slice 7 of `docs/aladdin/WEB_CAPABILITIES_DECISION.md` adds a host-side crawl qu
 
 - **robots.txt details.**
   - Paths are matched as written, without percent-encoding normalisation in either direction: a link to `/café` does not match `Disallow: /caf%C3%A9`, although the engine requests the encoded path.
-  - A `User-agent` value is compared by its product token (`deskal/1.0` names `deskal`). A `Sitemap:` or other non-group line between two `User-agent` lines does not end the group.
+  - A `User-agent` value is compared by its product token (`orcel/1.0` names `orcel`). A `Sitemap:` or other non-group line between two `User-agent` lines does not end the group.
   - The `crawl-delay` extension is not honoured. The crawl is sequential: one page at a time, each a full navigation.
 - **Sitemaps:** gzip-compressed sitemaps, text sitemaps (one URL per line) and styled sitemaps (see above) yield no entries. Numeric character references (`&#38;`) are not decoded, prefixed or attributed `<loc>` elements (`<sm:loc>`, `<loc attr>`) are not found, and a file is taken for an index whenever it mentions `<sitemapindex`.
 - Links are what the observation reports. A link the bounded observation does not include (past its node bound) is not found, and the observation's `truncated` flag is not surfaced per page.

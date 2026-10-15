@@ -1,12 +1,12 @@
-# Deskal P18 Exit Matrix
+# Orcel P18 Exit Matrix
 
-Product: Deskal. QDRAL-P18 is a retained compatibility and program
-identifier within the Deskal product; it is not the current product
+Product: Orcel. ORCEL-P18 is a retained compatibility and program
+identifier within the Orcel product; it is not the current product
 brand. This is the exit record for SG-000086: every capability is
 exactly one of PROVEN, NOT_EXPOSED, or UNVERIFIED. No row is both
 exposed and unverified, so P18 closes.
 
-Specifier: SG-000086, the sole active QDRAL-P18 grain. Base:
+Specifier: SG-000086, the sole active ORCEL-P18 grain. Base:
 `7d17fc5e69f0072e0ccb125390194d965cb811f6`.
 
 Companion qualification detail:
@@ -49,12 +49,12 @@ Companion qualification detail:
 ## Donor position at exit
 
 Pinned input under study: `bytedance/UI-TARS-desktop@2ff41a9e515828c5bd5b276e493d73aa0bdf4a3a`
-per `docs/canonical/QDRAL_COMPUTER_USE_DONOR_MATRIX.md`. At P18
+per `docs/canonical/ORCEL_COMPUTER_USE_DONOR_MATRIX.md`. At P18
 exit no donor code is imported anywhere in the shipped tree (proven
 by the canonical SG-000066 tripwire in
-`apps/qdral-mcp/src/p16-exit.test.ts`, which forbids donor runtime
+`apps/orcel-mcp/src/p16-exit.test.ts`, which forbids donor runtime
 markers in every crates `.rs` file and both app manifests on every
-CI run): the action parser shape is Deskal-native syntax-only
+CI run): the action parser shape is Orcel-native syntax-only
 normalization, the operator abstraction is concept-only, raw
 model-to-input is reference-only, and remote-operator authority,
 donor agent loops, arbitrary browser scripting, unrestricted

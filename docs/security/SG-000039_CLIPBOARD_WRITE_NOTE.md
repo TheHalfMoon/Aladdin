@@ -1,17 +1,17 @@
 # SG-000039 - Bounded clipboard write security note
 
 Status: IMPLEMENTATION CANDIDATE
-Program: QDRAL-P11
+Program: ORCEL-P11
 Grain: SG-000039
 
 ## Purpose
 
-SG-000039 establishes the second narrow QDRAL-P11 clipboard grain on
+SG-000039 establishes the second narrow ORCEL-P11 clipboard grain on
 top of the closed SG-000038 bounded clipboard-read registry, the
-closed QDRAL-P10 vision registry, the closed QDRAL-P09
+closed ORCEL-P10 vision registry, the closed ORCEL-P09
 structured-UIA registry, the SG-000018 replay-resistant foundation,
 SG-000019 class enforcement, SG-000020 trust and revoke records, and
-the closed QDRAL-P08 registry: a single explicit bounded
+the closed ORCEL-P08 registry: a single explicit bounded
 clipboard-write shape placing Unicode text only, with a hard size
 bound, caller-text validation, deterministic secret-pattern denial,
 fresh SOFT approval digest binding over the text digest, one-shot
@@ -37,7 +37,7 @@ otherwise unwritable clipboard fails closed as unavailable.
 ## Deterministic secret denial
 
 Caller text matching a documented credential, token, key, seed, or
-Qdral-protected family is denied in the policy layer and again in the
+Orcel-protected family is denied in the policy layer and again in the
 provider before any placement, and never enters results, evidence,
 prompts, logs, or MCP responses. Denial messages carry digests and
 bounds only, never the matched bytes. The audit log records
@@ -79,9 +79,9 @@ shapes remain explicit denials mapped to the STRONG gate, which has
 no execution authority for them. No MCP clipboard tool exists, and
 the agent cannot reach writes through its own tool surface.
 
-## Protected Qdral content and secrets
+## Protected Orcel content and secrets
 
-Write text carrying Qdral approval, trust, emergency-revoke, or
+Write text carrying Orcel approval, trust, emergency-revoke, or
 secret markers is denied like any other secret family. No password,
 credential, Windows Hello, cookie, token, session, private-key, or
 seed material is placed or retained. Prompts, records, history, logs,

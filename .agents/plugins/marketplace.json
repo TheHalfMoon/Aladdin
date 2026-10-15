@@ -1,14 +1,14 @@
 {
-  "name": "deskal",
+  "name": "orcel",
   "interface": {
-    "displayName": "Deskal"
+    "displayName": "Orcel"
   },
   "plugins": [
     {
-      "name": "deskal",
+      "name": "orcel",
       "source": {
         "source": "local",
-        "path": "./distribution/codex/qdral"
+        "path": "./distribution/codex/orcel"
       },
       "policy": {
         "installation": "AVAILABLE",

@@ -1,6 +1,6 @@
 # SG-000055 Outbound-Only Device Uplink and Remote-Session Lease Note
 
-Status: IMPLEMENTATION FOR QDRAL-P15
+Status: IMPLEMENTATION FOR ORCEL-P15
 SpecGrain: SG-000055
 Base: `21d85fc94d3fd6fa2875bc7a599c13e20f4bdf5b`
 Date: 2026-10-02
@@ -9,17 +9,17 @@ Companions:
 - `docs/security/SG-000053_DEVICE_IDENTITY_NOTE.md`
 - `docs/security/SG-000054_OAUTH_AUTHORIZATION_NOTE.md`
 - `docs/security/REMOTE_SESSION_AUTHORIZATION.md`
-- `apps/qdral-mcp/src/device_uplink.ts`, `apps/qdral-mcp/src/uplink_state.ts`
-- `apps/qdral-mcp/src/transports/relay_device.ts`
-- `crates/qdral-policy/src/remote_session.rs`
-- `crates/qdrald/src/remote_lease.rs`, `crates/qdrald/src/workstation.rs`
-- `crates/qdral-lifecycle/src/remote.rs`
+- `apps/orcel-mcp/src/device_uplink.ts`, `apps/orcel-mcp/src/uplink_state.ts`
+- `apps/orcel-mcp/src/transports/relay_device.ts`
+- `crates/orcel-policy/src/remote_session.rs`
+- `crates/orceld/src/remote_lease.rs`, `crates/orceld/src/workstation.rs`
+- `crates/orcel-lifecycle/src/remote.rs`
 
 ## 1. Purpose
 
 SG-000055 implements the device side of remote access: an outbound-only,
 authenticated device channel that carries frozen SG-000052 frames, and the
-local remote-session lease that `qdrald` checks on every remote dispatch.
+local remote-session lease that `orceld` checks on every remote dispatch.
 It also fixes, at its root, a pre-existing lifecycle tree-ACL verification
 race. No public `/mcp` edge (SG-000056), no relay server or deployment
 (SG-000057), no new MCP tool, no schema change, and no approval change for
@@ -55,7 +55,7 @@ authenticated with the token current at push time.
 ## 4. Frame validation (before any dispatch)
 
 Inbound frames must have exactly the 13 frozen envelope fields plus
-`payload`, protocol `qdral-relay/1`, and kind `mcp_request`, `cancel`, or
+`payload`, protocol `orcel-relay/1`, and kind `mcp_request`, `cancel`, or
 `heartbeat`. In order, the device checks: types and identifier shapes;
 channel token; `routeDeviceId` equals the local device; `remoteConnectionId`
 is a locally paired connection; payload byte length equals `payloadLength`
@@ -97,20 +97,20 @@ retries the same sequence with a fresh nonce.
 ## 6. Dispatch
 
 An accepted request becomes one MCP message for the authoritative
-`buildQdralServer` catalog over an in-process frame transport (one server
+`buildOrcelServer` catalog over an in-process frame transport (one server
 per short-lived connection, closed when idle). The kernel for that server is
 constructed with a server-supplied `RemoteDispatchContext` (principal, both
 connection identifiers, device and epoch, provider kind, client profile and
 revision, `core` profile, pinned scopes). Tool arguments cannot reach it.
 
-## 7. Remote-session lease (`qdrald`)
+## 7. Remote-session lease (`orceld`)
 
-- `qdrald` accepts `RemoteRequestEnvelope` lines: the unchanged internal
+- `orceld` accepts `RemoteRequestEnvelope` lines: the unchanged internal
   request plus an optional camelCase `remote` context with
   `deny_unknown_fields`. Local transports never send it.
 - Every remote-context request is checked against the protected lease store
-  (`%LOCALAPPDATA%\Qdral\remote_leases.json`, override
-  `QDRAL_REMOTE_LEASE_PATH`, now listed in the protected-state overrides)
+  (`%LOCALAPPDATA%\Orcel\remote_leases.json`, override
+  `ORCEL_REMOTE_LEASE_PATH`, now listed in the protected-state overrides)
   before policy and dispatch. Any mismatch fails with the frozen
   `REMOTE_SESSION_INACTIVE`; local authority management (`remote.*`,
   `workspace.trust.*`, `trust.*`, `approval.*`, `lifecycle.*`) fails with
@@ -142,7 +142,7 @@ revision, `core` profile, pinned scopes). Tool arguments cannot reach it.
 
 ## 8. Workstation state
 
-`qdrald` queries `WTSQuerySessionInformationW(WTSSessionInfoEx)` for its own
+`orceld` queries `WTSQuerySessionInformationW(WTSSessionInfoEx)` for its own
 session. Only an active session whose flags report unlocked is
 `Unlocked(session, logon time)`; locked, disconnected, unknown, or failed
 queries fail closed. Other platforms always report `Unknown`, so remote
@@ -152,10 +152,10 @@ real Windows are additionally qualified in the P15 adversarial exit
 
 ## 9. Lifecycle commands
 
-`qdral remote allow|revoke|status` talk to `qdrald` as the existing trust
-commands do. `qdral remote connect` starts the uplink entrypoint with the
+`orcel remote allow|revoke|status` talk to `orceld` as the existing trust
+commands do. `orcel remote connect` starts the uplink entrypoint with the
 sanitized environment plus the uplink configuration, device key, and
-revocation list paths under the Qdral state directory. The lifecycle CLI
+revocation list paths under the Orcel state directory. The lifecycle CLI
 reads only public device fields; it never reads, prints, or logs the private
 key. Missing pairing state fails closed with `PAIRING_REQUIRED`.
 
@@ -177,5 +177,5 @@ reproduce the vanished-entry case and prove enforcement is unchanged.
   this is the documented bounded residual risk.
 - A remote call already dispatched when the workstation locks completes; the
   lock denies every later call.
-- Pairing enrollment (`qdral remote enable` and `pair`), the relay server,
+- Pairing enrollment (`orcel remote enable` and `pair`), the relay server,
   and the public edge are delivered by SG-000056 and SG-000057.

@@ -116,11 +116,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "qdral-approval"
+name = "orcel-approval"
 version = "0.2.0"
 dependencies = [
  "fs4",
- "qdral-contracts",
+ "orcel-contracts",
  "serde",
  "serde_json",
  "sha2",
@@ -128,39 +128,18 @@ dependencies = [
 ]
 
 [[package]]
-name = "qdral-audit"
+name = "orcel-audit"
 version = "0.2.0"
 dependencies = [
- "qdral-contracts",
+ "orcel-contracts",
  "serde",
  "serde_json",
 ]
 
 [[package]]
-name = "qdral-browser-host"
+name = "orcel-browser-host"
 version = "0.2.0"
 dependencies = [
- "serde",
- "serde_json",
- "sha2",
- "windows-sys 0.52.0",
-]
-
-[[package]]
-name = "qdral-contracts"
-version = "0.2.0"
-dependencies = [
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "qdral-lifecycle"
-version = "0.2.0"
-dependencies = [
- "qdral-approval",
- "qdral-policy",
- "qdral-tunnel",
  "serde",
  "serde_json",
  "sha2",
@@ -168,15 +147,20 @@ dependencies = [
 ]
 
 [[package]]
-name = "qdral-policy"
+name = "orcel-contracts"
 version = "0.2.0"
 dependencies = [
- "qdral-approval",
- "qdral-contracts",
- "qdral-provider-browser",
- "qdral-provider-clipboard",
- "qdral-provider-network",
- "qdral-provider-uia",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "orcel-lifecycle"
+version = "0.2.0"
+dependencies = [
+ "orcel-approval",
+ "orcel-policy",
+ "orcel-tunnel",
  "serde",
  "serde_json",
  "sha2",
@@ -184,20 +168,36 @@ dependencies = [
 ]
 
 [[package]]
-name = "qdral-provider-browser"
+name = "orcel-policy"
 version = "0.2.0"
 dependencies = [
- "qdral-contracts",
+ "orcel-approval",
+ "orcel-contracts",
+ "orcel-provider-browser",
+ "orcel-provider-clipboard",
+ "orcel-provider-network",
+ "orcel-provider-uia",
+ "serde",
+ "serde_json",
+ "sha2",
+ "windows-sys 0.52.0",
+]
+
+[[package]]
+name = "orcel-provider-browser"
+version = "0.2.0"
+dependencies = [
+ "orcel-contracts",
  "serde",
  "serde_json",
  "sha2",
 ]
 
 [[package]]
-name = "qdral-provider-clipboard"
+name = "orcel-provider-clipboard"
 version = "0.2.0"
 dependencies = [
- "qdral-contracts",
+ "orcel-contracts",
  "serde",
  "serde_json",
  "sha2",
@@ -205,48 +205,48 @@ dependencies = [
 ]
 
 [[package]]
-name = "qdral-provider-fs"
+name = "orcel-provider-fs"
 version = "0.2.0"
 dependencies = [
- "qdral-contracts",
+ "orcel-contracts",
  "serde_json",
  "sha2",
 ]
 
 [[package]]
-name = "qdral-provider-git"
+name = "orcel-provider-git"
 version = "0.2.0"
 dependencies = [
- "qdral-contracts",
+ "orcel-contracts",
  "serde_json",
 ]
 
 [[package]]
-name = "qdral-provider-network"
+name = "orcel-provider-network"
 version = "0.2.0"
 dependencies = [
- "qdral-contracts",
+ "orcel-contracts",
  "serde_json",
  "sha2",
  "windows-sys 0.52.0",
 ]
 
 [[package]]
-name = "qdral-provider-process"
+name = "orcel-provider-process"
 version = "0.2.0"
 dependencies = [
- "qdral-approval",
- "qdral-lifecycle",
- "qdral-policy",
+ "orcel-approval",
+ "orcel-lifecycle",
+ "orcel-policy",
  "serde_json",
  "sha2",
 ]
 
 [[package]]
-name = "qdral-provider-uia"
+name = "orcel-provider-uia"
 version = "0.2.0"
 dependencies = [
- "qdral-contracts",
+ "orcel-contracts",
  "serde",
  "serde_json",
  "sha2",
@@ -254,7 +254,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "qdral-tunnel"
+name = "orcel-tunnel"
 version = "0.2.0"
 dependencies = [
  "serde",
@@ -262,21 +262,21 @@ dependencies = [
 ]
 
 [[package]]
-name = "qdrald"
+name = "orceld"
 version = "0.2.0"
 dependencies = [
- "qdral-approval",
- "qdral-audit",
- "qdral-browser-host",
- "qdral-contracts",
- "qdral-policy",
- "qdral-provider-browser",
- "qdral-provider-clipboard",
- "qdral-provider-fs",
- "qdral-provider-git",
- "qdral-provider-network",
- "qdral-provider-process",
- "qdral-provider-uia",
+ "orcel-approval",
+ "orcel-audit",
+ "orcel-browser-host",
+ "orcel-contracts",
+ "orcel-policy",
+ "orcel-provider-browser",
+ "orcel-provider-clipboard",
+ "orcel-provider-fs",
+ "orcel-provider-git",
+ "orcel-provider-network",
+ "orcel-provider-process",
+ "orcel-provider-uia",
  "serde",
  "serde_json",
  "sha2",

@@ -1,4 +1,4 @@
 {
-  "command": "qdral",
+  "command": "orcel",
   "args": ["mcp", "stdio"]
 }

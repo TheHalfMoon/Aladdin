@@ -1,0 +1,45 @@
+[package]
+name = "orceld"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+autobins = false
+
+[[bin]]
+name = "orceld"
+path = "src/sg000039_main.rs"
+
+[features]
+# SG-000108 product caller slice 1b: orceld drives the live browser host in
+# worker mode under the approval broker. Test builds only; the release
+# build never enables it.
+live-browser-test = ["dep:orcel-browser-host", "orcel-browser-host/live-browser-test"]
+
+[dependencies]
+orcel-approval = { path = "../orcel-approval" }
+orcel-browser-host = { path = "../orcel-browser-host", optional = true }
+orcel-audit = { path = "../orcel-audit" }
+orcel-contracts = { path = "../orcel-contracts" }
+orcel-policy = { path = "../orcel-policy" }
+orcel-provider-browser = { path = "../orcel-provider-browser" }
+orcel-provider-clipboard = { path = "../orcel-provider-clipboard" }
+orcel-provider-fs = { path = "../orcel-provider-fs" }
+orcel-provider-git = { path = "../orcel-provider-git" }
+orcel-provider-network = { path = "../orcel-provider-network" }
+orcel-provider-process = { path = "../orcel-provider-process" }
+orcel-provider-uia = { path = "../orcel-provider-uia" }
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.52", features = [
+  "Win32_Foundation",
+  "Win32_System_RemoteDesktop",
+  "Win32_System_Threading",
+] }
+
+[dev-dependencies]
+orcel-approval = { path = "../orcel-approval", features = ["test-support"] }

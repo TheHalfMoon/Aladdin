@@ -1,4 +1,4 @@
-# Qdral Dependency Pins
+# Orcel Dependency Pins
 
 Snapshot: 2026-09-23
 
@@ -18,7 +18,7 @@ Upstream snapshot reviewed:
 License: MIT for the server package.
 
 Use:
-Qdral depends on the official server package rather than copying the MCP protocol implementation.
+Orcel depends on the official server package rather than copying the MCP protocol implementation.
 
 ## Zod
 

@@ -6,7 +6,7 @@ Status: test-only, unarmed. Parent issues #271 and #264; program #260.
 Branch based directly on `main` `1b9919ff95c26e47712b21c1a411c5bfbc88dc73`, after post-main CI `37860297680` succeeded 9/9. No completed work repeated.
 
 ## Test-only scope
-The only new executable logic is under `#[cfg(test)]` in the Windows process provider. It uses the existing `qdral-approval` `test-support` feature as a development dependency, providing a fixed synthetic SOFT broker. It never displays a human approval UI, mints real STRONG user-presence authority, executes a Full User process, or opens the claimed executable or cwd. No child is spawned in this fixture.
+The only new executable logic is under `#[cfg(test)]` in the Windows process provider. It uses the existing `orcel-approval` `test-support` feature as a development dependency, providing a fixed synthetic SOFT broker. It never displays a human approval UI, mints real STRONG user-presence authority, executes a Full User process, or opens the claimed executable or cwd. No child is spawned in this fixture.
 
 The test verifies a disposable MAC-authenticated Full User lease against actual Windows SID/logon LUID, derived device identity, current owner creation generation, session, policy revision, epoch and expiry. It creates a typed proposed `ShellSessionIntent`, computes its domain-separated digest, and validates the entire independently retained `ExpectedShellBinding` before requesting any synthetic action token. A synthetic SOFT token is consumed exactly once and replay is rejected. Even after that consumption, `authorize_shell_session_t01` MUST continue to deny ShellProcess.
 

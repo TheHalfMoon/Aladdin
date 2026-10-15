@@ -1,7 +1,7 @@
 {
-  "schema": "deskal-p19-exit-matrix/1",
+  "schema": "orcel-p19-exit-matrix/1",
   "grain": "SG-000091",
-  "program": "DESKAL-P19",
+  "program": "ORCEL-P19",
   "activation_base": "d58801ec8e9875c65f10d51d6eebd90d1913052e",
   "activation_head": "78d7d03c4540ea129d249a3a9c7a74ce040867c3",
   "activation_merge": "064124ce64650de29e69f04d42dbd4ec0a89dbfa",
@@ -47,7 +47,7 @@
   "live_snapshot": {
     "observed_date": "2026-10-07",
     "website": {
-      "url": "https://thehalfmoon.github.io/Deskal/",
+      "url": "https://thehalfmoon.github.io/Orcel/",
       "http_status": 200
     },
     "pages": {
@@ -61,7 +61,7 @@
     },
     "repository": {
       "description": "Local-first MCP authority layer for safe, bounded computer use and developer workflows.",
-      "homepage": "https://thehalfmoon.github.io/Deskal/",
+      "homepage": "https://thehalfmoon.github.io/Orcel/",
       "topics": [
         "ai-agents",
         "computer-use",
@@ -75,12 +75,12 @@
   },
   "rows": [
     {
-      "id": "identity.deskal",
+      "id": "identity.orcel",
       "required": true,
       "classification": "PROVEN",
       "evidence": [
         "README.md",
-        "docs/identity/DESKAL_RENAME.md",
+        "docs/identity/ORCEL_RENAME.md",
         "SG-000089"
       ]
     },
@@ -89,7 +89,7 @@
       "required": true,
       "classification": "PROVEN",
       "evidence": [
-        "apps/web/public/brand/deskal-mark-mask.svg",
+        "apps/web/public/brand/orcel-mark-mask.svg",
         "SG-000087",
         "SG-000090"
       ],
@@ -221,7 +221,7 @@
       "classification": "OUT_OF_SCOPE",
       "evidence": [
         ".github/workflows/pages.yml",
-        "docs/canonical/DESKAL_POST_P18_LAUNCH_PLAN.md"
+        "docs/canonical/ORCEL_POST_P18_LAUNCH_PLAN.md"
       ]
     },
     {
@@ -229,7 +229,7 @@
       "required": false,
       "classification": "OUT_OF_SCOPE",
       "evidence": [
-        "docs/canonical/DESKAL_POST_P18_LAUNCH_PLAN.md"
+        "docs/canonical/ORCEL_POST_P18_LAUNCH_PLAN.md"
       ]
     },
     {
@@ -238,7 +238,7 @@
       "classification": "OUT_OF_SCOPE",
       "evidence": [
         ".specgrain/specs/SG-000091.json",
-        "docs/canonical/DESKAL_POST_P18_LAUNCH_PLAN.md"
+        "docs/canonical/ORCEL_POST_P18_LAUNCH_PLAN.md"
       ]
     },
     {
@@ -247,7 +247,7 @@
       "classification": "OUT_OF_SCOPE",
       "evidence": [
         ".specgrain/specs/SG-000091.json",
-        "docs/canonical/DESKAL_POST_P18_LAUNCH_PLAN.md"
+        "docs/canonical/ORCEL_POST_P18_LAUNCH_PLAN.md"
       ]
     },
     {
@@ -256,7 +256,7 @@
       "classification": "OUT_OF_SCOPE",
       "evidence": [
         ".specgrain/specs/SG-000091.json",
-        "docs/canonical/DESKAL_POST_P18_LAUNCH_PLAN.md"
+        "docs/canonical/ORCEL_POST_P18_LAUNCH_PLAN.md"
       ]
     }
   ],

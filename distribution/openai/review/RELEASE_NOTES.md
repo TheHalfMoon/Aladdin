@@ -1,6 +1,6 @@
-# Qdral for ChatGPT — Release Notes (submission draft)
+# Orcel for ChatGPT — Release Notes (submission draft)
 
-Qdral connects ChatGPT to one computer that its owner paired through a Qdral relay. The plugin exposes the remote `core` tool profile only:
+Orcel connects ChatGPT to one computer that its owner paired through a Orcel relay. The plugin exposes the remote `core` tool profile only:
 
 - workspace reads: `fs_stat`, `fs_list`, `fs_read`, `fs_read_range`, `fs_search`, `fs_find`, `workspace_get`, `system_status`;
 - Git reads: `git_status`, `git_diff`, `git_log`;

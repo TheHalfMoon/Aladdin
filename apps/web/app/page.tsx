@@ -1,4 +1,4 @@
-const github = "https://github.com/TheHalfMoon/Deskal";
+const github = "https://github.com/TheHalfMoon/Orcel";
 const releases = `${github}/releases`;
 const security = `${github}/blob/main/docs/security/THREAT_MODEL.md`;
 const docs = `${github}/tree/main/docs`;
@@ -46,15 +46,15 @@ const CodePanel = () => (
     </div>
     <pre><code>{`{
   "mcpServers": {
-    "deskal": {
-      "command": "qdral",
+    "orcel": {
+      "command": "orcel",
       "args": ["mcp", "stdio"]
     }
   }
 }`}</code></pre>
     <div className="compat-note">
       <span>Compatibility note</span>
-      <p><code>qdral</code> remains the retained CLI identifier. Deskal is the product.</p>
+      <p><code>orcel</code> remains the retained CLI identifier. Orcel is the product.</p>
     </div>
   </div>
 );
@@ -81,9 +81,9 @@ export default function Home() {
       <a className="skip-link" href="#content">Skip to content</a>
 
       <header className="site-header">
-        <a className="brand" href="#" aria-label="Deskal home">
+        <a className="brand" href="#" aria-label="Orcel home">
           <span className="brand-mark brand-mark-white" aria-hidden="true" />
-          <span>Deskal</span>
+          <span>Orcel</span>
         </a>
         <nav className="desktop-nav" aria-label="Primary navigation">
           <a href="#product">Product</a>
@@ -104,20 +104,20 @@ export default function Home() {
           <div className="eyebrow"><span className="status-dot" /> Local-first computer access for AI agents</div>
           <h1>Your computer.<br />Your terms.</h1>
           <p className="hero-copy">
-            Deskal gives MCP-compatible agents a governed path to your own computer.
+            Orcel gives MCP-compatible agents a governed path to your own computer.
             Work stays bounded by local trust, approvals, policy, and audit.
           </p>
           <div className="hero-actions">
             <a className="button button-primary" href={github}>View on GitHub <Arrow /></a>
             <a className="button button-secondary" href={security}>Read the security model</a>
           </div>
-          <p className="hero-footnote">Open source · Apache-2.0 · No mandatory Deskal cloud</p>
+          <p className="hero-footnote">Open source · Apache-2.0 · No mandatory Orcel cloud</p>
 
-          <div className="hero-console" aria-label="Deskal authority boundary illustration">
+          <div className="hero-console" aria-label="Orcel authority boundary illustration">
             <div className="console-topbar">
               <div className="console-brand">
                 <span className="brand-mark brand-mark-color" aria-hidden="true" />
-                <span>Deskal</span>
+                <span>Orcel</span>
               </div>
               <div className="console-status"><span className="status-dot" /> Local boundary active</div>
             </div>
@@ -132,7 +132,7 @@ export default function Home() {
               </article>
               <div className="flow-arrow" aria-hidden="true">→</div>
               <article className="flow-card boundary-card">
-                <span className="flow-kicker">02 · DESKAL</span>
+                <span className="flow-kicker">02 · ORCEL</span>
                 <h3>Decide locally</h3>
                 <p>Trust, policy, approval, leases, and target identity stay authoritative.</p>
                 <div className="boundary-list">
@@ -174,7 +174,7 @@ export default function Home() {
               <h3>Standard MCP interface</h3>
               <p>Connect through the Model Context Protocol instead of a private agent runtime.</p>
               <div className="protocol-line">
-                <span>CLIENT</span><i /> <span>MCP</span><i /> <strong>DESKAL</strong><i /> <span>LOCAL PROVIDER</span>
+                <span>CLIENT</span><i /> <span>MCP</span><i /> <strong>ORCEL</strong><i /> <span>LOCAL PROVIDER</span>
               </div>
             </article>
             <article className="feature-card">
@@ -226,7 +226,7 @@ export default function Home() {
           <div className="developer-copy">
             <span className="section-index">04 / FOR DEVELOPERS</span>
             <h2>Integrate once.<br />Keep the boundary.</h2>
-            <p>Deskal exposes the qualified local surface through MCP, so clients can change without changing who owns authority.</p>
+            <p>Orcel exposes the qualified local surface through MCP, so clients can change without changing who owns authority.</p>
             <div className="developer-actions">
               <a className="button button-primary" href={docs}>Read the docs <Arrow /></a>
               <a className="button button-secondary" href={github}>Browse the repository</a>
@@ -237,7 +237,7 @@ export default function Home() {
 
         <section className="section-shell final-cta">
           <span className="brand-mark brand-mark-color final-logo" aria-hidden="true" />
-          <span className="section-index">DESKAL</span>
+          <span className="section-index">ORCEL</span>
           <h2>A more capable agent.<br />On your computer.</h2>
           <p>Open source, local-first, and built around explicit authority.</p>
           <div className="hero-actions final-actions">
@@ -250,7 +250,7 @@ export default function Home() {
 
       <footer className="site-footer">
         <div className="footer-brand">
-          <span className="brand"><span className="brand-mark brand-mark-white" aria-hidden="true" /><span>Deskal</span></span>
+          <span className="brand"><span className="brand-mark brand-mark-white" aria-hidden="true" /><span>Orcel</span></span>
           <p>Your computer, on your terms.</p>
         </div>
         <div className="footer-links">

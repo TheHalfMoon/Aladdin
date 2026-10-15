@@ -1,14 +1,14 @@
 # SG-000067 OpenAI Plugin Package Security Note
 
-Status: IMPLEMENTATION FOR QDRAL-P17
+Status: IMPLEMENTATION FOR ORCEL-P17
 SpecGrain: SG-000067
 Base: `479594786197978411b259cfbc101984ec618b35`
 Date: 2026-10-04
 
 ## Changes
 
-1. `apps/qdral-mcp/src/openai_plugin.ts` builds and validates the package; `scripts/build-openai-plugin.mjs` writes it.
-   `apps/qdral-mcp/src/discovery.ts` answers `tools/list` in process through the authoritative builder with a kernel that
+1. `apps/orcel-mcp/src/openai_plugin.ts` builds and validates the package; `scripts/build-openai-plugin.mjs` writes it.
+   `apps/orcel-mcp/src/discovery.ts` answers `tools/list` in process through the authoritative builder with a kernel that
    throws if called, so provider-facing tool metadata is never hand-written.
 2. Every remotely mappable tool now declares `_meta.securitySchemes = [{ "type": "oauth2", "scopes": [<contract scope>] }]`
    on every transport, derived from the SG-000065 tool contract. No tool is anonymous; local-only tools declare none.
