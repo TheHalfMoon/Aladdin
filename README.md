@@ -1,7 +1,7 @@
 # Orcel
 
 <p align="center">
-  <img src="assets/brand/orcel-app-icon.svg" alt="Orcel brand mark" width="112" height="112">
+  <img src="assets/brand/orcel-app-icon.svg" alt="Orcel orbital emblem with open outer arc, inner ring, and satellite dot" width="112" height="112">
 </p>
 
 <p align="center"><strong>Your computer, your terms.</strong></p>

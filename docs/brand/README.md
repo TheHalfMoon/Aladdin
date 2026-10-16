@@ -1,59 +1,34 @@
-# Orcel — Brand kit
+# Orcel Orbital — Brand Kit
 
-**Selected identity:** Design #17. Solid white disc with two rounded diagonal
-cut-out rails. The mark is flat, mono, and mechanically repeatable. The
-primary SVG has true transparency in the two slashes, not painted black lines.
+The official Orcel identity is the founder-approved **orbital symbol**: one open outer C-shaped arc, one complete inner ring, and a detached dot. The signature horizontal lockup uses the original lowercase white wordmark on black.
 
-## Get the kit
+## Download the current kit
 
-[Download the Orcel Brand Kit v1 ZIP](https://thehalfmoon.github.io/Orcel/brand/Orcel-Identity-Kit-v1.zip)
+[Download Orcel Brand Kit ZIP](https://thehalfmoon.github.io/Orcel/brand/Orcel-Identity-Kit-v1.zip) — includes vector masters, PNGs (16–1024px), favicon ICO, social cards, the illustrated brand overview, and an SHA-256 manifest.
 
-[Full identity specifications](../../assets/brand/IDENTITY.md) ·
-[Asset SHA-256 manifest](https://thehalfmoon.github.io/Orcel/brand/orcel-asset-manifest.json) ·
-[Production master generator](../../scripts/sync-brand.mjs) ·
-[Raster exporter](../../scripts/export-brand.py)
+[Open the gallery](https://thehalfmoon.github.io/Orcel/brand.html) | [Full construction and usage guidelines](../../assets/brand/IDENTITY.md) | [SHA-256 manifest](https://thehalfmoon.github.io/Orcel/brand/orcel-asset-manifest.json)
 
-## Primary assets
+## Primary files
 
-| Use | SVG |
+| Application | Exact asset |
 | --- | --- |
-| White master | [White disc + dual rails](../../assets/brand/orcel-o-white.svg) |
-| Reverse master | [Black disc + dual rails](../../assets/brand/orcel-o-black.svg) |
-| ChatGPT / Codex | [Dark app tile](../../assets/brand/orcel-app-icon.svg) |
-| Light app tile | [Light app tile](../../assets/brand/orcel-app-icon-light.svg) |
-| White wordmark | [Custom vector wordmark](../../assets/brand/orcel-wordmark-white.svg) |
-| Black wordmark | [Custom vector wordmark](../../assets/brand/orcel-wordmark-black.svg) |
-| White horizontal logo | [Horizontal lockup](../../assets/brand/orcel-lockup-white.svg) |
-| Black horizontal logo | [Horizontal lockup](../../assets/brand/orcel-lockup-black.svg) |
-| Social dark | [OG/social dark](../../assets/brand/orcel-social-dark.svg) |
-| Social light | [OG/social light](../../assets/brand/orcel-social-light.svg) |
-| Secondary pattern | [Two-rail rhythm](../../assets/brand/orcel-rails-pattern.svg) |
+| Main white symbol | [orcel-o-white.svg](../../assets/brand/orcel-o-white.svg) |
+| Black symbol for white backgrounds | [orcel-o-black.svg](../../assets/brand/orcel-o-black.svg) |
+| Official horizontal logo | [orcel-lockup-white.svg](../../assets/brand/orcel-lockup-white.svg) |
+| Inverted horizontal logo | [orcel-lockup-black.svg](../../assets/brand/orcel-lockup-black.svg) |
+| Vertical white lockup | [orcel-lockup-stacked-white.svg](../../assets/brand/orcel-lockup-stacked-white.svg) |
+| Vertical black lockup | [orcel-lockup-stacked-black.svg](../../assets/brand/orcel-lockup-stacked-black.svg) |
+| Standalone lowercase lettering | [orcel-wordmark-white.svg](../../assets/brand/orcel-wordmark-white.svg) |
+| Main app/ChatGPT/Codex icon | [orcel-app-icon.svg](../../assets/brand/orcel-app-icon.svg) |
+| Light application icon | [orcel-app-icon-light.svg](../../assets/brand/orcel-app-icon-light.svg) |
+| Social preview on black | [orcel-social-dark.svg](../../assets/brand/orcel-social-dark.svg) |
+| Supporting pattern | [orcel-orbit-pattern.svg](../../assets/brand/orcel-orbit-pattern.svg) |
+| Editorial neutral accent | [orcel-accent-icon.svg](../../assets/brand/orcel-accent-icon.svg) |
 
-Raster files from 16px to 1024px, a print-friendly brand overview PNG, ICO,
-and PNG social cards are generated during Pages deployment and included in
-the downloadable ZIP. Compiled media are not checked into Git.
+## Production and provenance
 
-## Website
+All public and app logos are generated from [one deterministic source](../../scripts/sync-brand.mjs). PNGs and ZIP are generated during CI/Pages with the existing local image tooling; binaries are not committed. This protects text-based reviews and provides verifiable published checksums.
 
-Public identity preview: https://thehalfmoon.github.io/Orcel/brand.html
+This identity applies to Orcel's source and new website/package assets. Previously installed marketplace/plugin icons may remain cached until distributed by their respective platforms. Historical records, past signatures, and archived logo artifacts remain intact.
 
-The site and product plugin icons all derive from the exact same source mark,
-generated with `node scripts/sync-brand.mjs`. The original frozen logo and
-closed-grain evidence remain unchanged and are no longer presented as active.
-
-## Launch checklist
-
-1. Download ZIP; compare manifest hashes after extraction.
-2. Confirm the two slots remain visible at 16, 24, 32 and 64px.
-3. Test logo on both `#080808` and `#F5F6F7` surfaces.
-4. Release the updated OpenAI/Codex package assets through the applicable
-   platform workflow. Changing repository contents does not automatically
-   update an already installed ChatGPT connector icon.
-5. Keep original release signatures and provenance immutable.
-
-**Research:** design-system principles informed by public Pentagram case
-studies (Windows, Intrinsic, Tractable) and internal repositories
-TheHalfMoon/Skelet and TheHalfMoon/Ninerr. No other brand artwork copied;
-Pentagram is not the author of this Orcel identity.
-
-**No external font files are included.**
+The research method draws on [Pentagram's MIT Media Lab identity system](https://www.pentagram.com/work/mit-media-lab/story), the icon and font provenance gates in [Skelet](https://github.com/TheHalfMoon/Skelet), and the content-addressed assets approach in [Ninerr](https://github.com/TheHalfMoon/Ninerr). **No third-party brand artwork was copied, and no external studio endorsement is implied.**
