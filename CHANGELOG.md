@@ -7,8 +7,8 @@ Orcel's published artifacts and release notes are the canonical release history:
 - Improve open-source onboarding, contributor documentation, project presentation, and issue/PR templates.
 - Keep the existing compatibility and security boundaries explicit for new contributors.
 
-## 2026-10-16 — Brand system merged (repository change)
+## 2026-10-16 — Orbital identity adopted (repository change)
 
-- Adopt the founder-selected white-disc Design #17 identity across Orcel's web assets and OpenAI/Codex distribution packages ([PR #339](https://github.com/TheHalfMoon/Orcel/pull/339)).
-- Add a reproducible SVG brand system, public identity gallery, raster export tooling, and downloadable media kit.
+- Replace the earlier white-disc Design #17 from [PR #339](https://github.com/TheHalfMoon/Orcel/pull/339) with the founder-approved **Orcel Orbital** identity in [PR #341](https://github.com/TheHalfMoon/Orcel/pull/341): open outer white arc, complete inner ring, detached satellite dot, and lowercase white wordmark on black.
+- Synchronize deterministic vector assets across the website and OpenAI/Codex package destinations; provide the public identity gallery, raster export tooling, and downloadable media kit. The previous design remains in Git history and is no longer the active mark.
 - **Not automatically a standalone product release**: use the GitHub Releases page for released binaries, checksums, and provenance.
