@@ -13,6 +13,8 @@
 .orcel-brand-system .brand-intro p{font-size:20px;line-height:1.65;color:#b8bcc1;max-width:660px;margin-top:34px}
 .orcel-brand-system .brand-hero{border:1px solid #252729;min-height:650px;display:grid;place-items:center;background:#0d0e0f;border-radius:16px;position:relative;overflow:hidden}
 .orcel-brand-system .brand-hero>img{width:min(38vw,380px);height:auto;filter:none}
+.orcel-brand-system .brand-main-lockup{width:min(86%,980px);max-width:100%;display:grid;place-items:center}
+.orcel-brand-system .brand-main-lockup img{width:100%;height:auto;display:block}
 .orcel-brand-system .brand-hero-caption{position:absolute;bottom:28px;left:35px;right:35px;display:flex;justify-content:space-between;align-items:center;color:#b8bcc1;font-size:12px;letter-spacing:.16em}
 .orcel-brand-system .brand-hero-caption strong{color:#fff;letter-spacing:.28em}
 .orcel-brand-system .brand-heading{padding:88px 0 26px;display:flex;justify-content:space-between;gap:40px;align-items:baseline}

@@ -1,6 +1,6 @@
 # Orcel
 
-<img alt="Orcel — solid white disc with two diagonal rounded rails" src="assets/brand/orcel-app-icon.svg" width="96" height="96" />
+<img alt="Orcel: orbital symbol with open white arc, complete ring and satellite dot" src="assets/brand/orcel-app-icon.svg" width="96" height="96" />
 
 [Brand identity and downloadable design kit](docs/brand/README.md)
 

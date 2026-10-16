@@ -52,7 +52,7 @@ sources=sorted(BRAND.glob("*.svg"))
 exports=sorted(OUT.glob("*"))
 docs=[BRAND/"IDENTITY.md",ROOT/"docs"/"brand"/"README.md"]
 entries=sorted([*sources,*exports,*docs],key=lambda p:p.relative_to(ROOT).as_posix())
-manifest={"name":"Orcel","brand_version":"1.0","source":"Design 17","assets":[]}
+manifest={"name":"Orcel","brand_version":"1.0","source":"Orcel Orbital Identity 2026","assets":[]}
 for path in entries:
     body=path.read_bytes()
     manifest["assets"].append({
