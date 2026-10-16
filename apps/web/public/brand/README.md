@@ -1,22 +1,14 @@
-# Orcel web identity
+# Orcel public brand assets
 
-Current mark: **Design #17** — one pure-white circle with two rounded
-diagonal transparent cutouts. Master `orcel-o-white.svg`.
+**Current approved mark:** three-part Orbital Identity (open C-shaped outer orbit, complete circular inner ring, detached dot), with the lowercase orcel vector wordmark.
 
-The same geometry is used for:
-- `orcel-o-white.svg` and `orcel-o-black.svg` — transparent core identity;
-- `orcel-app-icon.svg` and `orcel-app-icon-light.svg` — application tiles;
-- `orcel-lockup-white.svg`, `orcel-lockup-black.svg` — vector wordmark lockups;
-- `orcel-social-dark.svg`, `orcel-social-light.svg` — social presentation;
-- `orcel-social-dark.png` — social/OG platform preview.
+The canonical generator is scripts/sync-brand.mjs. Run node scripts/sync-brand.mjs --check to detect asset drift. All public SVG files and the OpenAI, Codex and Next.js icons derive from that script.
 
-Source of truth: `scripts/sync-brand.mjs`; optional raster exports via
-`scripts/render-brand.mjs` using the isolated website's existing `sharp`.
-All current SVG destinations pass `node scripts/sync-brand.mjs --check`.
+Production imagery: orbital SVG masters, horizontal and vertical vector lockups, monochrome app tiles, optional neutral editorial accent, orbital background pattern and 1200 by 630 social-card artwork. The dark social PNG, ZIP and checksum JSON in this directory are built on CI/Pages from reviewable sources.
 
-Full specifications, variants, and downloadable assets:
-`docs/brand/README.md` or `https://thehalfmoon.github.io/Orcel/brand.html`.
+Complete identity specifications: assets/brand/IDENTITY.md.
+Public gallery: https://thehalfmoon.github.io/Orcel/brand.html
 
-**Historical artifact — do not alter:** `orcel-mark-mask.svg` remains an
-immutable SG-000087/P19 legacy design with its previous SHA-256 to preserve
-closed-grain evidence. It is not the active public logo.
+**Historic artifact only:** orcel-mark-mask.svg is the frozen predecessor from a closed governance record. Do not edit, overwrite or rebrand that file. It is not used as the current public mark.
+
+The GitHub repo defines the package icons, but installed ChatGPT/Codex interfaces may require separate distribution steps and cache refreshes before showing them.

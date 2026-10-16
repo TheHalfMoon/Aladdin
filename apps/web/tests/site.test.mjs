@@ -85,10 +85,10 @@ test("Next output is a static export with a bounded explicit project base path",
   assert.equal((css.match(/var\(--orcel-mark-mask\)/g) ?? []).length, 2);
 });
 
-test("approved Orcel brand geometry is byte-pinned and shared by both variants", async () => {
+test("approved orbital geometry is byte-pinned and shared by both variants", async () => {
   assert.equal(
     await sha256(join(root, "public", "brand", "orcel-o-white.svg")),
-    "812de68035e5adc62dac6561db5d529cf33f84ecc8bae49e004dfccb3c6ff809"
+    "1a0785e4d1eff2fa6158c68837cf62f4a70eb2481a6872768f2b2a1c9260251c"
   );
   const css = await read(join(root, "app", "globals.css"));
   assert.equal((css.match(/var\(--orcel-mark-mask\)/g) ?? []).length, 2, "both mask declarations must use the one canonical geometry variable");
