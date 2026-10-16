@@ -50,9 +50,9 @@ jobs:
         run: |
           test "${{ steps.pages.outputs.base_path }}" = "/Orcel"
           test -f apps/web/out/index.html
-          test -f apps/web/out/brand/orcel-mark-mask.svg
+          test -f apps/web/out/brand/orcel-o-white.svg
           grep -Fq '/Orcel/_next/' apps/web/out/index.html
-          grep -Fq '/Orcel/brand/orcel-mark-mask.svg' apps/web/out/index.html
+          grep -Fq '/Orcel/brand/orcel-o-white.svg' apps/web/out/index.html
           test ! -e apps/web/public/CNAME
       - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
@@ -94,11 +94,11 @@ jobs:
           esac
 
           page="${PAGE_URL%/}/"
-          asset="${PAGE_URL%/}/brand/orcel-mark-mask.svg"
+          asset="${PAGE_URL%/}/brand/orcel-o-white.svg"
 
           for attempt in $(seq 1 12); do
             if curl --fail --location --silent --show-error --max-time 15 "$page" -o "$RUNNER_TEMP/index.html" &&
-               curl --fail --location --silent --show-error --max-time 15 "$asset" -o "$RUNNER_TEMP/orcel-mark-mask.svg"; then
+               curl --fail --location --silent --show-error --max-time 15 "$asset" -o "$RUNNER_TEMP/orcel-o-white.svg"; then
               break
             fi
             if [ "$attempt" -eq 12 ]; then
@@ -110,4 +110,4 @@ jobs:
 
           grep -Fq 'Orcel' "$RUNNER_TEMP/index.html"
           grep -Fq 'https://github.com/TheHalfMoon/Orcel/releases' "$RUNNER_TEMP/index.html"
-          grep -Fq '<svg' "$RUNNER_TEMP/orcel-mark-mask.svg"
+          grep -Fq '<svg' "$RUNNER_TEMP/orcel-o-white.svg"
