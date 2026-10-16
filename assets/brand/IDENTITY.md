@@ -127,10 +127,11 @@ npm run web:test
 npm run web:build
 ```
 
-CI requires byte-identity of all generated SVG variants. The optional Python
-export uses Pillow/CairoSVG locally for PNG outputs; it does not add a runtime
-dependency. The release ZIP is deterministic and includes SHA-256 records.
-Only regenerate it when vector source or guide changes.
+CI requires byte-identity of all generated SVG variants. The pinned web
+sharp dependency renders PNGs; Python's standard library packages the ICO,
+manifest, and downloadable ZIP during build. Compiled media are not committed
+to Git, so semantic review receives only inspectable text and SVG sources.
+The deterministic ZIP includes SHA-256 records and is published by Pages.
 
 ## 10. Historical boundary
 

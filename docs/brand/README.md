@@ -6,10 +6,10 @@ primary SVG has true transparency in the two slashes, not painted black lines.
 
 ## Get the kit
 
-[Download the Orcel Brand Kit v1 ZIP](../../assets/brand/downloads/Orcel-Identity-Kit-v1.zip)
+[Download the Orcel Brand Kit v1 ZIP](https://thehalfmoon.github.io/Orcel/brand/Orcel-Identity-Kit-v1.zip)
 
 [Full identity specifications](../../assets/brand/IDENTITY.md) ·
-[Asset SHA-256 manifest](../../assets/brand/ASSET_MANIFEST.json) ·
+[Asset SHA-256 manifest](https://thehalfmoon.github.io/Orcel/brand/orcel-asset-manifest.json) ·
 [Production master generator](../../scripts/sync-brand.mjs) ·
 [Raster exporter](../../scripts/export-brand.py)
 
@@ -30,8 +30,8 @@ primary SVG has true transparency in the two slashes, not painted black lines.
 | Secondary pattern | [Two-rail rhythm](../../assets/brand/orcel-rails-pattern.svg) |
 
 Raster files from 16px to 1024px, a print-friendly brand overview PNG, ICO,
-and PNG social cards are stored in
-[`assets/brand/exports/`](../../assets/brand/exports/).
+and PNG social cards are generated during Pages deployment and included in
+the downloadable ZIP. Compiled media are not checked into Git.
 
 ## Website
 

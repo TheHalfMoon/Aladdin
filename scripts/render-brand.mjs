@@ -37,5 +37,36 @@ for(const {src,w,h,name} of batch){
  }catch(e){fails.push(name+": "+e.message)}
 }
 if(fails.length){console.error(fails.join("\n"));process.exit(1)}
+// The overview is generated from real logo assets, not an independently drawn mockup.
+const previewSvg=Buffer.from(
+ '<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1050" viewBox="0 0 1600 1050">'+
+ '<rect width="1600" height="1050" fill="#080808"/>'+
+ '<text x="68" y="98" fill="#FFFFFF" font-family="Arial,sans-serif" font-size="48" font-weight="700" letter-spacing="5">ORCEL</text>'+
+ '<text x="70" y="137" fill="#B8BCC1" font-family="Arial,sans-serif" font-size="20" letter-spacing="3">BRAND SYSTEM   /   DESIGN 17   /   V1.0</text>'+
+ '<line x1="70" y1="177" x2="1530" y2="177" stroke="#3E4144"/>'+
+ '<rect x="70" y="210" width="710" height="600" rx="28" fill="#17191B"/>'+
+ '<rect x="800" y="210" width="730" height="600" rx="28" fill="#F5F6F7"/>'+
+ '<text x="108" y="760" fill="#FFFFFF" font-family="Arial,sans-serif" font-size="22" letter-spacing="2">DARK  /  PRIMARY APP ICON</text>'+
+ '<text x="840" y="760" fill="#080808" font-family="Arial,sans-serif" font-size="22" letter-spacing="2">LIGHT  /  INVERSE ICON</text>'+
+ '<text x="80" y="875" fill="#FFFFFF" font-family="Arial,sans-serif" font-size="29" font-weight="600">One white disc. Two diagonal rails.</text>'+
+ '<text x="80" y="927" fill="#B8BCC1" font-family="Arial,sans-serif" font-size="25">Your computer, your terms.</text>'+
+ '<text x="815" y="870" fill="#FFFFFF" font-family="Arial,sans-serif" font-size="21">16px</text>'+
+ '<text x="930" y="870" fill="#FFFFFF" font-family="Arial,sans-serif" font-size="21">32px</text>'+
+ '<text x="1080" y="870" fill="#FFFFFF" font-family="Arial,sans-serif" font-size="21">64px</text>'+
+ '<text x="1300" y="870" fill="#FFFFFF" font-family="Arial,sans-serif" font-size="21">128px</text>'+
+ '</svg>');
+const overlay=[];
+for(const {file,left,top,size} of [
+ {file:"orcel-app-dark-512.png",left:225,top:275,size:405},
+ {file:"orcel-app-light-512.png",left:955,top:275,size:405},
+ {file:"orcel-app-dark-16.png",left:827,top:910,size:16},
+ {file:"orcel-app-dark-32.png",left:944,top:904,size:32},
+ {file:"orcel-app-dark-64.png",left:1090,top:892,size:64},
+ {file:"orcel-app-dark-128.png",left:1310,top:878,size:128}
+]){
+ const input=await sharp(join(out,file)).resize(size,size).png().toBuffer();
+ overlay.push({input,left,top});
+}
+await sharp(previewSvg).composite(overlay).png().toFile(join(out,"orcel-identity-overview.png"));
 copyFileSync(join(out,"orcel-social-dark.png"),join(root,"apps/web/public/brand/orcel-social-dark.png"));
-console.log("Rendered "+batch.length+" PNG files from authored Orcel SVG variants using local sharp.");
+console.log("Rendered "+(batch.length+1)+" PNG files from the canonical Orcel SVG assets using local sharp.");

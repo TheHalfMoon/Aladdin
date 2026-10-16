@@ -8,7 +8,7 @@ export const metadata: Metadata = {
 
 const basePath = process.env.ORCEL_WEB_BASE_PATH ?? "";
 const asset = (file: string) => basePath + "/brand/" + file;
-const kit = "https://github.com/TheHalfMoon/Orcel/raw/refs/heads/main/assets/brand/downloads/Orcel-Identity-Kit-v1.zip";
+const kit = basePath + "/brand/Orcel-Identity-Kit-v1.zip";
 const palette = [
   {name:"White",hex:"#FFFFFF"},{name:"Ink",hex:"#080808"},
   {name:"Charcoal",hex:"#17191B"},{name:"Silver",hex:"#D9DDE1"},
