@@ -37,7 +37,7 @@ for(const {src,w,h,name} of batch){
  }catch(e){fails.push(name+": "+e.message)}
 }
 if(fails.length){console.error(fails.join("\n"));process.exit(1)}
-// The overview is generated from real logo assets, not an independently drawn mockup.
+// The overview composites the same canonical icon assets used by the product.
 const previewSvg=Buffer.from(
  '<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1050" viewBox="0 0 1600 1050">'+
  '<rect width="1600" height="1050" fill="#080808"/>'+
