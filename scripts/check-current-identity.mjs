@@ -46,6 +46,36 @@ if (pathResidue.length) {
   throw new Error(`superseded identity remains in current paths:\n${pathResidue.join("\n")}`);
 }
 
+// Also reject every previous product name in active runtime paths and source.
+// Dated donor/architecture assertions must continue to match the frozen evidence.
+const oldProductName = /cotra|deskal|aladdin|qdral|quntal/i;
+const historicalFilenameExceptions = new Set([
+  "docs/identity/QUNTAL_RENAME.md",
+  "docs/identity/ORCEL_HISTORY_DESKAL.md",
+  "docs/identity/ORCEL_HISTORY_QDRAL.md"
+]);
+const staleActiveFilenames = tracked.filter(
+  (path) => oldProductName.test(path) && !historicalFilenameExceptions.has(path)
+);
+if (staleActiveFilenames.length) {
+  throw new Error(`former product name in maintained file paths:\n${staleActiveFilenames.join("\n")}`);
+}
+const historicalAssertions = new Set([
+  "apps/orcel-mcp/src/p16-exit.test.ts",
+  "apps/orcel-mcp/src/p20-architecture.test.ts",
+  "apps/web/tests/p19-exit.test.mjs",
+  "apps/web/tests/site.test.mjs"
+]);
+const runtimePaths = tracked.filter(
+  (path) => /^(apps|crates|distribution|examples|\.github)\//.test(path) && !historicalAssertions.has(path)
+);
+for (const path of runtimePaths) {
+  const bytes = readFileSync(path);
+  if (!isBinary(bytes) && oldProductName.test(bytes.toString("utf8"))) {
+    throw new Error(`former product name in current source: ${path}`);
+  }
+}
+
 const contentResidue = [];
 for (const path of tracked) {
   if (historicalContentAllowed(path)) continue;
@@ -126,6 +156,19 @@ for (const expected of [
   "Repository identity: `TheHalfMoon/Orcel`"
 ]) {
   if (!identity.includes(expected)) throw new Error(`Orcel identity record is missing: ${expected}`);
+}
+
+// Active governance notices must never call Orcel a superseded identity.
+// Historical ledgers below the CURRENT separator remain immutable evidence.
+const activeFrontier = readFileSync("docs/canonical/CURRENT.md", "utf8").split("\n---\n")[0];
+const planningIdentity = readFileSync("docs/canonical/PLANNING_INDEX.md", "utf8").split("## 2. Planning precedence")[0];
+for (const [name, notice] of [["CURRENT", activeFrontier], ["PLANNING_INDEX", planningIdentity]]) {
+  if (!notice.includes("Orcel is the sole current product and repository identity")) {
+    throw new Error(`${name} must identify Orcel as the sole current product`);
+  }
+  if (/Orcel and Cotra are superseded|Orcel, .*?are superseded/i.test(notice)) {
+    throw new Error(`${name} incorrectly lists Orcel as a superseded product`);
+  }
 }
 
 const readme = readFileSync("README.md", "utf8");

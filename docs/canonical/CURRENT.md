@@ -1,15 +1,20 @@
 # Orcel Current Identity Notice
 
 Status: ACTIVE PRODUCT IDENTITY
-Effective date: 2026-10-04
+Updated: 2026-10-16
+Canonical identity effective: 2026-10-15
 
-Orcel is the current product and project name. Orcel, Quntal, and Cotra are superseded product identities and must not be presented as the current product. Orcel-derived identifiers (CLI `orcel`, daemon `orceld`, npm packages `@orcel/mcp` and `@orcel/relay`, `ORCEL_*` environment variables, `orcel.*` OAuth scopes, `orcel-*` source paths, install/storage paths containing `Orcel`/`orcel`, and the `orcel` MCP compatibility name) remain compatibility identifiers governed by `docs/identity/ORCEL_RENAME.md`; they do not define the current product brand. "ORCEL-P18 is a retained compatibility/program identifier within the Orcel product; it is not the current product brand." COTRA-P16, COTRA-P17, and ORCEL-P18 likewise name governed programs, not the product. This identity change grants no new authority.
+**Orcel is the sole current product and repository identity.** The current CLI is `orcel`, daemon `orceld`, public packages `@orcel/mcp` and `@orcel/relay`, environment prefix `ORCEL_`, OAuth scope prefix `orcel.`, and repository `TheHalfMoon/Orcel`. They are **current** identifiers, not superseded brands.
+
+Earlier product names are historical only. Closed-grain identifiers such as `COTRA-P16` and `COTRA-P17` and the retained `ORCEL-P18` are program identifiers, not product brands. Previously published binaries, approvals, signatures, credentials, and trusted state are not silently migrated by this rename, nor does it grant any new authority.
+
+The dated ledger below preserves its original evidence. For the current product and migration boundaries, follow `docs/identity/ORCEL_RENAME.md`.
 
 ---
 
 # Orcel Current Canonical Frontier
 
-> Historical ledger note: every dated entry below this marker records a past canonical frontier verbatim and is historical evidence. Superseded product names (Cotra, Quntal, Orcel) appearing below identify earlier names of this same project and are intentionally preserved rather than rewritten. The current product identity is stated above and in `docs/identity/ORCEL_RENAME.md`.
+> Historical ledger note: dated entries below preserve previous project names, program identifiers, and authority claims verbatim. They are historical evidence, not the current product identity, which is Orcel as specified above and in `docs/identity/ORCEL_RENAME.md`.
 
 Status: COMPLETE_CANONICAL
 Date: 2026-10-01
