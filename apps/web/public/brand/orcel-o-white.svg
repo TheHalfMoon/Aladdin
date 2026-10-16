@@ -1,3 +1,3 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="Orcel">
-  <path fill="#ffffff" fill-rule="evenodd" d="M128 16a112 112 0 1 0 0 224a112 112 0 1 0 0-224ZM101 71H155C174 71 185 83 185 102V154C185 173 174 185 155 185H101C82 185 71 173 71 154V102C71 83 82 71 101 71Z"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="Orcel white circular symbol with two rounded diagonal cuts">
+  <path d="M128 20 A108 108 0 1 0 128 236 A108 108 0 1 0 128 20 Z M90.071 153.071 L140.071 103.071 A10 10 0 0 1 125.929 88.929 L75.929 138.929 A10 10 0 0 1 90.071 153.071 Z M132.071 184.071 L183.071 133.071 A10 10 0 0 1 168.929 118.929 L117.929 169.929 A10 10 0 0 1 132.071 184.071 Z" fill="#FFFFFF" fill-rule="evenodd"/>
 </svg>

@@ -88,7 +88,7 @@ test("Next output is a static export with a bounded explicit project base path",
 test("approved Orcel brand geometry is byte-pinned and shared by both variants", async () => {
   assert.equal(
     await sha256(join(root, "public", "brand", "orcel-o-white.svg")),
-    "983e5bdc8b8f91e6615fc34c1892e7b24c83cdac48f90d38587b751f5c6520b3"
+    "812de68035e5adc62dac6561db5d529cf33f84ecc8bae49e004dfccb3c6ff809"
   );
   const css = await read(join(root, "app", "globals.css"));
   assert.equal((css.match(/var\(--orcel-mark-mask\)/g) ?? []).length, 2, "both mask declarations must use the one canonical geometry variable");
@@ -203,7 +203,13 @@ test("canonical and social metadata stay exact, static, and bounded to the Pages
   assert.match(layout, /openGraph:\s*\{[\s\S]*url:\s*siteUrl[\s\S]*siteName:\s*"Orcel"/);
   assert.match(layout, /twitter:\s*\{[\s\S]*card:\s*"summary"[\s\S]*title[\s\S]*description/);
   assert.equal((layout.match(/https:\/\/thehalfmoon\.github\.io\/Orcel\//g) ?? []).length, 1);
-  assert.doesNotMatch(layout, /images:\s*\[/);
+  assert.equal((layout.match(/images:\s*\[/g) ?? []).length, 2, "only the two static local image declarations are allowed");
+  assert.match(layout, /images:\s*\[\{\s*url:\s*siteUrl \+ "brand\/orcel-social-dark\.png"/);
+  assert.match(layout, /images:\s*\[siteUrl \+ "brand\/orcel-social-dark\.png"\]/);
+  const og = await readFile(join(root, "public", "brand", "orcel-social-dark.png"));
+  assert.equal(og.subarray(0, 8).toString("hex"), "89504e470d0a1a0a");
+  assert.equal(og.readUInt32BE(16), 1200);
+  assert.equal(og.readUInt32BE(20), 630);
 });
 
 test("responsive primary navigation stays keyboard and touch usable without client runtime", async () => {

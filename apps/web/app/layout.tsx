@@ -22,10 +22,12 @@ export const metadata: Metadata = {
     description: socialDescription,
     type: "website",
     url: siteUrl,
-    siteName: "Orcel"
+    siteName: "Orcel",
+    images: [{ url: siteUrl + "brand/orcel-social-dark.png", width: 1200, height: 630, alt: "Orcel — Your computer, your terms" }]
   },
   twitter: {
     card: "summary",
+    images: [siteUrl + "brand/orcel-social-dark.png"],
     title,
     description: socialDescription
   }

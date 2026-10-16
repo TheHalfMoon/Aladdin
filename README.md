@@ -1,5 +1,10 @@
 # Orcel
 
+<img alt="Orcel — solid white disc with two diagonal rounded rails" src="assets/brand/orcel-app-icon.svg" width="96" height="96" />
+
+[Brand identity and downloadable design kit](docs/brand/README.md)
+
+
 **Computer Orchestration & Trusted Runtime Access**
 
 Orcel is an open-source, local-first MCP gateway that lets ChatGPT work with an explicitly trusted folder on your Windows computer through a small set of bounded tools, with local approval for anything that changes your computer. It connects through the OpenAI Secure MCP Tunnel, so no inbound port is opened on your machine.

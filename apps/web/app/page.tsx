@@ -2,6 +2,7 @@ const github = "https://github.com/TheHalfMoon/Orcel";
 const releases = `${github}/releases`;
 const security = `${github}/blob/main/docs/security/THREAT_MODEL.md`;
 const docs = `${github}/tree/main/docs`;
+const brandUrl = (process.env.ORCEL_WEB_BASE_PATH ?? "") + "/brand.html";
 
 const Arrow = () => (
   <svg aria-hidden="true" viewBox="0 0 16 16" width="16" height="16">
@@ -69,6 +70,7 @@ const MobileNav = () => (
       <a href="#product">Product</a>
       <a href="#security">Security</a>
       <a href="#developers">Developers</a>
+      <a href={brandUrl}>Brand</a>
       <a href={releases}>Releases</a>
       <a href={github}>GitHub</a>
     </nav>
@@ -89,6 +91,7 @@ export default function Home() {
           <a href="#product">Product</a>
           <a href="#security">Security</a>
           <a href="#developers">Developers</a>
+          <a href={brandUrl}>Brand</a>
           <a href={releases}>Releases</a>
           <a href={github}>GitHub</a>
         </nav>
@@ -258,6 +261,7 @@ export default function Home() {
           <a href="#security">Security</a>
           <a href="#developers">Developers</a>
           <a href={docs}>Docs</a>
+          <a href={brandUrl}>Brand identity</a>
           <a href={releases}>Releases</a>
           <a href={github}>GitHub</a>
         </div>

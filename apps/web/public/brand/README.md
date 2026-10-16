@@ -1,19 +1,22 @@
-# Orcel website brand assets
+# Orcel web identity
 
-**Current**: `orcel-o-white.svg` — the pure-white Orcel O. The matching
-app icon (`orcel-app-icon.svg`) presents exactly the same mark on a black
-rounded-square backdrop, suitable for 16px browser or LLM integrations.
+Current mark: **Design #17** — one pure-white circle with two rounded
+diagonal transparent cutouts. Master `orcel-o-white.svg`.
 
-These assets are generated from the *single authored geometry* in
-`scripts/sync-brand.mjs`; use `node scripts/sync-brand.mjs --check` to
-verify exact byte identity across website, OpenAI and Codex distributions.
+The same geometry is used for:
+- `orcel-o-white.svg` and `orcel-o-black.svg` — transparent core identity;
+- `orcel-app-icon.svg` and `orcel-app-icon-light.svg` — application tiles;
+- `orcel-lockup-white.svg`, `orcel-lockup-black.svg` — vector wordmark lockups;
+- `orcel-social-dark.svg`, `orcel-social-light.svg` — social presentation;
+- `orcel-social-dark.png` — social/OG platform preview.
 
-- Current white O SHA-256: `983e5bdc8b8f91e6615fc34c1892e7b24c83cdac48f90d38587b751f5c6520b3`
-- Current dark app tile SHA-256: `bfc5c4b1808b8b9553a3a266db01b361159b6cdfc58e5b1630560da49dfcc2cc`
+Source of truth: `scripts/sync-brand.mjs`; optional raster exports via
+`scripts/render-brand.mjs` using the isolated website's existing `sharp`.
+All current SVG destinations pass `node scripts/sync-brand.mjs --check`.
 
-**Historical**: `orcel-mark-mask.svg` is the frozen SG-000087/P19
-founder-approved `D + computer` mark. It is no longer displayed as
-the current Orcel identity, but remains intact for historical evidence and
-its exact checksum tests. Do not modify or overwrite it.
+Full specifications, variants, and downloadable assets:
+`docs/brand/README.md` or `https://thehalfmoon.github.io/Orcel/brand.html`.
 
-See `assets/brand/IDENTITY.md` for usage, licensing and rollout boundaries.
+**Historical artifact — do not alter:** `orcel-mark-mask.svg` remains an
+immutable SG-000087/P19 legacy design with its previous SHA-256 to preserve
+closed-grain evidence. It is not the active public logo.
