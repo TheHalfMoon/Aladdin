@@ -45,7 +45,7 @@ Orcel is an **open-source computer-access authority layer** for MCP-compatible A
 
 **Canonical releases:** https://github.com/TheHalfMoon/Orcel/releases
 
-> **Platform & release status:** The installed client currently targets **Windows 10/11 x64**; GitHub release assets must be independently verified before installation. The repository is Apache-2.0 licensed, but source changes on `main` are not automatically published binaries.
+> **Platform & release status:** Orcel's current source targets **Windows 10/11 x64**, but source changes on `main` are not automatically published binaries. The published [v0.1.0 release](https://github.com/TheHalfMoon/Orcel/releases/tag/v0.1.0) is an **archival Cotra-era build, not a qualified Orcel installer**. Check release notes and asset names before following any installation example.
 
 > **Identity migration:** Orcel is the current product and repository name. Existing clients, credentials, and trusted state are not automatically migrated from historical names; consult the [identity migration record](docs/identity/ORCEL_RENAME.md) before updating.
 
@@ -100,9 +100,9 @@ Everything else is denied. Remote clients (ChatGPT through the tunnel or relay, 
 
 ## Install
 
-The current transition release keeps the existing archive and executable names for compatibility.
+**Release availability:** The historical `v0.1.0` archive contains original Cotra-era assets, not the `orcel.exe` installer described below. Do not rename that archive or assume it supports current Orcel commands. Follow these instructions **only after a qualified Orcel-branded Windows release with matching filenames has been published**.
 
-1. Download `orcel-<version>-windows-x64.zip` and `SHA256SUMS.txt` from the project's GitHub Releases page (release automation only prepares drafts; a release appears there once the maintainer publishes it) and verify the hash:
+1. For a published release that actually lists `orcel-<version>-windows-x64.zip` and `SHA256SUMS.txt`, download those exact matching assets from [GitHub Releases](https://github.com/TheHalfMoon/Orcel/releases) and verify the hash:
    ```powershell
    $zip = "orcel-<version>-windows-x64.zip"
    $expected = ((Get-Content .\SHA256SUMS.txt) | Where-Object { $_ -like "*  $zip" } | ForEach-Object { $_.Split(" ")[0] })
@@ -113,7 +113,7 @@ The current transition release keeps the existing archive and executable names f
    Optionally verify provenance: `gh attestation verify .\orcel-<version>-windows-x64.zip --repo TheHalfMoon/Orcel`.
 2. Extract the archive and run, from the extracted folder:
    `.\orcel.exe install`
-   Every file is checked against `manifest.json` before anything is copied. The compatibility installer currently installs to `%LOCALAPPDATA%\Orcel`, readable only by you (and Windows itself), and adds `%LOCALAPPDATA%\Orcel\bin` to your user PATH (`--no-path` to skip). Open a new terminal afterwards.
+   For a qualified Orcel build, the installer checks files against `manifest.json` before copying them. The current source uses `%LOCALAPPDATA%\Orcel` and adds `%LOCALAPPDATA%\Orcel\bin` to your user PATH (`--no-path` to skip). Follow the exact published release notes and open a new terminal afterwards.
 
 ## Configure
 
