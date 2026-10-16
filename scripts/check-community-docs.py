@@ -32,11 +32,13 @@ for name in [".github/ISSUE_TEMPLATE/bug_report.yml",".github/ISSUE_TEMPLATE/fea
     value=p.read_text(encoding="utf-8")
     if not value.endswith("\n"):errors.append(f"No final newline {name}")
     if not value.strip():errors.append(f"Empty {name}")
+yaml_status="skipped (PyYAML unavailable)"
 try:
     import yaml
 except ImportError:
-    print("YAML syntax check not run (PyYAML optional).")
+    pass
 else:
+    yaml_status="passed"
     for name in [".github/ISSUE_TEMPLATE/bug_report.yml",".github/ISSUE_TEMPLATE/feature_request.yml",".github/ISSUE_TEMPLATE/config.yml"]:
         try:
             loaded=yaml.safe_load((root/name).read_text(encoding="utf-8"))
@@ -44,4 +46,4 @@ else:
         except yaml.YAMLError as exc:errors.append(f"{name}: {exc}")
 if errors:
     print("\n".join(errors));sys.exit(1)
-print("Contributor documentation: links, required files, and YAML passed.")
+print(f"Contributor documentation: links and required files passed; YAML validation: {yaml_status}.")
