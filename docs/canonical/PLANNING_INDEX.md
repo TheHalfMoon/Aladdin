@@ -1,29 +1,25 @@
 # Orcel Canonical Planning Index
 
 Status: ACTIVE NORMATIVE
-Date: 2026-10-07
+Updated: 2026-10-16
 
-This index fixes planning precedence so no implementation agent can treat an
-obsolete Cotra-era or Orcel-era architectural statement as current authority.
-Historical evidence is preserved verbatim; preservation is not authorization.
+This index fixes planning precedence so implementation agents never treat
+historical plans as current authority. Historical evidence is preserved
+verbatim; preservation is not authorization.
 
 ## 1. Product identity rule
 
-The maintained product identity is Orcel. Orcel and Cotra are
-superseded product identities and must not be presented as the current product
-(the rename records in `docs/identity/` govern the full earlier history).
-The compatibility boundary (CLI `orcel`, daemon `orceld`, npm packages
-`@orcel/mcp` and `@orcel/relay`, `ORCEL_*` environment variables, `orcel.*`
-OAuth scopes, `orcel-*` source paths, install/storage paths containing
-`Orcel`/`orcel`, and the `orcel` MCP compatibility name) is governed by
-`docs/identity/ORCEL_RENAME.md` and is never renamed blindly.
+**Orcel is the sole current product and repository identity.**
+The CLI `orcel`, daemon `orceld`, npm packages `@orcel/mcp` and
+`@orcel/relay`, `ORCEL_*` environment variables, `orcel.*` OAuth
+scopes, `orcel-*` source paths, and the MCP name `orcel` are
+current identifiers. `docs/identity/ORCEL_RENAME.md` is authoritative.
 
-"ORCEL-P18 is a retained compatibility/program identifier within the Orcel
-product; it is not the current product brand."
-
-COTRA-P16, COTRA-P17, and ORCEL-P18 name governed programs, not the product.
-The word "Orcel" surviving inside `ORCEL_*` document titles and program text
-names that retained program/compatibility namespace, not the product brand.
+Earlier names found in frozen records, donor manifests, historical releases,
+and dated plans are **historical**, not alternative current product names.
+COTRA-P16, COTRA-P17, and ORCEL-P18 remain the original governed program
+identifiers; they do not define a competing product brand. Existing trusted
+state and archived binaries are not silently migrated or reissued.
 
 ## 2. Planning precedence
 
@@ -100,7 +96,7 @@ canonically.
 | --- | --- |
 | `docs/canonical/ARCHITECTURE_AND_DELIVERY_PLAN.md` | Delivered through COTRA-P13. Its Cotra-era product statements are superseded; the current state is recorded in `CURRENT.md`. |
 | `docs/canonical/UNIVERSAL_AI_ACCESS_PLAN.md` | Proposal whose provider-neutral decisions were absorbed by the closed P17 grains; its `Cotra v0.2.x` product naming is superseded. |
-| `docs/identity/` rename records (`ORCEL_RENAME.md`, `ORCEL_RENAME.md`, and the earlier record beside them) | Historical rename records; immutable provenance. |
+| Prior identity records (`ORCEL_HISTORY_DESKAL.md`, `ORCEL_HISTORY_QDRAL.md`, and earlier provenance) | Historical rename evidence; immutable provenance. The active `ORCEL_RENAME.md` is normative, not historical. |
 | `docs/security/THREAT_MODEL_REGRESSION.md` | Point-in-time ORCEL-P13 regression evidence with P13-era counts; superseded for v0.2 by `THREAT_MODEL_REGRESSION_V02.md`. |
 | `docs/security/RELEASE_SECURITY_REVIEW.md` | SG-000046 program-level review for the P13 release line; superseded for v0.2 by the SG-000072 exit record. |
 | `docs/p16/sg000066_exit_evidence.json` | Closed P16 exit evidence. |
@@ -109,12 +105,11 @@ canonically.
 
 ### SUPERSEDED
 
-No SUPERSEDED document remains. A document that presents Orcel or Cotra as the current product, or that contradicts the precedence above, must
-be reclassified here or corrected before it is followed.
+No superseded plan may override active Orcel authority. A document that presents an earlier product name as current, or contradicts the precedence above, must be classified historical or corrected before it is followed.
 
 ## 4. Rules for implementation agents
 
-1. Never treat a HISTORICAL plan statement (notably any `Cotra is` / `Orcel is`
+1. Never treat a HISTORICAL plan statement (notably statements in dated old-name plans
    product sentence in the documents above) as permission to build, expose, or
    widen authority.
 2. Never rename a compatibility identifier on the basis of this index; rename

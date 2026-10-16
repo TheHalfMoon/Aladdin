@@ -128,6 +128,19 @@ for (const expected of [
   if (!identity.includes(expected)) throw new Error(`Orcel identity record is missing: ${expected}`);
 }
 
+// Active governance notices must never call Orcel a superseded identity.
+// Historical ledgers below the CURRENT separator remain immutable evidence.
+const activeFrontier = readFileSync("docs/canonical/CURRENT.md", "utf8").split("\n---\n")[0];
+const planningIdentity = readFileSync("docs/canonical/PLANNING_INDEX.md", "utf8").split("## 2. Planning precedence")[0];
+for (const [name, notice] of [["CURRENT", activeFrontier], ["PLANNING_INDEX", planningIdentity]]) {
+  if (!notice.includes("Orcel is the sole current product and repository identity")) {
+    throw new Error(`${name} must identify Orcel as the sole current product`);
+  }
+  if (/Orcel and Cotra are superseded|Orcel, .*?are superseded/i.test(notice)) {
+    throw new Error(`${name} incorrectly lists Orcel as a superseded product`);
+  }
+}
+
 const readme = readFileSync("README.md", "utf8");
 if (!readme.startsWith("# Orcel\n")) {
   throw new Error("README does not present Orcel as the current product name");
