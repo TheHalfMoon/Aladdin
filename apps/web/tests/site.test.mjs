@@ -87,7 +87,7 @@ test("Next output is a static export with a bounded explicit project base path",
 
 test("approved Orcel brand geometry is byte-pinned and shared by both variants", async () => {
   assert.equal(
-    await sha256(join(root, "public", "brand", "orcel-mark-mask.svg")),
+    await sha256(join(root, "public", "brand", "orcel-o-white.svg")),
     "983e5bdc8b8f91e6615fc34c1892e7b24c83cdac48f90d38587b751f5c6520b3"
   );
   const css = await read(join(root, "app", "globals.css"));
