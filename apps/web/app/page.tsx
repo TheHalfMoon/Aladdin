@@ -247,7 +247,7 @@ export default function Home() {
             <a className="button button-primary" href={releases}>Browse release archive <Arrow /></a>
             <a className="button button-secondary" href={github}>Browse the source</a>
           </div>
-          <p className="release-note">The published v0.1.0 is a legacy Cotra-era archive, not a qualified Orcel installer. For Orcel installations, use only qualified Orcel-branded assets and verify their checksums and provenance.</p>
+          <p className="release-note">The published v0.1.0 is a pre-rename archival build, not a qualified Orcel installer. For Orcel installations, use only qualified Orcel-branded assets and verify their checksums and provenance.</p>
         </section>
       </div>
 
