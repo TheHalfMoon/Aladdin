@@ -68,6 +68,11 @@ jobs:
         run: npm ci --prefix apps/web --ignore-scripts
       - name: Audit isolated web dependencies
         run: npm audit --prefix apps/web
+      - name: Build Orcel brand media from reviewed SVG sources
+        run: |
+          node scripts/sync-brand.mjs --check
+          node scripts/render-brand.mjs
+          python3 scripts/export-brand.py
       - name: Typecheck
         run: npm run web:typecheck
       - name: Test
