@@ -1,0 +1,11 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Report a vulnerability privately
+    url: https://github.com/TheHalfMoon/Orcel/security/advisories/new
+    about: Please use GitHub private reporting for security vulnerabilities; do not disclose them in a public issue.
+  - name: Installation and troubleshooting guidance
+    url: https://github.com/TheHalfMoon/Orcel/blob/main/SUPPORT.md
+    about: Start here for supported versions, diagnostics, and support limitations.
+  - name: Contribute to Orcel
+    url: https://github.com/TheHalfMoon/Orcel/blob/main/CONTRIBUTING.md
+    about: Read contribution and testing guidelines before proposing a pull request.
