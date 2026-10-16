@@ -12,3 +12,11 @@
 .DS_Store
 Thumbs.db
 .orcel-local/
+
+# Reproducible brand outputs: generated during CI/Pages from reviewed SVG masters.
+/assets/brand/exports/
+/assets/brand/downloads/
+/assets/brand/ASSET_MANIFEST.json
+/apps/web/public/brand/orcel-social-dark.png
+/apps/web/public/brand/orcel-asset-manifest.json
+/apps/web/public/brand/Orcel-Identity-Kit-v1.zip

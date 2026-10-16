@@ -80,20 +80,20 @@ test("Next output is a static export with a bounded explicit project base path",
   const layout = await read(join(root, "app", "layout.tsx"));
   const css = await read(join(root, "app", "globals.css"));
   assert.match(layout, /--orcel-mark-mask/);
-  assert.match(layout, /brand\/orcel-mark-mask\.svg/);
-  assert.equal(css.includes('url("/brand/orcel-mark-mask.svg")'), false);
+  assert.match(layout, /brand\/orcel-o-white\.svg/);
+  assert.equal(css.includes('url("/brand/orcel-o-white.svg")'), false);
   assert.equal((css.match(/var\(--orcel-mark-mask\)/g) ?? []).length, 2);
 });
 
 test("approved Orcel brand geometry is byte-pinned and shared by both variants", async () => {
   assert.equal(
-    await sha256(join(root, "public", "brand", "orcel-mark-mask.svg")),
-    "56bd8af1c84680e45ff579a130e16949a472e81c6846e475adf6f06f16e92daf"
+    await sha256(join(root, "public", "brand", "orcel-o-white.svg")),
+    "812de68035e5adc62dac6561db5d529cf33f84ecc8bae49e004dfccb3c6ff809"
   );
   const css = await read(join(root, "app", "globals.css"));
   assert.equal((css.match(/var\(--orcel-mark-mask\)/g) ?? []).length, 2, "both mask declarations must use the one canonical geometry variable");
   assert.match(css, /\.brand-mark-white[\s\S]*color:\s*#fff/);
-  assert.match(css, /\.brand-mark-color[\s\S]*linear-gradient/);
+  assert.match(css, /\.brand-mark-color[\s\S]*background:\s*#fff/);
 });
 
 test("web dependency graph is isolated from runtime workspaces and lockfile", async () => {
@@ -159,7 +159,7 @@ test("Pages workflow builds the canonical project path and verifies the deployed
   assert.match(workflow, /base_path/);
   assert.match(workflow, /test "\$\{\{ steps\.pages\.outputs\.base_path \}\}" = "\/Orcel"/);
   assert.match(workflow, /\/Orcel\/_next\//);
-  assert.match(workflow, /\/Orcel\/brand\/orcel-mark-mask\.svg/);
+  assert.match(workflow, /\/Orcel\/brand\/orcel-o-white\.svg/);
   assert.match(workflow, /https:\/\/thehalfmoon\.github\.io\/Orcel/);
   assert.match(workflow, /curl --fail --location/);
   assert.match(workflow, /https:\/\/github\.com\/TheHalfMoon\/Orcel\/releases/);
@@ -203,7 +203,13 @@ test("canonical and social metadata stay exact, static, and bounded to the Pages
   assert.match(layout, /openGraph:\s*\{[\s\S]*url:\s*siteUrl[\s\S]*siteName:\s*"Orcel"/);
   assert.match(layout, /twitter:\s*\{[\s\S]*card:\s*"summary"[\s\S]*title[\s\S]*description/);
   assert.equal((layout.match(/https:\/\/thehalfmoon\.github\.io\/Orcel\//g) ?? []).length, 1);
-  assert.doesNotMatch(layout, /images:\s*\[/);
+  assert.equal((layout.match(/images:\s*\[/g) ?? []).length, 2, "only the two static local image declarations are allowed");
+  assert.match(layout, /images:\s*\[\{\s*url:\s*siteUrl \+ "brand\/orcel-social-dark\.png"/);
+  assert.match(layout, /images:\s*\[siteUrl \+ "brand\/orcel-social-dark\.png"\]/);
+  const og = await readFile(join(root, "public", "brand", "orcel-social-dark.png"));
+  assert.equal(og.subarray(0, 8).toString("hex"), "89504e470d0a1a0a");
+  assert.equal(og.readUInt32BE(16), 1200);
+  assert.equal(og.readUInt32BE(20), 630);
 });
 
 test("responsive primary navigation stays keyboard and touch usable without client runtime", async () => {

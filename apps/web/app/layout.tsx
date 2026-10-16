@@ -22,10 +22,12 @@ export const metadata: Metadata = {
     description: socialDescription,
     type: "website",
     url: siteUrl,
-    siteName: "Orcel"
+    siteName: "Orcel",
+    images: [{ url: siteUrl + "brand/orcel-social-dark.png", width: 1200, height: 630, alt: "Orcel — Your computer, your terms" }]
   },
   twitter: {
     card: "summary",
+    images: [siteUrl + "brand/orcel-social-dark.png"],
     title,
     description: socialDescription
   }
@@ -34,7 +36,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
   const basePath = process.env.ORCEL_WEB_BASE_PATH ?? "";
   const style = {
-    "--orcel-mark-mask": `url("${basePath}/brand/orcel-mark-mask.svg")`
+    "--orcel-mark-mask": `url("${basePath}/brand/orcel-o-white.svg")`
   } as CSSProperties;
 
   return (

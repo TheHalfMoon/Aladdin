@@ -1,17 +1,22 @@
-# Orcel web brand asset
+# Orcel web identity
 
-SG-000087 uses one canonical geometry source for every website logo treatment:
-`orcel-mark-mask.svg`.
+Current mark: **Design #17** — one pure-white circle with two rounded
+diagonal transparent cutouts. Master `orcel-o-white.svg`.
 
-The geometry is a programmatic silhouette extraction of the founder-approved
-Orcel `D + computer` mark. Background isolation and contour conversion were
-mechanical; the mark was not manually redrawn, proportionally altered, or
-replaced with alternate geometry. The resulting website asset is byte-pinned
-below so later changes are review-visible.
+The same geometry is used for:
+- `orcel-o-white.svg` and `orcel-o-black.svg` — transparent core identity;
+- `orcel-app-icon.svg` and `orcel-app-icon-light.svg` — application tiles;
+- `orcel-lockup-white.svg`, `orcel-lockup-black.svg` — vector wordmark lockups;
+- `orcel-social-dark.svg`, `orcel-social-light.svg` — social presentation;
+- `orcel-social-dark.png` — social/OG platform preview.
 
-The website renders the monochrome white and approved blue/violet full-color
-treatments from this same mask in CSS. There is no second logo geometry.
+Source of truth: `scripts/sync-brand.mjs`; optional raster exports via
+`scripts/render-brand.mjs` using the isolated website's existing `sharp`.
+All current SVG destinations pass `node scripts/sync-brand.mjs --check`.
 
-SHA-256:
+Full specifications, variants, and downloadable assets:
+`docs/brand/README.md` or `https://thehalfmoon.github.io/Orcel/brand.html`.
 
-- `orcel-mark-mask.svg`: `150ae5ccd9fdb6b25a8f0421a64acc2d0bf1615a32c2b33aea92e77700706fce`
+**Historical artifact — do not alter:** `orcel-mark-mask.svg` remains an
+immutable SG-000087/P19 legacy design with its previous SHA-256 to preserve
+closed-grain evidence. It is not the active public logo.
