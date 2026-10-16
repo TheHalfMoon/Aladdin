@@ -1,21 +1,61 @@
 # Orcel
 
-<img alt="Orcel — solid white disc with two diagonal rounded rails" src="assets/brand/orcel-app-icon.svg" width="96" height="96" />
+<p align="center">
+  <img src="assets/brand/orcel-app-icon.svg" alt="Orcel brand mark" width="112" height="112">
+</p>
 
-[Brand identity and downloadable design kit](docs/brand/README.md)
+<p align="center"><strong>Your computer, your terms.</strong></p>
 
+<p align="center">
+  A local-first, approval-driven MCP gateway that helps AI assistants work within the boundaries <em>you</em> control.
+</p>
 
-**Computer Orchestration & Trusted Runtime Access**
+<p align="center">
+  <a href="https://github.com/TheHalfMoon/Orcel/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/TheHalfMoon/Orcel/actions/workflows/ci.yml/badge.svg?branch=main"></a>
+  <a href="https://github.com/TheHalfMoon/Orcel/actions/workflows/pages.yml"><img alt="Website deployment" src="https://github.com/TheHalfMoon/Orcel/actions/workflows/pages.yml/badge.svg?branch=main"></a>
+  <a href="LICENSE"><img alt="Apache-2.0" src="https://img.shields.io/badge/license-Apache--2.0-2d7bda"></a>
+  <a href="#requirements"><img alt="Windows x64" src="https://img.shields.io/badge/platform-Windows%20x64-555"></a>
+</p>
 
-Orcel is an open-source, local-first MCP gateway that lets ChatGPT work with an explicitly trusted folder on your Windows computer through a small set of bounded tools, with local approval for anything that changes your computer. It connects through the OpenAI Secure MCP Tunnel, so no inbound port is opened on your machine.
+<p align="center">
+  <a href="https://thehalfmoon.github.io/Orcel/">Website</a> ·
+  <a href="#install">Get started</a> ·
+  <a href="https://github.com/TheHalfMoon/Orcel/releases">Releases</a> ·
+  <a href="CONTRIBUTING.md">Contribute</a> ·
+  <a href="SECURITY.md">Security</a> ·
+  <a href="https://thehalfmoon.github.io/Orcel/brand.html">Brand kit</a>
+</p>
 
-Orcel is not a remote shell, a remote desktop, or a "run anything" agent.
+---
 
-> **Identity migration:** Orcel is the current product and repository name. Older client installations, credentials, and state are not automatically migrated to the newly named CLI, packages, or environment variables. See [the Orcel identity record](docs/identity/ORCEL_RENAME.md) before upgrading.
+## Why Orcel?
+
+Orcel is an **open-source computer-access authority layer** for MCP-compatible AI agents. It connects supported clients, including ChatGPT through the OpenAI Secure MCP Tunnel, to **explicitly trusted local workspaces**. Read operations are bounded; sensitive changes require approval on your own Windows desktop. A client cannot grant itself new privileges.
+
+| Designed for | What you get |
+| --- | --- |
+| **Your authority** | Workspace trust and narrowly scoped, one-time local approvals; Windows Hello for high-risk actions |
+| **Your machine** | Local-first operation without an inbound port for the ChatGPT tunnel integration |
+| **Your choice of clients** | Local MCP over stdio or token-protected loopback HTTP, plus the remote 26-tool core profile |
+| **Your confidence** | Fail-closed policy, release checksums/provenance, security documentation, and public CI |
+
+**Boundaries matter:** Orcel is **not** an unrestricted remote shell, general-purpose remote desktop, or blanket browser/UI automation service. The local tool surface has **31 tools**; remote clients see a smaller **26-tool core profile**. Desktop observation, clipboard, and web fetch are local-only, and UI actuation is not exposed over MCP. Read the [current limitations](#current-limitations) before installing.
 
 **Website:** https://thehalfmoon.github.io/Orcel/
 
 **Canonical releases:** https://github.com/TheHalfMoon/Orcel/releases
+
+> **Platform & release status:** The installed client currently targets **Windows 10/11 x64**; GitHub release assets must be independently verified before installation. The repository is Apache-2.0 licensed, but source changes on `main` are not automatically published binaries.
+
+> **Identity migration:** Orcel is the current product and repository name. Existing clients, credentials, and trusted state are not automatically migrated from historical names; consult the [identity migration record](docs/identity/ORCEL_RENAME.md) before updating.
+
+## Explore and contribute
+
+- **Start here:** [Install](#install), [Configure](#configure), [Connect ChatGPT](#connect-chatgpt), or [use local MCP](#connect-local-mcp-clients-no-tunnel-required).
+- **Learn the design:** [Architecture and delivery plan](docs/canonical/ARCHITECTURE_AND_DELIVERY_PLAN.md), [threat model](docs/security/THREAT_MODEL.md), and [current state](docs/canonical/CURRENT.md).
+- **Help improve Orcel:** [Open issues and proposals](https://github.com/TheHalfMoon/Orcel/issues), [contribution guide](CONTRIBUTING.md), [support](SUPPORT.md), [code of conduct](CODE_OF_CONDUCT.md), and [project stewardship](docs/community/MAINTAINERSHIP.md).
+- **Check what ships:** [Changelog](CHANGELOG.md), [release assets](https://github.com/TheHalfMoon/Orcel/releases), [source license](LICENSE), and [required third-party notices](docs/research/DEPENDENCY_LICENSE_REVIEW.md).
+- **Use the brand correctly:** [Identity specifications](assets/brand/IDENTITY.md) and [brand media kit](https://thehalfmoon.github.io/Orcel/brand.html).
 
 ## What ChatGPT can do through Orcel
 

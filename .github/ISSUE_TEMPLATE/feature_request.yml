@@ -1,0 +1,44 @@
+name: Feature request
+description: Suggest a bounded improvement to Orcel or its documentation.
+title: "[Feature] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Describe the user need and an alternative. Proposals do not automatically expand local trust or tool authority.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem would this solve?
+      description: Describe the use case rather than only a preferred implementation.
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed approach
+      description: What change would help, and how would it work?
+    validations:
+      required: true
+  - type: textarea
+    id: safeguards
+    attributes:
+      label: Security, privacy, and compatibility considerations
+      description: Explain effects on local approval, workspace bounds, data access, and existing integrations.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives or workarounds
+    validations:
+      required: false
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched existing issues for similar proposals.
+          required: true
+        - label: This report contains no passwords, tokens, or private data.
+          required: true
