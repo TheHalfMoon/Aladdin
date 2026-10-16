@@ -34,7 +34,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
   const basePath = process.env.ORCEL_WEB_BASE_PATH ?? "";
   const style = {
-    "--orcel-mark-mask": `url("${basePath}/brand/orcel-mark-mask.svg")`
+    "--orcel-mark-mask": `url("${basePath}/brand/orcel-o-white.svg")`
   } as CSSProperties;
 
   return (

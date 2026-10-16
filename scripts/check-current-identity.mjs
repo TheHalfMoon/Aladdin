@@ -191,4 +191,5 @@ if (openaiPlugin.name !== "orcel" || openaiPlugin.displayName !== "Orcel") {
   throw new Error("OpenAI plugin does not present Orcel as the current product identity");
 }
 
-console.log(`Orcel identity validated across ${tracked.length} tracked files with orcel compatibility identifiers preserved.`);
+execFileSync(process.execPath, ["scripts/sync-brand.mjs", "--check"], { encoding: "utf8" });
+console.log(`Orcel identity validated across ${tracked.length} tracked files with orcel compatibility identifiers preserved, including synchronized white O brand assets.`);

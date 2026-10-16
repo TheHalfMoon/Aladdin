@@ -1,17 +1,19 @@
-# Orcel web brand asset
+# Orcel website brand assets
 
-SG-000087 uses one canonical geometry source for every website logo treatment:
-`orcel-mark-mask.svg`.
+**Current**: `orcel-o-white.svg` — the pure-white Orcel O. The matching
+app icon (`orcel-app-icon.svg`) presents exactly the same mark on a black
+rounded-square backdrop, suitable for 16px browser or LLM integrations.
 
-The geometry is a programmatic silhouette extraction of the founder-approved
-Orcel `D + computer` mark. Background isolation and contour conversion were
-mechanical; the mark was not manually redrawn, proportionally altered, or
-replaced with alternate geometry. The resulting website asset is byte-pinned
-below so later changes are review-visible.
+These assets are generated from the *single authored geometry* in
+`scripts/sync-brand.mjs`; use `node scripts/sync-brand.mjs --check` to
+verify exact byte identity across website, OpenAI and Codex distributions.
 
-The website renders the monochrome white and approved blue/violet full-color
-treatments from this same mask in CSS. There is no second logo geometry.
+- Current white O SHA-256: `983e5bdc8b8f91e6615fc34c1892e7b24c83cdac48f90d38587b751f5c6520b3`
+- Current dark app tile SHA-256: `bfc5c4b1808b8b9553a3a266db01b361159b6cdfc58e5b1630560da49dfcc2cc`
 
-SHA-256:
+**Historical**: `orcel-mark-mask.svg` is the frozen SG-000087/P19
+founder-approved `D + computer` mark. It is no longer displayed as
+the current Orcel identity, but remains intact for historical evidence and
+its exact checksum tests. Do not modify or overwrite it.
 
-- `orcel-mark-mask.svg`: `150ae5ccd9fdb6b25a8f0421a64acc2d0bf1615a32c2b33aea92e77700706fce`
+See `assets/brand/IDENTITY.md` for usage, licensing and rollout boundaries.

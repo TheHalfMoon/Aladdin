@@ -1,0 +1,4 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="Orcel">
+  <rect width="256" height="256" rx="56" fill="#080808"/>
+  <path fill="#ffffff" fill-rule="evenodd" d="M128 16a112 112 0 1 0 0 224a112 112 0 1 0 0-224ZM101 71H155C174 71 185 83 185 102V154C185 173 174 185 155 185H101C82 185 71 173 71 154V102C71 83 82 71 101 71Z"/>
+</svg>

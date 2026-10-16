@@ -80,20 +80,20 @@ test("Next output is a static export with a bounded explicit project base path",
   const layout = await read(join(root, "app", "layout.tsx"));
   const css = await read(join(root, "app", "globals.css"));
   assert.match(layout, /--orcel-mark-mask/);
-  assert.match(layout, /brand\/orcel-mark-mask\.svg/);
-  assert.equal(css.includes('url("/brand/orcel-mark-mask.svg")'), false);
+  assert.match(layout, /brand\/orcel-o-white\.svg/);
+  assert.equal(css.includes('url("/brand/orcel-o-white.svg")'), false);
   assert.equal((css.match(/var\(--orcel-mark-mask\)/g) ?? []).length, 2);
 });
 
 test("approved Orcel brand geometry is byte-pinned and shared by both variants", async () => {
   assert.equal(
     await sha256(join(root, "public", "brand", "orcel-mark-mask.svg")),
-    "56bd8af1c84680e45ff579a130e16949a472e81c6846e475adf6f06f16e92daf"
+    "983e5bdc8b8f91e6615fc34c1892e7b24c83cdac48f90d38587b751f5c6520b3"
   );
   const css = await read(join(root, "app", "globals.css"));
   assert.equal((css.match(/var\(--orcel-mark-mask\)/g) ?? []).length, 2, "both mask declarations must use the one canonical geometry variable");
   assert.match(css, /\.brand-mark-white[\s\S]*color:\s*#fff/);
-  assert.match(css, /\.brand-mark-color[\s\S]*linear-gradient/);
+  assert.match(css, /\.brand-mark-color[\s\S]*background:\s*#fff/);
 });
 
 test("web dependency graph is isolated from runtime workspaces and lockfile", async () => {
@@ -159,7 +159,7 @@ test("Pages workflow builds the canonical project path and verifies the deployed
   assert.match(workflow, /base_path/);
   assert.match(workflow, /test "\$\{\{ steps\.pages\.outputs\.base_path \}\}" = "\/Orcel"/);
   assert.match(workflow, /\/Orcel\/_next\//);
-  assert.match(workflow, /\/Orcel\/brand\/orcel-mark-mask\.svg/);
+  assert.match(workflow, /\/Orcel\/brand\/orcel-o-white\.svg/);
   assert.match(workflow, /https:\/\/thehalfmoon\.github\.io\/Orcel/);
   assert.match(workflow, /curl --fail --location/);
   assert.match(workflow, /https:\/\/github\.com\/TheHalfMoon\/Orcel\/releases/);

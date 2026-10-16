@@ -124,9 +124,8 @@ svg {
 }
 
 .brand-mark-color {
-  color: transparent;
-  background: linear-gradient(135deg, #d6e0fd 4%, #a7bbfb 35%, #858eec 57%, #c8befb 76%, #eee2fd 100%);
-  filter: drop-shadow(0 0 12px rgba(133, 142, 236, 0.28));
+  color: #fff;
+  background: #fff;
 }
 
 .desktop-nav {
