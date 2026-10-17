@@ -41,7 +41,7 @@ test("Identity delivers full mono and editorial system without distributing font
  const names=[
  "orcel-o-white.svg","orcel-o-black.svg",
  "orcel-app-icon.svg","orcel-app-icon-light.svg","orcel-accent-icon.svg",
- "orcel-wordmark-white.svg","orcel-wordmark-black.svg",
+ "orcel-wordmark-white.svg","orcel-wordmark-black.svg","orcel-readme-lockup.svg",
  "orcel-lockup-white.svg","orcel-lockup-black.svg",
  "orcel-lockup-stacked-white.svg","orcel-lockup-stacked-black.svg",
  "orcel-social-dark.svg","orcel-social-light.svg","orcel-monogram-pattern.svg"
@@ -54,6 +54,11 @@ test("Identity delivers full mono and editorial system without distributing font
   assert.doesNotMatch(svg,/<text\b|<image\b|@font-face/i,"no font or image dependencies");
  }
  assert.match(str("assets/brand/orcel-wordmark-white.svg"),/fill="#FF813E"/);
+ const readme=str("README.md");
+ assert.match(readme,/orcel-readme-lockup\\.svg/);
+ const hero=str("assets/brand/orcel-readme-lockup.svg");
+ assert.match(hero,/fill="#080808"/);
+ assert.match(hero,/fill="#FF813E"/);
  const page=str("apps/web/app/brand/page.tsx");
  assert.match(page,/A clear signal/);
  assert.match(page,/Unbroken o and c forms/);

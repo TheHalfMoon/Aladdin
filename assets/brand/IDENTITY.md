@@ -24,6 +24,7 @@ No blue/purple gradient is used in the approved primary mark. No shadows, 3D eff
 ## Logo variants and file mapping
 - assets/brand/orcel-wordmark-white.svg and orcel-wordmark-black.svg — main brand.
 - assets/brand/orcel-lockup-white.svg and orcel-lockup-black.svg — primary website horizontal wordmark.
+- assets/brand/orcel-readme-lockup.svg — official dark-background README logo, same vector wordmark in both GitHub color themes.
 - assets/brand/orcel-o-white.svg and orcel-o-black.svg — new Signal icon, historical URL name retained for consumers.
 - assets/brand/orcel-app-icon.svg and orcel-app-icon-light.svg — favicon and distribution tiles.
 - assets/brand/orcel-lockup-stacked-white.svg and orcel-lockup-stacked-black.svg — stacked arrangements.

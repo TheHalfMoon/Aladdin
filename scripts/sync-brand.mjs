@@ -48,6 +48,10 @@ const tile=doc("0 0 256 256",'  <rect width="256" height="256" rx="54" fill="#08
 const tileLight=doc("0 0 256 256",'  <rect width="256" height="256" rx="54" fill="#F5F6F7"/>\n  '+signalMark("#080808"),"Orcel Signal light application icon");
 const wordWhite=doc("0 0 860 256","  "+lettering("#FFFFFF"),"Orcel Signal original lowercase white and orange wordmark");
 const wordBlack=doc("0 0 860 256","  "+lettering("#080808"),"Orcel Signal original lowercase black and orange wordmark");
+// Dedicated dark-background lockup for GitHub README in either theme.
+const readmeLogo=doc("0 0 1000 300",
+  '  <rect width="1000" height="300" rx="20" fill="#080808"/>\n  <g transform="translate(40 26) scale(1.06)">\n    '+lettering("#FFFFFF")+'\n  </g>',
+  "Orcel Signal primary white wordmark with orange l terminal for GitHub");
 function horizontal(ink) {
  return doc("0 0 900 256",'  <g transform="translate(20 0)">'+lettering(ink)+'</g>',
   "Orcel Signal typographic horizontal logo with orange terminal");
@@ -89,6 +93,7 @@ const outputs=new Map([
  ["assets/brand/orcel-app-icon-light.svg",tileLight],
  ["assets/brand/orcel-wordmark-white.svg",wordWhite],
  ["assets/brand/orcel-wordmark-black.svg",wordBlack],
+ ["assets/brand/orcel-readme-lockup.svg",readmeLogo],
  ["assets/brand/orcel-lockup-white.svg",lockWhite],
  ["assets/brand/orcel-lockup-black.svg",lockBlack],
  ["assets/brand/orcel-lockup-stacked-white.svg",stackWhite],
