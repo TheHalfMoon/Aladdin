@@ -13,19 +13,19 @@ The previous orbital and satellite logo is **retired as the current mark** but p
 
 ## 2. Geometry and optical construction
 
-The vector master is 256 by 256 units. All strokes are round-capped, unfilled and unskewed. Geometry lives in scripts/sync-brand.mjs:
+The vector master is 256 by 256 units. The O and l are solid white-filled vector shapes with deliberate black negative space; the inner r/c/e strokes are round-capped, unfilled and unskewed. Geometry lives in scripts/sync-brand.mjs:
 
 | Element | Master construction |
 | --- | --- |
-| O outer enclosure | Rect at (18,20), width 188, height 216, radius 70, stroke 10 |
+| O outer enclosure | Filled white O silhouette: outer rounded path (18,20)-(206,236), even-odd interior hole (37,40)-(187,216), with approximately 19-20 units of positive white letter weight |
 | r outer nested path | M154 63 H105 C76 63 63 83 63 110 V180 C63 194 77 201 95 201 H156 |
 | c middle nested path | M169 92 H124 C100 92 89 109 89 132 V159 C89 176 103 185 123 185 H171 |
 | e inner loop | M177 120 H145 C128 120 118 131 118 145 C118 158 128 169 145 169 H177 |
 | e crossbar | M122 145 H175 |
-| l detached stroke | M234 79 V201 |
+| l detached stroke | Filled white vertical bar at (226,30), width 16, height 196, corner radius 8 |
 | Interior stroke | 10 units |
 
-The lowercase l is **outside** the O and never intersects it. Maintain its right offset, balanced center height, optical baseline, and open negative space between each nested layer. Do not typeset the symbol using regular r/c/e/l letters. The vector geometry itself is the mark.
+The solid-white lowercase l is **outside** the O and never intersects it. Maintain its right offset, balanced center height, optical baseline, and open negative space between each nested layer. Do not typeset the symbol using regular r/c/e/l letters. The vector geometry itself is the mark.
 
 ## 3. Color system
 
@@ -40,7 +40,7 @@ The lowercase l is **outside** the O and never intersects it. Maintain its right
 | Accent blue | #3B82F6 | Optional digital highlight only |
 | Accent violet | #8B5CF6 | Optional gradient endpoint |
 
-The official master is always flat monochrome; only the optional editorial accent icon may use a blue/violet linear gradient. Do not apply blue or violet to the production monochrome SVG masters, security indicators or text requiring contrast.
+The official O and I/l are filled white shapes, never thin outlines; the master is always flat monochrome; only the optional editorial accent icon may use a blue/violet linear gradient. Do not apply blue or violet to the production monochrome SVG masters, security indicators or text requiring contrast.
 
 ## 4. Logo variants and rules
 

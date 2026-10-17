@@ -88,7 +88,7 @@ test("Next output is a static export with a bounded explicit project base path",
 test("approved nested monogram geometry is byte-pinned and shared by both variants", async () => {
   assert.equal(
     await sha256(join(root, "public", "brand", "orcel-o-white.svg")),
-    "b0888864e91ebee4cb548f1513c8acd15e89f420936d2f7277960eebe80f87e2"
+    "d692e74ae5ce9cc99febad6c4d6ad1faf0d6fc81fc87de25e56cd8fc028859e4"
   );
   const css = await read(join(root, "app", "globals.css"));
   assert.equal((css.match(/var\(--orcel-mark-mask\)/g) ?? []).length, 2, "both mask declarations must use the one canonical geometry variable");

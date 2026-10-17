@@ -12,8 +12,10 @@ const hash=(path)=>createHash("sha256").update(file(path)).digest("hex");
 test("Approved nested Orcel monogram keeps O r c e l geometry in sync",()=>{
  const svg=str("assets/brand/orcel-o-white.svg");
  assert.match(svg,/viewBox="0 0 256 256"/);
- assert.match(svg,/<rect x="18" y="20" width="188" height="216" rx="70"/);
- for(const path of ["M154 63 H105","M169 92 H124","M177 120 H145","M122 145 H175","M234 79 V201"])
+ assert.match(svg,/fill-rule="evenodd"/);
+ assert.match(svg,/M88 20 H136 A70 70/);
+ assert.match(svg,/<rect x="226" y="30" width="16" height="196" rx="8" fill="#FFFFFF"/);
+ for(const path of ["M154 63 H105","M169 92 H124","M177 120 H145","M122 145 H175"])
    assert.ok(svg.includes(path),path);
  assert.equal((svg.match(/<path /g)||[]).length,5);
  assert.equal((svg.match(/<circle /g)||[]).length,0);

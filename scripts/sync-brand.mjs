@@ -15,20 +15,22 @@ function doc(view,body,label) {
 }
 // Approved founder-selected nested O/r/c/e/l identity, original SVG geometry.
 // One immutable geometry definition shared by website, app and plugin assets.
+// O and I/l are white filled shapes (not hairline outline strokes); O uses
+// a true even-odd negative-space center, and inner r/c/e remain nested.
 export const MONOGRAM={
- outer:{x:18,y:20,width:188,height:216,rx:70,widthStroke:10},
+ outerFill:"M88 20 H136 A70 70 0 0 1 206 90 V166 A70 70 0 0 1 136 236 H88 A70 70 0 0 1 18 166 V90 A70 70 0 0 1 88 20 Z M87 40 H137 A50 50 0 0 1 187 90 V166 A50 50 0 0 1 137 216 H87 A50 50 0 0 1 37 166 V90 A50 50 0 0 1 87 40 Z",
  r:"M154 63 H105 C76 63 63 83 63 110 V180 C63 194 77 201 95 201 H156",
  c:"M169 92 H124 C100 92 89 109 89 132 V159 C89 176 103 185 123 185 H171",
  e:"M177 120 H145 C128 120 118 131 118 145 C118 158 128 169 145 169 H177",
  eBar:"M122 145 H175",
- l:"M234 79 V201",
  width:10
 };
 function core(ink) {
  const m=MONOGRAM;
  const base='fill="none" stroke="'+ink+'" stroke-linecap="round" stroke-linejoin="round"';
- return '<rect x="'+m.outer.x+'" y="'+m.outer.y+'" width="'+m.outer.width+'" height="'+m.outer.height+'" rx="'+m.outer.rx+'" '+base+' stroke-width="'+m.outer.widthStroke+'"/>'+
- [m.r,m.c,m.e,m.eBar,m.l].map(d=>'<path d="'+d+'" '+base+' stroke-width="'+m.width+'"/>').join('');
+ return '<path d="'+m.outerFill+'" fill="'+ink+'" fill-rule="evenodd"/>'+
+  [m.r,m.c,m.e,m.eBar].map(d=>'<path d="'+d+'" '+base+' stroke-width="'+m.width+'"/>').join('')+
+  '<rect x="226" y="30" width="16" height="196" rx="8" fill="'+ink+'"/>';
 }
 const pure=doc("0 0 256 256","  "+core("#FFFFFF"),"Orcel white nested O r c e l monogram");
 const inverse=doc("0 0 256 256","  "+core("#080808"),"Orcel black nested O r c e l monogram");

@@ -33,7 +33,7 @@ export default function BrandPage(){
     <section className="brand-intro">
      <div className="brand-eyebrow">OFFICIAL VISUAL IDENTITY</div>
      <h1>Nested by design.</h1>
-     <p>One enclosing O. Nested r, c and e strokes. A separate l at the right.
+     <p>One solid-white O. Nested r, c and e strokes. A filled white l at the right.
      Distinctive, intentional, and built for a clear, durable identity.</p>
     </section>
     <section className="brand-hero" aria-label="Primary Orcel nested monogram">

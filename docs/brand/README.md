@@ -1,6 +1,6 @@
 # Orcel — Brand Identity v2
 
-Orcel uses an original rounded **O** enclosing progressively nested **r / c / e** strokes with a separate **l** at the right. The primary palette is white (#FFFFFF) on deep ink (#080808). Optional blue (#3B82F6) and violet (#8B5CF6) are secondary, not the official monochrome master.
+Orcel uses an original rounded **O** enclosing progressively nested **r / c / e** strokes with a separate **solid-white l/I bar** at the right. The O and the right-hand I/l are filled white shapes, rather than thin outlined contours. The primary palette is white (#FFFFFF) on deep ink (#080808). Optional blue (#3B82F6) and violet (#8B5CF6) are secondary, not the official monochrome master.
 
 **[Live visual gallery](https://thehalfmoon.github.io/Orcel/brand.html)** | **[Version 2 brand kit](https://thehalfmoon.github.io/Orcel/brand/Orcel-Identity-Kit-v2.zip)** | **[Asset SHA-256 manifest](https://thehalfmoon.github.io/Orcel/brand/orcel-asset-manifest.json)** | [Full construction and usage guide](../../assets/brand/IDENTITY.md)
 
