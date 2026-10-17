@@ -1,100 +1,48 @@
-# Orcel - Nested Monogram Brand Identity
+# Orcel — Signal identity
 
-**Edition:** 2.0, October 2026
-**Approval:** Founder-selected nested symbol; this document is the production design specification.
-**Character:** Precise, understated, technical, recognizable.
-**Brand promise:** Your computer, your terms.
+Edition: Signal version 2, founder-approved design, October 2026.
 
-## 1. Idea and visual meaning
+## Concept
+A custom lowercase Orcel typographic identity with white geometric letterforms on a near-black background. The recognition accent is the orange upper terminal of the final lowercase l. The founder specifically rejected diagonal cuts *inside* o and c. These cuts are removed: o is a continuous rounded counter; c has a normal right-hand aperture without any separate slash or notch. Letter spacing is independent of this decision.
 
-The identity is an original single-line system derived from the founder's sketches. Its outer rounded **O** holds successively nested **r, c and e** paths; the lowercase **l** stands independently to the right of the O. The separate terminal stroke gives the mark its deliberate **O |** silhouette. The nested paths are designed to form a coherent monogram, not a literal vertically stacked word.
+The standalone square icon is a reduced geometric C-shaped form with an orange terminal. It is not a previous orbital, OI or nested monogram. The primary full typographic mark is the word itself.
 
-The previous orbital and satellite logo is **retired as the current mark** but preserved as historical evidence in Git and prior release records. No aerospace motif, planetary rings, fingerprints, unrelated font glyphs or imported trademarks belong in the new mark.
+## Source geometry and palette
+All original editable vector geometry is built by scripts/sync-brand.mjs from the SIGNAL constant. Wordmark canvas: 860x256. Letter o is a true even-odd closed annulus; r is a continuous filled stem/shoulder; c is uninterrupted open-sided curved geometry; e uses a structured counter and crossbar; l is a single rounded filled vertical bar with the top section orange. The glyphs contain no typeset text, downloaded fonts or third-party artwork.
 
-## 2. Geometry and optical construction
-
-The vector master is 256 by 256 units. The O and l are solid white-filled vector shapes with deliberate black negative space; the inner r/c/e strokes are round-capped, unfilled and unskewed. Geometry lives in scripts/sync-brand.mjs:
-
-| Element | Master construction |
+| Role | Color |
 | --- | --- |
-| O outer enclosure | Filled white O silhouette: outer rounded path (18,20)-(206,236), even-odd interior hole (37,40)-(187,216), with approximately 19-20 units of positive white letter weight |
-| r outer nested path | M154 63 H105 C76 63 63 83 63 110 V180 C63 194 77 201 95 201 H156 |
-| c middle nested path | M169 92 H124 C100 92 89 109 89 132 V159 C89 176 103 185 123 185 H171 |
-| e inner loop | M177 120 H145 C128 120 118 131 118 145 C118 158 128 169 145 169 H177 |
-| e crossbar | M122 145 H175 |
-| l detached stroke | Filled white vertical bar at (226,30), width 16, height 196, corner radius 8 |
-| Interior stroke | 10 units |
+| Main background | #080808 |
+| Primary glyphs | #FFFFFF |
+| Recognition terminal | #FF813E |
+| Charcoal supporting surface | #17191B |
+| Light inverse surface | #F5F6F7 |
+| Supporting silver | #D9DDE1 |
 
-The solid-white lowercase l is **outside** the O and never intersects it. Maintain its right offset, balanced center height, optical baseline, and open negative space between each nested layer. Do not typeset the symbol using regular r/c/e/l letters. The vector geometry itself is the mark.
+No blue/purple gradient is used in the approved primary mark. No shadows, 3D effects, glow, font files, or artificially disconnected strokes. Typography for adjacent editorial text is the existing web system sans-serif stack. The actual wordmark is hand-constructed vector artwork.
 
-## 3. Color system
+## Logo variants and file mapping
+- assets/brand/orcel-wordmark-white.svg and orcel-wordmark-black.svg — main brand.
+- assets/brand/orcel-lockup-white.svg and orcel-lockup-black.svg — primary website horizontal wordmark.
+- assets/brand/orcel-o-white.svg and orcel-o-black.svg — new Signal icon, historical URL name retained for consumers.
+- assets/brand/orcel-app-icon.svg and orcel-app-icon-light.svg — favicon and distribution tiles.
+- assets/brand/orcel-lockup-stacked-white.svg and orcel-lockup-stacked-black.svg — stacked arrangements.
+- assets/brand/orcel-social-dark.svg and orcel-social-light.svg — social previews.
+- assets/brand/orcel-monogram-pattern.svg — Signal motif; old orcel-orbit-pattern path retained only for link compatibility.
 
-| Role | HEX | Use |
-| --- | --- | --- |
-| Primary white | #FFFFFF | Monogram and wordmark on dark backgrounds |
-| Primary ink | #080808 | Main background and inverted dark mark |
-| Surface mist | #F5F6F7 | Light-surface presentations |
-| Charcoal | #17191B | Secondary dark panels |
-| Silver | #D9DDE1 | Rules and subdued details |
-| Slate | #94A3B8 | Descriptive UI/editorial supporting text |
-| Accent blue | #3B82F6 | Optional digital highlight only |
-| Accent violet | #8B5CF6 | Optional gradient endpoint |
+These SVGs are synchronized to apps/web/public/brand, apps/web/app/icon.svg, distribution/openai/assets/logo.svg, and distribution/codex/orcel/assets/logo.svg. Preserve generous clear space around the entire wordmark and use the compact icon for 16-32px surfaces only after a pixel-level inspection. Screen-reader visible identity is Orcel. Decorative repeated artwork must not be read as extra text.
 
-The official O and I/l are filled white shapes, never thin outlines; the master is always flat monochrome; only the optional editorial accent icon may use a blue/violet linear gradient. Do not apply blue or violet to the production monochrome SVG masters, security indicators or text requiring contrast.
-
-## 4. Logo variants and rules
-
-- **Primary lockup:** white nested symbol and original lowercase vector wordmark on #080808.
-- **Inverse lockup:** matching black paths on #F5F6F7.
-- **Stacked:** symbol above lowercase wordmark in square or portrait layouts.
-- **Standalone icon:** nested symbol plus detached l; never crop the l or merge it into the O.
-- **App tiles:** dark and light rounded-corner tiles; do not place a second enclosing circle around the symbol.
-- **Editorial accent:** blue/violet gradient permitted only in secondary marketing treatments.
-
-Keep a minimum clear space of **32 master units** around the entire symbol including the detached l; for the full lockup reserve at least **20% of the symbol height**. Align the wordmark to the mark's optical center, not to its bounding-box extreme. The custom letterforms remain lower-case **orcel**; prose uses **Orcel**.
-
-## 5. Optical sizes and accessibility
-
-Outputs are prepared at 16, 24, 32, 48, 64, 128, 256, 512 and 1024 pixels. Inspect real rendered pixels before using sizes below 32px: the fine nesting is necessarily compressed at 16px. Where space permits, prefer a 32px or larger icon, and include an accessible visible text label alongside the symbol. For screen readers, use the short accessible description **Orcel monogram** and keep decorative repeats hidden from assistive technologies.
-
-Use sufficient contrast on site backgrounds; never depend on a gradient to establish the logo's identity. No glow, shadows, faux metallic effects, 3-D extrusions, rotation, shearing, outlines around the l, or arbitrary recoloring of the primary emblem.
-
-## 6. Wordmark, voice and typography
-
-The official lowercase wordmark is hand-constructed in the SVG generator, with **no font dependency**. For surrounding graphic/editorial typography, Sora is a preferred design reference if legitimately available; use system sans-serif fallbacks by default. No downloaded font files or commercial font redistribution are required.
-
-Tone: clear, precise, confident and technically grounded. The canonical product tagline is **Your computer, your terms.** Do not state unavailable browser/desktop UI capabilities, supported operating systems or shipping installer status without separate product qualification.
-
-## 7. Authoritative file mapping
-
-| Target | Generated asset |
-| --- | --- |
-| White/black source masters | assets/brand/orcel-o-white.svg, orcel-o-black.svg |
-| Horizontal/stacked lockups | assets/brand/orcel-lockup-*.svg |
-| Wordmark | assets/brand/orcel-wordmark-*.svg |
-| Dark and light application tiles | assets/brand/orcel-app-icon*.svg |
-| Optional accent | assets/brand/orcel-accent-icon.svg |
-| Monogram supporting pattern | assets/brand/orcel-monogram-pattern.svg |
-| Site assets and Next favicon | apps/web/public/brand/, apps/web/app/icon.svg |
-| OpenAI/Codex distribution | distribution/openai/assets/logo.svg, distribution/codex/orcel/assets/logo.svg |
-| Web brand gallery | apps/web/app/brand/page.tsx |
-| Raster/ICO exports | assets/brand/exports/ (built locally/CI) |
-| Kit and SHA-256 manifest | Orcel-Identity-Kit-v2.zip, ASSET_MANIFEST.json |
-
-Legacy filename orcel-orbit-pattern.svg remains as a **compatibility alias** for consumers relying on the old path; its content is the new monogram pattern, not the orbital art. The previous historical artwork remains available in Git history, rather than being silently overwritten in release tags.
-
-## 8. Reproducibility, security and provenance
-
-From the repository root run, in order:
-
+## Reproduction and release boundaries
+From the repository root run in order:
 1. node scripts/sync-brand.mjs
 2. node scripts/sync-brand.mjs --check
-3. node scripts/render-brand.mjs
-4. python scripts/export-brand.py
-5. npm run web:test
-6. npm run web:typecheck
-7. npm run web:build
+3. npm ci --prefix apps/web --ignore-scripts --no-audit --no-fund
+4. node scripts/render-brand.mjs
+5. python scripts/export-brand.py
+6. npm run web:test
+7. npm run web:typecheck
+8. npm run web:build
 
-Brand media use local pinned Sharp through the existing web toolchain, and standard-library Python ZIP/ICO generation. The v2 brand kit packages the current SVG masters, raster sizes, usage docs and SHA-256 hashes; it does not claim to be a software installer. The generator synchronizes OpenAI/Codex icons, but installed clients or marketplaces may cache previous versions.
+This produces the new versioned Orcel-Identity-Kit-v2.zip, raster sizes, favicon and SHA-256 asset manifest on the qualified GitHub Pages workflow. Product tagline remains Your computer, your terms. A clear signal for what's next is an editorial design phrase, not a software availability claim.
 
-This logo was developed as original geometry from the founder's own sketches and approved brand references. No art, fonts or marks of another organization are copied. Preserve all existing security, trust and approval boundaries. This is a branding change only: no product runtime, authorization, deployment credential or paid service is added.
+Do not change previous Git history, published releases, product runtime, security boundaries or agent capabilities. Prior identity proposals remain as historical Git evidence. Source branch and PR alone are not proof of Pages publication. Orcel claims no affiliation with external design agencies or competitors.

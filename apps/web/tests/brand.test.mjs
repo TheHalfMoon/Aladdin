@@ -9,19 +9,18 @@ const file=(path)=>readFileSync(join(root,path));
 const str=(path)=>file(path).toString("utf8");
 const hash=(path)=>createHash("sha256").update(file(path)).digest("hex");
 
-test("Approved nested Orcel monogram keeps O r c e l geometry in sync",()=>{
- const svg=str("assets/brand/orcel-o-white.svg");
- assert.match(svg,/viewBox="0 0 256 256"/);
- assert.match(svg,/fill-rule="evenodd"/);
- assert.match(svg,/M88 20 H136 A70 70/);
- assert.match(svg,/<rect x="226" y="30" width="16" height="196" rx="8" fill="#FFFFFF"/);
- for(const path of ["M154 63 H105","M169 92 H124","M177 120 H145","M122 145 H175"])
-   assert.ok(svg.includes(path),path);
- assert.equal((svg.match(/<path /g)||[]).length,5);
- assert.equal((svg.match(/<circle /g)||[]).length,0);
- assert.doesNotMatch(svg,/satellite|orbit|<text|<image|linearGradient/i);
- assert.equal(str("apps/web/public/brand/orcel-o-white.svg"),svg);
- assert.match(str("assets/brand/orcel-o-black.svg"),/stroke="#080808"/);
+test("Founder-approved Orcel Signal mark and uncut o/c letters are canonical",()=>{
+ const mark=str("assets/brand/orcel-o-white.svg");
+ const logo=str("assets/brand/orcel-wordmark-white.svg");
+ assert.match(mark,/Orcel Signal white mark/);
+ assert.match(mark,/fill="#FF813E"/);
+ assert.equal(str("apps/web/public/brand/orcel-o-white.svg"),mark);
+ assert.match(str("assets/brand/orcel-o-black.svg"),/fill="#080808"/);
+ for(const path of ["M128 30 A95 95","M557 52 L531 88","x=\"793\" y=\"5\" width=\"47\" height=\"218\""])
+   assert.ok(logo.includes(path),path);
+ assert.equal((logo.match(/fill-rule="evenodd"/g)||[]).length,2);
+ assert.match(logo,/fill="#FF813E"/);
+ assert.doesNotMatch(logo,/<text\\b|<image\\b|stroke-width=|<circle|linearGradient/i);
 });
 
 test("OpenAI/Codex app icons and Next favicon are byte-identical",()=>{
@@ -54,10 +53,10 @@ test("Identity delivers full mono and editorial system without distributing font
   const svg=str("assets/brand/"+name);
   assert.doesNotMatch(svg,/<text\b|<image\b|@font-face/i,"no font or image dependencies");
  }
- assert.match(str("assets/brand/orcel-wordmark-white.svg"),/stroke-width="19"/);
+ assert.match(str("assets/brand/orcel-wordmark-white.svg"),/fill="#FF813E"/);
  const page=str("apps/web/app/brand/page.tsx");
- assert.match(page,/Nested by design/);
- assert.match(page,/nested strokes/);
+ assert.match(page,/A clear signal/);
+ assert.match(page,/Unbroken o and c forms/);
  assert.match(page,/orcel-lockup-white\.svg/);
  assert.match(page,/Download kit/);
  assert.match(str("apps/web/app/page.tsx"),/\/brand\.html/);

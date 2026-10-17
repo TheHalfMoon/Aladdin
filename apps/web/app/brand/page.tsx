@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./brand.css";
 
 export const metadata: Metadata = {
-  title: "Orcel Nested Monogram Identity",
-  description: "The Orcel nested monogram: O enclosure, r c e interior strokes, separate l and lowercase wordmark.",
+  title: "Orcel Signal Identity",
+  description: "The Orcel Signal identity: custom lowercase typography with closed o/c letterforms and an orange l terminal.",
 };
 
 const basePath=process.env.ORCEL_WEB_BASE_PATH??"";
@@ -11,38 +11,38 @@ const asset=(file:string)=>basePath+"/brand/"+file;
 const kit=asset("Orcel-Identity-Kit-v2.zip");
 const neutrals=[
  {name:"White",hex:"#FFFFFF"},{name:"Ink",hex:"#080808"},
- {name:"Charcoal",hex:"#17191B"},{name:"Silver",hex:"#D9DDE1"},
+ {name:"Charcoal",hex:"#17191B"},{name:"Signal orange",hex:"#FF813E"},
  {name:"Mist",hex:"#F5F6F7"},{name:"Graphite",hex:"#565D66"}
 ];
 const variants=[
- {label:"02 / Dark application",image:"orcel-app-icon.svg",alt:"White nested monogram on black rounded application tile",light:false,detail:"ChatGPT, Codex and app"},
- {label:"03 / Light application",image:"orcel-app-icon-light.svg",alt:"Black nested monogram on pale rounded application tile",light:true,detail:"Light UI and print"},
- {label:"04 / Horizontal lockup",image:"orcel-lockup-white.svg",alt:"White nested monogram with lowercase Orcel wordmark",light:false,detail:"Website, presentations and headers",wide:true},
- {label:"05 / Inverse lockup",image:"orcel-lockup-black.svg",alt:"Black nested monogram and lowercase Orcel wordmark",light:true,detail:"Docs and light surfaces",wide:true},
- {label:"06 / Stacked lockup",image:"orcel-lockup-stacked-white.svg",alt:"White nested monogram over lowercase Orcel wordmark",light:false,detail:"Square promotional layouts"},
- {label:"07 / Editorial accent",image:"orcel-accent-icon.svg",alt:"Optional blue-to-violet nested monogram on charcoal",light:false,detail:"Optional; not the primary identity"}
+ {label:"02 / Dark application",image:"orcel-app-icon.svg",alt:"White Signal icon with orange terminal on black application tile",light:false,detail:"ChatGPT, Codex and app"},
+ {label:"03 / Light application",image:"orcel-app-icon-light.svg",alt:"Black Signal icon with orange terminal on pale application tile",light:true,detail:"Light UI and print"},
+ {label:"04 / Horizontal lockup",image:"orcel-lockup-white.svg",alt:"Orcel Signal white-and-orange typographic wordmark",light:false,detail:"Website, presentations and headers",wide:true},
+ {label:"05 / Inverse lockup",image:"orcel-lockup-black.svg",alt:"Orcel Signal black-and-orange typographic wordmark",light:true,detail:"Docs and light surfaces",wide:true},
+ {label:"06 / Stacked lockup",image:"orcel-lockup-stacked-white.svg",alt:"Orcel Signal stacked symbol and wordmark",light:false,detail:"Square promotional layouts"},
+ {label:"07 / Editorial accent",image:"orcel-accent-icon.svg",alt:"Orcel Signal orange terminal on charcoal",light:false,detail:"Alternate dark application treatment"}
 ];
 export default function BrandPage(){
  return <main className="orcel-brand-system">
    <div className="brand-shell">
     <header className="brand-nav">
      <a href={basePath+"/"} aria-label="Return to Orcel homepage">orcel</a>
-     <span>NESTED MONOGRAM / 2026</span>
+     <span>SIGNAL / 2026</span>
      <a href={kit}>Download kit ↗</a>
     </header>
     <section className="brand-intro">
      <div className="brand-eyebrow">OFFICIAL VISUAL IDENTITY</div>
-     <h1>Nested by design.</h1>
-     <p>One solid-white O. Nested r, c and e strokes. A filled white l at the right.
+     <h1>A clear signal.</h1>
+     <p>An original typographic wordmark. Unbroken o and c forms. A vivid orange terminal on l.
      Distinctive, intentional, and built for a clear, durable identity.</p>
     </section>
-    <section className="brand-hero" aria-label="Primary Orcel nested monogram">
+    <section className="brand-hero" aria-label="Primary Orcel Signal wordmark">
       <div className="brand-main-lockup">
        <img src={asset("orcel-lockup-white.svg")} width="900" height="256"
-         alt="Orcel primary horizontal logo: white nested monogram and lowercase orcel"/>
+         alt="Orcel primary horizontal logo: white and orange Orcel Signal wordmark"/>
       </div>
       <div className="brand-hero-caption">
-       <span>01 / PRIMARY MONOGRAM LOCKUP</span><strong>orcel</strong><span>White / Ink</span>
+       <span>01 / PRIMARY SIGNAL WORDMARK</span><strong>orcel</strong><span>White / Orange / Ink</span>
       </div>
     </section>
     <div className="brand-heading">
@@ -60,7 +60,7 @@ export default function BrandPage(){
     <section className="brand-palette" aria-labelledby="color-title">
       <div className="brand-heading">
        <h2 id="color-title">Made of essentials.</h2>
-       <p>Strict monochrome primary mark. Neutrals belong around it.</p>
+       <p>White forms, one orange signal, and restrained neutral surfaces.</p>
       </div>
       <div className="brand-swatches">
        {neutrals.map(p=><div className="brand-swatch" key={p.hex}>
@@ -72,9 +72,9 @@ export default function BrandPage(){
     <section className="brand-principle">
       <span>A CONSISTENT VISUAL LANGUAGE</span>
       <h2>Simple at 16px.<br/>Distinctive at every scale.</h2>
-      <p>Preserve the O contour, nested strokes, and detached right-hand l,
-      and the original lowercase vector wordmark. No shadows, gradients,
-      additional rings, detached letters, or unnecessary decoration.</p>
+      <p>Preserve the closed o, open-sided c, and orange tip on l,
+      with the original lowercase vector wordmark. No shadows,
+      artificial letter cuts, gradients, or unnecessary decoration.</p>
       <a className="brand-download" href={kit}>Download complete Orcel identity kit ↗</a>
       <p><a href="https://github.com/TheHalfMoon/Orcel/blob/main/assets/brand/IDENTITY.md">Read the vector construction and usage guide ↗</a></p>
     </section>

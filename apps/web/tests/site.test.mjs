@@ -82,18 +82,18 @@ test("Next output is a static export with a bounded explicit project base path",
   assert.match(layout, /--orcel-mark-mask/);
   assert.match(layout, /brand\/orcel-o-white\.svg/);
   assert.equal(css.includes('url("/brand/orcel-o-white.svg")'), false);
-  assert.equal((css.match(/var\(--orcel-mark-mask\)/g) ?? []).length, 2);
+  assert.equal((css.match(/var\(--orcel-mark-mask\)/g) ?? []).length, 1);
 });
 
-test("approved nested monogram geometry is byte-pinned and shared by both variants", async () => {
+test("approved Signal symbol is byte-pinned and keeps the orange terminal", async () => {
   assert.equal(
     await sha256(join(root, "public", "brand", "orcel-o-white.svg")),
-    "d692e74ae5ce9cc99febad6c4d6ad1faf0d6fc81fc87de25e56cd8fc028859e4"
+    "86d02171fabd5b4a2350c89617f38617e34f26ce58012ade95bdeee176a294d2"
   );
   const css = await read(join(root, "app", "globals.css"));
-  assert.equal((css.match(/var\(--orcel-mark-mask\)/g) ?? []).length, 2, "both mask declarations must use the one canonical geometry variable");
+  assert.equal((css.match(/var\(--orcel-mark-mask\)/g) ?? []).length, 1, "all site instances share one full-color SVG");
   assert.match(css, /\.brand-mark-white[\s\S]*color:\s*#fff/);
-  assert.match(css, /\.brand-mark-color[\s\S]*background:\s*#fff/);
+  assert.match(css, /\.brand-mark[\s\S]*background:\s*var\(--orcel-mark-mask\)/);
 });
 
 test("web dependency graph is isolated from runtime workspaces and lockfile", async () => {

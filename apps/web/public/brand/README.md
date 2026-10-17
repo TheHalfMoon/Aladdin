@@ -1,7 +1,7 @@
-# Orcel public brand assets — monogram v2
+# Orcel public brand — Signal
 
-**Current identity:** nested rounded O, interior r/c/e paths, filled-white detached lowercase l/I stroke at the right. Primary white on #080808; inverse ink on light background. Optional blue/purple editorial icon is a secondary graphic.
+The founder-approved current brand is Signal: custom lowercase white orcel lettering with an orange terminal on l, and uninterrupted o/c shapes. Black #080808, white #FFFFFF, accent #FF813E. The standalone Signal icon is a C-based mark with the same orange accent.
 
-Source SVG masters are generated deterministically from scripts/sync-brand.mjs and mirrored into this directory. Raster versions, the favicon ICO, SHA-256 asset manifest and Orcel-Identity-Kit-v2.zip are produced through local Sharp/Python by GitHub Pages. No external font download or paid graphics service is required.
+Source vectors are generated from scripts/sync-brand.mjs and mirrored here for GitHub Pages. Local Sharp and Python build PNG/ICO, asset manifest, social preview and Orcel-Identity-Kit-v2.zip. See assets/brand/IDENTITY.md for guidelines.
 
-Refer to assets/brand/IDENTITY.md and docs/brand/README.md for detailed usage. The old orbital identity remains in Git history; some installed marketplace icons may still display cached copies.
+Old orbit or OI media filenames are retained only for public URL compatibility; they contain updated Signal art. Past history and released versions are not rewritten. No software capability is implied by these changes.

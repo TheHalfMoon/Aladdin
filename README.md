@@ -1,7 +1,7 @@
 # Orcel
 
 <p align="center">
-  <img src="assets/brand/orcel-app-icon.svg" alt="Orcel nested monogram with O enclosure, layered r c e and detached l" width="112" height="112">
+  <img src="assets/brand/orcel-app-icon.svg" alt="Orcel Signal icon: geometric white C shape with orange approval terminal" width="112" height="112">
 </p>
 
 <p align="center"><strong>Your computer, your terms.</strong></p>

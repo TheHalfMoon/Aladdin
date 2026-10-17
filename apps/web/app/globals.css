@@ -114,9 +114,7 @@ svg {
   flex: 0 0 auto;
   width: 27px;
   height: 27px;
-  background: currentColor;
-  -webkit-mask: var(--orcel-mark-mask) center / contain no-repeat;
-  mask: var(--orcel-mark-mask) center / contain no-repeat;
+  background: var(--orcel-mark-mask) center / contain no-repeat;
 }
 
 .brand-mark-white {
@@ -125,7 +123,6 @@ svg {
 
 .brand-mark-color {
   color: #fff;
-  background: #fff;
 }
 
 .desktop-nav {
