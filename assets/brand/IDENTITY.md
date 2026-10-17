@@ -1,6 +1,9 @@
-# Orcel â€” Nested Monogram Brand Identity
+# Orcel - Nested Monogram Brand Identity
 
-**Edition:** 2.0, October 2026`n**Approval:** Founder-selected nested symbol; this document is the production design specification.`n**Character:** Precise, understated, technical, recognizable.`n**Brand promise:** Your computer, your terms.
+**Edition:** 2.0, October 2026
+**Approval:** Founder-selected nested symbol; this document is the production design specification.
+**Character:** Precise, understated, technical, recognizable.
+**Brand promise:** Your computer, your terms.
 
 ## 1. Idea and visual meaning
 
