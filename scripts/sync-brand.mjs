@@ -105,6 +105,8 @@ const outputs=new Map([
  ["assets/brand/orcel-accent-icon.svg",accent],
  ["apps/web/public/brand/orcel-o-white.svg",pure],
  ["apps/web/public/brand/orcel-o-black.svg",inverse],
+ ["apps/web/public/brand/orcel-wordmark-white.svg",wordWhite],
+ ["apps/web/public/brand/orcel-wordmark-black.svg",wordBlack],
  ["apps/web/public/brand/orcel-app-icon.svg",tile],
  ["apps/web/public/brand/orcel-app-icon-light.svg",tileLight],
  ["apps/web/public/brand/orcel-lockup-white.svg",lockWhite],
