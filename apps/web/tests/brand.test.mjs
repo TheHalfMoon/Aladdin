@@ -55,7 +55,7 @@ test("Identity delivers full mono and editorial system without distributing font
  }
  assert.match(str("assets/brand/orcel-wordmark-white.svg"),/fill="#FF813E"/);
  const readme=str("README.md");
- assert.match(readme,/orcel-readme-lockup\\.svg/);
+ assert.match(readme,/orcel-readme-lockup\.svg/);
  const hero=str("assets/brand/orcel-readme-lockup.svg");
  assert.match(hero,/fill="#080808"/);
  assert.match(hero,/fill="#FF813E"/);
