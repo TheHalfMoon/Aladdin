@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Orcel Signal Identity. One deterministic vector construction, shared across
 // site, OpenAI/Codex packages, favicon, marketing, and downloadable assets.
-// Based on the founder-approved October 16, 2026 Signal typography design. Not third-party art.
+// Based on the founder-approved October 17, 2026 Signal typography design. Not third-party art.
 // No font files, runtime dependencies, or mutable external resources.
 import { createHash } from "node:crypto";
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";

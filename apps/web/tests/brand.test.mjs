@@ -59,6 +59,10 @@ test("Identity delivers full mono and editorial system without distributing font
  assert.match(page,/Unbroken o and c forms/);
  assert.match(page,/orcel-lockup-white\.svg/);
  assert.match(page,/Download kit/);
+ const css=str("apps/web/app/globals.css");
+ assert.match(css,/--accent-a:\s*#FF813E/);
+ assert.match(css,/--accent-b:\s*#FF9D67/);
+ assert.doesNotMatch(css,/#78c8ff|#8278ff|#d4a6ff|rgba\(\s*96,\s*104,\s*255/i);
  assert.match(str("apps/web/app/page.tsx"),/\/brand\.html/);
  assert.ok(statSync(join(root,"apps/web/app/brand/brand.css")).size>2000);
 });
@@ -67,6 +71,7 @@ test("Every raster export is validated and delivered via deterministic ZIP",()=>
  const manifest=JSON.parse(str("assets/brand/ASSET_MANIFEST.json"));
  assert.equal(manifest.name,"Orcel");
  assert.equal(manifest.brand_version,"2.0");
+ assert.equal(manifest.source,"Orcel Signal Identity 2026");
  assert.ok(manifest.assets.length>=50);
  for (const item of manifest.assets) {
   assert.equal(hash(item.path),item.sha256,item.path);
