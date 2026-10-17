@@ -9,15 +9,15 @@ const file=(path)=>readFileSync(join(root,path));
 const str=(path)=>file(path).toString("utf8");
 const hash=(path)=>createHash("sha256").update(file(path)).digest("hex");
 
-test("Selected Orcel orbital mark has 1 open arc, 1 complete ring, and 1 detached satellite",()=>{
+test("Approved nested Orcel monogram keeps O r c e l geometry in sync",()=>{
  const svg=str("assets/brand/orcel-o-white.svg");
  assert.match(svg,/viewBox="0 0 256 256"/);
- assert.match(svg,/M188 36 A108 108 0 1 0 128 232/);
- assert.match(svg,/<circle cx="137" cy="127" r="78" stroke="#FFFFFF" stroke-width="12" fill="none"/);
- assert.match(svg,/<circle cx="208" cy="49" r="14" fill="#FFFFFF"/);
- assert.equal((svg.match(/<circle /g)||[]).length,2);
- assert.equal((svg.match(/<path /g)||[]).length,1);
- assert.doesNotMatch(svg,/linearGradient|radialGradient|filter=|<text\b|<image\b|fill-rule="evenodd"|M128 20 A108 108/i);
+ assert.match(svg,/<rect x="18" y="20" width="188" height="216" rx="70"/);
+ for(const path of ["M154 63 H105","M169 92 H124","M177 120 H145","M122 145 H175","M234 79 V201"])
+   assert.ok(svg.includes(path),path);
+ assert.equal((svg.match(/<path /g)||[]).length,5);
+ assert.equal((svg.match(/<circle /g)||[]).length,0);
+ assert.doesNotMatch(svg,/satellite|orbit|<text|<image|linearGradient/i);
  assert.equal(str("apps/web/public/brand/orcel-o-white.svg"),svg);
  assert.match(str("assets/brand/orcel-o-black.svg"),/stroke="#080808"/);
 });
@@ -43,7 +43,7 @@ test("Identity delivers full mono and editorial system without distributing font
  "orcel-wordmark-white.svg","orcel-wordmark-black.svg",
  "orcel-lockup-white.svg","orcel-lockup-black.svg",
  "orcel-lockup-stacked-white.svg","orcel-lockup-stacked-black.svg",
- "orcel-social-dark.svg","orcel-social-light.svg","orcel-orbit-pattern.svg"
+ "orcel-social-dark.svg","orcel-social-light.svg","orcel-monogram-pattern.svg"
  ];
  for (const name of names) {
   assert.ok(statSync(join(root,"assets/brand",name)).size>175,name);
@@ -54,8 +54,8 @@ test("Identity delivers full mono and editorial system without distributing font
  }
  assert.match(str("assets/brand/orcel-wordmark-white.svg"),/stroke-width="19"/);
  const page=str("apps/web/app/brand/page.tsx");
- assert.match(page,/Open by design/);
- assert.match(page,/complete inner ring/);
+ assert.match(page,/Nested by design/);
+ assert.match(page,/nested strokes/);
  assert.match(page,/orcel-lockup-white\.svg/);
  assert.match(page,/Download kit/);
  assert.match(str("apps/web/app/page.tsx"),/\/brand\.html/);
@@ -65,7 +65,7 @@ test("Identity delivers full mono and editorial system without distributing font
 test("Every raster export is validated and delivered via deterministic ZIP",()=>{
  const manifest=JSON.parse(str("assets/brand/ASSET_MANIFEST.json"));
  assert.equal(manifest.name,"Orcel");
- assert.equal(manifest.brand_version,"1.0");
+ assert.equal(manifest.brand_version,"2.0");
  assert.ok(manifest.assets.length>=50);
  for (const item of manifest.assets) {
   assert.equal(hash(item.path),item.sha256,item.path);
@@ -77,7 +77,7 @@ test("Every raster export is validated and delivered via deterministic ZIP",()=>
   assert.equal(png.readUInt32BE(16),n);
   assert.equal(png.readUInt32BE(20),n);
  }
- const zip=file("assets/brand/downloads/Orcel-Identity-Kit-v1.zip");
+ const zip=file("assets/brand/downloads/Orcel-Identity-Kit-v2.zip");
  assert.equal(zip.subarray(0,4).toString("hex"),"504b0304");
  assert.ok(zip.length>25000&&zip.length<3000000);
 });

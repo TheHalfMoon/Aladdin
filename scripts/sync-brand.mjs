@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-// Orcel Orbital Identity. One deterministic vector construction, shared across
+// Orcel Nested Monogram Identity. One deterministic vector construction, shared across
 // site, OpenAI/Codex packages, favicon, marketing, and downloadable assets.
-// Based on the founder-approved October 16, 2026 orbital concept. Not third-party art.
+// Based on the founder-approved October 16, 2026 nested monogram design. Not third-party art.
 // No font files, runtime dependencies, or mutable external resources.
 import { createHash } from "node:crypto";
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
@@ -13,24 +13,27 @@ const svgStart='<svg xmlns="http://www.w3.org/2000/svg"';
 function doc(view,body,label) {
  return svgStart+' viewBox="'+view+'" role="img" aria-label="'+label+'">\n'+body+'\n</svg>\n';
 }
-// Master geometry (256x256). Outer C-shaped orbit deliberately ends before
-// the detached satellite and near the lower vertical axis. Inner O is complete.
-export const ORBIT={
-  outerPath:"M188 36 A108 108 0 1 0 128 232",
-  outerWidth:10,
-  inner:{cx:137,cy:127,r:78,width:12},
-  satellite:{cx:208,cy:49,r:14}
+// Approved founder-selected nested O/r/c/e/l identity, original SVG geometry.
+// One immutable geometry definition shared by website, app and plugin assets.
+export const MONOGRAM={
+ outer:{x:18,y:20,width:188,height:216,rx:70,widthStroke:10},
+ r:"M154 63 H105 C76 63 63 83 63 110 V180 C63 194 77 201 95 201 H156",
+ c:"M169 92 H124 C100 92 89 109 89 132 V159 C89 176 103 185 123 185 H171",
+ e:"M177 120 H145 C128 120 118 131 118 145 C118 158 128 169 145 169 H177",
+ eBar:"M122 145 H175",
+ l:"M234 79 V201",
+ width:10
 };
 function core(ink) {
- const {outerPath,outerWidth,inner,satellite}=ORBIT;
- return '<path d="'+outerPath+'" stroke="'+ink+'" stroke-width="'+outerWidth+'" fill="none" stroke-linecap="round"/>'+
-  '<circle cx="'+inner.cx+'" cy="'+inner.cy+'" r="'+inner.r+'" stroke="'+ink+'" stroke-width="'+inner.width+'" fill="none"/>'+
-  '<circle cx="'+satellite.cx+'" cy="'+satellite.cy+'" r="'+satellite.r+'" fill="'+ink+'"/>';
+ const m=MONOGRAM;
+ const base='fill="none" stroke="'+ink+'" stroke-linecap="round" stroke-linejoin="round"';
+ return '<rect x="'+m.outer.x+'" y="'+m.outer.y+'" width="'+m.outer.width+'" height="'+m.outer.height+'" rx="'+m.outer.rx+'" '+base+' stroke-width="'+m.outer.widthStroke+'"/>'+
+ [m.r,m.c,m.e,m.eBar,m.l].map(d=>'<path d="'+d+'" '+base+' stroke-width="'+m.width+'"/>').join('');
 }
-const pure=doc("0 0 256 256","  "+core("#FFFFFF"),"Orcel orbital emblem: open outer white arc, inner white ring, satellite dot");
-const inverse=doc("0 0 256 256","  "+core("#080808"),"Orcel orbital emblem in black for a light surface");
-const tile=doc("0 0 256 256",'  <rect width="256" height="256" rx="54" fill="#080808"/>\n  '+core("#FFFFFF"),"Orcel dark application icon with orbital symbol");
-const tileLight=doc("0 0 256 256",'  <rect width="256" height="256" rx="54" fill="#F5F6F7"/>\n  '+core("#080808"),"Orcel light application icon with orbital symbol");
+const pure=doc("0 0 256 256","  "+core("#FFFFFF"),"Orcel white nested O r c e l monogram");
+const inverse=doc("0 0 256 256","  "+core("#080808"),"Orcel black nested O r c e l monogram");
+const tile=doc("0 0 256 256",'  <rect width="256" height="256" rx="54" fill="#080808"/>\n  '+core("#FFFFFF"),"Orcel dark application icon with nested monogram");
+const tileLight=doc("0 0 256 256",'  <rect width="256" height="256" rx="54" fill="#F5F6F7"/>\n  '+core("#080808"),"Orcel light application icon with nested monogram");
 // Custom hand-authored lowercase outline letterforms, converted to filled
 // outlines by a 19px monoline stroke. No system or redistributed font needed.
 function lettering(ink) {
@@ -48,14 +51,14 @@ function horizontal(ink) {
  return doc("0 0 900 256",
    '  <g>'+core(ink)+'</g>\n'+
    '  <g transform="translate(270 23) scale(1.65)">'+lettering(ink)+'</g>',
-   "Orcel orbital emblem and lowercase custom wordmark in horizontal arrangement");
+   "Orcel nested monogram and lowercase custom wordmark in horizontal arrangement");
 }
 const lockWhite=horizontal("#FFFFFF"),lockBlack=horizontal("#080808");
 function stacked(ink) {
  return doc("0 0 520 450",
   '  <g transform="translate(132 15)">'+core(ink)+'</g>\n'+
   '  <g transform="translate(80 278) scale(1.04)">'+lettering(ink)+'</g>',
-  "Orcel vertical lockup with orbital icon and lowercase wordmark");
+  "Orcel vertical lockup with nested icon and lowercase wordmark");
 }
 const stackWhite=stacked("#FFFFFF"),stackBlack=stacked("#080808");
 function social(dark) {
@@ -75,17 +78,15 @@ function motif() {
   const x=30+i*230;
   parts.push('<g transform="translate('+x+' 70) scale(.9)" opacity="'+(0.12+i*.11).toFixed(2)+'">'+core("#FFFFFF")+'</g>');
  }
- return doc("0 0 1200 420",parts.join("\n"),"Orcel orbital rhythm for supporting brand graphics");
+ return doc("0 0 1200 420",parts.join("\n"),"Orcel nested monogram pattern for supporting brand graphics");
 }
 const pattern=motif();
 // A tightly limited accent treatment for optional marketing pieces only.
 // The primary identity and package tiles remain strictly monochrome.
 const accent=doc("0 0 256 256",
-  '  <rect width="256" height="256" rx="54" fill="#17191B"/>\n'+
-  '  <path d="'+ORBIT.outerPath+'" stroke="#D9DDE1" stroke-width="'+ORBIT.outerWidth+'" fill="none" stroke-linecap="round"/>\n'+
-  '  <circle cx="137" cy="127" r="78" stroke="#FFFFFF" stroke-width="12" fill="none"/>\n'+
-  '  <circle cx="208" cy="49" r="14" fill="#FFFFFF"/>',
-  "Orcel graphite/silver accent icon for editorial use");
+  '  <defs><linearGradient id="accent" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#3B82F6"/><stop offset="1" stop-color="#8B5CF6"/></linearGradient></defs>\n'+
+  '  <rect width="256" height="256" rx="54" fill="#10121A"/>\n'+core("url(#accent)"),
+  "Orcel optional blue purple editorial accent icon");
 const outputs=new Map([
  ["assets/brand/orcel-o-white.svg",pure],
  ["assets/brand/orcel-o-black.svg",inverse],
@@ -99,6 +100,7 @@ const outputs=new Map([
  ["assets/brand/orcel-lockup-stacked-black.svg",stackBlack],
  ["assets/brand/orcel-social-dark.svg",social(true)],
  ["assets/brand/orcel-social-light.svg",social(false)],
+ ["assets/brand/orcel-monogram-pattern.svg",pattern],
  ["assets/brand/orcel-orbit-pattern.svg",pattern],
  ["assets/brand/orcel-accent-icon.svg",accent],
  ["apps/web/public/brand/orcel-o-white.svg",pure],
@@ -111,6 +113,7 @@ const outputs=new Map([
  ["apps/web/public/brand/orcel-lockup-stacked-black.svg",stackBlack],
  ["apps/web/public/brand/orcel-social-dark.svg",social(true)],
  ["apps/web/public/brand/orcel-social-light.svg",social(false)],
+ ["apps/web/public/brand/orcel-monogram-pattern.svg",pattern],
  ["apps/web/public/brand/orcel-orbit-pattern.svg",pattern],
  ["apps/web/public/brand/orcel-accent-icon.svg",accent],
  ["apps/web/app/icon.svg",tile],
@@ -129,7 +132,7 @@ for (const [name,contents] of outputs) {
  }
 }
 if(errors.length) {console.error("Brand asset drift:\n"+errors.join("\n"));process.exit(1);}
-console.log("Orcel orbital identity "+(check?"verified":"generated")+": "+outputs.size+" SVG destinations");
+console.log("Orcel nested monogram identity "+(check?"verified":"generated")+": "+outputs.size+" SVG destinations");
 for (const [name,data] of [["symbol",pure],["app tile",tile],["lockup",lockWhite]]) {
  console.log(name+": "+createHash("sha256").update(data).digest("hex"));
 }
