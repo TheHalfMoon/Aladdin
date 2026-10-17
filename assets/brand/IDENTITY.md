@@ -3,12 +3,12 @@
 Edition: Signal version 2, founder-approved design, October 2026.
 
 ## Concept
-A custom lowercase Orcel typographic identity with white geometric letterforms on a near-black background. The recognition accent is the orange upper terminal of the final lowercase l. The founder specifically rejected diagonal cuts *inside* o and c. These cuts are removed: o is a continuous rounded counter; c has a normal right-hand aperture without any separate slash or notch. Letter spacing is independent of this decision.
+A custom lowercase Orcel typographic identity with white geometric letterforms on a near-black background. The recognition accent is the orange upper terminal of the final lowercase l. The founder's final approved image has one small deliberate lower-left opening inside the o's circular stroke. The c remains continuous with its normal right-side aperture; preserve the original composition and the orange l terminal. Do not reinterpret the opening as letter spacing.
 
-The standalone square icon is a reduced geometric C-shaped form with an orange terminal. It is not a previous orbital, OI or nested monogram. The primary full typographic mark is the word itself.
+The standalone square icon is a white C-shaped form with a curved orange arc at its upper-right and a small white teardrop, matching the founder's final visual reference. It is not a previous orbital, OI or nested monogram. The primary full typographic mark is the word itself.
 
 ## Source geometry and palette
-All original editable vector geometry is built by scripts/sync-brand.mjs from the SIGNAL constant. Wordmark canvas: 860x256. Letter o is a true even-odd closed annulus; r is a continuous filled stem/shoulder; c is uninterrupted open-sided curved geometry; e uses a structured counter and crossbar; l is a single rounded filled vertical bar with the top section orange. The glyphs contain no typeset text, downloaded fonts or third-party artwork.
+All original editable vector geometry is built by scripts/sync-brand.mjs from the SIGNAL constant. Wordmark canvas: 860x256. Letter o is a 343-degree open heavy circular stroke with a deliberately slanted lower-left opening; r is a continuous filled stem/shoulder; c is uninterrupted open-sided curved geometry; e uses a structured counter and crossbar; l is a single rounded filled vertical bar with the top section orange. The glyphs contain no typeset text, downloaded fonts or third-party artwork.
 
 | Role | Color |
 | --- | --- |

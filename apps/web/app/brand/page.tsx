@@ -3,7 +3,7 @@ import "./brand.css";
 
 export const metadata: Metadata = {
   title: "Orcel Signal Identity",
-  description: "The Orcel Signal identity: custom lowercase typography with closed o/c letterforms and an orange l terminal.",
+  description: "The Orcel Signal identity: custom lowercase typography with a deliberate o opening, continuous c, orange l and matching icon.",
 };
 
 const basePath=process.env.ORCEL_WEB_BASE_PATH??"";
@@ -33,7 +33,7 @@ export default function BrandPage(){
     <section className="brand-intro">
      <div className="brand-eyebrow">OFFICIAL VISUAL IDENTITY</div>
      <h1>A clear signal.</h1>
-     <p>An original typographic wordmark. Unbroken o and c forms. A vivid orange terminal on l.
+     <p>An original typographic wordmark. Deliberate o opening and continuous c. A vivid orange terminal on l.
      Distinctive, intentional, and built for a clear, durable identity.</p>
     </section>
     <section className="brand-hero" aria-label="Primary Orcel Signal wordmark">
@@ -72,9 +72,9 @@ export default function BrandPage(){
     <section className="brand-principle">
       <span>A CONSISTENT VISUAL LANGUAGE</span>
       <h2>Simple at 16px.<br/>Distinctive at every scale.</h2>
-      <p>Preserve the closed o, open-sided c, and orange tip on l,
+      <p>Preserve the deliberate o slit, continuous open-sided c, and orange tip on l,
       with the original lowercase vector wordmark. No shadows,
-      artificial letter cuts, gradients, or unnecessary decoration.</p>
+      extra artificial letter cuts, gradients, or unnecessary decoration.</p>
       <a className="brand-download" href={kit}>Download complete Orcel identity kit ↗</a>
       <p><a href="https://github.com/TheHalfMoon/Orcel/blob/main/assets/brand/IDENTITY.md">Read the vector construction and usage guide ↗</a></p>
     </section>

@@ -88,7 +88,7 @@ test("Next output is a static export with a bounded explicit project base path",
 test("approved Signal symbol is byte-pinned and keeps the orange terminal", async () => {
   assert.equal(
     await sha256(join(root, "public", "brand", "orcel-o-white.svg")),
-    "86d02171fabd5b4a2350c89617f38617e34f26ce58012ade95bdeee176a294d2"
+    "99c3c4d510147df7b9a043e758ddede7844b91c585547d0ba700a59867e94a58"
   );
   const css = await read(join(root, "app", "globals.css"));
   assert.equal((css.match(/var\(--orcel-mark-mask\)/g) ?? []).length, 1, "all site instances share one full-color SVG");

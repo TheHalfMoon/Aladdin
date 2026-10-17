@@ -1,6 +1,6 @@
 # Orcel — Signal Brand Kit v2
 
-The founder-approved Orcel Signal identity is the white lowercase orcel wordmark with a small orange upper segment on the final letter l, presented on #080808. The unwanted visual cuts inside o and c have been removed. The paired application mark is a compact white/orange geometric signal glyph.
+The founder-approved Orcel Signal identity is the white lowercase orcel wordmark with a small orange upper segment on the final letter l, presented on #080808. The final approved reference retains one precise lower-left opening in o; c has no artificial internal slash. The paired application mark is a compact white/orange geometric signal glyph.
 
 Brand gallery: https://thehalfmoon.github.io/Orcel/brand.html
 Versioned ZIP: https://thehalfmoon.github.io/Orcel/brand/Orcel-Identity-Kit-v2.zip

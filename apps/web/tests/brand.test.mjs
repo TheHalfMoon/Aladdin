@@ -9,18 +9,21 @@ const file=(path)=>readFileSync(join(root,path));
 const str=(path)=>file(path).toString("utf8");
 const hash=(path)=>createHash("sha256").update(file(path)).digest("hex");
 
-test("Founder-approved Orcel Signal mark and uncut o/c letters are canonical",()=>{
+test("Founder-approved Orcel Signal o slit and curved icon are canonical",()=>{
  const mark=str("assets/brand/orcel-o-white.svg");
  const logo=str("assets/brand/orcel-wordmark-white.svg");
  assert.match(mark,/Orcel Signal white mark/);
  assert.match(mark,/fill="#FF813E"/);
  assert.equal(str("apps/web/public/brand/orcel-o-white.svg"),mark);
  assert.match(str("assets/brand/orcel-o-black.svg"),/fill="#080808"/);
- for(const path of ["M128 30 A95 95","M557 52 L531 88","x=\"793\" y=\"5\" width=\"47\" height=\"218\""])
+ for(const path of ["M67.1 161.6 A71 71 0 1 1 80.5 177.8","M557 52 L531 88","x=\"793\" y=\"5\" width=\"47\" height=\"218\""])
    assert.ok(logo.includes(path),path);
- assert.equal((logo.match(/fill-rule="evenodd"/g)||[]).length,2);
+ assert.equal((logo.match(/fill-rule="evenodd"/g)||[]).length,1);
+ assert.match(logo,/stroke-width="48" stroke-linecap="butt"/);
+ assert.match(mark,/M148 105 C161 65 193 41/);
+ assert.match(mark,/M187 119 C184 132/);
  assert.match(logo,/fill="#FF813E"/);
- assert.doesNotMatch(logo,/<text\\b|<image\\b|stroke-width=|<circle|linearGradient/i);
+ assert.doesNotMatch(logo,/<text\\b|<image\\b|<circle|linearGradient/i);
 });
 
 test("OpenAI/Codex app icons and Next favicon are byte-identical",()=>{
@@ -63,7 +66,7 @@ test("Identity delivers full mono and editorial system without distributing font
  assert.match(hero,/fill="#FF813E"/);
  const page=str("apps/web/app/brand/page.tsx");
  assert.match(page,/A clear signal/);
- assert.match(page,/Unbroken o and c forms/);
+ assert.match(page,/Deliberate o opening and continuous c/);
  assert.match(page,/orcel-lockup-white\.svg/);
  assert.match(page,/Download kit/);
  const css=str("apps/web/app/globals.css");
