@@ -160,6 +160,9 @@ test("Pages workflow builds the canonical project path and verifies the deployed
   assert.match(workflow, /test "\$\{\{ steps\.pages\.outputs\.base_path \}\}" = "\/Orcel"/);
   assert.match(workflow, /\/Orcel\/_next\//);
   assert.match(workflow, /\/Orcel\/brand\/orcel-o-white\.svg/);
+  assert.match(workflow, /A clear signal\\\./);
+  assert.match(workflow, /orcel-wordmark-white\\\.svg/);
+  assert.match(workflow, /Orcel Signal Identity 2026/);
   assert.match(workflow, /https:\/\/thehalfmoon\.github\.io\/Orcel/);
   assert.match(workflow, /curl --fail --location/);
   assert.match(workflow, /https:\/\/github\.com\/TheHalfMoon\/Orcel\/releases/);
