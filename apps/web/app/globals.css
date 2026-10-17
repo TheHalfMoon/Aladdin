@@ -117,6 +117,17 @@ svg {
   background: var(--orcel-mark-mask) center / contain no-repeat;
 }
 
+.brand-wordmark {
+  display: block;
+  width: 130px;
+  height: auto;
+  max-width: 100%;
+}
+
+.console-brand .brand-wordmark {
+  width: 98px;
+}
+
 .brand-mark-white {
   color: #fff;
 }
