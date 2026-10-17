@@ -20,7 +20,7 @@ const variants=[
  {label:"04 / Horizontal lockup",image:"orcel-lockup-white.svg",alt:"White nested monogram with lowercase Orcel wordmark",light:false,detail:"Website, presentations and headers",wide:true},
  {label:"05 / Inverse lockup",image:"orcel-lockup-black.svg",alt:"Black nested monogram and lowercase Orcel wordmark",light:true,detail:"Docs and light surfaces",wide:true},
  {label:"06 / Stacked lockup",image:"orcel-lockup-stacked-white.svg",alt:"White nested monogram over lowercase Orcel wordmark",light:false,detail:"Square promotional layouts"},
- {label:"07 / Editorial accent",image:"orcel-accent-icon.svg",alt:"Silver and white orbital icon on charcoal",light:false,detail:"Optional; not the primary identity"}
+ {label:"07 / Editorial accent",image:"orcel-accent-icon.svg",alt:"Optional blue-to-violet nested monogram on charcoal",light:false,detail:"Optional; not the primary identity"}
 ];
 export default function BrandPage(){
  return <main className="orcel-brand-system">
